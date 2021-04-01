@@ -4,3 +4,7 @@ description = "Name binding for arbitrary programming languages"
 version = "0.1.0"
 authors = ["Douglas Creager <dcreager@dcreager.net>"]
 edition = "2018"
+
+[lib]
+# All of our tests are in the tests/it "integration" test executable.
+test = false
