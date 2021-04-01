@@ -32,6 +32,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::marker::PhantomData;
+use std::num::NonZeroU32;
 
 /// A handle to an instance of type `T` that was allocated from an [`Arena`][].
 ///
@@ -42,16 +43,21 @@ use std::marker::PhantomData;
 /// _same type_, we do not do anything to ensure that you only use a handle with the corresponding
 /// arena.
 pub struct Handle<T> {
-    pub index: u32,
+    index: NonZeroU32,
     _phantom: PhantomData<T>,
 }
 
 impl<T> Handle<T> {
-    fn new(index: u32) -> Handle<T> {
+    fn new(index: NonZeroU32) -> Handle<T> {
         Handle {
             index,
             _phantom: PhantomData,
         }
+    }
+
+    #[inline(always)]
+    pub fn as_usize(self) -> usize {
+        self.index.get() as usize
     }
 }
 
@@ -121,11 +127,11 @@ impl<T> Arena<T> {
     pub fn add(&mut self, item: T) -> Handle<T> {
         let index = self.items.len() as u32;
         self.items.push(item);
-        Handle::new(index)
+        Handle::new(unsafe { NonZeroU32::new_unchecked(index + 1) })
     }
 
     /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
     pub fn get(&self, handle: Handle<T>) -> &T {
-        &self.items[handle.index as usize]
+        &self.items[handle.as_usize() - 1]
     }
 }
