@@ -53,3 +53,5 @@
 //! reference to `A.foo` with a _single_ execution of the path-finding algorithm.  And most
 //! importantly, each “chunk” of the overall graph only depends on “local” information from the
 //! original source file.  (a.k.a., it’s incremental!)
+
+pub mod arena;
