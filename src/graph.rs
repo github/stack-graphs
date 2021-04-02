@@ -199,11 +199,38 @@ impl StackGraph {
     }
 }
 
+impl Display for File {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 impl Index<Handle<File>> for StackGraph {
     type Output = File;
     #[inline(always)]
     fn index(&self, handle: Handle<File>) -> &File {
         &self.files.get(handle)
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayFile<'a> {
+    wrapped: Handle<File>,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayFile<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.graph[self.wrapped])
+    }
+}
+
+impl Handle<File> {
+    pub fn display(self, graph: &StackGraph) -> impl Display + '_ {
+        DisplayFile {
+            wrapped: self,
+            graph,
+        }
     }
 }
 
@@ -220,6 +247,32 @@ pub struct NodeID {
     pub file: Handle<File>,
     /// The unique identity of the node within its file.
     pub local_id: u32,
+}
+
+#[doc(hidden)]
+pub struct DisplayNodeID<'a> {
+    wrapped: NodeID,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayNodeID<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            self.wrapped.file.display(self.graph),
+            self.wrapped.local_id,
+        )
+    }
+}
+
+impl NodeID {
+    pub fn display(self, graph: &StackGraph) -> impl Display + '_ {
+        DisplayNodeID {
+            wrapped: self,
+            graph,
+        }
+    }
 }
 
 /// A node in a stack graph.
@@ -263,6 +316,13 @@ impl Node {
     pub fn is_root(&self) -> bool {
         matches!(self, Node::Root(_))
     }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayNode {
+            wrapped: self,
+            graph,
+        }
+    }
 }
 
 impl StackGraph {
@@ -293,6 +353,37 @@ impl StackGraph {
     }
 }
 
+#[doc(hidden)]
+pub struct DisplayNode<'a> {
+    wrapped: &'a Node,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.wrapped {
+            Node::DropScopes(node) => node.display(self.graph).fmt(f),
+            Node::ExportedScope(node) => node.display(self.graph).fmt(f),
+            Node::InternalScope(node) => node.display(self.graph).fmt(f),
+            Node::JumpTo(node) => node.fmt(f),
+            Node::PushScopedSymbol(node) => node.display(self.graph).fmt(f),
+            Node::PushSymbol(node) => node.display(self.graph).fmt(f),
+            Node::PopScopedSymbol(node) => node.display(self.graph).fmt(f),
+            Node::PopSymbol(node) => node.display(self.graph).fmt(f),
+            Node::Root(node) => node.fmt(f),
+        }
+    }
+}
+
+impl Handle<Node> {
+    pub fn display(self, graph: &StackGraph) -> impl Display + '_ {
+        DisplayNode {
+            wrapped: &graph[self],
+            graph,
+        }
+    }
+}
+
 impl Index<Handle<Node>> for StackGraph {
     type Output = Node;
     #[inline(always)]
@@ -318,6 +409,29 @@ impl DropScopesNode {
     pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
         graph.add_node(self.id, self.into())
     }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayDropScopesNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayDropScopesNode<'a> {
+    wrapped: &'a DropScopesNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayDropScopesNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(f, "[{} drop scopes]", self.wrapped.id.display(self.graph))
+        }
+    }
 }
 
 /// A node that can be referred to on the scope stack, which allows "jump to" nodes in any other
@@ -337,6 +451,33 @@ impl ExportedScopeNode {
     /// Adds the node to a stack graph.
     pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
         graph.add_node(self.id, self.into())
+    }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayExportedScopeNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayExportedScopeNode<'a> {
+    wrapped: &'a ExportedScopeNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayExportedScopeNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(
+                f,
+                "[{} exported scope]",
+                self.wrapped.id.display(self.graph),
+            )
+        }
     }
 }
 
@@ -358,6 +499,33 @@ impl InternalScopeNode {
     pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
         graph.add_node(self.id, self.into())
     }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayInternalScopeNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayInternalScopeNode<'a> {
+    wrapped: &'a InternalScopeNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayInternalScopeNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(
+                f,
+                "[{} internal scope]",
+                self.wrapped.id.display(self.graph),
+            )
+        }
+    }
 }
 
 /// The singleton "jump to" node, which allows a name binding path to jump back to another part of
@@ -367,6 +535,12 @@ pub struct JumpToNode;
 impl From<JumpToNode> for Node {
     fn from(node: JumpToNode) -> Node {
         Node::JumpTo(node)
+    }
+}
+
+impl Display for JumpToNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[jump to scope]")
     }
 }
 
@@ -393,6 +567,39 @@ impl PopScopedSymbolNode {
     pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
         graph.add_node(self.id, self.into())
     }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayPopScopedSymbolNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayPopScopedSymbolNode<'a> {
+    wrapped: &'a PopScopedSymbolNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayPopScopedSymbolNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(
+                f,
+                "[{} {} {}]",
+                self.wrapped.id.display(self.graph),
+                if self.wrapped.is_definition {
+                    "scoped definition"
+                } else {
+                    "pop scoped"
+                },
+                self.wrapped.symbol.display(self.graph),
+            )
+        }
+    }
 }
 
 /// Pops a symbol from the symbol stack.  If the top of the symbol stack doesn't match the
@@ -416,6 +623,39 @@ impl PopSymbolNode {
     /// Adds the node to a stack graph.
     pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
         graph.add_node(self.id, self.into())
+    }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayPopSymbolNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayPopSymbolNode<'a> {
+    wrapped: &'a PopSymbolNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayPopSymbolNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(
+                f,
+                "[{} {} {}]",
+                self.wrapped.id.display(self.graph),
+                if self.wrapped.is_definition {
+                    "definition"
+                } else {
+                    "pop"
+                },
+                self.wrapped.symbol.display(self.graph),
+            )
+        }
     }
 }
 
@@ -443,6 +683,40 @@ impl PushScopedSymbolNode {
     pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
         graph.add_node(self.id, self.into())
     }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayPushScopedSymbolNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayPushScopedSymbolNode<'a> {
+    wrapped: &'a PushScopedSymbolNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayPushScopedSymbolNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(
+                f,
+                "[{} {} {} {}]",
+                self.wrapped.id.display(self.graph),
+                if self.wrapped.is_reference {
+                    "scoped reference"
+                } else {
+                    "push scoped"
+                },
+                self.wrapped.symbol.display(self.graph),
+                self.wrapped.scope.display(self.graph),
+            )
+        }
+    }
 }
 
 /// Pushes a symbol onto the symbol stack.
@@ -466,6 +740,39 @@ impl PushSymbolNode {
     pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
         graph.add_node(self.id, self.into())
     }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayPushSymbolNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayPushSymbolNode<'a> {
+    wrapped: &'a PushSymbolNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayPushSymbolNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(
+                f,
+                "[{} {} {}]",
+                self.wrapped.id.display(self.graph),
+                if self.wrapped.is_reference {
+                    "reference"
+                } else {
+                    "push"
+                },
+                self.wrapped.symbol.display(self.graph),
+            )
+        }
+    }
 }
 
 /// The singleton root node, which allows a name binding path to cross between files.
@@ -474,6 +781,12 @@ pub struct RootNode;
 impl From<RootNode> for Node {
     fn from(node: RootNode) -> Node {
         Node::Root(node)
+    }
+}
+
+impl Display for RootNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[root]")
     }
 }
 
