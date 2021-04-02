@@ -21,10 +21,13 @@ use std::fmt::Display;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
+use crate::cycles::CycleDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::utils::cmp_option;
+use crate::utils::equals_option;
 
 //-------------------------------------------------------------------------------------------------
 // Displaying stuff
@@ -123,6 +126,22 @@ pub struct ScopedSymbol {
 }
 
 impl ScopedSymbol {
+    pub fn equals(&self, paths: &Paths, other: &ScopedSymbol) -> bool {
+        self.symbol == other.symbol
+            && equals_option(self.scopes, other.scopes, |a, b| a.equals(paths, &b))
+    }
+
+    pub fn cmp(
+        &self,
+        graph: &StackGraph,
+        paths: &Paths,
+        other: &ScopedSymbol,
+    ) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+            .then_with(|| graph[self.symbol].cmp(&graph[other.symbol]))
+            .then_with(|| cmp_option(self.scopes, other.scopes, |a, b| a.cmp(paths, &b)))
+    }
+
     pub fn display<'a>(self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {
         display_with(self, graph, paths)
     }
@@ -158,6 +177,7 @@ impl DisplayWithPaths for ScopedSymbol {
 #[derive(Clone, Copy)]
 pub struct SymbolStack {
     list: List<ScopedSymbol>,
+    length: usize,
 }
 
 impl SymbolStack {
@@ -167,17 +187,41 @@ impl SymbolStack {
         self.list.is_empty()
     }
 
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
     /// Returns an empty symbol stack.
     pub fn empty() -> SymbolStack {
         SymbolStack {
             list: List::empty(),
+            length: 0,
         }
+    }
+
+    pub fn equals(&self, paths: &Paths, other: &SymbolStack) -> bool {
+        self.list
+            .equals_with(&paths.symbol_stacks, other.list, |a, b| a.equals(paths, b))
+    }
+
+    pub fn cmp(
+        &self,
+        graph: &StackGraph,
+        paths: &Paths,
+        other: &SymbolStack,
+    ) -> std::cmp::Ordering {
+        self.list
+            .cmp_with(&paths.symbol_stacks, other.list, |a, b| {
+                a.cmp(graph, paths, b)
+            })
     }
 
     /// Pushes a new [`ScopedSymbol`][] onto the front of this symbol stack.
     ///
     /// [`ScopedSymbol`]: struct.ScopedSymbol.html
     pub fn push_front(&mut self, paths: &mut Paths, scoped_symbol: ScopedSymbol) {
+        self.length += 1;
         self.list
             .push_front(&mut paths.symbol_stacks, scoped_symbol);
     }
@@ -185,7 +229,11 @@ impl SymbolStack {
     /// Removes and returns the [`ScopedSymbol`][] at the front of this symbol stack.  If the stack
     /// is empty, returns `None`.
     pub fn pop_front(&mut self, paths: &Paths) -> Option<ScopedSymbol> {
-        self.list.pop_front(&paths.symbol_stacks).copied()
+        let result = self.list.pop_front(&paths.symbol_stacks).copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     pub fn display<'a>(self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {
@@ -239,6 +287,16 @@ impl ScopeStack {
         ScopeStack {
             list: List::empty(),
         }
+    }
+
+    pub fn equals(&self, paths: &Paths, other: &ScopeStack) -> bool {
+        self.list
+            .equals_with(&paths.scope_stacks, other.list, |a, b| *a == *b)
+    }
+
+    pub fn cmp(&self, paths: &Paths, other: &ScopeStack) -> std::cmp::Ordering {
+        self.list
+            .cmp_with(&paths.scope_stacks, other.list, |a, b| a.cmp(b))
     }
 
     /// Pushes a new [`Node`][] onto the front of this scope stack.  The node must be an _exported
@@ -320,6 +378,21 @@ impl Path {
             scope_stack,
             edge_count: 0,
         })
+    }
+
+    pub fn equals(&self, paths: &Paths, other: &Path) -> bool {
+        self.start_node == other.start_node
+            && self.end_node == other.end_node
+            && self.symbol_stack.equals(paths, &other.symbol_stack)
+            && self.scope_stack.equals(paths, &other.scope_stack)
+    }
+
+    pub fn cmp(&self, graph: &StackGraph, paths: &Paths, other: &Path) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+            .then_with(|| self.start_node.cmp(&other.start_node))
+            .then_with(|| self.end_node.cmp(&other.end_node))
+            .then_with(|| self.symbol_stack.cmp(graph, paths, &other.symbol_stack))
+            .then_with(|| self.scope_stack.cmp(paths, &other.scope_stack))
     }
 
     /// A _complete_ path represents a full name binding that resolves a reference to a definition.
@@ -522,11 +595,15 @@ impl Paths {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
     {
+        let mut cycle_detector = CycleDetector::new();
         let mut queue = starting_nodes
             .into_iter()
             .filter_map(|node| Path::from_node(graph, self, node))
             .collect::<VecDeque<_>>();
         while let Some(path) = queue.pop_front() {
+            if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
+                continue;
+            }
             path.extend(graph, self, &mut queue);
             visit(graph, self, path);
         }

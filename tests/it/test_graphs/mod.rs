@@ -11,6 +11,8 @@ use stack_graphs::arena::Handle;
 use stack_graphs::graph::*;
 
 pub mod class_field_through_function_parameter;
+pub mod cyclic_imports_python;
+pub mod cyclic_imports_rust;
 pub mod sequenced_import_star;
 
 /// An extension trait that makes it a bit easier to add stuff to our test stack graphs.
