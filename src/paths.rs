@@ -381,6 +381,8 @@ pub enum PathResolutionError {
     /// The path contains a _pop symbol_ or _pop scoped symbol_ node, but there are no symbols on
     /// the symbol stack to pop off.
     EmptySymbolStack,
+    /// The partial path contains edges from multiple files.
+    IncorrectFile,
     /// The path contains a _pop symbol_ or _pop scoped symbol_ node, but the symbol at the top of
     /// the symbol stack does not match.
     IncorrectPoppedSymbol,
