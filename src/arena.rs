@@ -488,6 +488,24 @@ where
     }
 }
 
+impl<T> ReversibleList<T> {
+    /// Reverses the list, assuming that the reversal has already been computed.  If it hasn't we
+    /// return an error.
+    pub fn reverse_reused(&mut self, arena: &ReversibleListArena<T>) -> Result<(), ()> {
+        match arena.get(self.cells) {
+            // The empty list is already reversed.
+            ReversibleListCell::Empty => Ok(()),
+            ReversibleListCell::Nonempty { reversed, .. } => match reversed.get() {
+                Some(reversed) => {
+                    self.cells = reversed;
+                    Ok(())
+                }
+                _ => Err(()),
+            },
+        }
+    }
+}
+
 impl<T> ReversibleListCell<T> {
     fn new(
         head: T,
@@ -550,3 +568,204 @@ impl<T> Clone for ReversibleList<T> {
 }
 
 impl<T> Copy for ReversibleList<T> {}
+
+//-------------------------------------------------------------------------------------------------
+// Arena-allocated deque
+
+/// An arena-allocated deque.
+///
+/// Under the covers, this is implemented as a [`List`][].  Because these lists are singly-linked,
+/// we can only add elements to, and remove them from, one side of the list.
+///
+/// To handle this, each deque stores its contents either _forwards_ or _backwards_.  We
+/// automatically shift between these two representations as needed, depending on the requirements
+/// of each method.
+///
+/// Note that we cache the result of reversing the list, so it should be quick to switch back and
+/// forth between representations _as long as you have not added any additional elements to the
+/// deque_!  If performance is critical, you should ensure that you don't call methods in a pattern
+/// that causes the deque to reverse itself each time you add an element.
+///
+/// [`List`]: struct.List.html
+pub struct Deque<T> {
+    list: ReversibleList<T>,
+    direction: DequeDirection,
+}
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+enum DequeDirection {
+    Forwards,
+    Backwards,
+}
+
+impl std::ops::Not for DequeDirection {
+    type Output = DequeDirection;
+    fn not(self) -> DequeDirection {
+        match self {
+            DequeDirection::Forwards => DequeDirection::Backwards,
+            DequeDirection::Backwards => DequeDirection::Forwards,
+        }
+    }
+}
+
+// An arena that's used to manage `Deque<T>` instances.
+pub type DequeArena<T> = ReversibleListArena<T>;
+
+impl<T> Deque<T> {
+    /// Creates a new `DequeArena` that will manage deques of this type.
+    pub fn new_arena() -> DequeArena<T> {
+        ReversibleList::new_arena()
+    }
+
+    /// Returns whether this deque is empty.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
+    /// Returns an empty deque.
+    pub fn empty() -> Deque<T> {
+        Deque {
+            list: ReversibleList::empty(),
+            // A philosophical question for you: is the empty list forwards or backwards?  It
+            // doesn't really matter which one we choose here; if we immediately start pushing onto
+            // the back, we'll "reverse" the current list before proceeding, but reversing the
+            // empty list is a no-op.
+            direction: DequeDirection::Forwards,
+        }
+    }
+
+    fn is_backwards(&self) -> bool {
+        matches!(self.direction, DequeDirection::Backwards)
+    }
+
+    fn is_forwards(&self) -> bool {
+        matches!(self.direction, DequeDirection::Forwards)
+    }
+
+    /// Returns an iterator over the contents of this deque, with no guarantee about the ordering of
+    /// the elements.  (By not caring about the ordering of the elements, you can call this method
+    /// regardless of which direction the deque's elements are currently stored.  And that, in
+    /// turn, means that we only need shared access to the arena, and not mutable access to it.)
+    pub fn iter_unordered<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        self.list.iter(arena)
+    }
+}
+
+impl<T> Deque<T>
+where
+    T: Clone,
+{
+    /// Ensures that this deque has computed its backwards-facing list of elements.
+    pub fn ensure_backwards(&mut self, arena: &mut DequeArena<T>) {
+        if self.is_backwards() {
+            return;
+        }
+        self.list.reverse(arena);
+        self.direction = DequeDirection::Backwards;
+    }
+
+    /// Ensures that this deque has computed its forwards-facing list of elements.
+    pub fn ensure_forwards(&mut self, arena: &mut DequeArena<T>) {
+        if self.is_forwards() {
+            return;
+        }
+        self.list.reverse(arena);
+        self.direction = DequeDirection::Forwards;
+    }
+
+    /// Pushes a new element onto the front of this deque.
+    pub fn push_front(&mut self, arena: &mut DequeArena<T>, element: T) {
+        self.ensure_forwards(arena);
+        self.list.push_front(arena, element);
+    }
+
+    /// Pushes a new element onto the back of this deque.
+    pub fn push_back(&mut self, arena: &mut DequeArena<T>, element: T) {
+        self.ensure_backwards(arena);
+        self.list.push_front(arena, element);
+    }
+
+    /// Removes and returns the element from the front of this deque.  If the deque is empty,
+    /// returns `None`.
+    pub fn pop_front<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+        self.ensure_forwards(arena);
+        self.list.pop_front(arena)
+    }
+
+    /// Removes and returns the element from the back of this deque.  If the deque is empty,
+    /// returns `None`.
+    pub fn pop_back<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+        self.ensure_backwards(arena);
+        self.list.pop_front(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a forwards direction.
+    pub fn iter<'a>(&self, arena: &'a mut DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_backwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a backwards direction.
+    pub fn iter_reversed<'a>(
+        &self,
+        arena: &'a mut DequeArena<T>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_forwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+}
+
+impl<T> Deque<T> {
+    /// Returns an iterator over the contents of this deque in a forwards direction, assuming that
+    /// we have already computed its forwards-facing list of elements via [`ensure_forwards`][].
+    /// Panics if we haven't already computed it.
+    ///
+    /// [`ensure_forwards`]: #method.ensure_forwards
+    pub fn iter_reused<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_backwards() {
+            list.reverse_reused(arena)
+                .expect("Forwards deque hasn't been calculated");
+        }
+        list.iter(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a backwards direction, assuming that
+    /// we have already computed its backwards-facing list of elements via [`ensure_backwards`][].
+    /// Panics if we haven't already computed it.
+    ///
+    /// [`ensure_backwards`]: #method.ensure_backwards
+    pub fn iter_reversed_reused<'a>(
+        &self,
+        arena: &'a DequeArena<T>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_forwards() {
+            list.reverse_reused(arena)
+                .expect("Backwards deque hasn't been calculated");
+        }
+        list.iter(arena)
+    }
+}
+
+// Normally we would #[derive] all of these traits, but the auto-derived implementations all
+// require that T implement the trait as well.  We don't store any real instances of T inside of
+// Deque, so our implementations do _not_ require that.
+
+impl<T> Clone for Deque<T> {
+    fn clone(&self) -> Deque<T> {
+        Deque {
+            list: self.list,
+            direction: self.direction,
+        }
+    }
+}
+
+impl<T> Copy for Deque<T> {}
