@@ -29,6 +29,7 @@
 //! [`Handle`]: struct.Handle.html
 //! [`StackGraph`]: ../graph/struct.StackGraph.html
 
+use std::cell::Cell;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -354,3 +355,198 @@ impl<T> Clone for List<T> {
 }
 
 impl<T> Copy for List<T> {}
+
+//-------------------------------------------------------------------------------------------------
+// Reversible arena-allocated list
+
+/// An arena-allocated list that can be reversed.
+///
+/// Well, that is, you can reverse a [`List`][] just fine by yourself.  This type takes care of
+/// doing that for you, and importantly, _saves the result_ so that if you only have to compute the
+/// reversal once even if you need to access it multiple times.
+///
+/// [`List`]: struct.List.html
+pub struct ReversibleList<T> {
+    cells: Handle<ReversibleListCell<T>>,
+}
+
+#[doc(hidden)]
+pub enum ReversibleListCell<T> {
+    Empty,
+    Nonempty {
+        head: T,
+        tail: Handle<ReversibleListCell<T>>,
+        reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
+    },
+}
+
+// An arena that's used to manage `ReversibleList<T>` instances.
+//
+// (Note that the arena doesn't store `ReversibleList<T>` itself; it stores the
+// `ReversibleListCell<T>`s that the lists are made of.)
+pub type ReversibleListArena<T> = Arena<ReversibleListCell<T>>;
+
+impl<T> ReversibleList<T> {
+    /// Creates a new `ReversibleListArena` that will manage lists of this type.
+    pub fn new_arena() -> ReversibleListArena<T> {
+        let mut arena = ReversibleListArena::new();
+        let handle = arena.add(ReversibleListCell::Empty);
+        assert!(handle.index == EMPTY_LIST_HANDLE);
+        arena
+    }
+
+    /// Returns whether this list is empty.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        ReversibleListCell::is_empty_handle(self.cells)
+    }
+
+    /// Returns an empty list.
+    pub fn empty() -> ReversibleList<T> {
+        ReversibleList {
+            cells: ReversibleListCell::empty_handle(),
+        }
+    }
+
+    /// Returns whether we have already calculated the reversal of this list.
+    pub fn have_reversal(&self, arena: &ReversibleListArena<T>) -> bool {
+        match arena.get(self.cells) {
+            // The empty list is already reversed.
+            ReversibleListCell::Empty => true,
+            ReversibleListCell::Nonempty { reversed, .. } => reversed.get().is_some(),
+        }
+    }
+
+    /// Pushes a new element onto the front of this list.
+    pub fn push_front(&mut self, arena: &mut ReversibleListArena<T>, head: T) {
+        self.cells = arena.add(ReversibleListCell::new(head, self.cells, None));
+    }
+
+    /// Removes and returns the element at the front of this list.  If the list is empty, returns
+    /// `None`.
+    pub fn pop_front<'a>(&mut self, arena: &'a ReversibleListArena<T>) -> Option<&'a T> {
+        match arena.get(self.cells) {
+            ReversibleListCell::Empty => return None,
+            ReversibleListCell::Nonempty { head, tail, .. } => {
+                self.cells = *tail;
+                Some(head)
+            }
+        }
+    }
+
+    /// Returns an iterator over the elements of this list.
+    pub fn iter<'a>(&self, arena: &'a ReversibleListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut current = self.cells;
+        std::iter::from_fn(move || match arena.get(current) {
+            ReversibleListCell::Empty => return None,
+            ReversibleListCell::Nonempty { head, tail, .. } => {
+                current = *tail;
+                Some(head)
+            }
+        })
+    }
+}
+
+impl<T> ReversibleList<T>
+where
+    T: Clone,
+{
+    /// Reverses the list.  Since we're already caching everything in an arena, we make sure to
+    /// only calculate the reversal once, returning it as-is if you call this function multiple
+    /// times.
+    pub fn reverse(&mut self, arena: &mut ReversibleListArena<T>) {
+        self.ensure_reversal_available(arena);
+        match arena.get(self.cells) {
+            ReversibleListCell::Empty => return,
+            ReversibleListCell::Nonempty { reversed, .. } => match reversed.get() {
+                Some(reversed) => self.cells = reversed,
+                _ => unreachable!(),
+            },
+        }
+    }
+
+    /// Ensures that the reversal of this list is available.  It can be useful to precalculate this
+    /// when you have mutable access to the arena, so that you can then reverse and un-reverse the
+    /// list later when you only have shared access to it.
+    pub fn ensure_reversal_available(&mut self, arena: &mut ReversibleListArena<T>) {
+        // First check to see if the list has already been reversed.
+        match arena.get(self.cells) {
+            // The empty list is already reversed.
+            ReversibleListCell::Empty => return,
+            ReversibleListCell::Nonempty { reversed, .. } if reversed.get().is_some() => return,
+            _ => (),
+        }
+
+        // If not, reverse the list and cache the result.
+        let new_reversed = ReversibleListCell::reverse(self.cells, arena);
+        match arena.get(self.cells) {
+            ReversibleListCell::Nonempty { reversed, .. } => {
+                reversed.set(Some(new_reversed));
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<T> ReversibleListCell<T> {
+    fn new(
+        head: T,
+        tail: Handle<ReversibleListCell<T>>,
+        reversed: Option<Handle<ReversibleListCell<T>>>,
+    ) -> ReversibleListCell<T> {
+        ReversibleListCell::Nonempty {
+            head,
+            tail,
+            reversed: Cell::new(reversed),
+        }
+    }
+
+    fn empty_handle() -> Handle<ReversibleListCell<T>> {
+        Handle::new(EMPTY_LIST_HANDLE)
+    }
+
+    fn is_empty_handle(handle: Handle<ReversibleListCell<T>>) -> bool {
+        handle.index == EMPTY_LIST_HANDLE
+    }
+}
+
+impl<T> ReversibleListCell<T>
+where
+    T: Clone,
+{
+    fn reverse(
+        forwards: Handle<ReversibleListCell<T>>,
+        arena: &mut ReversibleListArena<T>,
+    ) -> Handle<ReversibleListCell<T>> {
+        let mut reversed = ReversibleListCell::empty_handle();
+        let mut current = forwards;
+        while let ReversibleListCell::Nonempty { head, tail, .. } = arena.get(current) {
+            let head = head.clone();
+            current = *tail;
+            reversed = arena.add(Self::new(
+                head,
+                reversed,
+                // The reversal of the reversal that we just calculated is our original list!  Go
+                // ahead and cache that away preemptively.
+                if ReversibleListCell::is_empty_handle(current) {
+                    Some(forwards)
+                } else {
+                    None
+                },
+            ));
+        }
+        reversed
+    }
+}
+
+// Normally we would #[derive] all of these traits, but the auto-derived implementations all
+// require that T implement the trait as well.  We don't store any real instances of T inside of
+// ReversibleList, so our implementations do _not_ require that.
+
+impl<T> Clone for ReversibleList<T> {
+    fn clone(&self) -> ReversibleList<T> {
+        ReversibleList { cells: self.cells }
+    }
+}
+
+impl<T> Copy for ReversibleList<T> {}

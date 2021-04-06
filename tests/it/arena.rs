@@ -8,6 +8,8 @@
 use stack_graphs::arena::Arena;
 use stack_graphs::arena::List;
 use stack_graphs::arena::ListArena;
+use stack_graphs::arena::ReversibleList;
+use stack_graphs::arena::ReversibleListArena;
 use stack_graphs::arena::SupplementalArena;
 
 #[test]
@@ -53,4 +55,29 @@ fn can_create_lists() {
     list.push_front(&mut arena, 2);
     list.push_front(&mut arena, 3);
     assert_eq!(collect(&list, &arena), vec![3, 2, 1]);
+}
+
+#[test]
+fn can_create_reversible_lists() {
+    fn collect(list: &ReversibleList<u32>, arena: &ReversibleListArena<u32>) -> Vec<u32> {
+        list.iter(arena).copied().collect()
+    }
+
+    let mut arena = ReversibleList::new_arena();
+    let mut list = ReversibleList::empty();
+    assert_eq!(collect(&list, &arena), vec![]);
+    list.push_front(&mut arena, 1);
+    assert_eq!(collect(&list, &arena), vec![1]);
+    list.push_front(&mut arena, 2);
+    list.push_front(&mut arena, 3);
+    assert_eq!(collect(&list, &arena), vec![3, 2, 1]);
+    list.reverse(&mut arena);
+    assert_eq!(collect(&list, &arena), vec![1, 2, 3]);
+    list.push_front(&mut arena, 4);
+    list.push_front(&mut arena, 5);
+    assert_eq!(collect(&list, &arena), vec![5, 4, 1, 2, 3]);
+    list.reverse(&mut arena);
+    assert_eq!(collect(&list, &arena), vec![3, 2, 1, 4, 5]);
+    // Verify that we stash away the re-reversal so that we don't have to recompute it.
+    assert!(list.have_reversal(&arena));
 }
