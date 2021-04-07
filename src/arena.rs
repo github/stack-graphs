@@ -38,6 +38,9 @@ use std::num::NonZeroU32;
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use crate::utils::cmp_option;
+use crate::utils::equals_option;
+
 //-------------------------------------------------------------------------------------------------
 // Arenas and handles
 
@@ -344,6 +347,61 @@ impl<T> List<T> {
     }
 }
 
+impl<T> List<T> {
+    pub fn equals_with<F>(mut self, arena: &ListArena<T>, mut other: List<T>, mut eq: F) -> bool
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        loop {
+            if self.cells == other.cells {
+                return true;
+            }
+            if !equals_option(self.pop_front(arena), other.pop_front(arena), &mut eq) {
+                return false;
+            }
+        }
+    }
+
+    pub fn cmp_with<F>(
+        mut self,
+        arena: &ListArena<T>,
+        mut other: List<T>,
+        mut cmp: F,
+    ) -> std::cmp::Ordering
+    where
+        F: FnMut(&T, &T) -> std::cmp::Ordering,
+    {
+        use std::cmp::Ordering;
+        loop {
+            if self.cells == other.cells {
+                return Ordering::Equal;
+            }
+            match cmp_option(self.pop_front(arena), other.pop_front(arena), &mut cmp) {
+                Ordering::Equal => (),
+                result @ _ => return result,
+            }
+        }
+    }
+}
+
+impl<T> List<T>
+where
+    T: Eq,
+{
+    pub fn equals(self, arena: &ListArena<T>, other: List<T>) -> bool {
+        self.equals_with(arena, other, |a, b| *a == *b)
+    }
+}
+
+impl<T> List<T>
+where
+    T: Ord,
+{
+    pub fn cmp(self, arena: &ListArena<T>, other: List<T>) -> std::cmp::Ordering {
+        self.cmp_with(arena, other, |a, b| a.cmp(b))
+    }
+}
+
 // Normally we would #[derive] all of these traits, but the auto-derived implementations all
 // require that T implement the trait as well.  We don't store any real instances of T inside of
 // List, so our implementations do _not_ require that.
@@ -557,6 +615,70 @@ where
     }
 }
 
+impl<T> ReversibleList<T> {
+    pub fn equals_with<F>(
+        mut self,
+        arena: &ReversibleListArena<T>,
+        mut other: ReversibleList<T>,
+        mut eq: F,
+    ) -> bool
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        loop {
+            if self.cells == other.cells {
+                return true;
+            }
+            if !equals_option(self.pop_front(arena), other.pop_front(arena), &mut eq) {
+                return false;
+            }
+        }
+    }
+
+    pub fn cmp_with<F>(
+        mut self,
+        arena: &ReversibleListArena<T>,
+        mut other: ReversibleList<T>,
+        mut cmp: F,
+    ) -> std::cmp::Ordering
+    where
+        F: FnMut(&T, &T) -> std::cmp::Ordering,
+    {
+        use std::cmp::Ordering;
+        loop {
+            if self.cells == other.cells {
+                return Ordering::Equal;
+            }
+            match cmp_option(self.pop_front(arena), other.pop_front(arena), &mut cmp) {
+                Ordering::Equal => (),
+                result @ _ => return result,
+            }
+        }
+    }
+}
+
+impl<T> ReversibleList<T>
+where
+    T: Eq,
+{
+    pub fn equals(self, arena: &ReversibleListArena<T>, other: ReversibleList<T>) -> bool {
+        self.equals_with(arena, other, |a, b| *a == *b)
+    }
+}
+
+impl<T> ReversibleList<T>
+where
+    T: Ord,
+{
+    pub fn cmp(
+        self,
+        arena: &ReversibleListArena<T>,
+        other: ReversibleList<T>,
+    ) -> std::cmp::Ordering {
+        self.cmp_with(arena, other, |a, b| a.cmp(b))
+    }
+}
+
 // Normally we would #[derive] all of these traits, but the auto-derived implementations all
 // require that T implement the trait as well.  We don't store any real instances of T inside of
 // ReversibleList, so our implementations do _not_ require that.
@@ -719,6 +841,70 @@ where
             list.reverse(arena);
         }
         list.iter(arena)
+    }
+
+    /// Ensures that both deques are stored in the same direction.  It doesn't matter _which_
+    /// direction, as long as they're the same, so do the minimum amount of work to bring this
+    /// about.  (In particular, if we've already calculated the reversal of one of the deques,
+    /// reverse that one.)
+    fn ensure_same_direction(&mut self, arena: &mut DequeArena<T>, other: &mut Deque<T>) {
+        if self.direction == other.direction {
+            return;
+        }
+        if self.list.have_reversal(arena) {
+            self.list.reverse(arena);
+            self.direction = !self.direction;
+        } else {
+            other.list.reverse(arena);
+            other.direction = !other.direction;
+        }
+    }
+}
+
+impl<T> Deque<T>
+where
+    T: Clone,
+{
+    pub fn equals_with<F>(mut self, arena: &mut DequeArena<T>, mut other: Deque<T>, eq: F) -> bool
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        self.ensure_same_direction(arena, &mut other);
+        self.list.equals_with(arena, other.list, eq)
+    }
+
+    pub fn cmp_with<F>(
+        mut self,
+        arena: &mut DequeArena<T>,
+        mut other: Deque<T>,
+        cmp: F,
+    ) -> std::cmp::Ordering
+    where
+        F: FnMut(&T, &T) -> std::cmp::Ordering,
+    {
+        // To compare, we need boths deques to specifically be pointing forwards, and not just in
+        // the same direction, so that we get the lexicographic comparison correct.
+        self.ensure_forwards(arena);
+        other.ensure_forwards(arena);
+        self.list.cmp_with(arena, other.list, cmp)
+    }
+}
+
+impl<T> Deque<T>
+where
+    T: Clone + Eq,
+{
+    pub fn equals(self, arena: &mut DequeArena<T>, other: Deque<T>) -> bool {
+        self.equals_with(arena, other, |a, b| *a == *b)
+    }
+}
+
+impl<T> Deque<T>
+where
+    T: Clone + Ord,
+{
+    pub fn cmp(self, arena: &mut DequeArena<T>, other: Deque<T>) -> std::cmp::Ordering {
+        self.cmp_with(arena, other, |a, b| a.cmp(b))
     }
 }
 
