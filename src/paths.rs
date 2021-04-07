@@ -454,6 +454,12 @@ pub enum PathResolutionError {
     /// The path contains a _pop symbol_ or _pop scoped symbol_ node, but there are no symbols on
     /// the symbol stack to pop off.
     EmptySymbolStack,
+    /// The partial path contains multiple references to a scope stack variable, and those
+    /// references can't unify on a single scope stack.
+    IncompatibleScopeStackVariables,
+    /// The partial path contains multiple references to a symbol stack variable, and those
+    /// references can't unify on a single symbol stack.
+    IncompatibleSymbolStackVariables,
     /// The partial path contains edges from multiple files.
     IncorrectFile,
     /// The path contains a _pop symbol_ or _pop scoped symbol_ node, but the symbol at the top of
@@ -465,6 +471,16 @@ pub enum PathResolutionError {
     /// The path contains a _pop scoped symbol_ node, but the symbol at the top of the symbol stack
     /// does not have an attached scope list to pop off.
     MissingAttachedScopeList,
+    /// The path's scope stack does not satisfy the partial path's scope stack precondition.
+    ScopeStackUnsatisfied,
+    /// The path's symbol stack does not satisfy the partial path's symbol stack precondition.
+    SymbolStackUnsatisfied,
+    /// The partial path's postcondition references a symbol stack variable that isn't present in
+    /// the precondition.
+    UnboundSymbolStackVariable,
+    /// The partial path's postcondition references a scope stack variable that isn't present in
+    /// the precondition.
+    UnboundScopeStackVariable,
     /// The path contains a _pop symbol_ node, but the symbol at the top of the symbol stack has an
     /// attached scope list that we weren't expecting.
     UnexpectedAttachedScopeList,
