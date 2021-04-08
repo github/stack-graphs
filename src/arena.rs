@@ -33,6 +33,11 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::num::NonZeroU32;
+use std::ops::Index;
+use std::ops::IndexMut;
+
+//-------------------------------------------------------------------------------------------------
+// Arenas and handles
 
 /// A handle to an instance of type `T` that was allocated from an [`Arena`][].
 ///
@@ -133,5 +138,102 @@ impl<T> Arena<T> {
     /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
     pub fn get(&self, handle: Handle<T>) -> &T {
         &self.items[handle.as_usize() - 1]
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Supplemental arenas
+
+/// A supplemental arena lets you store additional data about some data type that is itself stored
+/// in an [`Arena`][].
+///
+/// We implement `Index` and `IndexMut` for a more ergonomic syntax.  Please note that when
+/// indexing in an _immutable_ context, we **_panic_** if you try to access data for a handle that
+/// doesn't exist in the arena.  (Use the [`get`][] method if you don't know whether the value
+/// exists or not.)  In a _mutable_ context, we automatically create a `Default` instance of the
+/// type if there isn't already an instance for that handle in the arena.
+///
+/// ```
+/// # use stack_graphs::arena::Arena;
+/// # use stack_graphs::arena::SupplementalArena;
+/// // We need an Arena to create handles.
+/// let mut arena = Arena::<u32>::new();
+/// let handle = arena.add(1);
+///
+/// let mut supplemental = SupplementalArena::<u32, String>::new();
+///
+/// // But indexing will panic if the element doesn't already exist.
+/// // assert_eq!(supplemental[handle].as_str(), "");
+///
+/// // The `get` method is always safe, since it returns an Option.
+/// assert_eq!(supplemental.get(handle), None);
+///
+/// // Once we've added the element to the supplemental arena, indexing
+/// // won't panic anymore.
+/// supplemental[handle] = "hello".to_string();
+/// assert_eq!(supplemental[handle].as_str(), "hello");
+/// ```
+///
+/// [`Arena`]: struct.Arena.html
+/// [`get`]: #method.get
+pub struct SupplementalArena<H, T> {
+    items: Vec<T>,
+    _phantom: PhantomData<H>,
+}
+
+impl<H, T> SupplementalArena<H, T> {
+    /// Creates a new, empty supplemental arena.
+    pub fn new() -> SupplementalArena<H, T> {
+        SupplementalArena {
+            items: Vec::new(),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Returns the item belonging to a particular handle, if it exists.
+    pub fn get(&self, handle: Handle<H>) -> Option<&T> {
+        self.items.get(handle.as_usize() - 1)
+    }
+
+    /// Returns a mutable reference to the item belonging to a particular handle, if it exists.
+    pub fn get_mut(&mut self, handle: Handle<H>) -> Option<&mut T> {
+        self.items.get_mut(handle.as_usize() - 1)
+    }
+}
+
+impl<H, T> SupplementalArena<H, T>
+where
+    T: Default,
+{
+    /// Returns a mutable reference to the item belonging to a particular handle, creating it first
+    /// (using the type's `Default` implementation) if it doesn't already exist.
+    pub fn get_mut_or_default(&mut self, handle: Handle<H>) -> &mut T {
+        let index = handle.as_usize();
+        if self.items.len() < index {
+            self.items.resize_with(index, || T::default());
+        }
+        unsafe { self.items.get_unchecked_mut(index - 1) }
+    }
+}
+
+impl<H, T> Default for SupplementalArena<H, T> {
+    fn default() -> SupplementalArena<H, T> {
+        SupplementalArena::new()
+    }
+}
+
+impl<H, T> Index<Handle<H>> for SupplementalArena<H, T> {
+    type Output = T;
+    fn index(&self, handle: Handle<H>) -> &T {
+        &self.items[handle.as_usize() - 1]
+    }
+}
+
+impl<H, T> IndexMut<Handle<H>> for SupplementalArena<H, T>
+where
+    T: Default,
+{
+    fn index_mut(&mut self, handle: Handle<H>) -> &mut T {
+        self.get_mut_or_default(handle)
     }
 }
