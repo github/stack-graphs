@@ -60,4 +60,5 @@ pub mod cycles;
 pub mod graph;
 pub mod partial;
 pub mod paths;
+pub mod stitching;
 pub(crate) mod utils;

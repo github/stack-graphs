@@ -9,7 +9,9 @@ pub mod test_graphs;
 
 mod arena;
 mod can_create_graph;
+mod can_find_node_partial_paths_in_database;
 mod can_find_partial_paths_in_file;
+mod can_find_root_partial_paths_in_database;
 mod can_jump_to_definition;
 mod graph;
 mod paths;
