@@ -140,6 +140,12 @@ impl<T> Arena<T> {
     pub fn get(&self, handle: Handle<T>) -> &T {
         &self.items[handle.as_usize() - 1]
     }
+    ///
+    /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
+    /// it.
+    pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
+        &mut self.items[handle.as_usize() - 1]
+    }
 
     /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
     /// retain a reference to the arena!)

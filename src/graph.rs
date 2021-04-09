@@ -286,6 +286,7 @@ pub enum Node {
     PopScopedSymbol(PopScopedSymbolNode),
     PopSymbol(PopSymbolNode),
     Root(RootNode),
+    Unknown(UnknownNode),
 }
 
 impl Node {
@@ -315,6 +316,23 @@ impl Node {
     #[inline(always)]
     pub fn is_root(&self) -> bool {
         matches!(self, Node::Root(_))
+    }
+
+    /// Returns the ID of this node.  Returns `None` for the singleton _root_ and _jump to scope_
+    /// nodes, which don't have IDs.
+    pub fn id(&self) -> Option<NodeID> {
+        match self {
+            Node::DropScopes(node) => Some(node.id),
+            Node::ExportedScope(node) => Some(node.id),
+            Node::InternalScope(node) => Some(node.id),
+            Node::JumpTo(_) => None,
+            Node::PushScopedSymbol(node) => Some(node.id),
+            Node::PushSymbol(node) => Some(node.id),
+            Node::PopScopedSymbol(node) => Some(node.id),
+            Node::PopSymbol(node) => Some(node.id),
+            Node::Root(_) => None,
+            Node::Unknown(node) => Some(node.id),
+        }
     }
 
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
@@ -371,6 +389,7 @@ impl<'a> Display for DisplayNode<'a> {
             Node::PopScopedSymbol(node) => node.display(self.graph).fmt(f),
             Node::PopSymbol(node) => node.display(self.graph).fmt(f),
             Node::Root(node) => node.fmt(f),
+            Node::Unknown(node) => node.display(self.graph).fmt(f),
         }
     }
 }
@@ -787,6 +806,67 @@ impl From<RootNode> for Node {
 impl Display for RootNode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "[root]")
+    }
+}
+
+/// A placeholder for a node that you know needs to exist, but don't yet know what kind of node it
+/// will be.  Before you can use the graph, you must use [`resolve_unknown_node`][] to replace this
+/// placeholder with a "real" node.
+///
+/// [`resolve_unknown_node`]: struct.StackGraph.html#method.resolve_unknown_node
+pub struct UnknownNode {
+    /// The unique identifier for this node.
+    pub id: NodeID,
+}
+
+impl From<UnknownNode> for Node {
+    fn from(node: UnknownNode) -> Node {
+        Node::Unknown(node)
+    }
+}
+
+impl UnknownNode {
+    /// Adds the node to a stack graph.
+    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
+        graph.add_node(self.id, self.into())
+    }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayUnknownNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayUnknownNode<'a> {
+    wrapped: &'a UnknownNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayUnknownNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(f, "[{} unknown]", self.wrapped.id.display(self.graph))
+        }
+    }
+}
+
+impl StackGraph {
+    /// Resolves an _unknown_ node with a "real" node.  Panics if there isn't a node in the arena
+    /// with the same ID as `node`.  Returns an error is that node is not an _unknown_ node.
+    pub fn resolve_unknown_node(&mut self, node: Node) -> Result<(), &Node> {
+        let id = node.id().unwrap();
+        let handle = self.node_id_handles.handle_for_id(id).unwrap();
+        let arena_node = self.nodes.get_mut(handle);
+        if !matches!(arena_node, Node::Unknown(_)) {
+            return Err(arena_node);
+        }
+        *arena_node = node;
+        Ok(())
     }
 }
 
