@@ -91,6 +91,13 @@ impl StackGraph {
         self.symbol_handles.insert(symbol_value, handle);
         handle
     }
+
+    /// Returns an iterator over all of the handles of all of the symbols in this stack graph.
+    /// (Note that because we're only returning _handles_, this iterator does not retain a
+    /// reference to the `StackGraph`.)
+    pub fn iter_symbols(&self) -> impl Iterator<Item = Handle<Symbol>> {
+        self.symbols.iter_handles()
+    }
 }
 
 impl Index<Handle<Symbol>> for StackGraph {

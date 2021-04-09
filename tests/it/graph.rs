@@ -5,6 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use std::collections::HashSet;
+
+use maplit::hashset;
 use stack_graphs::graph::StackGraph;
 
 #[test]
@@ -28,4 +31,19 @@ fn can_create_symbols() {
     assert_ne!(a2, b);
     assert_ne!(a2, c);
     assert_ne!(b, c);
+}
+
+#[test]
+fn can_iterate_symbols() {
+    let mut graph = StackGraph::new();
+    graph.add_symbol("a");
+    graph.add_symbol("b");
+    graph.add_symbol("c");
+    // We should get all of the symbols that we've created — though there's no guarantee in which
+    // order they'll come out of the iterator.
+    let symbols = graph
+        .iter_symbols()
+        .map(|symbol| graph[symbol].as_str())
+        .collect::<HashSet<_>>();
+    assert_eq!(symbols, hashset! {"a", "b", "c"});
 }
