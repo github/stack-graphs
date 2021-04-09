@@ -21,4 +21,11 @@ fn can_create_symbols() {
     assert_ne!(graph[a2], graph[b]);
     assert_ne!(graph[a2], graph[c]);
     assert_ne!(graph[b], graph[c]);
+    // and because we deduplicate symbols, the handles should be comparable too.
+    assert_eq!(a1, a2);
+    assert_ne!(a1, b);
+    assert_ne!(a1, c);
+    assert_ne!(a2, b);
+    assert_ne!(a2, c);
+    assert_ne!(b, c);
 }

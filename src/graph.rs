@@ -18,6 +18,7 @@
 //! [`Arena`]: ../arena/struct.Arena.html
 //! [`StackGraph`]: struct.StackGraph.html
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::ops::Index;
@@ -34,6 +35,10 @@ use crate::arena::Handle;
 /// can also represent some other "operation" that can occur in source code, and which needs to be
 /// modeled in a stack graph — for instance, many languages will use a "fake" symbol named `.` to
 /// represent member access.
+///
+/// We deduplicate `Symbol` instances in a `StackGraph` — that is, we ensure that there are never
+/// multiple `Symbol` instances with the same content.  That means that you can compare _handles_
+/// to symbols using simple equality, without having to dereference into the `StackGraph` arena.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Symbol {
     symbol: String,
@@ -71,11 +76,20 @@ impl PartialEq<&str> for Symbol {
 }
 
 impl StackGraph {
-    /// Adds a symbol to the stack graph.
-    pub fn add_symbol<S: ToString + ?Sized>(&mut self, symbol: &S) -> Handle<Symbol> {
-        self.symbols.add(Symbol {
-            symbol: symbol.to_string(),
-        })
+    /// Adds a symbol to the stack graph, ensuring that there's only ever one copy of a particular
+    /// symbol stored in the graph.
+    pub fn add_symbol<S: AsRef<str> + ?Sized>(&mut self, symbol: &S) -> Handle<Symbol> {
+        let symbol = symbol.as_ref();
+        if let Some(handle) = self.symbol_handles.get(symbol) {
+            return *handle;
+        }
+        let symbol_value = symbol.to_string();
+        let symbol = Symbol {
+            symbol: symbol_value.clone(),
+        };
+        let handle = self.symbols.add(symbol);
+        self.symbol_handles.insert(symbol_value, handle);
+        handle
     }
 }
 
@@ -113,7 +127,11 @@ impl Handle<Symbol> {
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct StackGraph {
+    // TODO: We're currently storing the content of each symbol twice.  Find a way to only store
+    // the content once, most likely using the trick described at
+    // https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
     symbols: Arena<Symbol>,
+    symbol_handles: HashMap<String, Handle<Symbol>>,
 }
 
 impl StackGraph {
@@ -121,6 +139,7 @@ impl StackGraph {
     pub fn new() -> StackGraph {
         StackGraph {
             symbols: Arena::new(),
+            symbol_handles: HashMap::new(),
         }
     }
 }
