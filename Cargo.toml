@@ -1,6 +1,13 @@
 [package]
 name = "stack-graphs"
-description = "Name binding for arbitrary programming languages"
 version = "0.1.0"
-authors = ["Douglas Creager <dcreager@dcreager.net>"]
+description = "Name binding for arbitrary programming languages"
+homepage = "https://github.com/github/stack-graphs/"
+repository = "https://github.com/github/stack-graphs/"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+  "GitHub <opensource+stack-graphs@github.com>",
+  "Douglas Creager <dcreager@dcreager.net>"
+]
 edition = "2018"
