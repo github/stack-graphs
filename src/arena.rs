@@ -190,6 +190,15 @@ impl<H, T> SupplementalArena<H, T> {
         }
     }
 
+    /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental
+    /// data for all of the instances that have already been allocated in a (regular) arena.
+    pub fn with_capacity(arena: &Arena<H>) -> SupplementalArena<H, T> {
+        SupplementalArena {
+            items: Vec::with_capacity(arena.items.len()),
+            _phantom: PhantomData,
+        }
+    }
+
     /// Returns the item belonging to a particular handle, if it exists.
     pub fn get(&self, handle: Handle<H>) -> Option<&T> {
         self.items.get(handle.as_usize() - 1)
