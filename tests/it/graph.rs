@@ -8,6 +8,7 @@
 use std::collections::HashSet;
 
 use maplit::hashset;
+use stack_graphs::graph::Edge;
 use stack_graphs::graph::ExportedScopeNode;
 use stack_graphs::graph::InternalScopeNode;
 use stack_graphs::graph::Node;
@@ -96,4 +97,44 @@ fn can_create_and_resolve_unknown_nodes() {
         graph.resolve_unknown_node(conflict.into()),
         Err(Node::InternalScope(_))
     ));
+}
+
+#[test]
+fn can_add_and_remove_edges() {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test.py");
+    let h1 = graph.internal_scope(file, 0);
+    let h2 = graph.internal_scope(file, 1);
+    let h3 = graph.internal_scope(file, 2);
+    let h4 = graph.internal_scope(file, 3);
+    graph.add_edge(Edge {
+        source: h1,
+        sink: h2,
+    });
+    graph.add_edge(Edge {
+        source: h1,
+        sink: h3,
+    });
+    graph.add_edge(Edge {
+        source: h1,
+        sink: h4,
+    });
+    assert_eq!(
+        graph
+            .outgoing_edges(h1)
+            .map(|edge| edge.sink)
+            .collect::<HashSet<_>>(),
+        hashset! { h2, h3, h4 }
+    );
+    graph.remove_edge(Edge {
+        source: h1,
+        sink: h3,
+    });
+    assert_eq!(
+        graph
+            .outgoing_edges(h1)
+            .map(|edge| edge.sink)
+            .collect::<HashSet<_>>(),
+        hashset! { h2, h4 }
+    );
 }

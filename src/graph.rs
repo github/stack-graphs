@@ -921,7 +921,7 @@ impl NodeIDHandles {
 /// in a stack graph.  (Though not all sequence of edges is a well-formed name binding: the nodes
 /// that you encounter along the path must also satisfy all of the rules for maintaining correct
 /// symbol and scope stacks.)
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Edge {
     pub source: Handle<Node>,
     pub sink: Handle<Node>,
@@ -933,6 +933,14 @@ impl StackGraph {
         let edges = &mut self.outgoing_edges[edge.source];
         if let Err(index) = edges.binary_search(&edge.sink) {
             edges.insert(index, edge.sink);
+        }
+    }
+
+    /// Removes an edge from the stack graph.
+    pub fn remove_edge(&mut self, edge: Edge) {
+        let edges = &mut self.outgoing_edges[edge.source];
+        if let Ok(index) = edges.binary_search(&edge.sink) {
+            edges.remove(index);
         }
     }
 
