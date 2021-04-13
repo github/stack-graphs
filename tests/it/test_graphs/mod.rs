@@ -14,7 +14,7 @@ pub mod class_field_through_function_parameter;
 pub mod sequenced_import_star;
 
 /// An extension trait that makes it a bit easier to add stuff to our test stack graphs.
-trait CreateStackGraph {
+pub trait CreateStackGraph {
     fn definition(
         &mut self,
         file: Handle<File>,

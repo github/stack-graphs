@@ -361,6 +361,12 @@ impl StackGraph {
         self.node_id_handles.unused_id(file)
     }
 
+    /// Returns an iterator of all of the nodes in the graph.  (Note that because we're only
+    /// returning _handles_, this iterator does not retain a reference to the `StackGraph`.)
+    pub fn iter_nodes(&self) -> impl Iterator<Item = Handle<Node>> {
+        self.nodes.iter_handles()
+    }
+
     fn add_node(&mut self, node_id: NodeID, node: Node) -> Option<Handle<Node>> {
         if let Some(_) = self.node_id_handles.handle_for_id(node_id) {
             return None;

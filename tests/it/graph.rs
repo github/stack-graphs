@@ -14,6 +14,8 @@ use stack_graphs::graph::Node;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::graph::UnknownNode;
 
+use crate::test_graphs::CreateStackGraph;
+
 #[test]
 fn can_create_symbols() {
     let mut graph = StackGraph::new();
@@ -64,6 +66,20 @@ fn can_display_symbols() {
         .collect::<Vec<_>>();
     symbols.sort();
     assert_eq!(symbols, vec!["a", "b", "c"]);
+}
+
+#[test]
+fn can_iterate_nodes() {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test.py");
+    let h1 = graph.internal_scope(file, 0);
+    let h2 = graph.internal_scope(file, 1);
+    let h3 = graph.internal_scope(file, 2);
+    let handles = graph.iter_nodes().collect::<HashSet<_>>();
+    assert_eq!(
+        handles,
+        hashset! {graph.root_node(), graph.jump_to_node(), h1, h2, h3}
+    );
 }
 
 #[test]
