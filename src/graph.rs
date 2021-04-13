@@ -54,6 +54,7 @@
 use std::fmt::Display;
 use std::ops::Deref;
 use std::ops::Index;
+use std::ops::IndexMut;
 
 use either::Either;
 use fxhash::FxHashMap;
@@ -413,7 +414,14 @@ impl Index<Handle<Node>> for StackGraph {
     type Output = Node;
     #[inline(always)]
     fn index(&self, handle: Handle<Node>) -> &Node {
-        &self.nodes.get(handle)
+        self.nodes.get(handle)
+    }
+}
+
+impl IndexMut<Handle<Node>> for StackGraph {
+    #[inline(always)]
+    fn index_mut(&mut self, handle: Handle<Node>) -> &mut Node {
+        self.nodes.get_mut(handle)
     }
 }
 
@@ -867,7 +875,7 @@ impl StackGraph {
     pub fn resolve_unknown_node(&mut self, node: Node) -> Result<(), &Node> {
         let id = node.id().unwrap();
         let handle = self.node_id_handles.handle_for_id(id).unwrap();
-        let arena_node = self.nodes.get_mut(handle);
+        let arena_node = &mut self[handle];
         if !matches!(arena_node, Node::Unknown(_)) {
             return Err(arena_node);
         }
