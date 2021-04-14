@@ -47,3 +47,17 @@ fn can_iterate_symbols() {
         .collect::<HashSet<_>>();
     assert_eq!(symbols, hashset! {"a", "b", "c"});
 }
+
+#[test]
+fn can_display_symbols() {
+    let mut graph = StackGraph::new();
+    graph.add_symbol("a");
+    graph.add_symbol("b");
+    graph.add_symbol("c");
+    let mut symbols = graph
+        .iter_symbols()
+        .map(|symbol| symbol.display(&graph).to_string())
+        .collect::<Vec<_>>();
+    symbols.sort();
+    assert_eq!(symbols, vec!["a", "b", "c"]);
+}
