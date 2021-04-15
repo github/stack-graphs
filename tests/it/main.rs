@@ -13,5 +13,6 @@ mod can_find_node_partial_paths_in_database;
 mod can_find_partial_paths_in_file;
 mod can_find_root_partial_paths_in_database;
 mod can_jump_to_definition;
+mod can_jump_to_definition_with_partial_paths;
 mod graph;
 mod paths;

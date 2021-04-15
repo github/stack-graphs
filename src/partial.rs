@@ -50,6 +50,7 @@ use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::paths::Extend;
+use crate::paths::Path;
 use crate::paths::PathResolutionError;
 use crate::paths::Paths;
 use crate::paths::ScopeStack;
@@ -1278,6 +1279,74 @@ impl PartialPaths {
             path.extend_from_file(graph, self, file, &mut queue);
             visit(graph, self, path);
         }
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Extending paths with partial paths
+
+impl Path {
+    /// Promotes a partial path to a path.
+    pub fn from_partial_path(
+        graph: &StackGraph,
+        paths: &mut Paths,
+        partials: &mut PartialPaths,
+        partial_path: &PartialPath,
+    ) -> Option<Path> {
+        let mut path = Path {
+            start_node: partial_path.start_node,
+            end_node: partial_path.start_node,
+            symbol_stack: SymbolStack::empty(),
+            scope_stack: ScopeStack::empty(),
+            edge_count: 0,
+        };
+        path.append_partial_path(graph, paths, partials, partial_path)
+            .ok()?;
+        Some(path)
+    }
+
+    /// Attempts to append a partial path to the end of a path.  If the partial path is not
+    /// compatible with this path, we return an error describing why.
+    pub fn append_partial_path(
+        &mut self,
+        graph: &StackGraph,
+        paths: &mut Paths,
+        partials: &mut PartialPaths,
+        partial_path: &PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        if partial_path.start_node != self.end_node {
+            return Err(PathResolutionError::IncorrectSourceNode);
+        }
+
+        let mut symbol_bindings = SymbolStackBindings::new();
+        let mut scope_bindings = ScopeStackBindings::new();
+        partial_path
+            .scope_stack_precondition
+            .match_stack(self.scope_stack, &mut scope_bindings)?;
+        partial_path.symbol_stack_precondition.match_stack(
+            graph,
+            paths,
+            partials,
+            self.symbol_stack,
+            &mut symbol_bindings,
+            &mut scope_bindings,
+        )?;
+
+        self.symbol_stack = partial_path.symbol_stack_postcondition.apply_bindings(
+            paths,
+            partials,
+            &symbol_bindings,
+            &scope_bindings,
+        )?;
+        self.scope_stack = partial_path.scope_stack_postcondition.apply_bindings(
+            paths,
+            partials,
+            &scope_bindings,
+        )?;
+
+        self.end_node = partial_path.end_node;
+        self.edge_count += partial_path.edge_count;
+        Ok(())
     }
 }
 
