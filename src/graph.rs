@@ -200,6 +200,15 @@ impl StackGraph {
     }
 }
 
+impl StackGraph {
+    /// Returns an iterator over all of the handles of all of the files in this stack graph.  (Note
+    /// that because we're only returning _handles_, this iterator does not retain a reference to
+    /// the `StackGraph`.)
+    pub fn iter_files(&self) -> impl Iterator<Item = Handle<File>> + '_ {
+        self.files.iter_handles()
+    }
+}
+
 impl Display for File {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.name)
