@@ -377,6 +377,11 @@ impl StackGraph {
         self.nodes.iter_handles()
     }
 
+    /// Returns the handle to the node with a particular ID, if it exists.
+    pub fn node_for_id(&self, node_id: NodeID) -> Option<Handle<Node>> {
+        self.node_id_handles.try_handle_for_id(node_id)
+    }
+
     fn add_node(&mut self, node_id: NodeID, node: Node) -> Option<Handle<Node>> {
         if let Some(_) = self.node_id_handles.handle_for_id(node_id) {
             return None;
@@ -902,6 +907,15 @@ impl NodeIDHandles {
         NodeIDHandles {
             files: SupplementalArena::new(),
         }
+    }
+
+    fn try_handle_for_id(&self, node_id: NodeID) -> Option<Handle<Node>> {
+        let file_entry = self.files.get(node_id.file)?;
+        let node_index = node_id.local_id as usize;
+        if node_index >= file_entry.len() {
+            return None;
+        }
+        file_entry[node_index]
     }
 
     fn handle_for_id(&mut self, node_id: NodeID) -> Option<Handle<Node>> {
