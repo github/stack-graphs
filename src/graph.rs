@@ -18,10 +18,11 @@
 //! [`Arena`]: ../arena/struct.Arena.html
 //! [`StackGraph`]: struct.StackGraph.html
 
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::ops::Index;
+
+use fxhash::FxHashMap;
 
 use crate::arena::Arena;
 use crate::arena::Handle;
@@ -138,7 +139,7 @@ pub struct StackGraph {
     // the content once, most likely using the trick described at
     // https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
     symbols: Arena<Symbol>,
-    symbol_handles: HashMap<String, Handle<Symbol>>,
+    symbol_handles: FxHashMap<String, Handle<Symbol>>,
 }
 
 impl StackGraph {
@@ -146,7 +147,7 @@ impl StackGraph {
     pub fn new() -> StackGraph {
         StackGraph {
             symbols: Arena::new(),
-            symbol_handles: HashMap::new(),
+            symbol_handles: FxHashMap::default(),
         }
     }
 }
