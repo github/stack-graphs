@@ -1253,21 +1253,27 @@ impl NodeIDHandles {
 pub struct Edge {
     pub source: Handle<Node>,
     pub sink: Handle<Node>,
+    pub precedence: i32,
+}
+
+struct OutgoingEdge {
+    sink: Handle<Node>,
+    precedence: i32,
 }
 
 impl StackGraph {
     /// Adds a new edge to the stack graph.
-    pub fn add_edge(&mut self, edge: Edge) {
-        let edges = &mut self.outgoing_edges[edge.source];
-        if let Err(index) = edges.binary_search(&edge.sink) {
-            edges.insert(index, edge.sink);
+    pub fn add_edge(&mut self, source: Handle<Node>, sink: Handle<Node>, precedence: i32) {
+        let edges = &mut self.outgoing_edges[source];
+        if let Err(index) = edges.binary_search_by_key(&sink, |o| o.sink) {
+            edges.insert(index, OutgoingEdge { sink, precedence });
         }
     }
 
     /// Removes an edge from the stack graph.
-    pub fn remove_edge(&mut self, edge: Edge) {
-        let edges = &mut self.outgoing_edges[edge.source];
-        if let Ok(index) = edges.binary_search(&edge.sink) {
+    pub fn remove_edge(&mut self, source: Handle<Node>, sink: Handle<Node>) {
+        let edges = &mut self.outgoing_edges[source];
+        if let Ok(index) = edges.binary_search_by_key(&sink, |o| o.sink) {
             edges.remove(index);
         }
     }
@@ -1275,9 +1281,10 @@ impl StackGraph {
     /// Returns an iterator of all of the edges that begin at a particular source node.
     pub fn outgoing_edges(&self, source: Handle<Node>) -> impl Iterator<Item = Edge> + '_ {
         match self.outgoing_edges.get(source) {
-            Some(edges) => Either::Right(edges.iter().map(move |sink| Edge {
+            Some(edges) => Either::Right(edges.iter().map(move |o| Edge {
                 source,
-                sink: *sink,
+                sink: o.sink,
+                precedence: o.precedence,
             })),
             None => Either::Left(std::iter::empty()),
         }
@@ -1298,7 +1305,7 @@ pub struct StackGraph {
     node_id_handles: NodeIDHandles,
     jump_to_node: Handle<Node>,
     root_node: Handle<Node>,
-    outgoing_edges: SupplementalArena<Node, SmallVec<[Handle<Node>; 8]>>,
+    outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
 }
 
 impl StackGraph {

@@ -8,7 +8,6 @@
 use std::collections::HashSet;
 
 use maplit::hashset;
-use stack_graphs::graph::Edge;
 use stack_graphs::graph::StackGraph;
 
 use crate::test_graphs::CreateStackGraph;
@@ -90,29 +89,19 @@ fn can_add_and_remove_edges() {
     let h2 = graph.internal_scope(file, 1);
     let h3 = graph.internal_scope(file, 2);
     let h4 = graph.internal_scope(file, 3);
-    graph.add_edge(Edge {
-        source: h1,
-        sink: h2,
-    });
-    graph.add_edge(Edge {
-        source: h1,
-        sink: h3,
-    });
-    graph.add_edge(Edge {
-        source: h1,
-        sink: h4,
-    });
+    graph.add_edge(h1, h2, 0);
+    graph.add_edge(h1, h3, 0);
+    graph.add_edge(h1, h4, 0);
+    // If you try to overwrite an edge, the original edge takes precedence.
+    graph.add_edge(h1, h3, 1);
     assert_eq!(
         graph
             .outgoing_edges(h1)
-            .map(|edge| edge.sink)
+            .map(|edge| (edge.sink, edge.precedence))
             .collect::<HashSet<_>>(),
-        hashset! { h2, h3, h4 }
+        hashset! { (h2, 0), (h3, 0), (h4, 0) }
     );
-    graph.remove_edge(Edge {
-        source: h1,
-        sink: h3,
-    });
+    graph.remove_edge(h1, h3);
     assert_eq!(
         graph
             .outgoing_edges(h1)

@@ -82,8 +82,7 @@ impl CreateStackGraph for StackGraph {
     }
 
     fn edge(&mut self, source: Handle<Node>, sink: Handle<Node>) {
-        let edge = Edge { source, sink };
-        self.add_edge(edge);
+        self.add_edge(source, sink, 0);
     }
 
     fn exported_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
