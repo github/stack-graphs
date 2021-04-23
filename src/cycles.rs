@@ -65,7 +65,7 @@ impl HasPathKey for Path {
     }
 
     fn is_shorter_than(&self, other: &Self) -> bool {
-        self.edge_count < other.edge_count && self.symbol_stack.len() <= other.symbol_stack.len()
+        self.edges.len() < other.edges.len() && self.symbol_stack.len() <= other.symbol_stack.len()
     }
 }
 
@@ -78,7 +78,7 @@ impl HasPathKey for PartialPath {
     }
 
     fn is_shorter_than(&self, other: &Self) -> bool {
-        self.edge_count < other.edge_count
+        self.edges.len() < other.edges.len()
     }
 }
 

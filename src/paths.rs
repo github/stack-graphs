@@ -18,12 +18,15 @@
 use std::collections::VecDeque;
 use std::fmt::Display;
 
+use crate::arena::Deque;
+use crate::arena::DequeArena;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
 use crate::cycles::CycleDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
+use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::utils::cmp_option;
@@ -337,6 +340,169 @@ impl DisplayWithPaths for ScopeStack {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Edge lists
+
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+pub struct PathEdge {
+    pub source_node_id: NodeID,
+    pub precedence: i32,
+}
+
+impl PathEdge {
+    pub fn display<'a>(self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {
+        display_with(self, graph, paths)
+    }
+}
+
+impl DisplayWithPaths for PathEdge {
+    fn display_with(
+        &self,
+        graph: &StackGraph,
+        _paths: &Paths,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        match graph.node_for_id(self.source_node_id) {
+            Some(node) => write!(f, "{:#}", node.display(graph))?,
+            None => write!(f, "[missing]")?,
+        }
+        if self.precedence != 0 {
+            write!(f, "({})", self.precedence)?;
+        }
+        Ok(())
+    }
+}
+
+/// The edges in a path keep track of precedence information so that we can correctly handle
+/// shadowed definitions.
+#[derive(Clone, Copy)]
+pub struct PathEdgeList {
+    edges: Deque<PathEdge>,
+    length: usize,
+}
+
+impl PathEdgeList {
+    /// Returns whether this edge list is empty.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.edges.is_empty()
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
+    /// Returns an empty edge list.
+    pub fn empty() -> PathEdgeList {
+        PathEdgeList {
+            edges: Deque::empty(),
+            length: 0,
+        }
+    }
+
+    /// Pushes a new edge onto the front of this edge list.
+    pub fn push_front(&mut self, paths: &mut Paths, edge: PathEdge) {
+        self.length += 1;
+        self.edges.push_front(&mut paths.path_edges, edge);
+    }
+
+    /// Pushes a new edge onto the back of this edge list.
+    pub fn push_back(&mut self, paths: &mut Paths, edge: PathEdge) {
+        self.length += 1;
+        self.edges.push_back(&mut paths.path_edges, edge);
+    }
+
+    /// Removes and returns the edge at the front of this edge list.  If the list is empty, returns
+    /// `None`.
+    pub fn pop_front(&mut self, paths: &mut Paths) -> Option<PathEdge> {
+        let result = self.edges.pop_front(&mut paths.path_edges);
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result.copied()
+    }
+
+    /// Removes and returns the edge at the back of this edge list.  If the list is empty, returns
+    /// `None`.
+    pub fn pop_back(&mut self, paths: &mut Paths) -> Option<PathEdge> {
+        let result = self.edges.pop_back(&mut paths.path_edges);
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result.copied()
+    }
+
+    pub fn display<'a>(self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {
+        display_with(self, graph, paths)
+    }
+
+    pub fn equals(mut self, paths: &mut Paths, mut other: PathEdgeList) -> bool {
+        while let Some(self_edge) = self.pop_front(paths) {
+            if let Some(other_edge) = other.pop_front(paths) {
+                if self_edge != other_edge {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        other.edges.is_empty()
+    }
+
+    pub fn cmp(mut self, paths: &mut Paths, mut other: PathEdgeList) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        while let Some(self_edge) = self.pop_front(paths) {
+            if let Some(other_edge) = other.pop_front(paths) {
+                match self_edge.cmp(&other_edge) {
+                    Ordering::Equal => continue,
+                    result @ _ => return result,
+                }
+            } else {
+                return Ordering::Greater;
+            }
+        }
+        if other.edges.is_empty() {
+            Ordering::Equal
+        } else {
+            Ordering::Less
+        }
+    }
+
+    /// Returns an iterator over the contents of this edge list.
+    pub fn iter<'a>(&self, paths: &'a mut Paths) -> impl Iterator<Item = PathEdge> + 'a {
+        self.edges.iter(&mut paths.path_edges).copied()
+    }
+
+    /// Returns an iterator over the contents of this edge list, with no guarantee about the
+    /// ordering of the elements.
+    pub fn iter_unordered<'a>(&self, paths: &'a Paths) -> impl Iterator<Item = PathEdge> + 'a {
+        self.edges.iter_unordered(&paths.path_edges).copied()
+    }
+}
+
+impl DisplayWithPaths for PathEdgeList {
+    fn prepare(&mut self, graph: &StackGraph, paths: &mut Paths) {
+        self.edges.ensure_forwards(&mut paths.path_edges);
+        let mut edges = self.edges;
+        while let Some(mut edge) = edges.pop_front(&mut paths.path_edges).copied() {
+            edge.prepare(graph, paths);
+        }
+    }
+
+    fn display_with(
+        &self,
+        graph: &StackGraph,
+        paths: &Paths,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        for edge in self.edges.iter_reused(&paths.path_edges) {
+            edge.display_with(graph, paths, f)?;
+        }
+        Ok(())
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Paths
 
 /// A sequence of edges from a stack graph.  A _complete_ path represents a full name binding in a
@@ -347,7 +513,7 @@ pub struct Path {
     pub end_node: Handle<Node>,
     pub symbol_stack: SymbolStack,
     pub scope_stack: ScopeStack,
-    pub edge_count: usize,
+    pub edges: PathEdgeList,
 }
 
 impl Path {
@@ -376,23 +542,25 @@ impl Path {
             end_node: node,
             symbol_stack,
             scope_stack,
-            edge_count: 0,
+            edges: PathEdgeList::empty(),
         })
     }
 
-    pub fn equals(&self, paths: &Paths, other: &Path) -> bool {
+    pub fn equals(&self, paths: &mut Paths, other: &Path) -> bool {
         self.start_node == other.start_node
             && self.end_node == other.end_node
             && self.symbol_stack.equals(paths, &other.symbol_stack)
             && self.scope_stack.equals(paths, &other.scope_stack)
+            && self.edges.equals(paths, other.edges)
     }
 
-    pub fn cmp(&self, graph: &StackGraph, paths: &Paths, other: &Path) -> std::cmp::Ordering {
+    pub fn cmp(&self, graph: &StackGraph, paths: &mut Paths, other: &Path) -> std::cmp::Ordering {
         std::cmp::Ordering::Equal
             .then_with(|| self.start_node.cmp(&other.start_node))
             .then_with(|| self.end_node.cmp(&other.end_node))
             .then_with(|| self.symbol_stack.cmp(graph, paths, &other.symbol_stack))
             .then_with(|| self.scope_stack.cmp(paths, &other.scope_stack))
+            .then_with(|| self.edges.cmp(paths, other.edges))
     }
 
     /// A _complete_ path represents a full name binding that resolves a reference to a definition.
@@ -546,7 +714,13 @@ impl Path {
         }
 
         self.end_node = edge.sink;
-        self.edge_count += 1;
+        self.edges.push_back(
+            paths,
+            PathEdge {
+                source_node_id: graph[edge.source].id(),
+                precedence: edge.precedence,
+            },
+        );
         Ok(())
     }
 
@@ -556,7 +730,7 @@ impl Path {
     pub fn resolve(
         &mut self,
         graph: &StackGraph,
-        paths: &Paths,
+        paths: &mut Paths,
     ) -> Result<(), PathResolutionError> {
         if !graph[self.end_node].is_jump_to() {
             return Ok(());
@@ -565,8 +739,14 @@ impl Path {
             Some(scope) => scope,
             None => return Err(PathResolutionError::EmptyScopeStack),
         };
+        self.edges.push_back(
+            paths,
+            PathEdge {
+                source_node_id: graph[self.end_node].id(),
+                precedence: 0,
+            },
+        );
         self.end_node = top_scope;
-        self.edge_count += 1;
         Ok(())
     }
 
@@ -666,6 +846,7 @@ impl<T> Extend<T> for VecDeque<T> {
 pub struct Paths {
     scope_stacks: ListArena<Handle<Node>>,
     symbol_stacks: ListArena<ScopedSymbol>,
+    path_edges: DequeArena<PathEdge>,
 }
 
 impl Paths {
@@ -673,6 +854,7 @@ impl Paths {
         Paths {
             scope_stacks: List::new_arena(),
             symbol_stacks: List::new_arena(),
+            path_edges: Deque::new_arena(),
         }
     }
 }

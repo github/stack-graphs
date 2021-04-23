@@ -47,10 +47,13 @@ use crate::cycles::CycleDetector;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
+use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::paths::Extend;
 use crate::paths::Path;
+use crate::paths::PathEdge;
+use crate::paths::PathEdgeList;
 use crate::paths::PathResolutionError;
 use crate::paths::Paths;
 use crate::paths::ScopeStack;
@@ -844,6 +847,199 @@ impl DisplayWithPartialPaths for PartialScopeStack {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Edge lists
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PartialPathEdge {
+    pub source_node_id: NodeID,
+    pub precedence: i32,
+}
+
+impl From<PartialPathEdge> for PathEdge {
+    fn from(other: PartialPathEdge) -> PathEdge {
+        PathEdge {
+            source_node_id: other.source_node_id,
+            precedence: other.precedence,
+        }
+    }
+}
+
+impl PartialPathEdge {
+    pub fn display<'a>(
+        self,
+        graph: &'a StackGraph,
+        partials: &'a mut PartialPaths,
+    ) -> impl Display + 'a {
+        display_with(self, graph, partials)
+    }
+}
+
+impl DisplayWithPartialPaths for PartialPathEdge {
+    fn display_with(
+        &self,
+        graph: &StackGraph,
+        _partials: &PartialPaths,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        match graph.node_for_id(self.source_node_id) {
+            Some(node) => write!(f, "{:#}", node.display(graph))?,
+            None => write!(f, "[missing]")?,
+        }
+        if self.precedence != 0 {
+            write!(f, "({})", self.precedence)?;
+        }
+        Ok(())
+    }
+}
+
+/// The edges in a path keep track of precedence information so that we can correctly handle
+/// shadowed definitions.
+#[derive(Clone, Copy)]
+pub struct PartialPathEdgeList {
+    edges: Deque<PartialPathEdge>,
+    length: usize,
+}
+
+impl PartialPathEdgeList {
+    /// Returns whether this edge list is empty.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.edges.is_empty()
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
+    /// Returns an empty edge list.
+    pub fn empty() -> PartialPathEdgeList {
+        PartialPathEdgeList {
+            edges: Deque::empty(),
+            length: 0,
+        }
+    }
+
+    /// Pushes a new edge onto the front of this edge list.
+    pub fn push_front(&mut self, partials: &mut PartialPaths, edge: PartialPathEdge) {
+        self.length += 1;
+        self.edges
+            .push_front(&mut partials.partial_path_edges, edge);
+    }
+
+    /// Pushes a new edge onto the back of this edge list.
+    pub fn push_back(&mut self, partials: &mut PartialPaths, edge: PartialPathEdge) {
+        self.length += 1;
+        self.edges.push_back(&mut partials.partial_path_edges, edge);
+    }
+
+    /// Removes and returns the edge at the front of this edge list.  If the list is empty, returns
+    /// `None`.
+    pub fn pop_front(&mut self, partials: &mut PartialPaths) -> Option<PartialPathEdge> {
+        let result = self.edges.pop_front(&mut partials.partial_path_edges);
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result.copied()
+    }
+
+    /// Removes and returns the edge at the back of this edge list.  If the list is empty, returns
+    /// `None`.
+    pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<PartialPathEdge> {
+        let result = self.edges.pop_back(&mut partials.partial_path_edges);
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result.copied()
+    }
+
+    pub fn display<'a>(
+        self,
+        graph: &'a StackGraph,
+        partials: &'a mut PartialPaths,
+    ) -> impl Display + 'a {
+        display_with(self, graph, partials)
+    }
+
+    pub fn equals(mut self, partials: &mut PartialPaths, mut other: PartialPathEdgeList) -> bool {
+        while let Some(self_edge) = self.pop_front(partials) {
+            if let Some(other_edge) = other.pop_front(partials) {
+                if self_edge != other_edge {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        other.edges.is_empty()
+    }
+
+    pub fn cmp(
+        mut self,
+        partials: &mut PartialPaths,
+        mut other: PartialPathEdgeList,
+    ) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        while let Some(self_edge) = self.pop_front(partials) {
+            if let Some(other_edge) = other.pop_front(partials) {
+                match self_edge.cmp(&other_edge) {
+                    Ordering::Equal => continue,
+                    result @ _ => return result,
+                }
+            } else {
+                return Ordering::Greater;
+            }
+        }
+        if other.edges.is_empty() {
+            Ordering::Equal
+        } else {
+            Ordering::Less
+        }
+    }
+
+    /// Returns an iterator over the contents of this edge list.
+    pub fn iter<'a>(
+        &self,
+        partials: &'a mut PartialPaths,
+    ) -> impl Iterator<Item = PartialPathEdge> + 'a {
+        self.edges.iter(&mut partials.partial_path_edges).copied()
+    }
+
+    /// Returns an iterator over the contents of this edge list, with no guarantee about the
+    /// ordering of the elements.
+    pub fn iter_unordered<'a>(
+        &self,
+        partials: &'a PartialPaths,
+    ) -> impl Iterator<Item = PartialPathEdge> + 'a {
+        self.edges
+            .iter_unordered(&partials.partial_path_edges)
+            .copied()
+    }
+}
+
+impl DisplayWithPartialPaths for PartialPathEdgeList {
+    fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
+        self.edges.ensure_forwards(&mut partials.partial_path_edges);
+        let mut edges = self.edges;
+        while let Some(mut edge) = edges.pop_front(&mut partials.partial_path_edges).copied() {
+            edge.prepare(graph, partials);
+        }
+    }
+
+    fn display_with(
+        &self,
+        graph: &StackGraph,
+        partials: &PartialPaths,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        for edge in self.edges.iter_reused(&partials.partial_path_edges) {
+            edge.display_with(graph, partials, f)?;
+        }
+        Ok(())
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Partial paths
 
 /// A portion of a name-binding path.
@@ -870,7 +1066,7 @@ pub struct PartialPath {
     pub symbol_stack_postcondition: PartialSymbolStack,
     pub scope_stack_precondition: PartialScopeStack,
     pub scope_stack_postcondition: PartialScopeStack,
-    pub edge_count: usize,
+    pub edges: PartialPathEdgeList,
 }
 
 impl PartialPath {
@@ -913,7 +1109,7 @@ impl PartialPath {
             symbol_stack_postcondition,
             scope_stack_precondition,
             scope_stack_postcondition,
-            edge_count: 0,
+            edges: PartialPathEdgeList::empty(),
         }
     }
 
@@ -932,6 +1128,7 @@ impl PartialPath {
             && self
                 .scope_stack_postcondition
                 .equals(partials, other.scope_stack_postcondition)
+            && self.edges.equals(partials, other.edges)
     }
 
     pub fn cmp(
@@ -962,6 +1159,7 @@ impl PartialPath {
                 self.scope_stack_postcondition
                     .cmp(partials, other.scope_stack_postcondition)
             })
+            .then_with(|| self.edges.cmp(partials, other.edges))
     }
 
     /// A partial path is _as complete as possible_ if we cannot extend it any further within the
@@ -1177,7 +1375,13 @@ impl PartialPath {
         }
 
         self.end_node = edge.sink;
-        self.edge_count += 1;
+        self.edges.push_back(
+            partials,
+            PartialPathEdge {
+                source_node_id: graph[edge.source].id(),
+                precedence: edge.precedence,
+            },
+        );
         Ok(())
     }
 
@@ -1199,8 +1403,14 @@ impl PartialPath {
             return Ok(());
         }
         let top_scope = self.scope_stack_postcondition.pop_front(partials).unwrap();
+        self.edges.push_back(
+            partials,
+            PartialPathEdge {
+                source_node_id: graph[self.end_node].id(),
+                precedence: 0,
+            },
+        );
         self.end_node = top_scope;
-        self.edge_count += 1;
         Ok(())
     }
 
@@ -1298,7 +1508,7 @@ impl Path {
             end_node: partial_path.start_node,
             symbol_stack: SymbolStack::empty(),
             scope_stack: ScopeStack::empty(),
-            edge_count: 0,
+            edges: PathEdgeList::empty(),
         };
         path.append_partial_path(graph, paths, partials, partial_path)
             .ok()?;
@@ -1344,8 +1554,11 @@ impl Path {
             &scope_bindings,
         )?;
 
+        let mut edges = partial_path.edges;
+        while let Some(edge) = edges.pop_front(partials) {
+            self.edges.push_back(paths, edge.into());
+        }
         self.end_node = partial_path.end_node;
-        self.edge_count += partial_path.edge_count;
         Ok(())
     }
 }
@@ -1358,6 +1571,7 @@ impl Path {
 pub struct PartialPaths {
     partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
     partial_scope_stacks: DequeArena<Handle<Node>>,
+    partial_path_edges: DequeArena<PartialPathEdge>,
 }
 
 impl PartialPaths {
@@ -1365,6 +1579,7 @@ impl PartialPaths {
         PartialPaths {
             partial_symbol_stacks: Deque::new_arena(),
             partial_scope_stacks: Deque::new_arena(),
+            partial_path_edges: Deque::new_arena(),
         }
     }
 }
