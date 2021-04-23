@@ -865,6 +865,12 @@ impl From<PartialPathEdge> for PathEdge {
 }
 
 impl PartialPathEdge {
+    /// Returns whether one edge shadows another.  Note that shadowing is not commutative — if path
+    /// A shadows path B, the reverse is not true.
+    pub fn shadows(self, other: PartialPathEdge) -> bool {
+        self.source_node_id == other.source_node_id && self.precedence > other.precedence
+    }
+
     pub fn display<'a>(
         self,
         graph: &'a StackGraph,
@@ -959,6 +965,21 @@ impl PartialPathEdgeList {
         partials: &'a mut PartialPaths,
     ) -> impl Display + 'a {
         display_with(self, graph, partials)
+    }
+
+    /// Returns whether one edge list shadows another.  Note that shadowing is not commutative — if
+    /// path A shadows path B, the reverse is not true.
+    pub fn shadows(mut self, partials: &mut PartialPaths, mut other: PartialPathEdgeList) -> bool {
+        while let Some(self_edge) = self.pop_front(partials) {
+            if let Some(other_edge) = other.pop_front(partials) {
+                if self_edge.shadows(other_edge) {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        }
+        false
     }
 
     pub fn equals(mut self, partials: &mut PartialPaths, mut other: PartialPathEdgeList) -> bool {
@@ -1111,6 +1132,12 @@ impl PartialPath {
             scope_stack_postcondition,
             edges: PartialPathEdgeList::empty(),
         }
+    }
+
+    /// Returns whether one path shadows another.  Note that shadowing is not commutative — if path
+    /// A shadows path B, the reverse is not true.
+    pub fn shadows(&self, partials: &mut PartialPaths, other: &PartialPath) -> bool {
+        self.edges.shadows(partials, other.edges)
     }
 
     pub fn equals(&self, partials: &mut PartialPaths, other: &PartialPath) -> bool {

@@ -349,6 +349,12 @@ pub struct PathEdge {
 }
 
 impl PathEdge {
+    /// Returns whether one edge shadows another.  Note that shadowing is not commutative — if path
+    /// A shadows path B, the reverse is not true.
+    pub fn shadows(self, other: PathEdge) -> bool {
+        self.source_node_id == other.source_node_id && self.precedence > other.precedence
+    }
+
     pub fn display<'a>(self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {
         display_with(self, graph, paths)
     }
@@ -436,6 +442,21 @@ impl PathEdgeList {
         display_with(self, graph, paths)
     }
 
+    /// Returns whether one edge list shadows another.  Note that shadowing is not commutative — if
+    /// path A shadows path B, the reverse is not true.
+    pub fn shadows(mut self, paths: &mut Paths, mut other: PathEdgeList) -> bool {
+        while let Some(self_edge) = self.pop_front(paths) {
+            if let Some(other_edge) = other.pop_front(paths) {
+                if self_edge.shadows(other_edge) {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        }
+        false
+    }
+
     pub fn equals(mut self, paths: &mut Paths, mut other: PathEdgeList) -> bool {
         while let Some(self_edge) = self.pop_front(paths) {
             if let Some(other_edge) = other.pop_front(paths) {
@@ -517,26 +538,35 @@ pub struct Path {
 }
 
 impl Path {
-    /// Creates a new empty path starting at a stack graph node.  The starting node must be a _push
-    /// symbol_ node, and will typically be a _reference_ node in particular.
+    /// Creates a new empty path starting at a stack graph node.  The starting node cannot be a
+    /// _pop symbol_ node.
     pub fn from_node(graph: &StackGraph, paths: &mut Paths, node: Handle<Node>) -> Option<Path> {
+        let mut symbol_stack = SymbolStack::empty();
         let mut scope_stack = ScopeStack::empty();
-        let scoped_symbol = match &graph[node] {
+        match &graph[node] {
             Node::PushScopedSymbol(node) => {
                 scope_stack.push_front(paths, node.scope);
-                ScopedSymbol {
-                    symbol: node.symbol,
-                    scopes: Some(scope_stack),
-                }
+                symbol_stack.push_front(
+                    paths,
+                    ScopedSymbol {
+                        symbol: node.symbol,
+                        scopes: Some(scope_stack),
+                    },
+                );
             }
-            Node::PushSymbol(node) => ScopedSymbol {
-                symbol: node.symbol,
-                scopes: None,
-            },
-            _ => return None,
+            Node::PushSymbol(node) => {
+                symbol_stack.push_front(
+                    paths,
+                    ScopedSymbol {
+                        symbol: node.symbol,
+                        scopes: None,
+                    },
+                );
+            }
+            Node::PopScopedSymbol(_) => return None,
+            Node::PopSymbol(_) => return None,
+            _ => {}
         };
-        let mut symbol_stack = SymbolStack::empty();
-        symbol_stack.push_front(paths, scoped_symbol);
         Some(Path {
             start_node: node,
             end_node: node,
@@ -544,6 +574,12 @@ impl Path {
             scope_stack,
             edges: PathEdgeList::empty(),
         })
+    }
+
+    /// Returns whether one path shadows another.  Note that shadowing is not commutative — if path
+    /// A shadows path B, the reverse is not true.
+    pub fn shadows(&self, paths: &mut Paths, other: &Path) -> bool {
+        self.edges.shadows(paths, other.edges)
     }
 
     pub fn equals(&self, paths: &mut Paths, other: &Path) -> bool {
@@ -836,6 +872,26 @@ impl<T> Extend<T> for VecDeque<T> {
 
     fn push(&mut self, item: T) {
         self.push_back(item);
+    }
+}
+
+impl Paths {
+    /// Removes any paths that are shadowed by any other path, according to the precedence values
+    /// of the edges in the paths.
+    pub fn remove_shadowed_paths(&mut self, paths: &mut Vec<Path>) {
+        let mut keep = vec![true; paths.len()];
+        for (i, comparator) in paths.iter().enumerate() {
+            for (j, other) in paths.iter().enumerate() {
+                if i == j || !keep[j] {
+                    continue;
+                }
+                if comparator.shadows(self, &other) {
+                    keep[j] = false;
+                }
+            }
+        }
+        let mut iter = keep.iter().copied();
+        paths.retain(|_| iter.next().unwrap());
     }
 }
 
