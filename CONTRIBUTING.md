@@ -27,6 +27,17 @@ Here are a few things you can do that will increase the likelihood of your pull 
 - Keep your change as focused as possible. If there are multiple changes you would like to make that are not dependent upon each other, consider submitting them as separate pull requests.
 - Write a [good commit message](http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html).
 
+## Publishing a new version
+
+If you are one of the maintainers of this package, bump the version numbers in [`Cargo.toml`](Cargo.toml) and [`README.md`](README.md), then follow the typical instructions to publish a new version to [crates.io][]:
+
+```
+$ cargo package
+$ cargo publish
+```
+
+[crates.io]: https://crates.io/stack-graphs/
+
 ## Resources
 
 - [How to Contribute to Open Source](https://opensource.guide/how-to-contribute/)
