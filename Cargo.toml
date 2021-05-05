@@ -5,7 +5,7 @@ description = "Name binding for arbitrary programming languages"
 homepage = "https://github.com/github/stack-graphs/"
 repository = "https://github.com/github/stack-graphs/"
 readme = "README.md"
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 authors = [
   "GitHub <opensource+stack-graphs@github.com>",
   "Douglas Creager <dcreager@dcreager.net>"
