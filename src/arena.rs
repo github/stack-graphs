@@ -140,6 +140,14 @@ impl<T> Arena<T> {
     pub fn get(&self, handle: Handle<T>) -> &T {
         &self.items[handle.as_usize() - 1]
     }
+
+    /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
+    /// retain a reference to the arena!)
+    pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
+        (1..=self.items.len())
+            .into_iter()
+            .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    }
 }
 
 //-------------------------------------------------------------------------------------------------

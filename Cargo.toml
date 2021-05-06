@@ -15,3 +15,9 @@ edition = "2018"
 [lib]
 # All of our tests are in the tests/it "integration" test executable.
 test = false
+
+[dependencies]
+fxhash = "0.2"
+
+[dev-dependencies]
+maplit = "1.0"

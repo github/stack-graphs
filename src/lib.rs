@@ -56,3 +56,4 @@
 //! original source file.  (a.k.a., it’s incremental!)
 
 pub mod arena;
+pub mod graph;
