@@ -328,6 +328,23 @@ impl Node {
         matches!(self, Node::Root(_))
     }
 
+    /// Returns this node's symbol, if it has one.  (_Pop symbol_, _pop scoped symbol_, _push
+    /// symbol_, and _push scoped symbol_ nodes have symbols.)
+    pub fn symbol(&self) -> Option<Handle<Symbol>> {
+        match self {
+            Node::DropScopes(_) => None,
+            Node::ExportedScope(_) => None,
+            Node::InternalScope(_) => None,
+            Node::JumpTo(_) => None,
+            Node::PushScopedSymbol(node) => Some(node.symbol),
+            Node::PushSymbol(node) => Some(node.symbol),
+            Node::PopScopedSymbol(node) => Some(node.symbol),
+            Node::PopSymbol(node) => Some(node.symbol),
+            Node::Root(_) => None,
+            Node::Unknown(_) => None,
+        }
+    }
+
     /// Returns the ID of this node.  Returns `None` for the singleton _root_ and _jump to scope_
     /// nodes, which don't have IDs.
     pub fn id(&self) -> Option<NodeID> {
