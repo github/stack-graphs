@@ -77,7 +77,7 @@ impl CreateStackGraph for StackGraph {
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
         let node = PopSymbolNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
             symbol,
             is_definition: true,
         };
@@ -86,7 +86,7 @@ impl CreateStackGraph for StackGraph {
 
     fn drop_scopes(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
         let node = DropScopesNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
         };
         node.add_to_graph(self).expect("Duplicate node ID")
     }
@@ -98,14 +98,14 @@ impl CreateStackGraph for StackGraph {
 
     fn exported_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
         let node = ExportedScopeNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
         };
         node.add_to_graph(self).expect("Duplicate node ID")
     }
 
     fn internal_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
         let node = InternalScopeNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
         };
         node.add_to_graph(self).expect("Duplicate node ID")
     }
@@ -117,7 +117,7 @@ impl CreateStackGraph for StackGraph {
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
         let node = PopScopedSymbolNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
             symbol,
             is_definition: false,
         };
@@ -131,7 +131,7 @@ impl CreateStackGraph for StackGraph {
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
         let node = PopSymbolNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
             symbol,
             is_definition: false,
         };
@@ -146,7 +146,7 @@ impl CreateStackGraph for StackGraph {
         scope: Handle<Node>,
     ) -> Handle<Node> {
         let node = PushScopedSymbolNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
             symbol,
             scope,
             is_reference: false,
@@ -161,7 +161,7 @@ impl CreateStackGraph for StackGraph {
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
         let node = PushSymbolNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
             symbol,
             is_reference: false,
         };
@@ -175,7 +175,7 @@ impl CreateStackGraph for StackGraph {
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
         let node = PushSymbolNode {
-            id: NodeID { file, local_id },
+            id: NodeID::new_in_file(file, local_id),
             symbol,
             is_reference: true,
         };

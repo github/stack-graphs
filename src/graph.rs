@@ -347,12 +347,79 @@ impl Handle<File> {
 ///
 /// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
 /// _local ID_ that must be unique within its file.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeID {
-    /// The file that the node comes from.
-    pub file: Handle<File>,
-    /// The unique identity of the node within its file.
-    pub local_id: u32,
+    file: Option<Handle<File>>,
+    local_id: u32,
+}
+
+const ROOT_NODE_ID: u32 = 0;
+const JUMP_TO_NODE_ID: u32 = 1;
+
+impl NodeID {
+    /// Returns the ID of the singleton _root node_.
+    #[inline(always)]
+    pub fn root() -> NodeID {
+        NodeID {
+            file: None,
+            local_id: ROOT_NODE_ID,
+        }
+    }
+
+    /// Returns the ID of the singleton _jump to scope_ node.
+    #[inline(always)]
+    pub fn jump_to() -> NodeID {
+        NodeID {
+            file: None,
+            local_id: JUMP_TO_NODE_ID,
+        }
+    }
+
+    /// Creates a new file-local node ID.
+    #[inline(always)]
+    pub fn new_in_file(file: Handle<File>, local_id: u32) -> NodeID {
+        NodeID {
+            file: Some(file),
+            local_id,
+        }
+    }
+
+    /// Returns whether this ID refers to the singleton _root node_.
+    #[inline(always)]
+    pub fn is_root(self) -> bool {
+        self.file.is_none() && self.local_id == ROOT_NODE_ID
+    }
+
+    /// Returns whether this ID refers to the singleton _jump to scope_ node.
+    #[inline(always)]
+    pub fn is_jump_to(self) -> bool {
+        self.file.is_none() && self.local_id == JUMP_TO_NODE_ID
+    }
+
+    /// Returns the file that this node belongs to.  Returns `None` for the singleton _root_ and
+    /// _jump to scope_ nodes, which belong to all files.
+    #[inline(always)]
+    pub fn file(self) -> Option<Handle<File>> {
+        self.file
+    }
+
+    /// Returns the local ID of this node within its file.  Panics if this node ID refers to the
+    /// singleton _root_ or _jump to scope_ nodes.
+    #[inline(always)]
+    pub fn local_id(self) -> u32 {
+        debug_assert!(self.file.is_some());
+        self.local_id
+    }
+
+    /// Returns whether this node belongs to a particular file.  Always returns `true` for the
+    /// singleton _root_ and _jump to scope_ nodes, which belong to all files.
+    #[inline(always)]
+    pub fn is_in_file(self, file: Handle<File>) -> bool {
+        match self.file {
+            Some(this_file) => this_file == file,
+            _ => true,
+        }
+    }
 }
 
 #[doc(hidden)]
@@ -363,12 +430,18 @@ pub struct DisplayNodeID<'a> {
 
 impl<'a> Display for DisplayNodeID<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}({})",
-            self.wrapped.file.display(self.graph),
-            self.wrapped.local_id,
-        )
+        match self.wrapped.file {
+            Some(file) => write!(f, "{}({})", file.display(self.graph), self.wrapped.local_id),
+            None => {
+                if self.wrapped.is_root() {
+                    write!(f, "[root]")
+                } else if self.wrapped.is_jump_to() {
+                    write!(f, "[jump]")
+                } else {
+                    unreachable!();
+                }
+            }
+        }
     }
 }
 
@@ -436,34 +509,34 @@ impl Node {
         }
     }
 
-    /// Returns the ID of this node.  Returns `None` for the singleton _root_ and _jump to scope_
-    /// nodes, which don't have IDs.
-    pub fn id(&self) -> Option<NodeID> {
+    /// Returns the ID of this node.
+    pub fn id(&self) -> NodeID {
         match self {
-            Node::DropScopes(node) => Some(node.id),
-            Node::ExportedScope(node) => Some(node.id),
-            Node::InternalScope(node) => Some(node.id),
-            Node::PushScopedSymbol(node) => Some(node.id),
-            Node::PushSymbol(node) => Some(node.id),
-            Node::PopScopedSymbol(node) => Some(node.id),
-            Node::PopSymbol(node) => Some(node.id),
-            Node::Unknown(node) => Some(node.id),
-            _ => None,
+            Node::DropScopes(node) => node.id,
+            Node::ExportedScope(node) => node.id,
+            Node::InternalScope(node) => node.id,
+            Node::JumpTo(_) => NodeID::jump_to(),
+            Node::PushScopedSymbol(node) => node.id,
+            Node::PushSymbol(node) => node.id,
+            Node::PopScopedSymbol(node) => node.id,
+            Node::PopSymbol(node) => node.id,
+            Node::Root(_) => NodeID::root(),
+            Node::Unknown(node) => node.id,
         }
     }
 
     /// Returns the file that this node belongs to.  Returns `None` for the singleton _root_ and
     /// _jump to scope_ nodes, which belong to all files.
+    #[inline(always)]
     pub fn file(&self) -> Option<Handle<File>> {
-        self.id().map(|id| id.file)
+        self.id().file()
     }
 
-    /// Returns whether a node belongs to a particular file.  Always returns `true` for the
+    /// Returns whether this node belongs to a particular file.  Always returns `true` for the
     /// singleton _root_ and _jump to scope_ nodes, which belong to all files.
+    #[inline(always)]
     pub fn is_in_file(&self, file: Handle<File>) -> bool {
-        self.file()
-            .map(|self_file| self_file == file)
-            .unwrap_or(true)
+        self.id().is_in_file(file)
     }
 
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
@@ -487,7 +560,9 @@ impl StackGraph {
         self.root_node
     }
 
-    /// Returns an unused _local node ID_ for the given file.
+    /// Returns an unused [`NodeID`][] for the given file.
+    ///
+    /// [`NodeID`]: struct.NodeID.html
     pub fn new_node_id(&mut self, file: Handle<File>) -> NodeID {
         self.node_id_handles.unused_id(file)
     }
@@ -499,16 +574,24 @@ impl StackGraph {
     }
 
     /// Returns the handle to the node with a particular ID, if it exists.
-    pub fn node_for_id(&self, node_id: NodeID) -> Option<Handle<Node>> {
-        self.node_id_handles.try_handle_for_id(node_id)
+    pub fn node_for_id(&self, id: NodeID) -> Option<Handle<Node>> {
+        if id.file().is_some() {
+            self.node_id_handles.try_handle_for_id(id)
+        } else if id.is_root() {
+            Some(self.root_node())
+        } else if id.is_jump_to() {
+            Some(self.jump_to_node())
+        } else {
+            None
+        }
     }
 
-    fn add_node(&mut self, node_id: NodeID, node: Node) -> Option<Handle<Node>> {
-        if let Some(_) = self.node_id_handles.handle_for_id(node_id) {
+    fn add_node(&mut self, id: NodeID, node: Node) -> Option<Handle<Node>> {
+        if let Some(_) = self.node_id_handles.handle_for_id(id) {
             return None;
         }
         let handle = self.nodes.add(node);
-        self.node_id_handles.set_handle_for_id(node_id, handle);
+        self.node_id_handles.set_handle_for_id(id, handle);
         Some(handle)
     }
 }
@@ -1008,8 +1091,7 @@ impl StackGraph {
     /// Resolves an _unknown_ node with a "real" node.  Panics if there isn't a node in the arena
     /// with the same ID as `node`.  Returns an error is that node is not an _unknown_ node.
     pub fn resolve_unknown_node(&mut self, node: Node) -> Result<(), &Node> {
-        let id = node.id().unwrap();
-        let handle = self.node_id_handles.handle_for_id(id).unwrap();
+        let handle = self.node_for_id(node.id()).unwrap();
         let arena_node = &mut self[handle];
         if !matches!(arena_node, Node::Unknown(_)) {
             return Err(arena_node);
@@ -1031,7 +1113,7 @@ impl NodeIDHandles {
     }
 
     fn try_handle_for_id(&self, node_id: NodeID) -> Option<Handle<Node>> {
-        let file_entry = self.files.get(node_id.file)?;
+        let file_entry = self.files.get(node_id.file.unwrap())?;
         let node_index = node_id.local_id as usize;
         if node_index >= file_entry.len() {
             return None;
@@ -1040,7 +1122,7 @@ impl NodeIDHandles {
     }
 
     fn handle_for_id(&mut self, node_id: NodeID) -> Option<Handle<Node>> {
-        let file_entry = &mut self.files[node_id.file];
+        let file_entry = &mut self.files[node_id.file.unwrap()];
         let node_index = node_id.local_id as usize;
         if node_index >= file_entry.len() {
             file_entry.resize(node_index + 1, None);
@@ -1049,7 +1131,7 @@ impl NodeIDHandles {
     }
 
     fn set_handle_for_id(&mut self, node_id: NodeID, handle: Handle<Node>) {
-        let file_entry = &mut self.files[node_id.file];
+        let file_entry = &mut self.files[node_id.file.unwrap()];
         let node_index = node_id.local_id as usize;
         file_entry[node_index] = Some(handle);
     }
@@ -1060,7 +1142,7 @@ impl NodeIDHandles {
             .get(file)
             .map(|file_entry| file_entry.len() as u32)
             .unwrap_or(0);
-        NodeID { file, local_id }
+        NodeID::new_in_file(file, local_id)
     }
 
     fn nodes_for_file(&self, file: Handle<File>) -> impl Iterator<Item = Handle<Node>> + '_ {
