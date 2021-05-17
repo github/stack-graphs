@@ -5,8 +5,14 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-pub mod test_graphs;
+use crate::test_graphs;
 
-mod arena;
-mod can_create_graph;
-mod graph;
+#[test]
+fn class_field_through_function_parameter() {
+    let _ = test_graphs::class_field_through_function_parameter::new();
+}
+
+#[test]
+fn sequenced_import_star() {
+    let _ = test_graphs::sequenced_import_star::new();
+}

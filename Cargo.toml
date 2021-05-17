@@ -17,7 +17,9 @@ edition = "2018"
 test = false
 
 [dependencies]
+either = "1.6"
 fxhash = "0.2"
+smallvec = { version="1.6", features=["union"] }
 
 [dev-dependencies]
 maplit = "1.0"

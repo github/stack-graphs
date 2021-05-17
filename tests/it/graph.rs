@@ -8,7 +8,14 @@
 use std::collections::HashSet;
 
 use maplit::hashset;
+use stack_graphs::graph::Edge;
+use stack_graphs::graph::ExportedScopeNode;
+use stack_graphs::graph::InternalScopeNode;
+use stack_graphs::graph::Node;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::graph::UnknownNode;
+
+use crate::test_graphs::CreateStackGraph;
 
 #[test]
 fn can_create_symbols() {
@@ -60,4 +67,74 @@ fn can_display_symbols() {
         .collect::<Vec<_>>();
     symbols.sort();
     assert_eq!(symbols, vec!["a", "b", "c"]);
+}
+
+#[test]
+fn can_iterate_nodes() {
+    let mut graph = StackGraph::new();
+    let file = graph.get_or_create_file("test.py");
+    let h1 = graph.internal_scope(file, 0);
+    let h2 = graph.internal_scope(file, 1);
+    let h3 = graph.internal_scope(file, 2);
+    let handles = graph.iter_nodes().collect::<HashSet<_>>();
+    assert_eq!(
+        handles,
+        hashset! {graph.root_node(), graph.jump_to_node(), h1, h2, h3}
+    );
+}
+
+#[test]
+fn can_create_and_resolve_unknown_nodes() {
+    let mut graph = StackGraph::new();
+    let file = graph.get_or_create_file("test.py");
+    let id = graph.new_node_id(file);
+    let unknown = UnknownNode { id };
+    let _handle = unknown.add_to_graph(&mut graph);
+    let resolved = InternalScopeNode { id };
+    assert!(graph.resolve_unknown_node(resolved.into()).is_ok());
+    let conflict = ExportedScopeNode { id };
+    assert!(matches!(
+        graph.resolve_unknown_node(conflict.into()),
+        Err(Node::InternalScope(_))
+    ));
+}
+
+#[test]
+fn can_add_and_remove_edges() {
+    let mut graph = StackGraph::new();
+    let file = graph.get_or_create_file("test.py");
+    let h1 = graph.internal_scope(file, 0);
+    let h2 = graph.internal_scope(file, 1);
+    let h3 = graph.internal_scope(file, 2);
+    let h4 = graph.internal_scope(file, 3);
+    graph.add_edge(Edge {
+        source: h1,
+        sink: h2,
+    });
+    graph.add_edge(Edge {
+        source: h1,
+        sink: h3,
+    });
+    graph.add_edge(Edge {
+        source: h1,
+        sink: h4,
+    });
+    assert_eq!(
+        graph
+            .outgoing_edges(h1)
+            .map(|edge| edge.sink)
+            .collect::<HashSet<_>>(),
+        hashset! { h2, h3, h4 }
+    );
+    graph.remove_edge(Edge {
+        source: h1,
+        sink: h3,
+    });
+    assert_eq!(
+        graph
+            .outgoing_edges(h1)
+            .map(|edge| edge.sink)
+            .collect::<HashSet<_>>(),
+        hashset! { h2, h4 }
+    );
 }
