@@ -345,16 +345,11 @@ impl Node {
     /// symbol_, and _push scoped symbol_ nodes have symbols.)
     pub fn symbol(&self) -> Option<Handle<Symbol>> {
         match self {
-            Node::DropScopes(_) => None,
-            Node::ExportedScope(_) => None,
-            Node::InternalScope(_) => None,
-            Node::JumpTo(_) => None,
             Node::PushScopedSymbol(node) => Some(node.symbol),
             Node::PushSymbol(node) => Some(node.symbol),
             Node::PopScopedSymbol(node) => Some(node.symbol),
             Node::PopSymbol(node) => Some(node.symbol),
-            Node::Root(_) => None,
-            Node::Unknown(_) => None,
+            _ => None,
         }
     }
 
@@ -365,13 +360,12 @@ impl Node {
             Node::DropScopes(node) => Some(node.id),
             Node::ExportedScope(node) => Some(node.id),
             Node::InternalScope(node) => Some(node.id),
-            Node::JumpTo(_) => None,
             Node::PushScopedSymbol(node) => Some(node.id),
             Node::PushSymbol(node) => Some(node.id),
             Node::PopScopedSymbol(node) => Some(node.id),
             Node::PopSymbol(node) => Some(node.id),
-            Node::Root(_) => None,
             Node::Unknown(node) => Some(node.id),
+            _ => None,
         }
     }
 
