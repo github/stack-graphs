@@ -183,12 +183,17 @@ pub struct File {
 }
 
 impl StackGraph {
-    /// Adds a file to the stack graph, ensuring that there's only ever one file with a particular
-    /// name in the graph.
-    pub fn add_file<S: AsRef<str> + ?Sized>(&mut self, name: &S) -> Handle<File> {
+    /// Adds a file to the stack graph.  There can only ever be one file with a particular name in
+    /// the graph.  If a file with the requested name already exists, we return `Err`; if it
+    /// doesn't already exist, we return `Ok`.  In both cases, the value of the result is the
+    /// file's handle.
+    pub fn add_file<S: AsRef<str> + ?Sized>(
+        &mut self,
+        name: &S,
+    ) -> Result<Handle<File>, Handle<File>> {
         let name = name.as_ref();
         if let Some(handle) = self.file_handles.get(name) {
-            return *handle;
+            return Err(*handle);
         }
         let name_value = name.to_string();
         let file = File {
@@ -196,7 +201,15 @@ impl StackGraph {
         };
         let handle = self.files.add(file);
         self.file_handles.insert(name_value, handle);
-        handle
+        Ok(handle)
+    }
+
+    /// Adds a file to the stack graph, returning its handle.  There can only ever be one file with
+    /// a particular name in the graph, so if you call this multiple times with the same name,
+    /// you'll get the same handle each time.
+    #[inline(always)]
+    pub fn get_or_create_file<S: AsRef<str> + ?Sized>(&mut self, name: &S) -> Handle<File> {
+        self.add_file(name).unwrap_or_else(|handle| handle)
     }
 }
 

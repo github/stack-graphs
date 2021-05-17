@@ -50,7 +50,7 @@ pub fn new() -> SequencedImportStar {
     let sym_b = graph.add_symbol("b");
     let sym_foo = graph.add_symbol("foo");
 
-    let main_file = graph.add_file("main.py");
+    let main_file = graph.get_or_create_file("main.py");
     let main = graph.definition(main_file, 0, sym_main);
     let main_dot_1 = graph.pop_symbol(main_file, 1, sym_dot);
     let main_bottom_2 = graph.internal_scope(main_file, 2);
@@ -71,7 +71,7 @@ pub fn new() -> SequencedImportStar {
     graph.edge(main_a, root);
     graph.edge(main_4, main_top_5);
 
-    let a_file = graph.add_file("a.py");
+    let a_file = graph.get_or_create_file("a.py");
     let a = graph.definition(a_file, 0, sym_a);
     let a_dot_1 = graph.pop_symbol(a_file, 1, sym_dot);
     let a_bottom_2 = graph.internal_scope(a_file, 2);
@@ -88,7 +88,7 @@ pub fn new() -> SequencedImportStar {
     graph.edge(a_b, root);
     graph.edge(a_3, a_top_4);
 
-    let b_file = graph.add_file("b.py");
+    let b_file = graph.get_or_create_file("b.py");
     let b = graph.definition(b_file, 0, sym_b);
     let b_dot_1 = graph.pop_symbol(b_file, 1, sym_dot);
     let b_bottom_2 = graph.internal_scope(b_file, 2);

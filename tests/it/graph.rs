@@ -72,7 +72,7 @@ fn can_display_symbols() {
 #[test]
 fn can_iterate_nodes() {
     let mut graph = StackGraph::new();
-    let file = graph.add_file("test.py");
+    let file = graph.get_or_create_file("test.py");
     let h1 = graph.internal_scope(file, 0);
     let h2 = graph.internal_scope(file, 1);
     let h3 = graph.internal_scope(file, 2);
@@ -86,7 +86,7 @@ fn can_iterate_nodes() {
 #[test]
 fn can_create_and_resolve_unknown_nodes() {
     let mut graph = StackGraph::new();
-    let file = graph.add_file("test.py");
+    let file = graph.get_or_create_file("test.py");
     let id = graph.new_node_id(file);
     let unknown = UnknownNode { id };
     let _handle = unknown.add_to_graph(&mut graph);
@@ -102,7 +102,7 @@ fn can_create_and_resolve_unknown_nodes() {
 #[test]
 fn can_add_and_remove_edges() {
     let mut graph = StackGraph::new();
-    let file = graph.add_file("test.py");
+    let file = graph.get_or_create_file("test.py");
     let h1 = graph.internal_scope(file, 0);
     let h2 = graph.internal_scope(file, 1);
     let h3 = graph.internal_scope(file, 2);
