@@ -6,6 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use stack_graphs::arena::Arena;
+use stack_graphs::arena::List;
+use stack_graphs::arena::ListArena;
 use stack_graphs::arena::SupplementalArena;
 
 #[test]
@@ -35,4 +37,20 @@ fn can_allocate_in_supplemental_arena() {
     assert_eq!(&mut supplemental[h1], ""); // &mut to force "get or create" behavior
     supplemental[h2].push_str("hiya");
     assert_eq!(supplemental.get(h2).map(String::as_str), Some("hiya"));
+}
+
+#[test]
+fn can_create_lists() {
+    fn collect(list: &List<u32>, arena: &ListArena<u32>) -> Vec<u32> {
+        list.iter(arena).copied().collect()
+    }
+
+    let mut arena = List::new_arena();
+    let mut list = List::empty();
+    assert_eq!(collect(&list, &arena), vec![]);
+    list.push_front(&mut arena, 1);
+    assert_eq!(collect(&list, &arena), vec![1]);
+    list.push_front(&mut arena, 2);
+    list.push_front(&mut arena, 3);
+    assert_eq!(collect(&list, &arena), vec![3, 2, 1]);
 }

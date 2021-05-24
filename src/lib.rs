@@ -57,3 +57,4 @@
 
 pub mod arena;
 pub mod graph;
+pub mod paths;

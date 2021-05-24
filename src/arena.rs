@@ -261,3 +261,96 @@ where
         self.get_mut_or_default(handle)
     }
 }
+
+//-------------------------------------------------------------------------------------------------
+// Arena-allocated lists
+
+/// An arena-allocated singly-linked list.
+///
+/// Linked lists are often a poor choice because they aren't very cache-friendly.  However, this
+/// linked list implementation _should_ be cache-friendly, since the individual cells are allocated
+/// out of an arena.
+pub struct List<T> {
+    cells: Handle<ListCell<T>>,
+}
+
+#[doc(hidden)]
+pub enum ListCell<T> {
+    Empty,
+    Nonempty { head: T, tail: Handle<ListCell<T>> },
+}
+
+const EMPTY_LIST_HANDLE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1) };
+
+// An arena that's used to manage `List<T>` instances.
+//
+// (Note that the arena doesn't store `List<T>` itself; it stores the `ListCell<T>`s that the lists
+// are made of.)
+pub type ListArena<T> = Arena<ListCell<T>>;
+
+impl<T> List<T> {
+    /// Creates a new `ListArena` that will manage lists of this type.
+    pub fn new_arena() -> ListArena<T> {
+        let mut arena = ListArena::new();
+        let handle = arena.add(ListCell::Empty);
+        assert!(handle.index == EMPTY_LIST_HANDLE);
+        arena
+    }
+
+    /// Returns whether this list is empty.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.cells.index == EMPTY_LIST_HANDLE
+    }
+
+    /// Returns an empty list.
+    pub fn empty() -> List<T> {
+        List {
+            cells: Handle::new(EMPTY_LIST_HANDLE),
+        }
+    }
+
+    /// Pushes a new element onto the front of this list.
+    pub fn push_front(&mut self, arena: &mut ListArena<T>, head: T) {
+        self.cells = arena.add(ListCell::Nonempty {
+            head,
+            tail: self.cells,
+        });
+    }
+
+    /// Removes and returns the element at the front of this list.  If the list is empty, returns
+    /// `None`.
+    pub fn pop_front<'a>(&mut self, arena: &'a ListArena<T>) -> Option<&'a T> {
+        match arena.get(self.cells) {
+            ListCell::Empty => return None,
+            ListCell::Nonempty { head, tail } => {
+                self.cells = *tail;
+                Some(head)
+            }
+        }
+    }
+
+    /// Returns an iterator over the elements of this list.
+    pub fn iter<'a>(&self, arena: &'a ListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut current = self.cells;
+        std::iter::from_fn(move || match arena.get(current) {
+            ListCell::Empty => return None,
+            ListCell::Nonempty { head, tail } => {
+                current = *tail;
+                Some(head)
+            }
+        })
+    }
+}
+
+// Normally we would #[derive] all of these traits, but the auto-derived implementations all
+// require that T implement the trait as well.  We don't store any real instances of T inside of
+// List, so our implementations do _not_ require that.
+
+impl<T> Clone for List<T> {
+    fn clone(&self) -> List<T> {
+        List { cells: self.cells }
+    }
+}
+
+impl<T> Copy for List<T> {}
