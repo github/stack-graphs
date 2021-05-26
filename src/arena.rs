@@ -29,6 +29,7 @@
 //! [`Handle`]: struct.Handle.html
 //! [`StackGraph`]: ../graph/struct.StackGraph.html
 
+use std::cell::Cell;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -354,3 +355,417 @@ impl<T> Clone for List<T> {
 }
 
 impl<T> Copy for List<T> {}
+
+//-------------------------------------------------------------------------------------------------
+// Reversible arena-allocated list
+
+/// An arena-allocated list that can be reversed.
+///
+/// Well, that is, you can reverse a [`List`][] just fine by yourself.  This type takes care of
+/// doing that for you, and importantly, _saves the result_ so that if you only have to compute the
+/// reversal once even if you need to access it multiple times.
+///
+/// [`List`]: struct.List.html
+pub struct ReversibleList<T> {
+    cells: Handle<ReversibleListCell<T>>,
+}
+
+#[doc(hidden)]
+pub enum ReversibleListCell<T> {
+    Empty,
+    Nonempty {
+        head: T,
+        tail: Handle<ReversibleListCell<T>>,
+        reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
+    },
+}
+
+// An arena that's used to manage `ReversibleList<T>` instances.
+//
+// (Note that the arena doesn't store `ReversibleList<T>` itself; it stores the
+// `ReversibleListCell<T>`s that the lists are made of.)
+pub type ReversibleListArena<T> = Arena<ReversibleListCell<T>>;
+
+impl<T> ReversibleList<T> {
+    /// Creates a new `ReversibleListArena` that will manage lists of this type.
+    pub fn new_arena() -> ReversibleListArena<T> {
+        let mut arena = ReversibleListArena::new();
+        let handle = arena.add(ReversibleListCell::Empty);
+        assert!(handle.index == EMPTY_LIST_HANDLE);
+        arena
+    }
+
+    /// Returns whether this list is empty.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        ReversibleListCell::is_empty_handle(self.cells)
+    }
+
+    /// Returns an empty list.
+    pub fn empty() -> ReversibleList<T> {
+        ReversibleList {
+            cells: ReversibleListCell::empty_handle(),
+        }
+    }
+
+    /// Returns whether we have already calculated the reversal of this list.
+    pub fn have_reversal(&self, arena: &ReversibleListArena<T>) -> bool {
+        match arena.get(self.cells) {
+            // The empty list is already reversed.
+            ReversibleListCell::Empty => true,
+            ReversibleListCell::Nonempty { reversed, .. } => reversed.get().is_some(),
+        }
+    }
+
+    /// Pushes a new element onto the front of this list.
+    pub fn push_front(&mut self, arena: &mut ReversibleListArena<T>, head: T) {
+        self.cells = arena.add(ReversibleListCell::new(head, self.cells, None));
+    }
+
+    /// Removes and returns the element at the front of this list.  If the list is empty, returns
+    /// `None`.
+    pub fn pop_front<'a>(&mut self, arena: &'a ReversibleListArena<T>) -> Option<&'a T> {
+        match arena.get(self.cells) {
+            ReversibleListCell::Empty => return None,
+            ReversibleListCell::Nonempty { head, tail, .. } => {
+                self.cells = *tail;
+                Some(head)
+            }
+        }
+    }
+
+    /// Returns an iterator over the elements of this list.
+    pub fn iter<'a>(&self, arena: &'a ReversibleListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut current = self.cells;
+        std::iter::from_fn(move || match arena.get(current) {
+            ReversibleListCell::Empty => return None,
+            ReversibleListCell::Nonempty { head, tail, .. } => {
+                current = *tail;
+                Some(head)
+            }
+        })
+    }
+}
+
+impl<T> ReversibleList<T>
+where
+    T: Clone,
+{
+    /// Reverses the list.  Since we're already caching everything in an arena, we make sure to
+    /// only calculate the reversal once, returning it as-is if you call this function multiple
+    /// times.
+    pub fn reverse(&mut self, arena: &mut ReversibleListArena<T>) {
+        self.ensure_reversal_available(arena);
+        match arena.get(self.cells) {
+            ReversibleListCell::Empty => return,
+            ReversibleListCell::Nonempty { reversed, .. } => match reversed.get() {
+                Some(reversed) => self.cells = reversed,
+                _ => unreachable!(),
+            },
+        }
+    }
+
+    /// Ensures that the reversal of this list is available.  It can be useful to precalculate this
+    /// when you have mutable access to the arena, so that you can then reverse and un-reverse the
+    /// list later when you only have shared access to it.
+    pub fn ensure_reversal_available(&mut self, arena: &mut ReversibleListArena<T>) {
+        // First check to see if the list has already been reversed.
+        match arena.get(self.cells) {
+            // The empty list is already reversed.
+            ReversibleListCell::Empty => return,
+            ReversibleListCell::Nonempty { reversed, .. } if reversed.get().is_some() => return,
+            _ => (),
+        }
+
+        // If not, reverse the list and cache the result.
+        let new_reversed = ReversibleListCell::reverse(self.cells, arena);
+        match arena.get(self.cells) {
+            ReversibleListCell::Nonempty { reversed, .. } => {
+                reversed.set(Some(new_reversed));
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<T> ReversibleList<T> {
+    /// Reverses the list, assuming that the reversal has already been computed.  If it hasn't we
+    /// return an error.
+    pub fn reverse_reused(&mut self, arena: &ReversibleListArena<T>) -> Result<(), ()> {
+        match arena.get(self.cells) {
+            // The empty list is already reversed.
+            ReversibleListCell::Empty => Ok(()),
+            ReversibleListCell::Nonempty { reversed, .. } => match reversed.get() {
+                Some(reversed) => {
+                    self.cells = reversed;
+                    Ok(())
+                }
+                _ => Err(()),
+            },
+        }
+    }
+}
+
+impl<T> ReversibleListCell<T> {
+    fn new(
+        head: T,
+        tail: Handle<ReversibleListCell<T>>,
+        reversed: Option<Handle<ReversibleListCell<T>>>,
+    ) -> ReversibleListCell<T> {
+        ReversibleListCell::Nonempty {
+            head,
+            tail,
+            reversed: Cell::new(reversed),
+        }
+    }
+
+    fn empty_handle() -> Handle<ReversibleListCell<T>> {
+        Handle::new(EMPTY_LIST_HANDLE)
+    }
+
+    fn is_empty_handle(handle: Handle<ReversibleListCell<T>>) -> bool {
+        handle.index == EMPTY_LIST_HANDLE
+    }
+}
+
+impl<T> ReversibleListCell<T>
+where
+    T: Clone,
+{
+    fn reverse(
+        forwards: Handle<ReversibleListCell<T>>,
+        arena: &mut ReversibleListArena<T>,
+    ) -> Handle<ReversibleListCell<T>> {
+        let mut reversed = ReversibleListCell::empty_handle();
+        let mut current = forwards;
+        while let ReversibleListCell::Nonempty { head, tail, .. } = arena.get(current) {
+            let head = head.clone();
+            current = *tail;
+            reversed = arena.add(Self::new(
+                head,
+                reversed,
+                // The reversal of the reversal that we just calculated is our original list!  Go
+                // ahead and cache that away preemptively.
+                if ReversibleListCell::is_empty_handle(current) {
+                    Some(forwards)
+                } else {
+                    None
+                },
+            ));
+        }
+        reversed
+    }
+}
+
+// Normally we would #[derive] all of these traits, but the auto-derived implementations all
+// require that T implement the trait as well.  We don't store any real instances of T inside of
+// ReversibleList, so our implementations do _not_ require that.
+
+impl<T> Clone for ReversibleList<T> {
+    fn clone(&self) -> ReversibleList<T> {
+        ReversibleList { cells: self.cells }
+    }
+}
+
+impl<T> Copy for ReversibleList<T> {}
+
+//-------------------------------------------------------------------------------------------------
+// Arena-allocated deque
+
+/// An arena-allocated deque.
+///
+/// Under the covers, this is implemented as a [`List`][].  Because these lists are singly-linked,
+/// we can only add elements to, and remove them from, one side of the list.
+///
+/// To handle this, each deque stores its contents either _forwards_ or _backwards_.  We
+/// automatically shift between these two representations as needed, depending on the requirements
+/// of each method.
+///
+/// Note that we cache the result of reversing the list, so it should be quick to switch back and
+/// forth between representations _as long as you have not added any additional elements to the
+/// deque_!  If performance is critical, you should ensure that you don't call methods in a pattern
+/// that causes the deque to reverse itself each time you add an element.
+///
+/// [`List`]: struct.List.html
+pub struct Deque<T> {
+    list: ReversibleList<T>,
+    direction: DequeDirection,
+}
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+enum DequeDirection {
+    Forwards,
+    Backwards,
+}
+
+impl std::ops::Not for DequeDirection {
+    type Output = DequeDirection;
+    fn not(self) -> DequeDirection {
+        match self {
+            DequeDirection::Forwards => DequeDirection::Backwards,
+            DequeDirection::Backwards => DequeDirection::Forwards,
+        }
+    }
+}
+
+// An arena that's used to manage `Deque<T>` instances.
+pub type DequeArena<T> = ReversibleListArena<T>;
+
+impl<T> Deque<T> {
+    /// Creates a new `DequeArena` that will manage deques of this type.
+    pub fn new_arena() -> DequeArena<T> {
+        ReversibleList::new_arena()
+    }
+
+    /// Returns whether this deque is empty.
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
+    /// Returns an empty deque.
+    pub fn empty() -> Deque<T> {
+        Deque {
+            list: ReversibleList::empty(),
+            // A philosophical question for you: is the empty list forwards or backwards?  It
+            // doesn't really matter which one we choose here; if we immediately start pushing onto
+            // the back, we'll "reverse" the current list before proceeding, but reversing the
+            // empty list is a no-op.
+            direction: DequeDirection::Forwards,
+        }
+    }
+
+    fn is_backwards(&self) -> bool {
+        matches!(self.direction, DequeDirection::Backwards)
+    }
+
+    fn is_forwards(&self) -> bool {
+        matches!(self.direction, DequeDirection::Forwards)
+    }
+
+    /// Returns an iterator over the contents of this deque, with no guarantee about the ordering of
+    /// the elements.  (By not caring about the ordering of the elements, you can call this method
+    /// regardless of which direction the deque's elements are currently stored.  And that, in
+    /// turn, means that we only need shared access to the arena, and not mutable access to it.)
+    pub fn iter_unordered<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        self.list.iter(arena)
+    }
+}
+
+impl<T> Deque<T>
+where
+    T: Clone,
+{
+    /// Ensures that this deque has computed its backwards-facing list of elements.
+    pub fn ensure_backwards(&mut self, arena: &mut DequeArena<T>) {
+        if self.is_backwards() {
+            return;
+        }
+        self.list.reverse(arena);
+        self.direction = DequeDirection::Backwards;
+    }
+
+    /// Ensures that this deque has computed its forwards-facing list of elements.
+    pub fn ensure_forwards(&mut self, arena: &mut DequeArena<T>) {
+        if self.is_forwards() {
+            return;
+        }
+        self.list.reverse(arena);
+        self.direction = DequeDirection::Forwards;
+    }
+
+    /// Pushes a new element onto the front of this deque.
+    pub fn push_front(&mut self, arena: &mut DequeArena<T>, element: T) {
+        self.ensure_forwards(arena);
+        self.list.push_front(arena, element);
+    }
+
+    /// Pushes a new element onto the back of this deque.
+    pub fn push_back(&mut self, arena: &mut DequeArena<T>, element: T) {
+        self.ensure_backwards(arena);
+        self.list.push_front(arena, element);
+    }
+
+    /// Removes and returns the element from the front of this deque.  If the deque is empty,
+    /// returns `None`.
+    pub fn pop_front<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+        self.ensure_forwards(arena);
+        self.list.pop_front(arena)
+    }
+
+    /// Removes and returns the element from the back of this deque.  If the deque is empty,
+    /// returns `None`.
+    pub fn pop_back<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+        self.ensure_backwards(arena);
+        self.list.pop_front(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a forwards direction.
+    pub fn iter<'a>(&self, arena: &'a mut DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_backwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a backwards direction.
+    pub fn iter_reversed<'a>(
+        &self,
+        arena: &'a mut DequeArena<T>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_forwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+}
+
+impl<T> Deque<T> {
+    /// Returns an iterator over the contents of this deque in a forwards direction, assuming that
+    /// we have already computed its forwards-facing list of elements via [`ensure_forwards`][].
+    /// Panics if we haven't already computed it.
+    ///
+    /// [`ensure_forwards`]: #method.ensure_forwards
+    pub fn iter_reused<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_backwards() {
+            list.reverse_reused(arena)
+                .expect("Forwards deque hasn't been calculated");
+        }
+        list.iter(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a backwards direction, assuming that
+    /// we have already computed its backwards-facing list of elements via [`ensure_backwards`][].
+    /// Panics if we haven't already computed it.
+    ///
+    /// [`ensure_backwards`]: #method.ensure_backwards
+    pub fn iter_reversed_reused<'a>(
+        &self,
+        arena: &'a DequeArena<T>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_forwards() {
+            list.reverse_reused(arena)
+                .expect("Backwards deque hasn't been calculated");
+        }
+        list.iter(arena)
+    }
+}
+
+// Normally we would #[derive] all of these traits, but the auto-derived implementations all
+// require that T implement the trait as well.  We don't store any real instances of T inside of
+// Deque, so our implementations do _not_ require that.
+
+impl<T> Clone for Deque<T> {
+    fn clone(&self) -> Deque<T> {
+        Deque {
+            list: self.list,
+            direction: self.direction,
+        }
+    }
+}
+
+impl<T> Copy for Deque<T> {}

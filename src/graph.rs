@@ -211,9 +211,22 @@ impl StackGraph {
     pub fn get_or_create_file<S: AsRef<str> + ?Sized>(&mut self, name: &S) -> Handle<File> {
         self.add_file(name).unwrap_or_else(|handle| handle)
     }
+
+    /// Returns the file with a particular name.  Panics if there is no file with the requested
+    /// name.
+    pub fn get_file_unchecked<S: AsRef<str> + ?Sized>(&self, name: &S) -> Handle<File> {
+        let name = name.as_ref();
+        self.file_handles.get(name).copied().expect("Missing file")
+    }
 }
 
 impl StackGraph {
+    /// Returns an iterator of all of the nodes that belong to a particular file.  Note that this
+    /// does **_not_** include the singleton _root_ or _jump to scope_ nodes.
+    pub fn nodes_for_file(&self, file: Handle<File>) -> impl Iterator<Item = Handle<Node>> + '_ {
+        self.node_id_handles.nodes_for_file(file)
+    }
+
     /// Returns an iterator over all of the handles of all of the files in this stack graph.  (Note
     /// that because we're only returning _handles_, this iterator does not retain a reference to
     /// the `StackGraph`.)
@@ -367,6 +380,20 @@ impl Node {
             Node::Unknown(node) => Some(node.id),
             _ => None,
         }
+    }
+
+    /// Returns the file that this node belongs to.  Returns `None` for the singleton _root_ and
+    /// _jump to scope_ nodes, which belong to all files.
+    pub fn file(&self) -> Option<Handle<File>> {
+        self.id().map(|id| id.file)
+    }
+
+    /// Returns whether a node belongs to a particular file.  Always returns `true` for the
+    /// singleton _root_ and _jump to scope_ nodes, which belong to all files.
+    pub fn is_in_file(&self, file: Handle<File>) -> bool {
+        self.file()
+            .map(|self_file| self_file == file)
+            .unwrap_or(true)
     }
 
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
@@ -964,6 +991,14 @@ impl NodeIDHandles {
             .map(|file_entry| file_entry.len() as u32)
             .unwrap_or(0);
         NodeID { file, local_id }
+    }
+
+    fn nodes_for_file(&self, file: Handle<File>) -> impl Iterator<Item = Handle<Node>> + '_ {
+        let file_entry = match self.files.get(file) {
+            Some(file_entry) => file_entry,
+            None => return Either::Left(std::iter::empty()),
+        };
+        Either::Right(file_entry.iter().filter_map(|entry| *entry))
     }
 }
 

@@ -6,8 +6,12 @@
 // ------------------------------------------------------------------------------------------------
 
 use stack_graphs::arena::Arena;
+use stack_graphs::arena::Deque;
+use stack_graphs::arena::DequeArena;
 use stack_graphs::arena::List;
 use stack_graphs::arena::ListArena;
+use stack_graphs::arena::ReversibleList;
+use stack_graphs::arena::ReversibleListArena;
 use stack_graphs::arena::SupplementalArena;
 
 #[test]
@@ -53,4 +57,69 @@ fn can_create_lists() {
     list.push_front(&mut arena, 2);
     list.push_front(&mut arena, 3);
     assert_eq!(collect(&list, &arena), vec![3, 2, 1]);
+}
+
+#[test]
+fn can_create_reversible_lists() {
+    fn collect(list: &ReversibleList<u32>, arena: &ReversibleListArena<u32>) -> Vec<u32> {
+        list.iter(arena).copied().collect()
+    }
+
+    let mut arena = ReversibleList::new_arena();
+    let mut list = ReversibleList::empty();
+    assert_eq!(collect(&list, &arena), vec![]);
+    list.push_front(&mut arena, 1);
+    assert_eq!(collect(&list, &arena), vec![1]);
+    list.push_front(&mut arena, 2);
+    list.push_front(&mut arena, 3);
+    assert_eq!(collect(&list, &arena), vec![3, 2, 1]);
+    list.reverse(&mut arena);
+    assert_eq!(collect(&list, &arena), vec![1, 2, 3]);
+    list.push_front(&mut arena, 4);
+    list.push_front(&mut arena, 5);
+    assert_eq!(collect(&list, &arena), vec![5, 4, 1, 2, 3]);
+    list.reverse(&mut arena);
+    assert_eq!(collect(&list, &arena), vec![3, 2, 1, 4, 5]);
+    // Verify that we stash away the re-reversal so that we don't have to recompute it.
+    assert!(list.have_reversal(&arena));
+}
+
+#[test]
+fn can_create_deques() {
+    fn collect(deque: &Deque<u32>, arena: &mut DequeArena<u32>) -> Vec<u32> {
+        deque.iter(arena).copied().collect()
+    }
+    fn collect_reused(deque: &Deque<u32>, arena: &DequeArena<u32>) -> Vec<u32> {
+        deque.iter_reused(arena).copied().collect()
+    }
+    fn collect_rev(deque: &Deque<u32>, arena: &mut DequeArena<u32>) -> Vec<u32> {
+        deque.iter_reversed(arena).copied().collect()
+    }
+
+    let mut arena = Deque::new_arena();
+    let mut deque = Deque::empty();
+    assert_eq!(collect(&deque, &mut arena), vec![]);
+    assert_eq!(collect_rev(&deque, &mut arena), vec![]);
+    deque.push_front(&mut arena, 1);
+    assert_eq!(collect(&deque, &mut arena), vec![1]);
+    assert_eq!(collect_rev(&deque, &mut arena), vec![1]);
+    deque.push_front(&mut arena, 2);
+    deque.push_front(&mut arena, 3);
+    assert_eq!(collect(&deque, &mut arena), vec![3, 2, 1]);
+    assert_eq!(collect_rev(&deque, &mut arena), vec![1, 2, 3]);
+    deque.push_back(&mut arena, 4);
+    assert_eq!(collect(&deque, &mut arena), vec![3, 2, 1, 4]);
+    assert_eq!(collect_rev(&deque, &mut arena), vec![4, 1, 2, 3]);
+    deque.push_back(&mut arena, 5);
+    deque.push_back(&mut arena, 6);
+    assert_eq!(collect(&deque, &mut arena), vec![3, 2, 1, 4, 5, 6]);
+    assert_eq!(collect_rev(&deque, &mut arena), vec![6, 5, 4, 1, 2, 3]);
+    deque.push_front(&mut arena, 7);
+    deque.push_front(&mut arena, 8);
+    assert_eq!(collect(&deque, &mut arena), vec![8, 7, 3, 2, 1, 4, 5, 6]);
+    assert_eq!(collect_reused(&deque, &arena), vec![8, 7, 3, 2, 1, 4, 5, 6]);
+    assert_eq!(
+        collect_rev(&deque, &mut arena),
+        vec![6, 5, 4, 1, 2, 3, 7, 8]
+    );
 }
