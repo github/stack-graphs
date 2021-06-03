@@ -96,6 +96,75 @@ fn class_field_through_function_parameter() {
 }
 
 #[test]
+fn cyclic_imports_python() {
+    let fixture = test_graphs::cyclic_imports_python::new();
+    check_partial_paths_in_file(
+        &fixture.graph,
+        "main.py",
+        &[
+            // definition of `__main__` module
+            "<__main__> ($1) [root] -> [main.py(0) definition __main__] <> ($1)",
+            // reference to `a` in import statement
+            "<> () [main.py(8) reference a] -> [root] <a> ()",
+            // `from a import *` means we can rewrite any lookup of `__main__.*` → `a.*`
+            "<__main__.> ($1) [root] -> [root] <a.> ($1)",
+            // reference to `foo` becomes `a.foo` because of import statement
+            "<> () [main.py(6) reference foo] -> [root] <a.foo> ()",
+        ],
+    );
+    check_partial_paths_in_file(
+        &fixture.graph,
+        "a.py",
+        &[
+            // definition of `a` module
+            "<a> ($1) [root] -> [a.py(0) definition a] <> ($1)",
+            // reference to `b` in import statement
+            "<> () [a.py(6) reference b] -> [root] <b> ()",
+            // `from b import *` means we can rewrite any lookup of `a.*` → `b.*`
+            "<a.> ($1) [root] -> [root] <b.> ($1)",
+        ],
+    );
+    check_partial_paths_in_file(
+        &fixture.graph,
+        "b.py",
+        &[
+            // definition of `b` module
+            "<b> ($1) [root] -> [b.py(0) definition b] <> ($1)",
+            // reference to `a` in import statement
+            "<> () [b.py(8) reference a] -> [root] <a> ()",
+            // `from a import *` means we can rewrite any lookup of `b.*` → `a.*`
+            "<b.> ($1) [root] -> [root] <a.> ($1)",
+            // definition of `foo`
+            "<b.foo> ($1) [root] -> [b.py(6) definition foo] <> ($1)",
+        ],
+    );
+}
+
+#[test]
+fn cyclic_imports_rust() {
+    let fixture = test_graphs::cyclic_imports_rust::new();
+    check_partial_paths_in_file(
+        &fixture.graph,
+        "test.rs",
+        // NOTE: Because everything in this example is local to one file, there aren't any partial
+        // paths involving the root node.
+        &[
+            // reference to `a` in `main` function
+            "<> () [test.rs(103) reference a] -> [test.rs(201) definition a] <> ()",
+            // reference to `a` in `b` function
+            "<> () [test.rs(307) reference a] -> [test.rs(201) definition a] <> ()",
+            // reference to `b` in `a` function
+            "<> () [test.rs(206) reference b] -> [test.rs(301) definition b] <> ()",
+            // reference to `FOO` in `main` can resolve either to `a::BAR` or `b::FOO`
+            "<> () [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <> ()",
+            "<> () [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <> ()",
+            // reference to `BAR` in `b` resolves _only_ to `a::BAR`
+            "<> () [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <> ()",
+        ],
+    );
+}
+
+#[test]
 fn sequenced_import_star() {
     let fixture = test_graphs::sequenced_import_star::new();
     check_partial_paths_in_file(

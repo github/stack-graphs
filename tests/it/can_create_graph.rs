@@ -13,6 +13,16 @@ fn class_field_through_function_parameter() {
 }
 
 #[test]
+fn cyclic_imports_python() {
+    let _ = test_graphs::cyclic_imports_python::new();
+}
+
+#[test]
+fn cyclic_imports_rust() {
+    let _ = test_graphs::cyclic_imports_rust::new();
+}
+
+#[test]
 fn sequenced_import_star() {
     let _ = test_graphs::sequenced_import_star::new();
 }

@@ -41,6 +41,7 @@ use std::num::NonZeroU32;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
+use crate::cycles::CycleDetector;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -48,6 +49,8 @@ use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::paths::Extend;
 use crate::paths::PathResolutionError;
+use crate::utils::cmp_option;
+use crate::utils::equals_option;
 
 //-------------------------------------------------------------------------------------------------
 // Displaying stuff
@@ -220,6 +223,22 @@ impl PartialScopedSymbol {
         true
     }
 
+    pub fn equals(&self, partials: &mut PartialPaths, other: &PartialScopedSymbol) -> bool {
+        self.symbol == other.symbol
+            && equals_option(self.scopes, other.scopes, |a, b| a.equals(partials, b))
+    }
+
+    pub fn cmp(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        other: &PartialScopedSymbol,
+    ) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+            .then_with(|| graph[self.symbol].cmp(&graph[other.symbol]))
+            .then_with(|| cmp_option(self.scopes, other.scopes, |a, b| a.cmp(partials, b)))
+    }
+
     pub fn display<'a>(
         self,
         graph: &'a StackGraph,
@@ -336,6 +355,43 @@ impl PartialSymbolStack {
             return false;
         }
         true
+    }
+
+    pub fn equals(mut self, partials: &mut PartialPaths, mut other: PartialSymbolStack) -> bool {
+        while let Some(self_symbol) = self.pop_front(partials) {
+            if let Some(other_symbol) = other.pop_front(partials) {
+                if !self_symbol.equals(partials, &other_symbol) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        other.deque.is_empty()
+    }
+
+    pub fn cmp(
+        mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        mut other: PartialSymbolStack,
+    ) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        while let Some(self_symbol) = self.pop_front(partials) {
+            if let Some(other_symbol) = other.pop_front(partials) {
+                match self_symbol.cmp(graph, partials, &other_symbol) {
+                    Ordering::Equal => continue,
+                    result @ _ => return result,
+                }
+            } else {
+                return Ordering::Greater;
+            }
+        }
+        if other.deque.is_empty() {
+            Ordering::Equal
+        } else {
+            Ordering::Less
+        }
     }
 
     /// Returns an iterator over the contents of this partial symbol stack.
@@ -488,6 +544,25 @@ impl PartialScopeStack {
         self.variable
     }
 
+    pub fn equals(self, partials: &mut PartialPaths, other: PartialScopeStack) -> bool {
+        self.scopes
+            .equals_with(&mut partials.partial_scope_stacks, other.scopes, |a, b| {
+                *a == *b
+            })
+            && equals_option(self.variable, other.variable, |a, b| a == b)
+    }
+
+    pub fn cmp(self, partials: &mut PartialPaths, other: PartialScopeStack) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+            .then_with(|| {
+                self.scopes
+                    .cmp_with(&mut partials.partial_scope_stacks, other.scopes, |a, b| {
+                        a.cmp(b)
+                    })
+            })
+            .then_with(|| cmp_option(self.variable, other.variable, |a, b| a.cmp(&b)))
+    }
+
     /// Returns an iterator over the scopes in this partial scope stack.
     pub fn iter_scopes<'a>(
         &self,
@@ -622,6 +697,53 @@ impl PartialPath {
             scope_stack_postcondition,
             edge_count: 0,
         }
+    }
+
+    pub fn equals(&self, partials: &mut PartialPaths, other: &PartialPath) -> bool {
+        self.start_node == other.start_node
+            && self.end_node == other.end_node
+            && self
+                .symbol_stack_precondition
+                .equals(partials, other.symbol_stack_precondition)
+            && self
+                .symbol_stack_postcondition
+                .equals(partials, other.symbol_stack_postcondition)
+            && self
+                .scope_stack_precondition
+                .equals(partials, other.scope_stack_precondition)
+            && self
+                .scope_stack_postcondition
+                .equals(partials, other.scope_stack_postcondition)
+    }
+
+    pub fn cmp(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        other: &PartialPath,
+    ) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+            .then_with(|| self.start_node.cmp(&other.start_node))
+            .then_with(|| self.end_node.cmp(&other.end_node))
+            .then_with(|| {
+                self.symbol_stack_precondition
+                    .cmp(graph, partials, other.symbol_stack_precondition)
+            })
+            .then_with(|| {
+                self.symbol_stack_postcondition.cmp(
+                    graph,
+                    partials,
+                    other.symbol_stack_postcondition,
+                )
+            })
+            .then_with(|| {
+                self.scope_stack_precondition
+                    .cmp(partials, other.scope_stack_precondition)
+            })
+            .then_with(|| {
+                self.scope_stack_postcondition
+                    .cmp(partials, other.scope_stack_postcondition)
+            })
     }
 
     /// A partial path is _as complete as possible_ if we cannot extend it any further within the
@@ -918,6 +1040,7 @@ impl PartialPaths {
     ) where
         F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
     {
+        let mut cycle_detector = CycleDetector::new();
         let mut queue = VecDeque::new();
         queue.push_back(PartialPath::from_node(graph, self, graph.root_node()));
         queue.extend(
@@ -932,6 +1055,9 @@ impl PartialPaths {
                 .map(|node| PartialPath::from_node(graph, self, node)),
         );
         while let Some(path) = queue.pop_front() {
+            if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
+                continue;
+            }
             path.extend_from_file(graph, self, file, &mut queue);
             visit(graph, self, path);
         }

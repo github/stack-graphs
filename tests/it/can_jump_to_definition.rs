@@ -53,6 +53,45 @@ fn class_field_through_function_parameter() {
 }
 
 #[test]
+fn cyclic_imports_python() {
+    let fixture = test_graphs::cyclic_imports_python::new();
+    check_jump_to_definition(
+        &fixture.graph,
+        &[
+            // reference to `a` in import statement
+            "[main.py(8) reference a] -> [a.py(0) definition a]",
+            // reference to `foo` resolves through intermediate file to find `b.foo`
+            "[main.py(6) reference foo] -> [b.py(6) definition foo]",
+            // reference to `b` in import statement
+            "[a.py(6) reference b] -> [b.py(0) definition b]",
+            // reference to `a` in import statement
+            "[b.py(8) reference a] -> [a.py(0) definition a]",
+        ],
+    );
+}
+
+#[test]
+fn cyclic_imports_rust() {
+    let fixture = test_graphs::cyclic_imports_rust::new();
+    check_jump_to_definition(
+        &fixture.graph,
+        &[
+            // reference to `a` in `a::FOO` resolves to module definition
+            "[test.rs(103) reference a] -> [test.rs(201) definition a]",
+            // reference to `a::FOO` in `main` can resolve either to `a::BAR` or `b::FOO`
+            "[test.rs(101) reference FOO] -> [test.rs(304) definition FOO]",
+            "[test.rs(101) reference FOO] -> [test.rs(204) definition BAR]",
+            // reference to `b` in use statement resolves to module definition
+            "[test.rs(206) reference b] -> [test.rs(301) definition b]",
+            // reference to `a` in use statement resolves to module definition
+            "[test.rs(307) reference a] -> [test.rs(201) definition a]",
+            // reference to `BAR` in module `b` can _only_ resolve to `a::BAR`
+            "[test.rs(305) reference BAR] -> [test.rs(204) definition BAR]",
+        ],
+    );
+}
+
+#[test]
 fn sequenced_import_star() {
     let fixture = test_graphs::sequenced_import_star::new();
     check_jump_to_definition(
