@@ -53,6 +53,7 @@ use crate::utils::equals_option;
 /// type to index into an arena of another type.  However, if you have multiple arenas for the
 /// _same type_, we do not do anything to ensure that you only use a handle with the corresponding
 /// arena.
+#[repr(transparent)]
 pub struct Handle<T> {
     index: NonZeroU32,
     _phantom: PhantomData<T>,
@@ -67,7 +68,7 @@ impl<T> Handle<T> {
     }
 
     #[inline(always)]
-    fn as_usize(self) -> usize {
+    pub fn as_usize(self) -> usize {
         self.index.get() as usize
     }
 }
@@ -175,6 +176,17 @@ impl<T> Arena<T> {
         (1..self.items.len())
             .into_iter()
             .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    }
+
+    /// Returns a pointer to this arena's storage.
+    pub(crate) fn as_ptr(&self) -> *const T {
+        self.items.as_ptr() as *const T
+    }
+
+    /// Returns the number of instances stored in this arena.
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.items.len()
     }
 }
 

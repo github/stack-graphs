@@ -66,6 +66,7 @@ use crate::arena::SupplementalArena;
 //-------------------------------------------------------------------------------------------------
 // String content
 
+#[repr(C)]
 struct InternedString {
     // See InternedStringContent below for how we fill in these fields safely.
     start: *const u8,
@@ -161,6 +162,7 @@ impl InternedString {
 /// We deduplicate `Symbol` instances in a `StackGraph` — that is, we ensure that there are never
 /// multiple `Symbol` instances with the same content.  That means that you can compare _handles_
 /// to symbols using simple equality, without having to dereference into the `StackGraph` arena.
+#[repr(C)]
 pub struct Symbol {
     content: InternedString,
 }
@@ -1120,7 +1122,7 @@ impl StackGraph {
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct StackGraph {
     interned_strings: InternedStringContent,
-    symbols: Arena<Symbol>,
+    pub(crate) symbols: Arena<Symbol>,
     symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
     files: Arena<File>,
     file_handles: FxHashMap<&'static str, Handle<File>>,

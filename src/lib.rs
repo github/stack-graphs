@@ -56,6 +56,7 @@
 //! original source file.  (a.k.a., it’s incremental!)
 
 pub mod arena;
+pub mod c;
 pub mod cycles;
 pub mod graph;
 pub mod partial;
