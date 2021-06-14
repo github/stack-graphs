@@ -52,7 +52,6 @@
 //! [`File`]: struct.File.html
 
 use std::fmt::Display;
-use std::ops::Deref;
 use std::ops::Index;
 use std::ops::IndexMut;
 
@@ -63,6 +62,91 @@ use smallvec::SmallVec;
 use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::SupplementalArena;
+
+//-------------------------------------------------------------------------------------------------
+// String content
+
+struct InternedString {
+    // See InternedStringContent below for how we fill in these fields safely.
+    start: *const u8,
+    len: usize,
+}
+
+const INITIAL_STRING_CAPACITY: usize = 512;
+
+/// The content of each `InternedString` is stored in one of the buffers inside of a
+/// `InternedStringContent` instance, following the trick [described by Aleksey Kladov][interner].
+///
+/// The buffers stored in this type are preallocated, and are never allowed to grow.  That ensures
+/// that pointers into the buffer are stable, as long as the buffer has not been destroyed.
+/// (`InternedString` instances are also stored in an arena, ensuring that the strings that we hand
+/// out don't outlive the buffers.)
+///
+/// [interner]: https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
+struct InternedStringContent {
+    current_buffer: Vec<u8>,
+    full_buffers: Vec<Vec<u8>>,
+}
+
+impl InternedStringContent {
+    fn new() -> InternedStringContent {
+        InternedStringContent {
+            current_buffer: Vec::with_capacity(INITIAL_STRING_CAPACITY),
+            full_buffers: Vec::new(),
+        }
+    }
+
+    // Adds a new string.  This does not check whether we've already stored a string with the same
+    // content; that is handled down below in `StackGraph::add_symbol` and `add_file`.
+    fn add(&mut self, value: &str) -> InternedString {
+        // Is there enough room in current_buffer to hold this string?
+        let value = value.as_bytes();
+        let len = value.len();
+        let capacity = self.current_buffer.capacity();
+        let remaining_capacity = capacity - self.current_buffer.len();
+        if len > remaining_capacity {
+            // If not, move current_buffer over into full_buffers (so that we hang onto it until
+            // we're dropped) and allocate a new current_buffer that's at least big enough to hold
+            // this string.
+            let new_capacity = (capacity.max(len) + 1).next_power_of_two();
+            let new_buffer = Vec::with_capacity(new_capacity);
+            let old_buffer = std::mem::replace(&mut self.current_buffer, new_buffer);
+            self.full_buffers.push(old_buffer);
+        }
+
+        // Copy the string's content into current_buffer and return a pointer to it.  That pointer
+        // is stable since we never allow the current_buffer to be resized — once we run out of
+        // room, we allocate a _completely new buffer_ to replace it.
+        let start_index = self.current_buffer.len();
+        self.current_buffer.extend_from_slice(value);
+        let start = &self.current_buffer[start_index] as *const _;
+        InternedString { start, len }
+    }
+}
+
+impl InternedString {
+    /// Returns the content of this string as a `str`.  This is safe as long as the lifetime of the
+    /// InternedString is outlived by the lifetime of the InternedStringContent that holds its
+    /// data.  That is guaranteed because we store the InternedStrings in an Arena alongside the
+    /// InternedStringContent, and only hand out references to them.
+    fn as_str(&self) -> &str {
+        unsafe {
+            let bytes = std::slice::from_raw_parts(self.start, self.len);
+            std::str::from_utf8_unchecked(bytes)
+        }
+    }
+
+    // Returns a supposedly 'static reference to the string's data.  The string data isn't really
+    // static, but we are careful only to use this as a key in the HashMap that StackGraph uses to
+    // track whether we've stored a particular symbol already.  That HashMap lives alongside the
+    // InternedStringContent that holds the data, so we can get away with a technically incorrect
+    // 'static lifetime here.  As an extra precaution, this method is is marked as unsafe so that
+    // we don't inadvertently call it from anywhere else in the crate.
+    unsafe fn as_hash_key(&self) -> &'static str {
+        let bytes = std::slice::from_raw_parts(self.start, self.len);
+        std::str::from_utf8_unchecked(bytes)
+    }
+}
 
 //-------------------------------------------------------------------------------------------------
 // Symbols
@@ -77,39 +161,19 @@ use crate::arena::SupplementalArena;
 /// We deduplicate `Symbol` instances in a `StackGraph` — that is, we ensure that there are never
 /// multiple `Symbol` instances with the same content.  That means that you can compare _handles_
 /// to symbols using simple equality, without having to dereference into the `StackGraph` arena.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Symbol {
-    symbol: String,
+    content: InternedString,
 }
 
 impl Symbol {
-    pub fn as_str(&self) -> &str {
-        &self.symbol
-    }
-}
-
-impl AsRef<str> for Symbol {
-    fn as_ref(&self) -> &str {
-        &self.symbol
-    }
-}
-
-impl Deref for Symbol {
-    type Target = str;
-    fn deref(&self) -> &str {
-        &self.symbol
-    }
-}
-
-impl Display for Symbol {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.symbol)
+    fn as_str(&self) -> &str {
+        self.content.as_str()
     }
 }
 
 impl PartialEq<&str> for Symbol {
     fn eq(&self, other: &&str) -> bool {
-        self.symbol == **other
+        self.as_str() == *other
     }
 }
 
@@ -121,12 +185,11 @@ impl StackGraph {
         if let Some(handle) = self.symbol_handles.get(symbol) {
             return *handle;
         }
-        let symbol_value = symbol.to_string();
-        let symbol = Symbol {
-            symbol: symbol_value.clone(),
-        };
-        let handle = self.symbols.add(symbol);
-        self.symbol_handles.insert(symbol_value, handle);
+
+        let interned = self.interned_strings.add(symbol);
+        let hash_key = unsafe { interned.as_hash_key() };
+        let handle = self.symbols.add(Symbol { content: interned });
+        self.symbol_handles.insert(hash_key, handle);
         handle
     }
 
@@ -139,10 +202,10 @@ impl StackGraph {
 }
 
 impl Index<Handle<Symbol>> for StackGraph {
-    type Output = Symbol;
+    type Output = str;
     #[inline(always)]
-    fn index(&self, handle: Handle<Symbol>) -> &Symbol {
-        &self.symbols.get(handle)
+    fn index(&self, handle: Handle<Symbol>) -> &str {
+        self.symbols.get(handle).as_str()
     }
 }
 
@@ -154,7 +217,7 @@ pub struct DisplaySymbol<'a> {
 
 impl<'a> Display for DisplaySymbol<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.graph[self.wrapped])
+        write!(f, "{}", &self.graph[self.wrapped])
     }
 }
 
@@ -179,7 +242,13 @@ impl Handle<Symbol> {
 /// each other.
 pub struct File {
     /// The name of this source file.
-    pub name: String,
+    name: InternedString,
+}
+
+impl File {
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
 }
 
 impl StackGraph {
@@ -195,12 +264,11 @@ impl StackGraph {
         if let Some(handle) = self.file_handles.get(name) {
             return Err(*handle);
         }
-        let name_value = name.to_string();
-        let file = File {
-            name: name_value.clone(),
-        };
-        let handle = self.files.add(file);
-        self.file_handles.insert(name_value, handle);
+
+        let interned = self.interned_strings.add(name);
+        let hash_key = unsafe { interned.as_hash_key() };
+        let handle = self.files.add(File { name: interned });
+        self.file_handles.insert(hash_key, handle);
         Ok(handle)
     }
 
@@ -237,7 +305,7 @@ impl StackGraph {
 
 impl Display for File {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.name())
     }
 }
 
@@ -1051,13 +1119,11 @@ impl StackGraph {
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct StackGraph {
-    // TODO: We're currently storing the content of each symbol twice.  Find a way to only store
-    // the content once, most likely using the trick described at
-    // https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
+    interned_strings: InternedStringContent,
     symbols: Arena<Symbol>,
-    symbol_handles: FxHashMap<String, Handle<Symbol>>,
+    symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
     files: Arena<File>,
-    file_handles: FxHashMap<String, Handle<File>>,
+    file_handles: FxHashMap<&'static str, Handle<File>>,
     nodes: Arena<Node>,
     node_id_handles: NodeIDHandles,
     jump_to_node: Handle<Node>,
@@ -1073,6 +1139,7 @@ impl StackGraph {
         let jump_to_node = nodes.add(JumpToNode.into());
 
         StackGraph {
+            interned_strings: InternedStringContent::new(),
             symbols: Arena::new(),
             symbol_handles: FxHashMap::default(),
             files: Arena::new(),

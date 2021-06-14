@@ -50,7 +50,7 @@ fn can_iterate_symbols() {
     // order they'll come out of the iterator.
     let symbols = graph
         .iter_symbols()
-        .map(|symbol| graph[symbol].as_str())
+        .map(|symbol| &graph[symbol])
         .collect::<HashSet<_>>();
     assert_eq!(symbols, hashset! {"a", "b", "c"});
 }
