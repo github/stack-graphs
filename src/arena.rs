@@ -117,6 +117,12 @@ impl<T> PartialOrd for Handle<T> {
     }
 }
 
+// Handles are always Send and Sync, even if the underlying types are not.  After all, a handle is
+// just a number!  And you _also_ need access to the Arena (which _won't_ be Send/Sync if T isn't)
+// to dereference the handle.
+unsafe impl<T> Send for Handle<T> {}
+unsafe impl<T> Sync for Handle<T> {}
+
 /// Manages the life cycle of instances of type `T`.  You can allocate new instances of `T` from
 /// the arena.  All of the instances managed by this arena will be dropped as a single operation
 /// when the arena itself is dropped.
