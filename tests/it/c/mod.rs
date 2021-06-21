@@ -5,5 +5,8 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+mod can_create_graph;
 mod files;
+mod nodes;
 mod symbols;
+mod test_graph;

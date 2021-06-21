@@ -347,6 +347,7 @@ impl Handle<File> {
 ///
 /// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
 /// _local ID_ that must be unique within its file.
+#[repr(C)]
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeID {
     file: Option<Handle<File>>,
@@ -455,15 +456,16 @@ impl NodeID {
 }
 
 /// A node in a stack graph.
+#[repr(C)]
 pub enum Node {
     DropScopes(DropScopesNode),
     ExportedScope(ExportedScopeNode),
     InternalScope(InternalScopeNode),
     JumpTo(JumpToNode),
-    PushScopedSymbol(PushScopedSymbolNode),
-    PushSymbol(PushSymbolNode),
     PopScopedSymbol(PopScopedSymbolNode),
     PopSymbol(PopSymbolNode),
+    PushScopedSymbol(PushScopedSymbolNode),
+    PushSymbol(PushSymbolNode),
     Root(RootNode),
 }
 
@@ -504,6 +506,15 @@ impl Node {
             Node::PushSymbol(node) => Some(node.symbol),
             Node::PopScopedSymbol(node) => Some(node.symbol),
             Node::PopSymbol(node) => Some(node.symbol),
+            _ => None,
+        }
+    }
+
+    /// Returns this node's attached scope, if it has one.  (_Push scoped symbol_ nodes have
+    /// attached scopes.)
+    pub fn scope(&self) -> Option<Handle<Node>> {
+        match self {
+            Node::PushScopedSymbol(node) => Some(node.scope),
             _ => None,
         }
     }
@@ -584,7 +595,7 @@ impl StackGraph {
         }
     }
 
-    fn add_node(&mut self, id: NodeID, node: Node) -> Option<Handle<Node>> {
+    pub(crate) fn add_node(&mut self, id: NodeID, node: Node) -> Option<Handle<Node>> {
         if let Some(_) = self.node_id_handles.handle_for_id(id) {
             return None;
         }
@@ -641,6 +652,7 @@ impl IndexMut<Handle<Node>> for StackGraph {
 }
 
 /// Removes everything from the current scope stack.
+#[repr(C)]
 pub struct DropScopesNode {
     /// The unique identifier for this node.
     pub id: NodeID,
@@ -695,6 +707,7 @@ impl<'a> Display for DisplayDropScopesNode<'a> {
 
 /// A node that can be referred to on the scope stack, which allows "jump to" nodes in any other
 /// part of the graph can jump back here.
+#[repr(C)]
 pub struct ExportedScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
@@ -753,6 +766,7 @@ impl<'a> Display for DisplayExportedScopeNode<'a> {
 
 /// A node internal to a single file.  This node has no effect on the symbol or scope stacks;
 /// it's just used to add structure to the graph.
+#[repr(C)]
 pub struct InternalScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
@@ -811,6 +825,7 @@ impl<'a> Display for DisplayInternalScopeNode<'a> {
 
 /// The singleton "jump to" node, which allows a name binding path to jump back to another part of
 /// the graph.
+#[repr(C)]
 pub struct JumpToNode {
     _id: NodeID,
     _symbol: Option<Handle<Symbol>>,
@@ -847,6 +862,7 @@ impl Display for JumpToNode {
 /// Pops a scoped symbol from the symbol stack.  If the top of the symbol stack doesn't match the
 /// requested symbol, or if the top of the symbol stack doesn't have an attached scope list, then
 /// the path is not allowed to enter this node.
+#[repr(C)]
 pub struct PopScopedSymbolNode {
     /// The unique identifier for this node.
     pub id: NodeID,
@@ -918,6 +934,7 @@ impl<'a> Display for DisplayPopScopedSymbolNode<'a> {
 
 /// Pops a symbol from the symbol stack.  If the top of the symbol stack doesn't match the
 /// requested symbol, then the path is not allowed to enter this node.
+#[repr(C)]
 pub struct PopSymbolNode {
     /// The unique identifier for this node.
     pub id: NodeID,
@@ -988,6 +1005,7 @@ impl<'a> Display for DisplayPopSymbolNode<'a> {
 }
 
 /// Pushes a scoped symbol onto the symbol stack.
+#[repr(C)]
 pub struct PushScopedSymbolNode {
     /// The unique identifier for this node.
     pub id: NodeID,
@@ -1064,6 +1082,7 @@ impl<'a> Display for DisplayPushScopedSymbolNode<'a> {
 }
 
 /// Pushes a symbol onto the symbol stack.
+#[repr(C)]
 pub struct PushSymbolNode {
     /// The unique identifier for this node.
     pub id: NodeID,
@@ -1134,6 +1153,7 @@ impl<'a> Display for DisplayPushSymbolNode<'a> {
 }
 
 /// The singleton root node, which allows a name binding path to cross between files.
+#[repr(C)]
 pub struct RootNode {
     _id: NodeID,
     _symbol: Option<Handle<Symbol>>,
@@ -1274,7 +1294,7 @@ pub struct StackGraph {
     symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
     pub(crate) files: Arena<File>,
     file_handles: FxHashMap<&'static str, Handle<File>>,
-    nodes: Arena<Node>,
+    pub(crate) nodes: Arena<Node>,
     node_id_handles: NodeIDHandles,
     jump_to_node: Handle<Node>,
     root_node: Handle<Node>,

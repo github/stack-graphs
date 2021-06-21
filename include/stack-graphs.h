@@ -9,6 +9,40 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// The local_id of the singleton root node.
+#define SG_ROOT_NODE_ID 0
+
+// The local_id of the singleton "jump to scope" node.
+#define SG_JUMP_TO_NODE_ID 1
+
+// The different kinds of node that can appear in a stack graph.
+enum sg_node_kind {
+    // Removes everything from the current scope stack.
+    SG_NODE_KIND_DROP_SCOPES,
+    // A node that can be referred to on the scope stack, which allows "jump to" nodes in any
+    // other part of the graph can jump back here.
+    SG_NODE_KIND_EXPORTED_SCOPE,
+    // A node internal to a single file.  This node has no effect on the symbol or scope stacks;
+    // it's just used to add structure to the graph.
+    SG_NODE_KIND_INTERNAL_SCOPE,
+    // The singleton "jump to" node, which allows a name binding path to jump back to another part
+    // of the graph.
+    SG_NODE_KIND_JUMP_TO,
+    // Pops a scoped symbol from the symbol stack.  If the top of the symbol stack doesn't match
+    // the requested symbol, or if the top of the symbol stack doesn't have an attached scope
+    // list, then the path is not allowed to enter this node.
+    SG_NODE_KIND_POP_SCOPED_SYMBOL,
+    // Pops a symbol from the symbol stack.  If the top of the symbol stack doesn't match the
+    // requested symbol, then the path is not allowed to enter this node.
+    SG_NODE_KIND_POP_SYMBOL,
+    // Pushes a scoped symbol onto the symbol stack.
+    SG_NODE_KIND_PUSH_SCOPED_SYMBOL,
+    // Pushes a symbol onto the symbol stack.
+    SG_NODE_KIND_PUSH_SYMBOL,
+    // The singleton root node, which allows a name binding path to cross between files.
+    SG_NODE_KIND_ROOT,
+};
+
 // Contains all of the nodes and edges that make up a stack graph.
 struct sg_stack_graph;
 
@@ -65,6 +99,61 @@ struct sg_files {
 // handles using simple equality, without having to dereference them.
 typedef uint32_t sg_file_handle;
 
+// Uniquely identifies a node in a stack graph.
+//
+// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
+// _local ID_ that must be unique within its file.
+struct sg_node_id {
+    sg_file_handle file;
+    uint32_t local_id;
+};
+
+// A handle to a node in a stack graph.  A zero handle represents a missing node.
+typedef uint32_t sg_node_handle;
+
+// A node in a stack graph.
+struct sg_node {
+    enum sg_node_kind kind;
+    struct sg_node_id id;
+    // The symbol associated with this node.  For push nodes, this is the symbol that will be
+    // pushed onto the symbol stack.  For pop nodes, this is the symbol that we expect to pop off
+    // the symbol stack.  For all other node types, this will be null.
+    sg_symbol_handle symbol;
+    // The scope associated with this node.  For push scope nodes, this is the scope that will be
+    // attached to the symbol before it's pushed onto the symbol stack.  For all other node types,
+    // this will be null.
+    sg_node_handle scope;
+    // Whether this node is "clickable".  For push nodes, this indicates that the node represents
+    // a reference in the source.  For pop nodes, this indicates that the node represents a
+    // definition in the source.  For all other node types, this field will be unused.
+    bool is_clickable;
+};
+
+// An array of all of the nodes in a stack graph.  Node handles are indices into this array.
+// There will never be a valid node at index 0; a handle with the value 0 represents a missing
+// node.
+struct sg_nodes {
+    const struct sg_node *nodes;
+    size_t count;
+};
+
+// Connects two nodes in a stack graph.
+//
+// These edges provide the basic graph connectivity that allow us to search for name binding paths
+// in a stack graph.  (Though not all sequence of edges is a well-formed name binding: the nodes
+// that you encounter along the path must also satisfy all of the rules for maintaining correct
+// symbol and scope stacks.)
+struct sg_edge {
+    sg_node_handle source;
+    sg_node_handle sink;
+};
+
+// The handle of the singleton root node.
+#define SG_ROOT_NODE_HANDLE 1
+
+// The handle of the singleton "jump to scope" node.
+#define SG_JUMP_TO_NODE_HANDLE 2
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -119,6 +208,35 @@ void sg_stack_graph_add_files(struct sg_stack_graph *graph,
                               const char *const *files,
                               const size_t *lengths,
                               sg_file_handle *handles_out);
+
+// Returns a reference to the array of nodes in this stack graph.  The resulting array pointer is
+// only valid until the next call to any function that mutates the stack graph.
+struct sg_nodes sg_stack_graph_nodes(const struct sg_stack_graph *graph);
+
+// Adds new nodes to the stack graph.  You provide an array of `struct sg_node` instances.  You
+// also provide an output array, which must have the same length as `nodes`, in which we will
+// place each node's handle in the stack graph.
+//
+// We copy the node content into the stack graph.  The array you pass in does not need to outlive
+// the call to this function.
+//
+// You cannot add new instances of the root node or "jump to scope" node, since those are
+// singletons and already exist in the stack graph.
+//
+// If any node that you pass in is invalid, it will not be added to the graph, and the
+// corresponding entry in the `handles_out` array will be null.  (Note that includes trying to add
+// a node with the same ID as an existing node, since all nodes must have unique IDs.)
+void sg_stack_graph_add_nodes(struct sg_stack_graph *graph,
+                              size_t count,
+                              const struct sg_node *nodes,
+                              sg_node_handle *handles_out);
+
+// Adds new edges to the stack graph.  You provide an array of `struct sg_edges` instances.  A
+// stack graph can contain at most one edge between any two nodes.  It is not an error if you try
+// to add an edge that already exists, but it won't have any effect on the graph.
+void sg_stack_graph_add_edges(struct sg_stack_graph *graph,
+                              size_t count,
+                              const struct sg_edge *edges);
 
 #ifdef __cplusplus
 } // extern "C"
