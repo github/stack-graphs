@@ -12,6 +12,7 @@
 use libc::c_char;
 
 use crate::arena::Handle;
+use crate::graph::File;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
 
@@ -107,6 +108,83 @@ pub extern "C" fn sg_stack_graph_add_symbols(
         let symbol = unsafe { std::slice::from_raw_parts(symbols[i], lengths[i]) };
         handles_out[i] = match std::str::from_utf8(symbol) {
             Ok(symbol) => Some(graph.add_symbol(symbol)),
+            Err(_) => None,
+        };
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Files
+
+/// A source file that we have extracted stack graph data from.
+///
+/// It's up to you to choose what names to use for your files, but they must be unique within a
+/// stack graph.  If you are analyzing files from the local filesystem, the file's path is a good
+/// choice.  If your files belong to packages or repositories, they should include the package or
+/// repository IDs to make sure that files in different packages or repositories don't clash with
+/// each other.
+#[repr(C)]
+pub struct sg_file {
+    pub name: *const c_char,
+    pub name_len: usize,
+}
+
+/// A handle to a file in a stack graph.  A zero handle represents a missing file.
+///
+/// We deduplicate files in a stack graph — that is, we ensure that there are never multiple
+/// `struct sg_file` instances with the same filename.  That means that you can compare file
+/// handles using simple equality, without having to dereference them.
+pub type sg_file_handle = u32;
+
+/// An array of all of the files in a stack graph.  File handles are indices into this array.
+/// There will never be a valid file at index 0; a handle with the value 0 represents a missing
+/// file.
+#[repr(C)]
+pub struct sg_files {
+    pub files: *const sg_file,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of file data in this stack graph.  The resulting array pointer
+/// is only valid until the next call to any function that mutates the stack graph.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_files(graph: *const sg_stack_graph) -> sg_files {
+    let graph = unsafe { &(*graph).inner };
+    sg_files {
+        files: graph.files.as_ptr() as *const sg_file,
+        count: graph.files.len(),
+    }
+}
+
+/// Adds new files to the stack graph.  You provide an array of file content, and an output array,
+/// which must have the same length.  We will place each file's handle in the output array.
+///
+/// There can only ever be one file with a particular name in the graph.  If you try to add a file
+/// with a name that already exists, you'll get the same handle as a result.
+///
+/// We copy the filenames into the stack graph.  The filenames you pass in do not need to outlive
+/// the call to this function.
+///
+/// Each filename must be a valid UTF-8 string.  If any filename isn't valid UTF-8, it won't be
+/// added to the stack graph, and the corresponding entry in the output array will be the null
+/// handle.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_add_files(
+    graph: *mut sg_stack_graph,
+    count: usize,
+    files: *const *const c_char,
+    lengths: *const usize,
+    handles_out: *mut sg_file_handle,
+) {
+    let graph = unsafe { &mut (*graph).inner };
+    let files = unsafe { std::slice::from_raw_parts(files as *const *const u8, count) };
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let handles_out =
+        unsafe { std::slice::from_raw_parts_mut(handles_out as *mut Option<Handle<File>>, count) };
+    for i in 0..count {
+        let file = unsafe { std::slice::from_raw_parts(files[i], lengths[i]) };
+        handles_out[i] = match std::str::from_utf8(file) {
+            Ok(file) => Some(graph.get_or_create_file(file)),
             Err(_) => None,
         };
     }

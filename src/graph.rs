@@ -1124,7 +1124,7 @@ pub struct StackGraph {
     interned_strings: InternedStringContent,
     pub(crate) symbols: Arena<Symbol>,
     symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
-    files: Arena<File>,
+    pub(crate) files: Arena<File>,
     file_handles: FxHashMap<&'static str, Handle<File>>,
     nodes: Arena<Node>,
     node_id_handles: NodeIDHandles,

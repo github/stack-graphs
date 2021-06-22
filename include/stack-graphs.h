@@ -38,6 +38,33 @@ struct sg_symbols {
 // handles using simple equality, without having to dereference them.
 typedef uint32_t sg_symbol_handle;
 
+// A source file that we have extracted stack graph data from.
+//
+// It's up to you to choose what names to use for your files, but they must be unique within a
+// stack graph.  If you are analyzing files from the local filesystem, the file's path is a good
+// choice.  If your files belong to packages or repositories, they should include the package or
+// repository IDs to make sure that files in different packages or repositories don't clash with
+// each other.
+struct sg_file {
+    const char *name;
+    size_t name_len;
+};
+
+// An array of all of the files in a stack graph.  File handles are indices into this array.
+// There will never be a valid file at index 0; a handle with the value 0 represents a missing
+// file.
+struct sg_files {
+    const struct sg_file *files;
+    size_t count;
+};
+
+// A handle to a file in a stack graph.  A zero handle represents a missing file.
+//
+// We deduplicate files in a stack graph — that is, we ensure that there are never multiple
+// `struct sg_file` instances with the same filename.  That means that you can compare file
+// handles using simple equality, without having to dereference them.
+typedef uint32_t sg_file_handle;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -70,6 +97,28 @@ void sg_stack_graph_add_symbols(struct sg_stack_graph *graph,
                                 const char *const *symbols,
                                 const size_t *lengths,
                                 sg_symbol_handle *handles_out);
+
+// Returns a reference to the array of file data in this stack graph.  The resulting array pointer
+// is only valid until the next call to any function that mutates the stack graph.
+struct sg_files sg_stack_graph_files(const struct sg_stack_graph *graph);
+
+// Adds new files to the stack graph.  You provide an array of file content, and an output array,
+// which must have the same length.  We will place each file's handle in the output array.
+//
+// There can only ever be one file with a particular name in the graph.  If you try to add a file
+// with a name that already exists, you'll get the same handle as a result.
+//
+// We copy the filenames into the stack graph.  The filenames you pass in do not need to outlive
+// the call to this function.
+//
+// Each filename must be a valid UTF-8 string.  If any filename isn't valid UTF-8, it won't be
+// added to the stack graph, and the corresponding entry in the output array will be the null
+// handle.
+void sg_stack_graph_add_files(struct sg_stack_graph *graph,
+                              size_t count,
+                              const char *const *files,
+                              const size_t *lengths,
+                              sg_file_handle *handles_out);
 
 #ifdef __cplusplus
 } // extern "C"
