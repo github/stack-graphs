@@ -644,6 +644,9 @@ impl IndexMut<Handle<Node>> for StackGraph {
 pub struct DropScopesNode {
     /// The unique identifier for this node.
     pub id: NodeID,
+    _symbol: Option<Handle<Symbol>>,
+    _scope: Option<Handle<Node>>,
+    _is_clickable: bool,
 }
 
 impl From<DropScopesNode> for Node {
@@ -652,12 +655,20 @@ impl From<DropScopesNode> for Node {
     }
 }
 
-impl DropScopesNode {
-    /// Adds the node to a stack graph.
-    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
-        graph.add_node(self.id, self.into())
+impl StackGraph {
+    /// Adds a _drop scopes_ node to the stack graph.
+    pub fn add_drop_scopes_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
+        let node = DropScopesNode {
+            id,
+            _symbol: None,
+            _scope: None,
+            _is_clickable: false,
+        };
+        self.add_node(id, node.into())
     }
+}
 
+impl DropScopesNode {
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
         DisplayDropScopesNode {
             wrapped: self,
@@ -687,6 +698,9 @@ impl<'a> Display for DisplayDropScopesNode<'a> {
 pub struct ExportedScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
+    _symbol: Option<Handle<Symbol>>,
+    _scope: Option<Handle<Node>>,
+    _is_clickable: bool,
 }
 
 impl From<ExportedScopeNode> for Node {
@@ -695,12 +709,20 @@ impl From<ExportedScopeNode> for Node {
     }
 }
 
-impl ExportedScopeNode {
-    /// Adds the node to a stack graph.
-    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
-        graph.add_node(self.id, self.into())
+impl StackGraph {
+    /// Adds a _exported scope_ node to the stack graph.
+    pub fn add_exported_scope_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
+        let node = ExportedScopeNode {
+            id,
+            _symbol: None,
+            _scope: None,
+            _is_clickable: false,
+        };
+        self.add_node(id, node.into())
     }
+}
 
+impl ExportedScopeNode {
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
         DisplayExportedScopeNode {
             wrapped: self,
@@ -734,6 +756,9 @@ impl<'a> Display for DisplayExportedScopeNode<'a> {
 pub struct InternalScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
+    _symbol: Option<Handle<Symbol>>,
+    _scope: Option<Handle<Node>>,
+    _is_clickable: bool,
 }
 
 impl From<InternalScopeNode> for Node {
@@ -742,12 +767,20 @@ impl From<InternalScopeNode> for Node {
     }
 }
 
-impl InternalScopeNode {
-    /// Adds the node to a stack graph.
-    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
-        graph.add_node(self.id, self.into())
+impl StackGraph {
+    /// Adds a _internal scope_ node to the stack graph.
+    pub fn add_internal_scope_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
+        let node = InternalScopeNode {
+            id,
+            _symbol: None,
+            _scope: None,
+            _is_clickable: false,
+        };
+        self.add_node(id, node.into())
     }
+}
 
+impl InternalScopeNode {
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
         DisplayInternalScopeNode {
             wrapped: self,
@@ -778,11 +811,30 @@ impl<'a> Display for DisplayInternalScopeNode<'a> {
 
 /// The singleton "jump to" node, which allows a name binding path to jump back to another part of
 /// the graph.
-pub struct JumpToNode;
+pub struct JumpToNode {
+    _id: NodeID,
+    _symbol: Option<Handle<Symbol>>,
+    _scope: Option<Handle<Node>>,
+    _is_clickable: bool,
+}
 
 impl From<JumpToNode> for Node {
     fn from(node: JumpToNode) -> Node {
         Node::JumpTo(node)
+    }
+}
+
+impl JumpToNode {
+    fn new() -> JumpToNode {
+        JumpToNode {
+            _id: NodeID {
+                file: None,
+                local_id: 0,
+            },
+            _symbol: None,
+            _scope: None,
+            _is_clickable: false,
+        }
     }
 }
 
@@ -800,6 +852,7 @@ pub struct PopScopedSymbolNode {
     pub id: NodeID,
     /// The symbol to pop off the symbol stack.
     pub symbol: Handle<Symbol>,
+    _scope: Option<Handle<Node>>,
     /// Whether this node represents a reference in the source language.
     pub is_definition: bool,
 }
@@ -810,12 +863,25 @@ impl From<PopScopedSymbolNode> for Node {
     }
 }
 
-impl PopScopedSymbolNode {
-    /// Adds the node to a stack graph.
-    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
-        graph.add_node(self.id, self.into())
+impl StackGraph {
+    /// Adds a _pop scoped symbol_ node to the stack graph.
+    pub fn add_pop_scoped_symbol_node(
+        &mut self,
+        id: NodeID,
+        symbol: Handle<Symbol>,
+        is_definition: bool,
+    ) -> Option<Handle<Node>> {
+        let node = PopScopedSymbolNode {
+            id,
+            symbol,
+            _scope: None,
+            is_definition,
+        };
+        self.add_node(id, node.into())
     }
+}
 
+impl PopScopedSymbolNode {
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
         DisplayPopScopedSymbolNode {
             wrapped: self,
@@ -857,6 +923,7 @@ pub struct PopSymbolNode {
     pub id: NodeID,
     /// The symbol to pop off the symbol stack.
     pub symbol: Handle<Symbol>,
+    _scope: Option<Handle<Node>>,
     /// Whether this node represents a reference in the source language.
     pub is_definition: bool,
 }
@@ -867,12 +934,25 @@ impl From<PopSymbolNode> for Node {
     }
 }
 
-impl PopSymbolNode {
-    /// Adds the node to a stack graph.
-    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
-        graph.add_node(self.id, self.into())
+impl StackGraph {
+    /// Adds a _pop symbol_ node to the stack graph.
+    pub fn add_pop_symbol_node(
+        &mut self,
+        id: NodeID,
+        symbol: Handle<Symbol>,
+        is_definition: bool,
+    ) -> Option<Handle<Node>> {
+        let node = PopSymbolNode {
+            id,
+            symbol,
+            _scope: None,
+            is_definition,
+        };
+        self.add_node(id, node.into())
     }
+}
 
+impl PopSymbolNode {
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
         DisplayPopSymbolNode {
             wrapped: self,
@@ -918,6 +998,7 @@ pub struct PushScopedSymbolNode {
     pub scope: Handle<Node>,
     /// Whether this node represents a reference in the source language.
     pub is_reference: bool,
+    _phantom: (),
 }
 
 impl From<PushScopedSymbolNode> for Node {
@@ -926,12 +1007,27 @@ impl From<PushScopedSymbolNode> for Node {
     }
 }
 
-impl PushScopedSymbolNode {
-    /// Adds the node to a stack graph.
-    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
-        graph.add_node(self.id, self.into())
+impl StackGraph {
+    /// Adds a _push scoped symbol_ node to the stack graph.
+    pub fn add_push_scoped_symbol_node(
+        &mut self,
+        id: NodeID,
+        symbol: Handle<Symbol>,
+        scope: Handle<Node>,
+        is_reference: bool,
+    ) -> Option<Handle<Node>> {
+        let node = PushScopedSymbolNode {
+            id,
+            symbol,
+            scope,
+            is_reference,
+            _phantom: (),
+        };
+        self.add_node(id, node.into())
     }
+}
 
+impl PushScopedSymbolNode {
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
         DisplayPushScopedSymbolNode {
             wrapped: self,
@@ -973,6 +1069,7 @@ pub struct PushSymbolNode {
     pub id: NodeID,
     /// The symbol to push onto the symbol stack.
     pub symbol: Handle<Symbol>,
+    _scope: Option<Handle<Node>>,
     /// Whether this node represents a reference in the source language.
     pub is_reference: bool,
 }
@@ -983,12 +1080,25 @@ impl From<PushSymbolNode> for Node {
     }
 }
 
-impl PushSymbolNode {
-    /// Adds the node to a stack graph.
-    pub fn add_to_graph(self, graph: &mut StackGraph) -> Option<Handle<Node>> {
-        graph.add_node(self.id, self.into())
+impl StackGraph {
+    /// Adds a _push symbol_ node to the stack graph.
+    pub fn add_push_symbol_node(
+        &mut self,
+        id: NodeID,
+        symbol: Handle<Symbol>,
+        is_reference: bool,
+    ) -> Option<Handle<Node>> {
+        let node = PushSymbolNode {
+            id,
+            symbol,
+            _scope: None,
+            is_reference,
+        };
+        self.add_node(id, node.into())
     }
+}
 
+impl PushSymbolNode {
     pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
         DisplayPushSymbolNode {
             wrapped: self,
@@ -1024,11 +1134,30 @@ impl<'a> Display for DisplayPushSymbolNode<'a> {
 }
 
 /// The singleton root node, which allows a name binding path to cross between files.
-pub struct RootNode;
+pub struct RootNode {
+    _id: NodeID,
+    _symbol: Option<Handle<Symbol>>,
+    _scope: Option<Handle<Node>>,
+    _is_clickable: bool,
+}
 
 impl From<RootNode> for Node {
     fn from(node: RootNode) -> Node {
         Node::Root(node)
+    }
+}
+
+impl RootNode {
+    fn new() -> RootNode {
+        RootNode {
+            _id: NodeID {
+                file: None,
+                local_id: 0,
+            },
+            _symbol: None,
+            _scope: None,
+            _is_clickable: false,
+        }
     }
 }
 
@@ -1162,8 +1291,8 @@ impl StackGraph {
 impl Default for StackGraph {
     fn default() -> StackGraph {
         let mut nodes = Arena::new();
-        let root_node = nodes.add(RootNode.into());
-        let jump_to_node = nodes.add(JumpToNode.into());
+        let root_node = nodes.add(RootNode::new().into());
+        let jump_to_node = nodes.add(JumpToNode::new().into());
 
         StackGraph {
             interned_strings: InternedStringContent::new(),
