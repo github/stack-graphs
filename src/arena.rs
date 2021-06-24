@@ -304,6 +304,7 @@ where
 /// Linked lists are often a poor choice because they aren't very cache-friendly.  However, this
 /// linked list implementation _should_ be cache-friendly, since the individual cells are allocated
 /// out of an arena.
+#[repr(C)]
 pub struct List<T> {
     // The value of this handle will be EMPTY_LIST_HANDLE if the list is empty.  For an
     // Option<List<T>>, the value will be zero (via the Option<NonZero> optimization) if the list
@@ -312,6 +313,7 @@ pub struct List<T> {
 }
 
 #[doc(hidden)]
+#[repr(C)]
 pub struct ListCell<T> {
     head: T,
     // The value of this handle will be EMPTY_LIST_HANDLE if this is the last element of the list.

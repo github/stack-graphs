@@ -273,6 +273,7 @@ impl DisplayWithPaths for SymbolStack {
 // Scope stacks
 
 /// A sequence of exported scopes, used to pass name-binding context around a stack graph.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct ScopeStack {
     list: List<Handle<Node>>,
@@ -900,7 +901,7 @@ impl Paths {
 
 /// Manages the state of a collection of paths built up as part of the path-finding algorithm.
 pub struct Paths {
-    scope_stacks: ListArena<Handle<Node>>,
+    pub(crate) scope_stacks: ListArena<Handle<Node>>,
     symbol_stacks: ListArena<ScopedSymbol>,
     path_edges: DequeArena<PathEdge>,
 }
