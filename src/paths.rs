@@ -122,6 +122,7 @@ where
 // Symbol stacks
 
 /// A symbol with a possibly empty list of exported scopes attached to it.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct ScopedSymbol {
     pub symbol: Handle<Symbol>,
@@ -177,6 +178,7 @@ impl DisplayWithPaths for ScopedSymbol {
 
 /// A sequence of symbols that describe what we are currently looking for while in the middle of
 /// the path-finding algorithm.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SymbolStack {
     list: List<ScopedSymbol>,
@@ -902,7 +904,7 @@ impl Paths {
 /// Manages the state of a collection of paths built up as part of the path-finding algorithm.
 pub struct Paths {
     pub(crate) scope_stacks: ListArena<Handle<Node>>,
-    symbol_stacks: ListArena<ScopedSymbol>,
+    pub(crate) symbol_stacks: ListArena<ScopedSymbol>,
     path_edges: DequeArena<PathEdge>,
 }
 

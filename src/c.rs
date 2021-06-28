@@ -19,6 +19,8 @@ use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::paths::Paths;
 use crate::paths::ScopeStack;
+use crate::paths::ScopedSymbol;
+use crate::paths::SymbolStack;
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct sg_stack_graph {
@@ -437,11 +439,114 @@ pub extern "C" fn sg_stack_graph_add_edges(
 }
 
 //-------------------------------------------------------------------------------------------------
+// Symbol stacks
+
+/// A symbol with a possibly empty list of exported scopes attached to it.
+#[repr(C)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct sg_scoped_symbol {
+    pub symbol: sg_symbol_handle,
+    pub scopes: sg_scope_stack,
+}
+
+impl Into<ScopedSymbol> for sg_scoped_symbol {
+    fn into(self) -> ScopedSymbol {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+/// A sequence of symbols that describe what we are currently looking for while in the middle of
+/// the path-finding algorithm.
+#[repr(C)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub struct sg_symbol_stack {
+    /// The handle of the first element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if the
+    /// list is empty, or 0 if the list is null.
+    pub cells: sg_symbol_stack_cell_handle,
+    pub length: usize,
+}
+
+impl From<SymbolStack> for sg_symbol_stack {
+    fn from(stack: SymbolStack) -> sg_symbol_stack {
+        unsafe { std::mem::transmute(stack) }
+    }
+}
+
+/// A handle to an element of a symbol stack.  A zero handle represents a missing symbol stack.  A
+/// UINT32_MAX handle represents an empty symbol stack.
+pub type sg_symbol_stack_cell_handle = u32;
+
+/// The handle of the empty symbol stack.
+pub const SG_SYMBOL_STACK_EMPTY_HANDLE: sg_symbol_stack_cell_handle = 0xffffffff;
+
+/// An element of a symbol stack.
+#[repr(C)]
+pub struct sg_symbol_stack_cell {
+    /// The scoped symbol at this position in the symbol stack.
+    pub head: sg_scoped_symbol,
+    /// The handle of the next element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if this
+    /// is the last element.
+    pub tail: sg_symbol_stack_cell_handle,
+}
+
+/// The array of all of the symbol stack content in a path arena.
+#[repr(C)]
+pub struct sg_symbol_stack_cells {
+    pub cells: *const sg_symbol_stack_cell,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of symbol stack content in a path arena.  The resulting array
+/// pointer is only valid until the next call to any function that mutates the path arena.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_symbol_stack_cells(
+    paths: *const sg_path_arena,
+) -> sg_symbol_stack_cells {
+    let paths = unsafe { &(*paths).inner };
+    sg_symbol_stack_cells {
+        cells: paths.symbol_stacks.as_ptr() as *const sg_symbol_stack_cell,
+        count: paths.symbol_stacks.len(),
+    }
+}
+
+/// Adds new symbol stacks to the path arena.  `count` is the number of symbol stacks you want to
+/// create.  The content of each symbol stack comes from two arrays.  The `lengths` array must have
+/// `count` elements, and provides the number of symbols in each symbol stack.  The `symbols` array
+/// contains the contents of each of these symbol stacks in one contiguous array.  Its length must
+/// be the sum of all of the counts in the `lengths` array.
+///
+/// You must also provide an `out` array, which must also have room for `count` elements.  We will
+/// fill this array in with the `sg_symbol_stack` instances for each symbol stack that is created.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_add_symbol_stacks(
+    paths: *mut sg_path_arena,
+    count: usize,
+    mut symbols: *const sg_scoped_symbol,
+    lengths: *const usize,
+    out: *mut sg_symbol_stack,
+) {
+    let paths = unsafe { &mut (*paths).inner };
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
+    for i in 0..count {
+        let length = lengths[i];
+        let symbols_slice = unsafe { std::slice::from_raw_parts(symbols, length) };
+        let mut stack = SymbolStack::empty();
+        for j in (0..length).rev() {
+            let symbol = symbols_slice[j].into();
+            stack.push_front(paths, symbol);
+        }
+        out[i] = stack.into();
+        unsafe { symbols = symbols.add(length) };
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Scope stacks
 
 /// A sequence of exported scopes, used to pass name-binding context around a stack graph.
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct sg_scope_stack {
     /// The handle of the first element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if the
     /// list is empty, or 0 if the list is null.

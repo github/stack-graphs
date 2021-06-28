@@ -156,6 +156,47 @@ struct sg_edge {
 // UINT32_MAX handle represents an empty scope stack.
 typedef uint32_t sg_scope_stack_cell_handle;
 
+// A sequence of exported scopes, used to pass name-binding context around a stack graph.
+struct sg_scope_stack {
+    // The handle of the first element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if the
+    // list is empty, or 0 if the list is null.
+    sg_scope_stack_cell_handle cells;
+};
+
+// A symbol with a possibly empty list of exported scopes attached to it.
+struct sg_scoped_symbol {
+    sg_symbol_handle symbol;
+    struct sg_scope_stack scopes;
+};
+
+// A handle to an element of a symbol stack.  A zero handle represents a missing symbol stack.  A
+// UINT32_MAX handle represents an empty symbol stack.
+typedef uint32_t sg_symbol_stack_cell_handle;
+
+// An element of a symbol stack.
+struct sg_symbol_stack_cell {
+    // The scoped symbol at this position in the symbol stack.
+    struct sg_scoped_symbol head;
+    // The handle of the next element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if this
+    // is the last element.
+    sg_symbol_stack_cell_handle tail;
+};
+
+// The array of all of the symbol stack content in a path arena.
+struct sg_symbol_stack_cells {
+    const struct sg_symbol_stack_cell *cells;
+    size_t count;
+};
+
+// A sequence of symbols that describe what we are currently looking for while in the middle of
+// the path-finding algorithm.
+struct sg_symbol_stack {
+    // The handle of the first element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if the
+    // list is empty, or 0 if the list is null.
+    sg_symbol_stack_cell_handle cells;
+    size_t length;
+};
+
 // An element of a scope stack.
 struct sg_scope_stack_cell {
     // The exported scope at this position in the scope stack.
@@ -171,18 +212,14 @@ struct sg_scope_stack_cells {
     size_t count;
 };
 
-// A sequence of exported scopes, used to pass name-binding context around a stack graph.
-struct sg_scope_stack {
-    // The handle of the first element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if the
-    // list is empty, or 0 if the list is null.
-    sg_scope_stack_cell_handle cells;
-};
-
 // The handle of the singleton root node.
 #define SG_ROOT_NODE_HANDLE 1
 
 // The handle of the singleton "jump to scope" node.
 #define SG_JUMP_TO_NODE_HANDLE 2
+
+// The handle of the empty symbol stack.
+#define SG_SYMBOL_STACK_EMPTY_HANDLE 4294967295
 
 // The handle of the empty scope stack.
 #define SG_SCOPE_STACK_EMPTY_HANDLE 4294967295
@@ -276,6 +313,24 @@ void sg_stack_graph_add_nodes(struct sg_stack_graph *graph,
 void sg_stack_graph_add_edges(struct sg_stack_graph *graph,
                               size_t count,
                               const struct sg_edge *edges);
+
+// Returns a reference to the array of symbol stack content in a path arena.  The resulting array
+// pointer is only valid until the next call to any function that mutates the path arena.
+struct sg_symbol_stack_cells sg_path_arena_symbol_stack_cells(const struct sg_path_arena *paths);
+
+// Adds new symbol stacks to the path arena.  `count` is the number of symbol stacks you want to
+// create.  The content of each symbol stack comes from two arrays.  The `lengths` array must have
+// `count` elements, and provides the number of symbols in each symbol stack.  The `symbols` array
+// contains the contents of each of these symbol stacks in one contiguous array.  Its length must
+// be the sum of all of the counts in the `lengths` array.
+//
+// You must also provide an `out` array, which must also have room for `count` elements.  We will
+// fill this array in with the `sg_symbol_stack` instances for each symbol stack that is created.
+void sg_path_arena_add_symbol_stacks(struct sg_path_arena *paths,
+                                     size_t count,
+                                     const struct sg_scoped_symbol *symbols,
+                                     const size_t *lengths,
+                                     struct sg_symbol_stack *out);
 
 // Returns a reference to the array of scope stack content in a path arena.  The resulting array
 // pointer is only valid until the next call to any function that mutates the path arena.
