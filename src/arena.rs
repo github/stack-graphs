@@ -314,6 +314,15 @@ impl<T> List<T> {
         }
     }
 
+    pub fn from_handle(handle: Handle<ListCell<T>>) -> List<T> {
+        List { cells: handle }
+    }
+
+    /// Returns a handle to the head of the list.
+    pub fn handle(&self) -> Handle<ListCell<T>> {
+        self.cells
+    }
+
     /// Pushes a new element onto the front of this list.
     pub fn push_front(&mut self, arena: &mut ListArena<T>, head: T) {
         self.cells = arena.add(ListCell::Nonempty {

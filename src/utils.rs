@@ -5,9 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-pub(crate) fn equals_option<T, F>(a: Option<T>, b: Option<T>, mut eq: F) -> bool
+pub(crate) fn equals_option<A, B, F>(a: Option<A>, b: Option<B>, mut eq: F) -> bool
 where
-    F: FnMut(T, T) -> bool,
+    F: FnMut(A, B) -> bool,
 {
     match a {
         Some(a) => match b {
