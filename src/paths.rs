@@ -345,6 +345,8 @@ impl DisplayWithPaths for ScopeStack {
 //-------------------------------------------------------------------------------------------------
 // Edge lists
 
+/// Details about one of the edges in a name-binding path
+#[repr(C)]
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PathEdge {
     pub source_node_id: NodeID,
@@ -383,6 +385,7 @@ impl DisplayWithPaths for PathEdge {
 
 /// The edges in a path keep track of precedence information so that we can correctly handle
 /// shadowed definitions.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PathEdgeList {
     edges: Deque<PathEdge>,
@@ -905,7 +908,7 @@ impl Paths {
 pub struct Paths {
     pub(crate) scope_stacks: ListArena<Handle<Node>>,
     pub(crate) symbol_stacks: ListArena<ScopedSymbol>,
-    path_edges: DequeArena<PathEdge>,
+    pub(crate) path_edges: DequeArena<PathEdge>,
 }
 
 impl Paths {
