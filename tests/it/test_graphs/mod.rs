@@ -17,59 +17,55 @@ pub mod sequenced_import_star;
 
 /// An extension trait that makes it a bit easier to add stuff to our test stack graphs.
 pub trait CreateStackGraph {
-    fn definition(
-        &mut self,
-        file: Handle<File>,
-        local_id: u32,
-        symbol: Handle<Symbol>,
-    ) -> Handle<Node>;
+    type File: Clone + Copy;
+    type Node: Clone + Copy;
+    type Symbol: Clone + Copy;
 
-    fn drop_scopes(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node>;
+    fn definition(&mut self, file: Self::File, local_id: u32, symbol: Self::Symbol) -> Self::Node;
 
-    fn edge(&mut self, source: Handle<Node>, sink: Handle<Node>);
+    fn drop_scopes(&mut self, file: Self::File, local_id: u32) -> Self::Node;
 
-    fn exported_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node>;
+    fn edge(&mut self, source: Self::Node, sink: Self::Node);
 
-    fn internal_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node>;
+    fn exported_scope(&mut self, file: Self::File, local_id: u32) -> Self::Node;
+
+    fn file(&mut self, name: &str) -> Self::File;
+
+    fn internal_scope(&mut self, file: Self::File, local_id: u32) -> Self::Node;
+
+    fn jump_to_node(&mut self) -> Self::Node;
 
     fn pop_scoped_symbol(
         &mut self,
-        file: Handle<File>,
+        file: Self::File,
         local_id: u32,
-        symbol: Handle<Symbol>,
-    ) -> Handle<Node>;
+        symbol: Self::Symbol,
+    ) -> Self::Node;
 
-    fn pop_symbol(
-        &mut self,
-        file: Handle<File>,
-        local_id: u32,
-        symbol: Handle<Symbol>,
-    ) -> Handle<Node>;
+    fn pop_symbol(&mut self, file: Self::File, local_id: u32, symbol: Self::Symbol) -> Self::Node;
 
     fn push_scoped_symbol(
         &mut self,
-        file: Handle<File>,
+        file: Self::File,
         local_id: u32,
-        symbol: Handle<Symbol>,
-        scope: Handle<Node>,
-    ) -> Handle<Node>;
+        symbol: Self::Symbol,
+        scope: Self::Node,
+    ) -> Self::Node;
 
-    fn push_symbol(
-        &mut self,
-        file: Handle<File>,
-        local_id: u32,
-        symbol: Handle<Symbol>,
-    ) -> Handle<Node>;
+    fn push_symbol(&mut self, file: Self::File, local_id: u32, symbol: Self::Symbol) -> Self::Node;
 
-    fn reference(
-        &mut self,
-        file: Handle<File>,
-        local_id: u32,
-        symbol: Handle<Symbol>,
-    ) -> Handle<Node>;
+    fn reference(&mut self, file: Self::File, local_id: u32, symbol: Self::Symbol) -> Self::Node;
+
+    fn root_node(&mut self) -> Self::Node;
+
+    fn symbol(&mut self, value: &str) -> Self::Symbol;
 }
 
 impl CreateStackGraph for StackGraph {
+    type File = Handle<File>;
+    type Node = Handle<Node>;
+    type Symbol = Handle<Symbol>;
+
     fn definition(
         &mut self,
         file: Handle<File>,
@@ -103,11 +99,19 @@ impl CreateStackGraph for StackGraph {
         node.add_to_graph(self).expect("Duplicate node ID")
     }
 
+    fn file(&mut self, name: &str) -> Handle<File> {
+        self.get_or_create_file(name)
+    }
+
     fn internal_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
         let node = InternalScopeNode {
             id: NodeID::new_in_file(file, local_id),
         };
         node.add_to_graph(self).expect("Duplicate node ID")
+    }
+
+    fn jump_to_node(&mut self) -> Handle<Node> {
+        StackGraph::jump_to_node(self)
     }
 
     fn pop_scoped_symbol(
@@ -180,5 +184,13 @@ impl CreateStackGraph for StackGraph {
             is_reference: true,
         };
         node.add_to_graph(self).expect("Duplicate node ID")
+    }
+
+    fn root_node(&mut self) -> Handle<Node> {
+        StackGraph::root_node(self)
+    }
+
+    fn symbol(&mut self, value: &str) -> Handle<Symbol> {
+        self.add_symbol(value)
     }
 }

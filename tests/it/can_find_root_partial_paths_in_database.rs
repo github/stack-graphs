@@ -64,9 +64,9 @@ fn check_root_partial_paths(
 
 #[test]
 fn class_field_through_function_parameter() {
-    let mut fixture = test_graphs::class_field_through_function_parameter::new();
+    let mut graph = test_graphs::class_field_through_function_parameter::new();
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "main.py",
         &["__main__", ".", "baz"],
         &[
@@ -76,13 +76,13 @@ fn class_field_through_function_parameter() {
         ],
     );
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "a.py",
         &["a", ".", "baz"],
         &["<a> ($1) [root] -> [a.py(0) definition a] <> ($1)"],
     );
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "b.py",
         &["b", ".", "baz"],
         &["<b> ($1) [root] -> [b.py(0) definition b] <> ($1)"],
@@ -91,9 +91,9 @@ fn class_field_through_function_parameter() {
 
 #[test]
 fn cyclic_imports_python() {
-    let mut fixture = test_graphs::cyclic_imports_python::new();
+    let mut graph = test_graphs::cyclic_imports_python::new();
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "main.py",
         &["__main__", ".", "baz"],
         &[
@@ -102,7 +102,7 @@ fn cyclic_imports_python() {
         ],
     );
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "a.py",
         &["a", ".", "baz"],
         &[
@@ -111,7 +111,7 @@ fn cyclic_imports_python() {
         ],
     );
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "b.py",
         &["b", ".", "baz"],
         &[
@@ -123,9 +123,9 @@ fn cyclic_imports_python() {
 
 #[test]
 fn cyclic_imports_rust() {
-    let mut fixture = test_graphs::cyclic_imports_rust::new();
+    let mut graph = test_graphs::cyclic_imports_rust::new();
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "test.rs",
         &[],
         // NOTE: Because everything in this example is local to one file, there aren't any partial
@@ -136,9 +136,9 @@ fn cyclic_imports_rust() {
 
 #[test]
 fn sequenced_import_star() {
-    let mut fixture = test_graphs::sequenced_import_star::new();
+    let mut graph = test_graphs::sequenced_import_star::new();
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "main.py",
         &["__main__", ".", "baz"],
         &[
@@ -147,7 +147,7 @@ fn sequenced_import_star() {
         ],
     );
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "a.py",
         &["a", ".", "baz"],
         &[
@@ -156,7 +156,7 @@ fn sequenced_import_star() {
         ],
     );
     check_root_partial_paths(
-        &mut fixture.graph,
+        &mut graph,
         "b.py",
         &["b", ".", "baz"],
         &["<b> ($1) [root] -> [b.py(0) definition b] <> ($1)"],

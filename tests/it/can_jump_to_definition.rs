@@ -32,9 +32,9 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
 
 #[test]
 fn class_field_through_function_parameter() {
-    let fixture = test_graphs::class_field_through_function_parameter::new();
+    let graph = test_graphs::class_field_through_function_parameter::new();
     check_jump_to_definition(
-        &fixture.graph,
+        &graph,
         &[
             // reference to `a` in import statement
             "[main.py(17) reference a] -> [a.py(0) definition a]",
@@ -54,9 +54,9 @@ fn class_field_through_function_parameter() {
 
 #[test]
 fn cyclic_imports_python() {
-    let fixture = test_graphs::cyclic_imports_python::new();
+    let graph = test_graphs::cyclic_imports_python::new();
     check_jump_to_definition(
-        &fixture.graph,
+        &graph,
         &[
             // reference to `a` in import statement
             "[main.py(8) reference a] -> [a.py(0) definition a]",
@@ -72,9 +72,9 @@ fn cyclic_imports_python() {
 
 #[test]
 fn cyclic_imports_rust() {
-    let fixture = test_graphs::cyclic_imports_rust::new();
+    let graph = test_graphs::cyclic_imports_rust::new();
     check_jump_to_definition(
-        &fixture.graph,
+        &graph,
         &[
             // reference to `a` in `a::FOO` resolves to module definition
             "[test.rs(103) reference a] -> [test.rs(201) definition a]",
@@ -93,9 +93,9 @@ fn cyclic_imports_rust() {
 
 #[test]
 fn sequenced_import_star() {
-    let fixture = test_graphs::sequenced_import_star::new();
+    let graph = test_graphs::sequenced_import_star::new();
     check_jump_to_definition(
-        &fixture.graph,
+        &graph,
         &[
             // reference to `a` in import statement
             "[main.py(8) reference a] -> [a.py(0) definition a]",

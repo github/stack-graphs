@@ -1155,6 +1155,12 @@ pub struct StackGraph {
 impl StackGraph {
     /// Creates a new, initially empty stack graph.
     pub fn new() -> StackGraph {
+        StackGraph::default()
+    }
+}
+
+impl Default for StackGraph {
+    fn default() -> StackGraph {
         let mut nodes = Arena::new();
         let root_node = nodes.add(RootNode.into());
         let jump_to_node = nodes.add(JumpToNode.into());
