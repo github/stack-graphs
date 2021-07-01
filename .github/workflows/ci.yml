@@ -27,13 +27,23 @@ jobs:
         uses: actions/cache@v2
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
+            ~/.cargo
             target
           key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.OS }}-cargo-
+      - name: Install cargo-valgrind
+        run: |
+          sudo apt-get install -y valgrind
+          cargo install cargo-valgrind
       - name: Build library
         run: cargo build
+      - name: Ensure C headers are up to date
+        run: |
+          cargo install cbindgen
+          script/cbindgen
+          test -z "$(git status --porcelain)"
       - name: Run test suite
         run: cargo test
+      - name: Run test suite under valgrind
+        run: cargo valgrind test

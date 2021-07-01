@@ -34,6 +34,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 use std::num::NonZeroU32;
 use std::ops::Index;
 use std::ops::IndexMut;
@@ -52,6 +53,7 @@ use crate::utils::equals_option;
 /// type to index into an arena of another type.  However, if you have multiple arenas for the
 /// _same type_, we do not do anything to ensure that you only use a handle with the corresponding
 /// arena.
+#[repr(transparent)]
 pub struct Handle<T> {
     index: NonZeroU32,
     _phantom: PhantomData<T>,
@@ -66,7 +68,7 @@ impl<T> Handle<T> {
     }
 
     #[inline(always)]
-    fn as_usize(self) -> usize {
+    pub fn as_usize(self) -> usize {
         self.index.get() as usize
     }
 }
@@ -117,17 +119,34 @@ impl<T> PartialOrd for Handle<T> {
     }
 }
 
+// Handles are always Send and Sync, even if the underlying types are not.  After all, a handle is
+// just a number!  And you _also_ need access to the Arena (which _won't_ be Send/Sync if T isn't)
+// to dereference the handle.
+unsafe impl<T> Send for Handle<T> {}
+unsafe impl<T> Sync for Handle<T> {}
+
 /// Manages the life cycle of instances of type `T`.  You can allocate new instances of `T` from
 /// the arena.  All of the instances managed by this arena will be dropped as a single operation
 /// when the arena itself is dropped.
 pub struct Arena<T> {
-    items: Vec<T>,
+    items: Vec<MaybeUninit<T>>,
+}
+
+impl<T> Drop for Arena<T> {
+    fn drop(&mut self) {
+        unsafe {
+            let items = std::mem::transmute::<_, &mut [T]>(&mut self.items[1..]) as *mut [T];
+            items.drop_in_place();
+        }
+    }
 }
 
 impl<T> Arena<T> {
     /// Creates a new arena.
     pub fn new() -> Arena<T> {
-        Arena { items: Vec::new() }
+        Arena {
+            items: vec![MaybeUninit::uninit()],
+        }
     }
 
     /// Adds a new instance to this arena, returning a stable handle to it.
@@ -136,27 +155,38 @@ impl<T> Arena<T> {
     /// have the same content, you will get distinct handles for each one.
     pub fn add(&mut self, item: T) -> Handle<T> {
         let index = self.items.len() as u32;
-        self.items.push(item);
-        Handle::new(unsafe { NonZeroU32::new_unchecked(index + 1) })
+        self.items.push(MaybeUninit::new(item));
+        Handle::new(unsafe { NonZeroU32::new_unchecked(index) })
     }
 
     /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
     pub fn get(&self, handle: Handle<T>) -> &T {
-        &self.items[handle.as_usize() - 1]
+        unsafe { std::mem::transmute(&self.items[handle.as_usize()]) }
     }
     ///
     /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
     /// it.
     pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
-        &mut self.items[handle.as_usize() - 1]
+        unsafe { std::mem::transmute(&mut self.items[handle.as_usize()]) }
     }
 
     /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
     /// retain a reference to the arena!)
     pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
-        (1..=self.items.len())
+        (1..self.items.len())
             .into_iter()
             .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    }
+
+    /// Returns a pointer to this arena's storage.
+    pub(crate) fn as_ptr(&self) -> *const T {
+        self.items.as_ptr() as *const T
+    }
+
+    /// Returns the number of instances stored in this arena.
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.items.len()
     }
 }
 
