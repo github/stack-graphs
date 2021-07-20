@@ -120,7 +120,7 @@ impl InternedStringContent {
         // room, we allocate a _completely new buffer_ to replace it.
         let start_index = self.current_buffer.len();
         self.current_buffer.extend_from_slice(value);
-        let start = &self.current_buffer[start_index] as *const _;
+        let start = unsafe { self.current_buffer.as_ptr().add(start_index) };
         InternedString { start, len }
     }
 }

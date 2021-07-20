@@ -24,6 +24,7 @@ fn can_create_symbols() {
     let a2 = graph.add_symbol("a");
     let b = graph.add_symbol("b");
     let c = graph.add_symbol("c");
+    let empty1 = graph.add_symbol("");
     // The content of each symbol be comparable
     assert_eq!(graph[a1], graph[a2]);
     assert_ne!(graph[a1], graph[b]);
@@ -31,6 +32,7 @@ fn can_create_symbols() {
     assert_ne!(graph[a2], graph[b]);
     assert_ne!(graph[a2], graph[c]);
     assert_ne!(graph[b], graph[c]);
+    assert_ne!(graph[empty1], graph[a1]);
     // and because we deduplicate symbols, the handles should be comparable too.
     assert_eq!(a1, a2);
     assert_ne!(a1, b);
@@ -38,6 +40,7 @@ fn can_create_symbols() {
     assert_ne!(a2, b);
     assert_ne!(a2, c);
     assert_ne!(b, c);
+    assert_ne!(empty1, a1);
 }
 
 #[test]
