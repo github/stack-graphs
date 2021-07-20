@@ -21,7 +21,7 @@ fn check_node_partial_paths(
     node: Handle<Node>,
     expected_partial_paths: &[&str],
 ) {
-    let file = graph[node].id().unwrap().file;
+    let file = graph[node].file().unwrap();
     let mut partials = PartialPaths::new();
     let mut database = Database::new();
     partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
