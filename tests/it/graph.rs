@@ -9,11 +9,7 @@ use std::collections::HashSet;
 
 use maplit::hashset;
 use stack_graphs::graph::Edge;
-use stack_graphs::graph::ExportedScopeNode;
-use stack_graphs::graph::InternalScopeNode;
-use stack_graphs::graph::Node;
 use stack_graphs::graph::StackGraph;
-use stack_graphs::graph::UnknownNode;
 
 use crate::test_graphs::CreateStackGraph;
 
@@ -84,22 +80,6 @@ fn can_iterate_nodes() {
         handles,
         hashset! {graph.root_node(), graph.jump_to_node(), h1, h2, h3}
     );
-}
-
-#[test]
-fn can_create_and_resolve_unknown_nodes() {
-    let mut graph = StackGraph::new();
-    let file = graph.get_or_create_file("test.py");
-    let id = graph.new_node_id(file);
-    let unknown = UnknownNode { id };
-    let _handle = unknown.add_to_graph(&mut graph);
-    let resolved = InternalScopeNode { id };
-    assert!(graph.resolve_unknown_node(resolved.into()).is_ok());
-    let conflict = ExportedScopeNode { id };
-    assert!(matches!(
-        graph.resolve_unknown_node(conflict.into()),
-        Err(Node::InternalScope(_))
-    ));
 }
 
 #[test]
