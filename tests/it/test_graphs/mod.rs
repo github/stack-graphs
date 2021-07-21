@@ -72,19 +72,13 @@ impl CreateStackGraph for StackGraph {
         local_id: u32,
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
-        let node = PopSymbolNode {
-            id: NodeID::new_in_file(file, local_id),
-            symbol,
-            is_definition: true,
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_pop_symbol_node(NodeID::new_in_file(file, local_id), symbol, true)
+            .expect("Duplicate node ID")
     }
 
     fn drop_scopes(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
-        let node = DropScopesNode {
-            id: NodeID::new_in_file(file, local_id),
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_drop_scopes_node(NodeID::new_in_file(file, local_id))
+            .expect("Duplicate node ID")
     }
 
     fn edge(&mut self, source: Handle<Node>, sink: Handle<Node>) {
@@ -93,10 +87,8 @@ impl CreateStackGraph for StackGraph {
     }
 
     fn exported_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
-        let node = ExportedScopeNode {
-            id: NodeID::new_in_file(file, local_id),
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_exported_scope_node(NodeID::new_in_file(file, local_id))
+            .expect("Duplicate node ID")
     }
 
     fn file(&mut self, name: &str) -> Handle<File> {
@@ -104,10 +96,8 @@ impl CreateStackGraph for StackGraph {
     }
 
     fn internal_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
-        let node = InternalScopeNode {
-            id: NodeID::new_in_file(file, local_id),
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_internal_scope_node(NodeID::new_in_file(file, local_id))
+            .expect("Duplicate node ID")
     }
 
     fn jump_to_node(&mut self) -> Handle<Node> {
@@ -120,12 +110,8 @@ impl CreateStackGraph for StackGraph {
         local_id: u32,
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
-        let node = PopScopedSymbolNode {
-            id: NodeID::new_in_file(file, local_id),
-            symbol,
-            is_definition: false,
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_pop_scoped_symbol_node(NodeID::new_in_file(file, local_id), symbol, false)
+            .expect("Duplicate node ID")
     }
 
     fn pop_symbol(
@@ -134,12 +120,8 @@ impl CreateStackGraph for StackGraph {
         local_id: u32,
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
-        let node = PopSymbolNode {
-            id: NodeID::new_in_file(file, local_id),
-            symbol,
-            is_definition: false,
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_pop_symbol_node(NodeID::new_in_file(file, local_id), symbol, false)
+            .expect("Duplicate node ID")
     }
 
     fn push_scoped_symbol(
@@ -149,13 +131,8 @@ impl CreateStackGraph for StackGraph {
         symbol: Handle<Symbol>,
         scope: Handle<Node>,
     ) -> Handle<Node> {
-        let node = PushScopedSymbolNode {
-            id: NodeID::new_in_file(file, local_id),
-            symbol,
-            scope,
-            is_reference: false,
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_push_scoped_symbol_node(NodeID::new_in_file(file, local_id), symbol, scope, false)
+            .expect("Duplicate node ID")
     }
 
     fn push_symbol(
@@ -164,12 +141,8 @@ impl CreateStackGraph for StackGraph {
         local_id: u32,
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
-        let node = PushSymbolNode {
-            id: NodeID::new_in_file(file, local_id),
-            symbol,
-            is_reference: false,
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_push_symbol_node(NodeID::new_in_file(file, local_id), symbol, false)
+            .expect("Duplicate node ID")
     }
 
     fn reference(
@@ -178,12 +151,8 @@ impl CreateStackGraph for StackGraph {
         local_id: u32,
         symbol: Handle<Symbol>,
     ) -> Handle<Node> {
-        let node = PushSymbolNode {
-            id: NodeID::new_in_file(file, local_id),
-            symbol,
-            is_reference: true,
-        };
-        node.add_to_graph(self).expect("Duplicate node ID")
+        self.add_push_symbol_node(NodeID::new_in_file(file, local_id), symbol, true)
+            .expect("Duplicate node ID")
     }
 
     fn root_node(&mut self) -> Handle<Node> {

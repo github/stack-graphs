@@ -12,7 +12,10 @@
 use libc::c_char;
 
 use crate::arena::Handle;
+use crate::graph::Edge;
 use crate::graph::File;
+use crate::graph::Node;
+use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
 
@@ -187,5 +190,221 @@ pub extern "C" fn sg_stack_graph_add_files(
             Ok(file) => Some(graph.get_or_create_file(file)),
             Err(_) => None,
         };
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Nodes
+
+/// Uniquely identifies a node in a stack graph.
+///
+/// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
+/// _local ID_ that must be unique within its file.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct sg_node_id {
+    pub file: sg_file_handle,
+    pub local_id: u32,
+}
+
+impl Into<NodeID> for sg_node_id {
+    fn into(self) -> NodeID {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+/// The local_id of the singleton root node.
+pub const SG_ROOT_NODE_ID: u32 = 0;
+
+/// The local_id of the singleton "jump to scope" node.
+pub const SG_JUMP_TO_NODE_ID: u32 = 1;
+
+/// A node in a stack graph.
+#[repr(C)]
+#[derive(Clone)]
+pub struct sg_node {
+    pub kind: sg_node_kind,
+    pub id: sg_node_id,
+    /// The symbol associated with this node.  For push nodes, this is the symbol that will be
+    /// pushed onto the symbol stack.  For pop nodes, this is the symbol that we expect to pop off
+    /// the symbol stack.  For all other node types, this will be null.
+    pub symbol: sg_symbol_handle,
+    /// The scope associated with this node.  For push scope nodes, this is the scope that will be
+    /// attached to the symbol before it's pushed onto the symbol stack.  For all other node types,
+    /// this will be null.
+    pub scope: sg_node_handle,
+    /// Whether this node is "clickable".  For push nodes, this indicates that the node represents
+    /// a reference in the source.  For pop nodes, this indicates that the node represents a
+    /// definition in the source.  For all other node types, this field will be unused.
+    pub is_clickable: bool,
+}
+
+impl Into<Node> for sg_node {
+    fn into(self) -> Node {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+/// The different kinds of node that can appear in a stack graph.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub enum sg_node_kind {
+    /// Removes everything from the current scope stack.
+    SG_NODE_KIND_DROP_SCOPES,
+    /// A node that can be referred to on the scope stack, which allows "jump to" nodes in any
+    /// other part of the graph can jump back here.
+    SG_NODE_KIND_EXPORTED_SCOPE,
+    /// A node internal to a single file.  This node has no effect on the symbol or scope stacks;
+    /// it's just used to add structure to the graph.
+    SG_NODE_KIND_INTERNAL_SCOPE,
+    /// The singleton "jump to" node, which allows a name binding path to jump back to another part
+    /// of the graph.
+    SG_NODE_KIND_JUMP_TO,
+    /// Pops a scoped symbol from the symbol stack.  If the top of the symbol stack doesn't match
+    /// the requested symbol, or if the top of the symbol stack doesn't have an attached scope
+    /// list, then the path is not allowed to enter this node.
+    SG_NODE_KIND_POP_SCOPED_SYMBOL,
+    /// Pops a symbol from the symbol stack.  If the top of the symbol stack doesn't match the
+    /// requested symbol, then the path is not allowed to enter this node.
+    SG_NODE_KIND_POP_SYMBOL,
+    /// Pushes a scoped symbol onto the symbol stack.
+    SG_NODE_KIND_PUSH_SCOPED_SYMBOL,
+    /// Pushes a symbol onto the symbol stack.
+    SG_NODE_KIND_PUSH_SYMBOL,
+    /// The singleton root node, which allows a name binding path to cross between files.
+    SG_NODE_KIND_ROOT,
+}
+
+/// A handle to a node in a stack graph.  A zero handle represents a missing node.
+pub type sg_node_handle = u32;
+
+/// The handle of the singleton root node.
+pub const SG_ROOT_NODE_HANDLE: sg_node_handle = 1;
+
+/// The handle of the singleton "jump to scope" node.
+pub const SG_JUMP_TO_NODE_HANDLE: sg_node_handle = 2;
+
+/// An array of all of the nodes in a stack graph.  Node handles are indices into this array.
+/// There will never be a valid node at index 0; a handle with the value 0 represents a missing
+/// node.
+#[repr(C)]
+pub struct sg_nodes {
+    pub nodes: *const sg_node,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of nodes in this stack graph.  The resulting array pointer is
+/// only valid until the next call to any function that mutates the stack graph.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_nodes(graph: *const sg_stack_graph) -> sg_nodes {
+    let graph = unsafe { &(*graph).inner };
+    sg_nodes {
+        nodes: graph.nodes.as_ptr() as *const sg_node,
+        count: graph.nodes.len(),
+    }
+}
+
+/// Adds new nodes to the stack graph.  You provide an array of `struct sg_node` instances.  You
+/// also provide an output array, which must have the same length as `nodes`, in which we will
+/// place each node's handle in the stack graph.
+///
+/// We copy the node content into the stack graph.  The array you pass in does not need to outlive
+/// the call to this function.
+///
+/// You cannot add new instances of the root node or "jump to scope" node, since those are
+/// singletons and already exist in the stack graph.
+///
+/// If any node that you pass in is invalid, it will not be added to the graph, and the
+/// corresponding entry in the `handles_out` array will be null.  (Note that includes trying to add
+/// a node with the same ID as an existing node, since all nodes must have unique IDs.)
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_add_nodes(
+    graph: *mut sg_stack_graph,
+    count: usize,
+    nodes: *const sg_node,
+    handles_out: *mut sg_node_handle,
+) {
+    let graph = unsafe { &mut (*graph).inner };
+    let nodes = unsafe { std::slice::from_raw_parts(nodes, count) };
+    let handles_out =
+        unsafe { std::slice::from_raw_parts_mut(handles_out as *mut Option<Handle<Node>>, count) };
+    for i in 0..count {
+        let node_id = nodes[i].id;
+        handles_out[i] =
+            validate_node(graph, &nodes[i]).and_then(|node| graph.add_node(node_id.into(), node));
+    }
+}
+
+fn validate_node_id(graph: &StackGraph, node_id: sg_node_id) -> Option<()> {
+    if node_id.file == 0 || node_id.file >= (graph.files.len() as u32) {
+        return None;
+    }
+    Some(())
+}
+
+fn validate_node(graph: &StackGraph, node: &sg_node) -> Option<Node> {
+    if matches!(
+        &node.kind,
+        sg_node_kind::SG_NODE_KIND_JUMP_TO | sg_node_kind::SG_NODE_KIND_ROOT
+    ) {
+        // You can never add a singleton node, since there already is one!
+        return None;
+    }
+
+    // Every node must have a valid ID, which refers to an existing file.
+    validate_node_id(graph, node.id)?;
+
+    // Push and pop nodes must have a non-null symbol, and all other nodes must have a null symbol.
+    if (node.symbol != 0)
+        != matches!(
+            &node.kind,
+            sg_node_kind::SG_NODE_KIND_POP_SCOPED_SYMBOL
+                | sg_node_kind::SG_NODE_KIND_POP_SYMBOL
+                | sg_node_kind::SG_NODE_KIND_PUSH_SCOPED_SYMBOL
+                | sg_node_kind::SG_NODE_KIND_PUSH_SYMBOL
+        )
+    {
+        return None;
+    }
+
+    // Push scoped symbol nodes must have a non-null scope, and all other nodes must have a null
+    // scope.
+    if (node.scope != 0) != matches!(&node.kind, sg_node_kind::SG_NODE_KIND_PUSH_SCOPED_SYMBOL) {
+        return None;
+    }
+
+    Some(node.clone().into())
+}
+
+//-------------------------------------------------------------------------------------------------
+// Edges
+
+/// Connects two nodes in a stack graph.
+///
+/// These edges provide the basic graph connectivity that allow us to search for name binding paths
+/// in a stack graph.  (Though not all sequence of edges is a well-formed name binding: the nodes
+/// that you encounter along the path must also satisfy all of the rules for maintaining correct
+/// symbol and scope stacks.)
+#[repr(C)]
+pub struct sg_edge {
+    pub source: sg_node_handle,
+    pub sink: sg_node_handle,
+}
+
+/// Adds new edges to the stack graph.  You provide an array of `struct sg_edges` instances.  A
+/// stack graph can contain at most one edge between any two nodes.  It is not an error if you try
+/// to add an edge that already exists, but it won't have any effect on the graph.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_add_edges(
+    graph: *mut sg_stack_graph,
+    count: usize,
+    edges: *const sg_edge,
+) {
+    let graph = unsafe { &mut (*graph).inner };
+    let edges = unsafe { std::slice::from_raw_parts(edges, count) };
+    for i in 0..count {
+        let source = unsafe { std::mem::transmute(edges[i].source) };
+        let sink = unsafe { std::mem::transmute(edges[i].sink) };
+        graph.add_edge(Edge { source, sink });
     }
 }
