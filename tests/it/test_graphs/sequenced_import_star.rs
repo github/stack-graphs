@@ -5,9 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use stack_graphs::arena::Handle;
-use stack_graphs::graph::*;
-
 use crate::test_graphs::CreateStackGraph;
 
 /// A stack graph containing:
@@ -27,30 +24,19 @@ use crate::test_graphs::CreateStackGraph;
 /// # b.py
 /// foo = 2
 /// ```
-pub struct SequencedImportStar {
-    pub graph: StackGraph,
-    // Interesting nodes in main.py
-    pub main: Handle<Node>,
-    pub main_a: Handle<Node>,
-    pub main_foo: Handle<Node>,
-    // Interesting nodes in a.py
-    pub a: Handle<Node>,
-    pub a_b: Handle<Node>,
-    // Interesting nodes in b.py
-    pub b: Handle<Node>,
-    pub b_foo: Handle<Node>,
-}
-
-pub fn new() -> SequencedImportStar {
-    let mut graph = StackGraph::new();
+pub fn new<T>() -> T
+where
+    T: CreateStackGraph + Default,
+{
+    let mut graph = T::default();
     let root = graph.root_node();
-    let sym_dot = graph.add_symbol(".");
-    let sym_main = graph.add_symbol("__main__");
-    let sym_a = graph.add_symbol("a");
-    let sym_b = graph.add_symbol("b");
-    let sym_foo = graph.add_symbol("foo");
+    let sym_dot = graph.symbol(".");
+    let sym_main = graph.symbol("__main__");
+    let sym_a = graph.symbol("a");
+    let sym_b = graph.symbol("b");
+    let sym_foo = graph.symbol("foo");
 
-    let main_file = graph.get_or_create_file("main.py");
+    let main_file = graph.file("main.py");
     let main = graph.definition(main_file, 0, sym_main);
     let main_dot_1 = graph.pop_symbol(main_file, 1, sym_dot);
     let main_bottom_2 = graph.internal_scope(main_file, 2);
@@ -71,7 +57,7 @@ pub fn new() -> SequencedImportStar {
     graph.edge(main_a, root);
     graph.edge(main_4, main_top_5);
 
-    let a_file = graph.get_or_create_file("a.py");
+    let a_file = graph.file("a.py");
     let a = graph.definition(a_file, 0, sym_a);
     let a_dot_1 = graph.pop_symbol(a_file, 1, sym_dot);
     let a_bottom_2 = graph.internal_scope(a_file, 2);
@@ -88,7 +74,7 @@ pub fn new() -> SequencedImportStar {
     graph.edge(a_b, root);
     graph.edge(a_3, a_top_4);
 
-    let b_file = graph.get_or_create_file("b.py");
+    let b_file = graph.file("b.py");
     let b = graph.definition(b_file, 0, sym_b);
     let b_dot_1 = graph.pop_symbol(b_file, 1, sym_dot);
     let b_bottom_2 = graph.internal_scope(b_file, 2);
@@ -102,14 +88,5 @@ pub fn new() -> SequencedImportStar {
     graph.edge(b_3, b_foo);
     graph.edge(b_3, b_top_4);
 
-    SequencedImportStar {
-        graph,
-        main,
-        main_a,
-        main_foo,
-        a,
-        a_b,
-        b,
-        b_foo,
-    }
+    graph
 }

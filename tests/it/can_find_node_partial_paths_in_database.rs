@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 
 use stack_graphs::arena::Handle;
-use stack_graphs::graph::Node;
+use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
@@ -18,10 +18,12 @@ use crate::test_graphs;
 
 fn check_node_partial_paths(
     graph: &mut StackGraph,
-    node: Handle<Node>,
+    id: (&str, u32),
     expected_partial_paths: &[&str],
 ) {
-    let file = graph[node].file().unwrap();
+    let file = graph.get_file_unchecked(id.0);
+    let id = NodeID::new_in_file(file, id.1);
+    let node = graph.node_for_id(id).expect("Cannot find node");
     let mut partials = PartialPaths::new();
     let mut database = Database::new();
     partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
@@ -50,18 +52,18 @@ fn check_node_partial_paths(
 
 #[test]
 fn class_field_through_function_parameter() {
-    let mut fixture = test_graphs::class_field_through_function_parameter::new();
+    let mut graph = test_graphs::class_field_through_function_parameter::new();
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.main_bar,
+        &mut graph,
+        ("main.py", 10),
         &[
             "<> () [main.py(10) reference bar] -> [root] <a.foo()/[main.py(7)].bar> ()",
             "<> () [main.py(10) reference bar] -> [root] <b.foo()/[main.py(7)].bar> ()",
         ],
     );
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.a_x_ref,
+        &mut graph,
+        ("a.py", 8),
         &["<> () [a.py(8) reference x] -> [a.py(14) definition x] <> ()"],
     );
     // no references in b.py
@@ -69,53 +71,53 @@ fn class_field_through_function_parameter() {
 
 #[test]
 fn cyclic_imports_python() {
-    let mut fixture = test_graphs::cyclic_imports_python::new();
+    let mut graph = test_graphs::cyclic_imports_python::new();
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.main_foo,
+        &mut graph,
+        ("main.py", 6),
         &["<> () [main.py(6) reference foo] -> [root] <a.foo> ()"],
     );
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.a_b,
+        &mut graph,
+        ("a.py", 6),
         &["<> () [a.py(6) reference b] -> [root] <b> ()"],
     );
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.b_a,
+        &mut graph,
+        ("b.py", 8),
         &["<> () [b.py(8) reference a] -> [root] <a> ()"],
     );
 }
 
 #[test]
 fn cyclic_imports_rust() {
-    let mut fixture = test_graphs::cyclic_imports_rust::new();
+    let mut graph = test_graphs::cyclic_imports_rust::new();
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.main_FOO,
+        &mut graph,
+        ("test.rs", 101),
         &[
             "<> () [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <> ()",
             "<> () [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <> ()",
         ],
     );
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.b_BAR,
+        &mut graph,
+        ("test.rs", 305),
         &["<> () [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <> ()"],
     );
 }
 
 #[test]
 fn sequenced_import_star() {
-    let mut fixture = test_graphs::sequenced_import_star::new();
+    let mut graph = test_graphs::sequenced_import_star::new();
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.main_foo,
+        &mut graph,
+        ("main.py", 6),
         &["<> () [main.py(6) reference foo] -> [root] <a.foo> ()"],
     );
     check_node_partial_paths(
-        &mut fixture.graph,
-        fixture.a_b,
+        &mut graph,
+        ("a.py", 6),
         &["<> () [a.py(6) reference b] -> [root] <b> ()"],
     );
     // no references in b.py

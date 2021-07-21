@@ -34,9 +34,9 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
 
 #[test]
 fn class_field_through_function_parameter() {
-    let fixture = test_graphs::class_field_through_function_parameter::new();
+    let graph = test_graphs::class_field_through_function_parameter::new();
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "main.py",
         &[
             // definition of `__main__` module
@@ -62,7 +62,7 @@ fn class_field_through_function_parameter() {
         ],
     );
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "a.py",
         &[
             // definition of `a` module
@@ -80,7 +80,7 @@ fn class_field_through_function_parameter() {
         ],
     );
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "b.py",
         &[
             // definition of `b` module
@@ -97,9 +97,9 @@ fn class_field_through_function_parameter() {
 
 #[test]
 fn cyclic_imports_python() {
-    let fixture = test_graphs::cyclic_imports_python::new();
+    let graph = test_graphs::cyclic_imports_python::new();
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "main.py",
         &[
             // definition of `__main__` module
@@ -113,7 +113,7 @@ fn cyclic_imports_python() {
         ],
     );
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "a.py",
         &[
             // definition of `a` module
@@ -125,7 +125,7 @@ fn cyclic_imports_python() {
         ],
     );
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "b.py",
         &[
             // definition of `b` module
@@ -142,9 +142,9 @@ fn cyclic_imports_python() {
 
 #[test]
 fn cyclic_imports_rust() {
-    let fixture = test_graphs::cyclic_imports_rust::new();
+    let graph = test_graphs::cyclic_imports_rust::new();
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "test.rs",
         // NOTE: Because everything in this example is local to one file, there aren't any partial
         // paths involving the root node.
@@ -166,9 +166,9 @@ fn cyclic_imports_rust() {
 
 #[test]
 fn sequenced_import_star() {
-    let fixture = test_graphs::sequenced_import_star::new();
+    let graph = test_graphs::sequenced_import_star::new();
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "main.py",
         &[
             // definition of `__main__` module
@@ -182,7 +182,7 @@ fn sequenced_import_star() {
         ],
     );
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "a.py",
         &[
             // definition of `a` module
@@ -194,7 +194,7 @@ fn sequenced_import_star() {
         ],
     );
     check_partial_paths_in_file(
-        &fixture.graph,
+        &graph,
         "b.py",
         &[
             // definition of `b` module

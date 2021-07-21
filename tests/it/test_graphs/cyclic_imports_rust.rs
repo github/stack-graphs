@@ -5,9 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use stack_graphs::arena::Handle;
-use stack_graphs::graph::*;
-
 use crate::test_graphs::CreateStackGraph;
 
 /// A stack graph containing:
@@ -28,33 +25,18 @@ use crate::test_graphs::CreateStackGraph;
 /// }
 /// ```
 #[allow(non_snake_case)]
-pub struct CyclicImportsRust {
-    pub graph: StackGraph,
-    pub file_root: Handle<Node>,
-    // Interesting nodes in crate root
-    pub main_a: Handle<Node>,
-    pub main_FOO: Handle<Node>,
-    // Interesting nodes in mod a
-    pub a: Handle<Node>,
-    pub a_b: Handle<Node>,
-    pub a_BAR: Handle<Node>,
-    // Interesting nodes in mod b
-    pub b: Handle<Node>,
-    pub b_a: Handle<Node>,
-    pub b_BAR: Handle<Node>,
-    pub b_FOO: Handle<Node>,
-}
+pub fn new<T>() -> T
+where
+    T: CreateStackGraph + Default,
+{
+    let mut graph = T::default();
+    let sym_colons = graph.symbol("::");
+    let sym_a = graph.symbol("a");
+    let sym_b = graph.symbol("b");
+    let sym_BAR = graph.symbol("BAR");
+    let sym_FOO = graph.symbol("FOO");
 
-#[allow(non_snake_case)]
-pub fn new() -> CyclicImportsRust {
-    let mut graph = StackGraph::new();
-    let sym_colons = graph.add_symbol("::");
-    let sym_a = graph.add_symbol("a");
-    let sym_b = graph.add_symbol("b");
-    let sym_BAR = graph.add_symbol("BAR");
-    let sym_FOO = graph.add_symbol("FOO");
-
-    let file = graph.get_or_create_file("test.rs");
+    let file = graph.file("test.rs");
     let file_root = graph.internal_scope(file, 0);
 
     let main_FOO = graph.reference(file, 101, sym_FOO);
@@ -95,17 +77,5 @@ pub fn new() -> CyclicImportsRust {
     graph.edge(b_colons_6, b_a);
     graph.edge(b_a, file_root);
 
-    CyclicImportsRust {
-        graph,
-        file_root,
-        main_a,
-        main_FOO,
-        a,
-        a_b,
-        a_BAR,
-        b,
-        b_a,
-        b_BAR,
-        b_FOO,
-    }
+    graph
 }
