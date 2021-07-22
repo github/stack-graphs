@@ -23,4 +23,5 @@ libc = "0.2"
 smallvec = { version="1.6", features=["union"] }
 
 [dev-dependencies]
+itertools = "0.10"
 maplit = "1.0"

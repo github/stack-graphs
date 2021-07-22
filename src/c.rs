@@ -12,7 +12,6 @@
 use libc::c_char;
 
 use crate::arena::Handle;
-use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::NodeID;
@@ -389,6 +388,7 @@ fn validate_node(graph: &StackGraph, node: &sg_node) -> Option<Node> {
 pub struct sg_edge {
     pub source: sg_node_handle,
     pub sink: sg_node_handle,
+    pub precedence: i32,
 }
 
 /// Adds new edges to the stack graph.  You provide an array of `struct sg_edges` instances.  A
@@ -405,6 +405,6 @@ pub extern "C" fn sg_stack_graph_add_edges(
     for i in 0..count {
         let source = unsafe { std::mem::transmute(edges[i].source) };
         let sink = unsafe { std::mem::transmute(edges[i].sink) };
-        graph.add_edge(Edge { source, sink });
+        graph.add_edge(source, sink, edges[i].precedence);
     }
 }

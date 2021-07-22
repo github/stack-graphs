@@ -146,6 +146,7 @@ struct sg_nodes {
 struct sg_edge {
     sg_node_handle source;
     sg_node_handle sink;
+    int32_t precedence;
 };
 
 // The handle of the singleton root node.

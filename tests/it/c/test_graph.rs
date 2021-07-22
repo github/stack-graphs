@@ -87,7 +87,11 @@ impl CreateStackGraph for TestGraph {
     }
 
     fn edge(&mut self, source: sg_node_handle, sink: sg_node_handle) {
-        let edge = sg_edge { source, sink };
+        let edge = sg_edge {
+            source,
+            sink,
+            precedence: 0,
+        };
         let edges = [edge];
         sg_stack_graph_add_edges(self.graph, edges.len(), edges.as_ptr());
     }
