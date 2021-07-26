@@ -43,6 +43,9 @@ enum sg_node_kind {
     SG_NODE_KIND_ROOT,
 };
 
+// Manages the state of a collection of paths built up as part of the path-finding algorithm.
+struct sg_path_arena;
+
 // Contains all of the nodes and edges that make up a stack graph.
 struct sg_stack_graph;
 
@@ -149,11 +152,40 @@ struct sg_edge {
     int32_t precedence;
 };
 
+// A handle to an element of a scope stack.  A zero handle represents a missing scope stack.  A
+// UINT32_MAX handle represents an empty scope stack.
+typedef uint32_t sg_scope_stack_cell_handle;
+
+// An element of a scope stack.
+struct sg_scope_stack_cell {
+    // The exported scope at this position in the scope stack.
+    sg_node_handle head;
+    // The handle of the next element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if this
+    // is the last element.
+    sg_scope_stack_cell_handle tail;
+};
+
+// The array of all of the scope stack content in a path arena.
+struct sg_scope_stack_cells {
+    const struct sg_scope_stack_cell *cells;
+    size_t count;
+};
+
+// A sequence of exported scopes, used to pass name-binding context around a stack graph.
+struct sg_scope_stack {
+    // The handle of the first element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if the
+    // list is empty, or 0 if the list is null.
+    sg_scope_stack_cell_handle cells;
+};
+
 // The handle of the singleton root node.
 #define SG_ROOT_NODE_HANDLE 1
 
 // The handle of the singleton "jump to scope" node.
 #define SG_JUMP_TO_NODE_HANDLE 2
+
+// The handle of the empty scope stack.
+#define SG_SCOPE_STACK_EMPTY_HANDLE 4294967295
 
 #ifdef __cplusplus
 extern "C" {
@@ -164,6 +196,12 @@ struct sg_stack_graph *sg_stack_graph_new(void);
 
 // Frees a stack graph, and all of its contents.
 void sg_stack_graph_free(struct sg_stack_graph *graph);
+
+// Creates a new, initially empty path arena.
+struct sg_path_arena *sg_path_arena_new(void);
+
+// Frees a path arena, and all of its contents.
+void sg_path_arena_free(struct sg_path_arena *paths);
 
 // Returns a reference to the array of symbol data in this stack graph.  The resulting array
 // pointer is only valid until the next call to any function that mutates the stack graph.
@@ -238,6 +276,24 @@ void sg_stack_graph_add_nodes(struct sg_stack_graph *graph,
 void sg_stack_graph_add_edges(struct sg_stack_graph *graph,
                               size_t count,
                               const struct sg_edge *edges);
+
+// Returns a reference to the array of scope stack content in a path arena.  The resulting array
+// pointer is only valid until the next call to any function that mutates the path arena.
+struct sg_scope_stack_cells sg_path_arena_scope_stack_cells(const struct sg_path_arena *paths);
+
+// Adds new scope stacks to the path arena.  `count` is the number of scope stacks you want to
+// create.  The content of each scope stack comes from two arrays.  The `lengths` array must have
+// `count` elements, and provides the number of scopes in each scope stack.  The `scopes` array
+// contains the contents of each of these scope stacks in one contiguous array.  Its length must
+// be the sum of all of the counts in the `lengths` array.
+//
+// You must also provide an `out` array, which must also have room for `count` elements.  We will
+// fill this array in with the `sg_scope_stack` instances for each scope stack that is created.
+void sg_path_arena_add_scope_stacks(struct sg_path_arena *paths,
+                                    size_t count,
+                                    const sg_node_handle *scopes,
+                                    const size_t *lengths,
+                                    struct sg_scope_stack *out);
 
 #ifdef __cplusplus
 } // extern "C"

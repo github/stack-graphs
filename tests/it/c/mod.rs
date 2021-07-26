@@ -8,5 +8,6 @@
 mod can_create_graph;
 mod files;
 mod nodes;
+mod paths;
 mod symbols;
 mod test_graph;

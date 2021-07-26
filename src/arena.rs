@@ -304,17 +304,23 @@ where
 /// Linked lists are often a poor choice because they aren't very cache-friendly.  However, this
 /// linked list implementation _should_ be cache-friendly, since the individual cells are allocated
 /// out of an arena.
+#[repr(C)]
 pub struct List<T> {
+    // The value of this handle will be EMPTY_LIST_HANDLE if the list is empty.  For an
+    // Option<List<T>>, the value will be zero (via the Option<NonZero> optimization) if the list
+    // is None.
     cells: Handle<ListCell<T>>,
 }
 
 #[doc(hidden)]
-pub enum ListCell<T> {
-    Empty,
-    Nonempty { head: T, tail: Handle<ListCell<T>> },
+#[repr(C)]
+pub struct ListCell<T> {
+    head: T,
+    // The value of this handle will be EMPTY_LIST_HANDLE if this is the last element of the list.
+    tail: Handle<ListCell<T>>,
 }
 
-const EMPTY_LIST_HANDLE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1) };
+const EMPTY_LIST_HANDLE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(u32::MAX) };
 
 // An arena that's used to manage `List<T>` instances.
 //
@@ -325,10 +331,7 @@ pub type ListArena<T> = Arena<ListCell<T>>;
 impl<T> List<T> {
     /// Creates a new `ListArena` that will manage lists of this type.
     pub fn new_arena() -> ListArena<T> {
-        let mut arena = ListArena::new();
-        let handle = arena.add(ListCell::Empty);
-        assert!(handle.index == EMPTY_LIST_HANDLE);
-        arena
+        ListArena::new()
     }
 
     /// Returns whether this list is empty.
@@ -355,7 +358,7 @@ impl<T> List<T> {
 
     /// Pushes a new element onto the front of this list.
     pub fn push_front(&mut self, arena: &mut ListArena<T>, head: T) {
-        self.cells = arena.add(ListCell::Nonempty {
+        self.cells = arena.add(ListCell {
             head,
             tail: self.cells,
         });
@@ -364,25 +367,17 @@ impl<T> List<T> {
     /// Removes and returns the element at the front of this list.  If the list is empty, returns
     /// `None`.
     pub fn pop_front<'a>(&mut self, arena: &'a ListArena<T>) -> Option<&'a T> {
-        match arena.get(self.cells) {
-            ListCell::Empty => return None,
-            ListCell::Nonempty { head, tail } => {
-                self.cells = *tail;
-                Some(head)
-            }
+        if self.is_empty() {
+            return None;
         }
+        let cell = arena.get(self.cells);
+        self.cells = cell.tail;
+        Some(&cell.head)
     }
 
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(&self, arena: &'a ListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
-        let mut current = self.cells;
-        std::iter::from_fn(move || match arena.get(current) {
-            ListCell::Empty => return None,
-            ListCell::Nonempty { head, tail } => {
-                current = *tail;
-                Some(head)
-            }
-        })
+    pub fn iter<'a>(mut self, arena: &'a ListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        std::iter::from_fn(move || self.pop_front(arena))
     }
 }
 
@@ -468,13 +463,10 @@ pub struct ReversibleList<T> {
 }
 
 #[doc(hidden)]
-pub enum ReversibleListCell<T> {
-    Empty,
-    Nonempty {
-        head: T,
-        tail: Handle<ReversibleListCell<T>>,
-        reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
-    },
+pub struct ReversibleListCell<T> {
+    head: T,
+    tail: Handle<ReversibleListCell<T>>,
+    reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
 }
 
 // An arena that's used to manage `ReversibleList<T>` instances.
@@ -486,10 +478,7 @@ pub type ReversibleListArena<T> = Arena<ReversibleListCell<T>>;
 impl<T> ReversibleList<T> {
     /// Creates a new `ReversibleListArena` that will manage lists of this type.
     pub fn new_arena() -> ReversibleListArena<T> {
-        let mut arena = ReversibleListArena::new();
-        let handle = arena.add(ReversibleListCell::Empty);
-        assert!(handle.index == EMPTY_LIST_HANDLE);
-        arena
+        ReversibleListArena::new()
     }
 
     /// Returns whether this list is empty.
@@ -507,11 +496,11 @@ impl<T> ReversibleList<T> {
 
     /// Returns whether we have already calculated the reversal of this list.
     pub fn have_reversal(&self, arena: &ReversibleListArena<T>) -> bool {
-        match arena.get(self.cells) {
+        if self.is_empty() {
             // The empty list is already reversed.
-            ReversibleListCell::Empty => true,
-            ReversibleListCell::Nonempty { reversed, .. } => reversed.get().is_some(),
+            return true;
         }
+        arena.get(self.cells).reversed.get().is_some()
     }
 
     /// Pushes a new element onto the front of this list.
@@ -522,25 +511,20 @@ impl<T> ReversibleList<T> {
     /// Removes and returns the element at the front of this list.  If the list is empty, returns
     /// `None`.
     pub fn pop_front<'a>(&mut self, arena: &'a ReversibleListArena<T>) -> Option<&'a T> {
-        match arena.get(self.cells) {
-            ReversibleListCell::Empty => return None,
-            ReversibleListCell::Nonempty { head, tail, .. } => {
-                self.cells = *tail;
-                Some(head)
-            }
+        if self.is_empty() {
+            return None;
         }
+        let cell = arena.get(self.cells);
+        self.cells = cell.tail;
+        Some(&cell.head)
     }
 
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(&self, arena: &'a ReversibleListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
-        let mut current = self.cells;
-        std::iter::from_fn(move || match arena.get(current) {
-            ReversibleListCell::Empty => return None,
-            ReversibleListCell::Nonempty { head, tail, .. } => {
-                current = *tail;
-                Some(head)
-            }
-        })
+    pub fn iter<'a>(
+        mut self,
+        arena: &'a ReversibleListArena<T>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        std::iter::from_fn(move || self.pop_front(arena))
     }
 }
 
@@ -552,14 +536,11 @@ where
     /// only calculate the reversal once, returning it as-is if you call this function multiple
     /// times.
     pub fn reverse(&mut self, arena: &mut ReversibleListArena<T>) {
-        self.ensure_reversal_available(arena);
-        match arena.get(self.cells) {
-            ReversibleListCell::Empty => return,
-            ReversibleListCell::Nonempty { reversed, .. } => match reversed.get() {
-                Some(reversed) => self.cells = reversed,
-                _ => unreachable!(),
-            },
+        if self.is_empty() {
+            return;
         }
+        self.ensure_reversal_available(arena);
+        self.cells = arena.get(self.cells).reversed.get().unwrap();
     }
 
     /// Ensures that the reversal of this list is available.  It can be useful to precalculate this
@@ -567,21 +548,17 @@ where
     /// list later when you only have shared access to it.
     pub fn ensure_reversal_available(&mut self, arena: &mut ReversibleListArena<T>) {
         // First check to see if the list has already been reversed.
-        match arena.get(self.cells) {
+        if self.is_empty() {
             // The empty list is already reversed.
-            ReversibleListCell::Empty => return,
-            ReversibleListCell::Nonempty { reversed, .. } if reversed.get().is_some() => return,
-            _ => (),
+            return;
+        }
+        if arena.get(self.cells).reversed.get().is_some() {
+            return;
         }
 
         // If not, reverse the list and cache the result.
         let new_reversed = ReversibleListCell::reverse(self.cells, arena);
-        match arena.get(self.cells) {
-            ReversibleListCell::Nonempty { reversed, .. } => {
-                reversed.set(Some(new_reversed));
-            }
-            _ => unreachable!(),
-        }
+        arena.get(self.cells).reversed.set(Some(new_reversed));
     }
 }
 
@@ -589,17 +566,12 @@ impl<T> ReversibleList<T> {
     /// Reverses the list, assuming that the reversal has already been computed.  If it hasn't we
     /// return an error.
     pub fn reverse_reused(&mut self, arena: &ReversibleListArena<T>) -> Result<(), ()> {
-        match arena.get(self.cells) {
+        if self.is_empty() {
             // The empty list is already reversed.
-            ReversibleListCell::Empty => Ok(()),
-            ReversibleListCell::Nonempty { reversed, .. } => match reversed.get() {
-                Some(reversed) => {
-                    self.cells = reversed;
-                    Ok(())
-                }
-                _ => Err(()),
-            },
+            return Ok(());
         }
+        self.cells = arena.get(self.cells).reversed.get().ok_or(())?;
+        Ok(())
     }
 }
 
@@ -609,7 +581,7 @@ impl<T> ReversibleListCell<T> {
         tail: Handle<ReversibleListCell<T>>,
         reversed: Option<Handle<ReversibleListCell<T>>>,
     ) -> ReversibleListCell<T> {
-        ReversibleListCell::Nonempty {
+        ReversibleListCell {
             head,
             tail,
             reversed: Cell::new(reversed),
@@ -635,9 +607,10 @@ where
     ) -> Handle<ReversibleListCell<T>> {
         let mut reversed = ReversibleListCell::empty_handle();
         let mut current = forwards;
-        while let ReversibleListCell::Nonempty { head, tail, .. } = arena.get(current) {
-            let head = head.clone();
-            current = *tail;
+        while !ReversibleListCell::is_empty_handle(current) {
+            let cell = arena.get(current);
+            let head = cell.head.clone();
+            current = cell.tail;
             reversed = arena.add(Self::new(
                 head,
                 reversed,

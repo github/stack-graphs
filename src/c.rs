@@ -17,6 +17,8 @@ use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::paths::Paths;
+use crate::paths::ScopeStack;
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct sg_stack_graph {
@@ -35,6 +37,25 @@ pub extern "C" fn sg_stack_graph_new() -> *mut sg_stack_graph {
 #[no_mangle]
 pub extern "C" fn sg_stack_graph_free(graph: *mut sg_stack_graph) {
     drop(unsafe { Box::from_raw(graph) })
+}
+
+/// Manages the state of a collection of paths built up as part of the path-finding algorithm.
+pub struct sg_path_arena {
+    inner: Paths,
+}
+
+/// Creates a new, initially empty path arena.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_new() -> *mut sg_path_arena {
+    Box::into_raw(Box::new(sg_path_arena {
+        inner: Paths::new(),
+    }))
+}
+
+/// Frees a path arena, and all of its contents.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_free(paths: *mut sg_path_arena) {
+    drop(unsafe { Box::from_raw(paths) })
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -277,6 +298,12 @@ pub enum sg_node_kind {
 /// A handle to a node in a stack graph.  A zero handle represents a missing node.
 pub type sg_node_handle = u32;
 
+impl Into<Handle<Node>> for sg_node_handle {
+    fn into(self) -> Handle<Node> {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
 /// The handle of the singleton root node.
 pub const SG_ROOT_NODE_HANDLE: sg_node_handle = 1;
 
@@ -406,5 +433,92 @@ pub extern "C" fn sg_stack_graph_add_edges(
         let source = unsafe { std::mem::transmute(edges[i].source) };
         let sink = unsafe { std::mem::transmute(edges[i].sink) };
         graph.add_edge(source, sink, edges[i].precedence);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Scope stacks
+
+/// A sequence of exported scopes, used to pass name-binding context around a stack graph.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct sg_scope_stack {
+    /// The handle of the first element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if the
+    /// list is empty, or 0 if the list is null.
+    pub cells: sg_scope_stack_cell_handle,
+}
+
+impl From<ScopeStack> for sg_scope_stack {
+    fn from(stack: ScopeStack) -> sg_scope_stack {
+        unsafe { std::mem::transmute(stack) }
+    }
+}
+
+/// A handle to an element of a scope stack.  A zero handle represents a missing scope stack.  A
+/// UINT32_MAX handle represents an empty scope stack.
+pub type sg_scope_stack_cell_handle = u32;
+
+/// The handle of the empty scope stack.
+pub const SG_SCOPE_STACK_EMPTY_HANDLE: sg_scope_stack_cell_handle = 0xffffffff;
+
+/// An element of a scope stack.
+#[repr(C)]
+pub struct sg_scope_stack_cell {
+    /// The exported scope at this position in the scope stack.
+    pub head: sg_node_handle,
+    /// The handle of the next element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if this
+    /// is the last element.
+    pub tail: sg_scope_stack_cell_handle,
+}
+
+/// The array of all of the scope stack content in a path arena.
+#[repr(C)]
+pub struct sg_scope_stack_cells {
+    pub cells: *const sg_scope_stack_cell,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of scope stack content in a path arena.  The resulting array
+/// pointer is only valid until the next call to any function that mutates the path arena.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_scope_stack_cells(
+    paths: *const sg_path_arena,
+) -> sg_scope_stack_cells {
+    let paths = unsafe { &(*paths).inner };
+    sg_scope_stack_cells {
+        cells: paths.scope_stacks.as_ptr() as *const sg_scope_stack_cell,
+        count: paths.scope_stacks.len(),
+    }
+}
+
+/// Adds new scope stacks to the path arena.  `count` is the number of scope stacks you want to
+/// create.  The content of each scope stack comes from two arrays.  The `lengths` array must have
+/// `count` elements, and provides the number of scopes in each scope stack.  The `scopes` array
+/// contains the contents of each of these scope stacks in one contiguous array.  Its length must
+/// be the sum of all of the counts in the `lengths` array.
+///
+/// You must also provide an `out` array, which must also have room for `count` elements.  We will
+/// fill this array in with the `sg_scope_stack` instances for each scope stack that is created.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_add_scope_stacks(
+    paths: *mut sg_path_arena,
+    count: usize,
+    mut scopes: *const sg_node_handle,
+    lengths: *const usize,
+    out: *mut sg_scope_stack,
+) {
+    let paths = unsafe { &mut (*paths).inner };
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
+    for i in 0..count {
+        let length = lengths[i];
+        let scopes_slice = unsafe { std::slice::from_raw_parts(scopes, length) };
+        let mut stack = ScopeStack::empty();
+        for j in (0..length).rev() {
+            let node = scopes_slice[j].into();
+            stack.push_front(paths, node);
+        }
+        out[i] = stack.into();
+        unsafe { scopes = scopes.add(length) };
     }
 }
