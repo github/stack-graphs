@@ -847,6 +847,85 @@ impl DisplayWithPartialPaths for PartialScopeStack {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Partial symbol bindings
+
+pub struct PartialSymbolStackBindings {
+    binding: Option<PartialSymbolStack>,
+}
+
+impl PartialSymbolStackBindings {
+    /// Creates a new, empty set of partial symbol stack bindings.
+    pub fn new() -> PartialSymbolStackBindings {
+        PartialSymbolStackBindings { binding: None }
+    }
+
+    /// Returns the partial symbol stack that the (unnamed) partial symbol stack variable matched.  Returns an
+    /// error if that variable didn't match anything.
+    pub fn get(&self) -> Result<PartialSymbolStack, PathResolutionError> {
+        self.binding
+            .ok_or(PathResolutionError::UnboundSymbolStackVariable)
+    }
+
+    /// Adds a new binding from the (unnamed) partial symbol stack variable to the partial symbol stack that it
+    /// matched.  Returns an error if you try to bind the (unnamed) symbol stack variable more than
+    /// once.
+    pub fn add(&mut self, symbols: PartialSymbolStack) -> Result<(), PathResolutionError> {
+        if self.binding.is_some() {
+            return Err(PathResolutionError::IncompatibleSymbolStackVariables);
+        }
+        self.binding = Some(symbols);
+        Ok(())
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Partial scope bindings
+
+pub struct PartialScopeStackBindings {
+    bindings: SmallVec<[Option<PartialScopeStack>; 4]>,
+}
+
+impl PartialScopeStackBindings {
+    /// Creates a new, empty set of partial scope stack bindings.
+    pub fn new() -> ScopeStackBindings {
+        ScopeStackBindings {
+            bindings: SmallVec::new(),
+        }
+    }
+
+    /// Returns the partial scope stack that a particular scope stack variable matched.  Returns an error
+    /// if that variable didn't match anything.
+    pub fn get(
+        &self,
+        variable: ScopeStackVariable,
+    ) -> Result<PartialScopeStack, PathResolutionError> {
+        let index = variable.as_usize();
+        if self.bindings.len() < index {
+            return Err(PathResolutionError::UnboundScopeStackVariable);
+        }
+        self.bindings[index - 1].ok_or(PathResolutionError::UnboundScopeStackVariable)
+    }
+
+    /// Adds a new binding from a scope stack variable to the partial scope stack that it matched.  Returns
+    /// an error if you try to bind a particular variable more than once.
+    pub fn add(
+        &mut self,
+        variable: ScopeStackVariable,
+        scopes: PartialScopeStack,
+    ) -> Result<(), PathResolutionError> {
+        let index = variable.as_usize();
+        if self.bindings.len() < index {
+            self.bindings.resize_with(index, || None);
+        }
+        if self.bindings[index - 1].is_some() {
+            return Err(PathResolutionError::IncompatibleScopeStackVariables);
+        }
+        self.bindings[index - 1] = Some(scopes);
+        Ok(())
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Edge lists
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
