@@ -534,6 +534,7 @@ impl DisplayWithPaths for PathEdgeList {
 
 /// A sequence of edges from a stack graph.  A _complete_ path represents a full name binding in a
 /// source language.
+#[repr(C)]
 #[derive(Clone)]
 pub struct Path {
     pub start_node: Handle<Node>,

@@ -52,6 +52,9 @@ enum sg_node_kind {
 // Manages the state of a collection of paths built up as part of the path-finding algorithm.
 struct sg_path_arena;
 
+// A list of paths found by the path-finding algorithm.
+struct sg_path_list;
+
 // Contains all of the nodes and edges that make up a stack graph.
 struct sg_stack_graph;
 
@@ -255,6 +258,16 @@ struct sg_path_edge_list {
     size_t length;
 };
 
+// A sequence of edges from a stack graph.  A _complete_ path represents a full name binding in a
+// source language.
+struct sg_path {
+    sg_node_handle start_node;
+    sg_node_handle end_node;
+    struct sg_symbol_stack symbol_stack;
+    struct sg_scope_stack scope_stack;
+    struct sg_path_edge_list edges;
+};
+
 // The handle of the singleton root node.
 #define SG_ROOT_NODE_HANDLE 1
 
@@ -414,6 +427,29 @@ void sg_path_arena_add_path_edge_lists(struct sg_path_arena *paths,
                                        const struct sg_path_edge *edges,
                                        const size_t *lengths,
                                        struct sg_path_edge_list *out);
+
+// Creates a new, empty sg_path_list.
+struct sg_path_list *sg_path_list_new(void);
+
+void sg_path_list_free(struct sg_path_list *path_list);
+
+size_t sg_path_list_count(const struct sg_path_list *path_list);
+
+const struct sg_path *sg_path_list_paths(const struct sg_path_list *path_list);
+
+// Finds all complete paths reachable from a set of starting nodes, placing the result into the
+// `path_list` output parameter.  You must free the path list when you are done with it by calling
+// `sg_path_list_done`.
+//
+// This function will not return until all reachable paths have been processed, so `graph` must
+// already contain a complete stack graph.  If you have a very large stack graph stored in some
+// other storage system, and want more control over lazily loading only the necessary pieces, then
+// you should use TODO.
+void sg_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
+                                           struct sg_path_arena *paths,
+                                           size_t starting_node_count,
+                                           const sg_node_handle *starting_nodes,
+                                           struct sg_path_list *path_list);
 
 #ifdef __cplusplus
 } // extern "C"

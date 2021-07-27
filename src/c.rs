@@ -17,6 +17,7 @@ use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::paths::Path;
 use crate::paths::PathEdge;
 use crate::paths::PathEdgeList;
 use crate::paths::Paths;
@@ -26,7 +27,7 @@ use crate::paths::SymbolStack;
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct sg_stack_graph {
-    inner: StackGraph,
+    pub inner: StackGraph,
 }
 
 /// Creates a new, initially empty stack graph.
@@ -45,7 +46,7 @@ pub extern "C" fn sg_stack_graph_free(graph: *mut sg_stack_graph) {
 
 /// Manages the state of a collection of paths built up as part of the path-finding algorithm.
 pub struct sg_path_arena {
-    inner: Paths,
+    pub inner: Paths,
 }
 
 /// Creates a new, initially empty path arena.
@@ -752,4 +753,78 @@ pub extern "C" fn sg_path_arena_add_path_edge_lists(
         out[i] = list.into();
         unsafe { edges = edges.add(length) };
     }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Paths
+
+/// A sequence of edges from a stack graph.  A _complete_ path represents a full name binding in a
+/// source language.
+#[repr(C)]
+pub struct sg_path {
+    pub start_node: sg_node_handle,
+    pub end_node: sg_node_handle,
+    pub symbol_stack: sg_symbol_stack,
+    pub scope_stack: sg_scope_stack,
+    pub edges: sg_path_edge_list,
+}
+
+/// A list of paths found by the path-finding algorithm.
+#[derive(Default)]
+pub struct sg_path_list {
+    paths: Vec<Path>,
+}
+
+/// Creates a new, empty sg_path_list.
+#[no_mangle]
+pub extern "C" fn sg_path_list_new() -> *mut sg_path_list {
+    Box::into_raw(Box::new(sg_path_list::default()))
+}
+
+#[no_mangle]
+pub extern "C" fn sg_path_list_free(path_list: *mut sg_path_list) {
+    drop(unsafe { Box::from_raw(path_list) });
+}
+
+#[no_mangle]
+pub extern "C" fn sg_path_list_count(path_list: *const sg_path_list) -> usize {
+    let path_list = unsafe { &*path_list };
+    path_list.paths.len()
+}
+
+#[no_mangle]
+pub extern "C" fn sg_path_list_paths(path_list: *const sg_path_list) -> *const sg_path {
+    let path_list = unsafe { &*path_list };
+    path_list.paths.as_ptr() as *const _
+}
+
+/// Finds all complete paths reachable from a set of starting nodes, placing the result into the
+/// `path_list` output parameter.  You must free the path list when you are done with it by calling
+/// `sg_path_list_done`.
+///
+/// This function will not return until all reachable paths have been processed, so `graph` must
+/// already contain a complete stack graph.  If you have a very large stack graph stored in some
+/// other storage system, and want more control over lazily loading only the necessary pieces, then
+/// you should use TODO.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_find_all_complete_paths(
+    graph: *const sg_stack_graph,
+    paths: *mut sg_path_arena,
+    starting_node_count: usize,
+    starting_nodes: *const sg_node_handle,
+    path_list: *mut sg_path_list,
+) {
+    let graph = unsafe { &(*graph).inner };
+    let paths = unsafe { &mut (*paths).inner };
+    let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, starting_node_count) };
+    let path_list = unsafe { &mut *path_list };
+    paths.find_all_paths(
+        graph,
+        starting_nodes.iter().copied().map(sg_node_handle::into),
+        |graph, _paths, path| {
+            if path.is_complete(graph) {
+                path_list.paths.push(path);
+            }
+        },
+    );
 }
