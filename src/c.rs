@@ -17,6 +17,8 @@ use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::paths::PathEdge;
+use crate::paths::PathEdgeList;
 use crate::paths::Paths;
 use crate::paths::ScopeStack;
 use crate::paths::ScopedSymbol;
@@ -58,6 +60,20 @@ pub extern "C" fn sg_path_arena_new() -> *mut sg_path_arena {
 #[no_mangle]
 pub extern "C" fn sg_path_arena_free(paths: *mut sg_path_arena) {
     drop(unsafe { Box::from_raw(paths) })
+}
+
+/// Describes in which direction the content of a deque is stored in memory.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum sg_deque_direction {
+    SG_DEQUE_FORWARDS,
+    SG_DEQUE_BACKWARDS,
+}
+
+impl Default for sg_deque_direction {
+    fn default() -> sg_deque_direction {
+        sg_deque_direction::SG_DEQUE_FORWARDS
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -223,7 +239,7 @@ pub extern "C" fn sg_stack_graph_add_files(
 /// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
 /// _local ID_ that must be unique within its file.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct sg_node_id {
     pub file: sg_file_handle,
     pub local_id: u32,
@@ -625,5 +641,115 @@ pub extern "C" fn sg_path_arena_add_scope_stacks(
         }
         out[i] = stack.into();
         unsafe { scopes = scopes.add(length) };
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Edge lists
+
+/// Details about one of the edges in a name-binding path
+#[repr(C)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct sg_path_edge {
+    pub source_node_id: sg_node_id,
+    pub precedence: i32,
+}
+
+impl Into<PathEdge> for sg_path_edge {
+    fn into(self) -> PathEdge {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+/// The edges in a path keep track of precedence information so that we can correctly handle
+/// shadowed definitions.
+#[repr(C)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub struct sg_path_edge_list {
+    /// The handle of the first element in the edge list, or SG_PATH_EDGE_LIST_EMPTY_HANDLE if the
+    /// list is empty, or 0 if the list is null.
+    pub cells: sg_path_edge_list_cell_handle,
+    pub direction: sg_deque_direction,
+    pub length: usize,
+}
+
+impl From<PathEdgeList> for sg_path_edge_list {
+    fn from(edges: PathEdgeList) -> sg_path_edge_list {
+        unsafe { std::mem::transmute(edges) }
+    }
+}
+
+/// A handle to an element of a path edge list.  A zero handle represents a missing path edge list.
+/// A UINT32_MAX handle represents an empty path edge list.
+pub type sg_path_edge_list_cell_handle = u32;
+
+/// The handle of the empty path edge list.
+pub const SG_PATH_EDGE_LIST_EMPTY_HANDLE: sg_path_edge_list_cell_handle = 0xffffffff;
+
+/// An element of a path edge list.
+#[repr(C)]
+pub struct sg_path_edge_list_cell {
+    /// The path edge at this position in the path edge list.
+    pub head: sg_path_edge,
+    /// The handle of the next element in the path edge list, or SG_PATH_EDGE_LIST_EMPTY_HANDLE if
+    /// this is the last element.
+    pub tail: sg_path_edge_list_cell_handle,
+    /// The handle of the reversal of this list.
+    pub reversed: sg_path_edge_list_cell_handle,
+}
+
+/// The array of all of the path edge list content in a path arena.
+#[repr(C)]
+pub struct sg_path_edge_list_cells {
+    pub cells: *const sg_path_edge_list_cell,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of path edge list content in a path arena.  The resulting
+/// array pointer is only valid until the next call to any function that mutates the path arena.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_path_edge_list_cells(
+    paths: *const sg_path_arena,
+) -> sg_path_edge_list_cells {
+    let paths = unsafe { &(*paths).inner };
+    sg_path_edge_list_cells {
+        cells: paths.path_edges.as_ptr() as *const sg_path_edge_list_cell,
+        count: paths.path_edges.len(),
+    }
+}
+
+/// Adds new path edge lists to the path arena.  `count` is the number of path edge lists you want
+/// to create.  The content of each path edge list comes from two arrays.  The `lengths` array must
+/// have `count` elements, and provides the number of edges in each path edge list.  The `edges`
+/// array contains the contents of each of these path edge lists in one contiguous array.  Its
+/// length must be the sum of all of the counts in the `lengths` array.
+///
+/// You must also provide an `out` array, which must also have room for `count` elements.  We will
+/// fill this array in with the `sg_path_edge_list` instances for each path edge list that is
+/// created.
+#[no_mangle]
+pub extern "C" fn sg_path_arena_add_path_edge_lists(
+    paths: *mut sg_path_arena,
+    count: usize,
+    mut edges: *const sg_path_edge,
+    lengths: *const usize,
+    out: *mut sg_path_edge_list,
+) {
+    let paths = unsafe { &mut (*paths).inner };
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
+    for i in 0..count {
+        let length = lengths[i];
+        let edges_slice = unsafe { std::slice::from_raw_parts(edges, length) };
+        let mut list = PathEdgeList::empty();
+        for j in 0..length {
+            let edge: PathEdge = edges_slice[j].into();
+            list.push_back(paths, edge);
+        }
+        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
+        // before we return ensures that it will also be available in forwards order.
+        let _ = list.iter(paths);
+        out[i] = list.into();
+        unsafe { edges = edges.add(length) };
     }
 }

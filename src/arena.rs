@@ -458,10 +458,12 @@ impl<T> Copy for List<T> {}
 /// reversal once even if you need to access it multiple times.
 ///
 /// [`List`]: struct.List.html
+#[repr(C)]
 pub struct ReversibleList<T> {
     cells: Handle<ReversibleListCell<T>>,
 }
 
+#[repr(C)]
 #[doc(hidden)]
 pub struct ReversibleListCell<T> {
     head: T,
@@ -721,11 +723,13 @@ impl<T> Copy for ReversibleList<T> {}
 /// that causes the deque to reverse itself each time you add an element.
 ///
 /// [`List`]: struct.List.html
+#[repr(C)]
 pub struct Deque<T> {
     list: ReversibleList<T>,
     direction: DequeDirection,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum DequeDirection {
     Forwards,
