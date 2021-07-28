@@ -9,6 +9,7 @@ mod can_create_graph;
 mod can_jump_to_definition;
 mod files;
 mod nodes;
+mod partial;
 mod paths;
 mod symbols;
 mod test_graph;

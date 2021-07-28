@@ -52,6 +52,9 @@ enum sg_node_kind {
     SG_NODE_KIND_ROOT,
 };
 
+// Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
+struct sg_partial_path_arena;
+
 // Manages the state of a collection of paths built up as part of the path-finding algorithm.
 struct sg_path_arena;
 
@@ -271,6 +274,44 @@ struct sg_path {
     struct sg_path_edge_list edges;
 };
 
+// An element of a partial scope stack.
+struct sg_partial_scope_stack_cell {
+    // The exported scope at this position in the partial scope stack.
+    sg_node_handle head;
+    // The handle of the next element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if this
+    // is the last element.
+    sg_path_edge_list_cell_handle tail;
+    // The handle of the reversal of this partial scope stack.
+    sg_path_edge_list_cell_handle reversed;
+};
+
+// The array of all of the partial scope stack content in a partial path arena.
+struct sg_partial_scope_stack_cells {
+    const struct sg_partial_scope_stack_cell *cells;
+    size_t count;
+};
+
+// Represents an unknown list of exported scopes.
+typedef uint32_t sg_scope_stack_variable;
+
+// A handle to an element of a partial scope stack.  A zero handle represents a missing partial
+// scope stack.  A UINT32_MAX handle represents an empty partial scope stack.
+typedef uint32_t sg_partial_scope_stack_cell_handle;
+
+// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
+// exported scopes, along with an optional scope stack variable.
+struct sg_partial_scope_stack {
+    // The handle of the first element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if the
+    // list is empty, or 0 if the list is null.
+    sg_partial_scope_stack_cell_handle cells;
+    enum sg_deque_direction direction;
+    // The scope stack variable representing the unknown content of a partial scope stack, or 0 if
+    // the variable is missing.  (If so, this partial scope stack can only match a scope stack
+    // with exactly the list of scopes in `cells`, instead of any scope stack with those scopes as
+    // a prefix.)
+    sg_scope_stack_variable variable;
+};
+
 // The handle of the singleton root node.
 #define SG_ROOT_NODE_HANDLE 1
 
@@ -292,6 +333,12 @@ struct sg_path_arena *sg_path_arena_new(void);
 
 // Frees a path arena, and all of its contents.
 void sg_path_arena_free(struct sg_path_arena *paths);
+
+// Creates a new, initially empty partial path arena.
+struct sg_partial_path_arena *sg_partial_path_arena_new(void);
+
+// Frees a path arena, and all of its contents.
+void sg_partial_path_arena_free(struct sg_partial_path_arena *partials);
 
 // Returns a reference to the array of symbol data in this stack graph.  The resulting array
 // pointer is only valid until the next call to any function that mutates the stack graph.
@@ -444,6 +491,29 @@ void sg_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
                                            size_t starting_node_count,
                                            const sg_node_handle *starting_nodes,
                                            struct sg_path_list *path_list);
+
+// Returns a reference to the array of partial scope stack content in a partial path arena.  The
+// resulting array pointer is only valid until the next call to any function that mutates the
+// partial path arena.
+struct sg_partial_scope_stack_cells sg_partial_path_arena_partial_scope_stack_cells(const struct sg_partial_path_arena *partials);
+
+// Adds new partial scope stacks to the partial path arena.  `count` is the number of partial
+// scope stacks you want to create.  The content of each partial scope stack comes from three
+// arrays.  The `lengths` array must have `count` elements, and provides the number of scopes in
+// each scope stack.  The `scopes` array contains the contents of each of these scope stacks in
+// one contiguous array.  Its length must be the sum of all of the counts in the `lengths` array.
+// The `variables` array must have `count` elements, and provides the optional scope stack
+// variable for each partial scope stack.
+//
+// You must also provide an `out` array, which must also have room for `count` elements.  We will
+// fill this array in with the `sg_partial_scope_stack` instances for each partial scope stack
+// that is created.
+void sg_partial_path_arena_add_partial_scope_stacks(struct sg_partial_path_arena *partials,
+                                                    size_t count,
+                                                    const sg_node_handle *scopes,
+                                                    const size_t *lengths,
+                                                    const sg_scope_stack_variable *variables,
+                                                    struct sg_partial_scope_stack *out);
 
 #ifdef __cplusplus
 } // extern "C"

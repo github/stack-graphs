@@ -156,6 +156,7 @@ where
 // Scope stack variables
 
 /// Represents an unknown list of exported scopes.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ScopeStackVariable(NonZeroU32);
 
@@ -635,6 +636,7 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
 
 /// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
 /// exported scopes, along with an optional scope stack variable.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialScopeStack {
     scopes: Deque<Handle<Node>>,
@@ -1676,7 +1678,7 @@ impl Path {
 /// algorithm or path-stitching algorithm.
 pub struct PartialPaths {
     partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
-    partial_scope_stacks: DequeArena<Handle<Node>>,
+    pub(crate) partial_scope_stacks: DequeArena<Handle<Node>>,
     partial_path_edges: DequeArena<PartialPathEdge>,
 }
 

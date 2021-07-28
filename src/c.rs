@@ -9,6 +9,8 @@
 
 #![allow(non_camel_case_types)]
 
+use std::convert::TryInto;
+
 use libc::c_char;
 
 use crate::arena::Handle;
@@ -17,6 +19,8 @@ use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::partial::PartialPaths;
+use crate::partial::PartialScopeStack;
 use crate::paths::Path;
 use crate::paths::PathEdge;
 use crate::paths::PathEdgeList;
@@ -61,6 +65,25 @@ pub extern "C" fn sg_path_arena_new() -> *mut sg_path_arena {
 #[no_mangle]
 pub extern "C" fn sg_path_arena_free(paths: *mut sg_path_arena) {
     drop(unsafe { Box::from_raw(paths) })
+}
+
+/// Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
+pub struct sg_partial_path_arena {
+    pub inner: PartialPaths,
+}
+
+/// Creates a new, initially empty partial path arena.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_new() -> *mut sg_partial_path_arena {
+    Box::into_raw(Box::new(sg_partial_path_arena {
+        inner: PartialPaths::new(),
+    }))
+}
+
+/// Frees a path arena, and all of its contents.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_free(partials: *mut sg_partial_path_arena) {
+    drop(unsafe { Box::from_raw(partials) })
 }
 
 /// The handle of an empty list.
@@ -821,4 +844,113 @@ pub extern "C" fn sg_path_arena_find_all_complete_paths(
             }
         },
     );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Partial scope stacks
+
+/// Represents an unknown list of exported scopes.
+pub type sg_scope_stack_variable = u32;
+
+/// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
+/// exported scopes, along with an optional scope stack variable.
+#[repr(C)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub struct sg_partial_scope_stack {
+    /// The handle of the first element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if the
+    /// list is empty, or 0 if the list is null.
+    pub cells: sg_partial_scope_stack_cell_handle,
+    pub direction: sg_deque_direction,
+    /// The scope stack variable representing the unknown content of a partial scope stack, or 0 if
+    /// the variable is missing.  (If so, this partial scope stack can only match a scope stack
+    /// with exactly the list of scopes in `cells`, instead of any scope stack with those scopes as
+    /// a prefix.)
+    pub variable: sg_scope_stack_variable,
+}
+
+impl From<PartialScopeStack> for sg_partial_scope_stack {
+    fn from(stack: PartialScopeStack) -> sg_partial_scope_stack {
+        unsafe { std::mem::transmute(stack) }
+    }
+}
+
+/// A handle to an element of a partial scope stack.  A zero handle represents a missing partial
+/// scope stack.  A UINT32_MAX handle represents an empty partial scope stack.
+pub type sg_partial_scope_stack_cell_handle = u32;
+
+/// An element of a partial scope stack.
+#[repr(C)]
+pub struct sg_partial_scope_stack_cell {
+    /// The exported scope at this position in the partial scope stack.
+    pub head: sg_node_handle,
+    /// The handle of the next element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if this
+    /// is the last element.
+    pub tail: sg_path_edge_list_cell_handle,
+    /// The handle of the reversal of this partial scope stack.
+    pub reversed: sg_path_edge_list_cell_handle,
+}
+
+/// The array of all of the partial scope stack content in a partial path arena.
+#[repr(C)]
+pub struct sg_partial_scope_stack_cells {
+    pub cells: *const sg_partial_scope_stack_cell,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of partial scope stack content in a partial path arena.  The
+/// resulting array pointer is only valid until the next call to any function that mutates the
+/// partial path arena.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_partial_scope_stack_cells(
+    partials: *const sg_partial_path_arena,
+) -> sg_partial_scope_stack_cells {
+    let partials = unsafe { &(*partials).inner };
+    sg_partial_scope_stack_cells {
+        cells: partials.partial_scope_stacks.as_ptr() as *const sg_partial_scope_stack_cell,
+        count: partials.partial_scope_stacks.len(),
+    }
+}
+
+/// Adds new partial scope stacks to the partial path arena.  `count` is the number of partial
+/// scope stacks you want to create.  The content of each partial scope stack comes from three
+/// arrays.  The `lengths` array must have `count` elements, and provides the number of scopes in
+/// each scope stack.  The `scopes` array contains the contents of each of these scope stacks in
+/// one contiguous array.  Its length must be the sum of all of the counts in the `lengths` array.
+/// The `variables` array must have `count` elements, and provides the optional scope stack
+/// variable for each partial scope stack.
+///
+/// You must also provide an `out` array, which must also have room for `count` elements.  We will
+/// fill this array in with the `sg_partial_scope_stack` instances for each partial scope stack
+/// that is created.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_add_partial_scope_stacks(
+    partials: *mut sg_partial_path_arena,
+    count: usize,
+    mut scopes: *const sg_node_handle,
+    lengths: *const usize,
+    variables: *const sg_scope_stack_variable,
+    out: *mut sg_partial_scope_stack,
+) {
+    let partials = unsafe { &mut (*partials).inner };
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let variables = unsafe { std::slice::from_raw_parts(variables, count) };
+    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
+    for i in 0..count {
+        let length = lengths[i];
+        let scopes_slice = unsafe { std::slice::from_raw_parts(scopes, length) };
+        let mut stack = if variables[i] == 0 {
+            PartialScopeStack::empty()
+        } else {
+            PartialScopeStack::from_variable(variables[i].try_into().unwrap())
+        };
+        for j in 0..length {
+            let node = scopes_slice[j].into();
+            stack.push_back(partials, node);
+        }
+        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
+        // before we return ensures that it will also be available in forwards order.
+        let _ = stack.iter_scopes(partials);
+        out[i] = stack.into();
+        unsafe { scopes = scopes.add(length) };
+    }
 }
