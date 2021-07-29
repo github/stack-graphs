@@ -55,6 +55,9 @@ enum sg_node_kind {
 // Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
 struct sg_partial_path_arena;
 
+// A list of paths found by the path-finding algorithm.
+struct sg_partial_path_list;
+
 // Manages the state of a collection of paths built up as part of the path-finding algorithm.
 struct sg_path_arena;
 
@@ -354,6 +357,69 @@ struct sg_partial_scope_stack_cells {
     size_t count;
 };
 
+// Details about one of the edges in a partial path
+struct sg_partial_path_edge {
+    struct sg_node_id source_node_id;
+    int32_t precedence;
+};
+
+// A handle to an element of a partial path edge list.  A zero handle represents a missing partial
+// path edge list.  A UINT32_MAX handle represents an empty partial path edge list.
+typedef uint32_t sg_partial_path_edge_list_cell_handle;
+
+// An element of a partial path edge list.
+struct sg_partial_path_edge_list_cell {
+    // The partial path edge at this position in the partial path edge list.
+    struct sg_partial_path_edge head;
+    // The handle of the next element in the partial path edge list, or SG_LIST_EMPTY_HANDLE if
+    // this is the last element.
+    sg_partial_path_edge_list_cell_handle tail;
+    // The handle of the reversal of this list.
+    sg_partial_path_edge_list_cell_handle reversed;
+};
+
+// The array of all of the partial path edge list content in a partial path arena.
+struct sg_partial_path_edge_list_cells {
+    const struct sg_partial_path_edge_list_cell *cells;
+    size_t count;
+};
+
+// The edges in a path keep track of precedence information so that we can correctly handle
+// shadowed definitions.
+struct sg_partial_path_edge_list {
+    // The handle of the first element in the edge list, or SG_LIST_EMPTY_HANDLE if the list is
+    // empty, or 0 if the list is null.
+    sg_partial_path_edge_list_cell_handle cells;
+    enum sg_deque_direction direction;
+    size_t length;
+};
+
+// A portion of a name-binding path.
+//
+// Partial paths can be computed _incrementally_, in which case all of the edges in the partial
+// path belong to a single file.  At query time, we can efficiently concatenate partial paths to
+// yield a name-binding path.
+//
+// Paths describe the contents of the symbol stack and scope stack at the end of the path.
+// Partial paths, on the other hand, have _preconditions_ and _postconditions_ for each stack.
+// The precondition describes what the stack must look like for us to be able to concatenate this
+// partial path onto the end of a path.  The postcondition describes what the resulting stack
+// looks like after doing so.
+//
+// The preconditions can contain _scope stack variables_, which describe parts of the scope stack
+// (or parts of a scope symbol's attached scope list) whose contents we don't care about.  The
+// postconditions can _also_ refer to those variables, and describe how those variable parts of
+// the input scope stacks are carried through unmodified into the resulting scope stack.
+struct sg_partial_path {
+    sg_node_handle start_node;
+    sg_node_handle end_node;
+    struct sg_partial_symbol_stack symbol_stack_precondition;
+    struct sg_partial_symbol_stack symbol_stack_postcondition;
+    struct sg_partial_scope_stack scope_stack_precondition;
+    struct sg_partial_scope_stack scope_stack_postcondition;
+    struct sg_partial_path_edge_list edges;
+};
+
 // The handle of the singleton root node.
 #define SG_ROOT_NODE_HANDLE 1
 
@@ -577,6 +643,49 @@ void sg_partial_path_arena_add_partial_scope_stacks(struct sg_partial_path_arena
                                                     const size_t *lengths,
                                                     const sg_scope_stack_variable *variables,
                                                     struct sg_partial_scope_stack *out);
+
+// Returns a reference to the array of partial path edge list content in a partial path arena.
+// The resulting array pointer is only valid until the next call to any function that mutates the
+// partial path arena.
+struct sg_partial_path_edge_list_cells sg_partial_path_arena_partial_path_edge_list_cells(const struct sg_partial_path_arena *partials);
+
+// Adds new partial path edge lists to the partial path arena.  `count` is the number of partial
+// path edge lists you want to create.  The content of each partial path edge list comes from two
+// arrays.  The `lengths` array must have `count` elements, and provides the number of edges in
+// each partial path edge list.  The `edges` array contains the contents of each of these partial
+// path edge lists in one contiguous array.  Its length must be the sum of all of the counts in
+// the `lengths` array.
+//
+// You must also provide an `out` array, which must also have room for `count` elements.  We will
+// fill this array in with the `sg_partial_path_edge_list` instances for each partial path edge
+// list that is created.
+void sg_partial_path_arena_add_partial_path_edge_lists(struct sg_partial_path_arena *partials,
+                                                       size_t count,
+                                                       const struct sg_partial_path_edge *edges,
+                                                       const size_t *lengths,
+                                                       struct sg_partial_path_edge_list *out);
+
+// Creates a new, empty sg_partial_path_list.
+struct sg_partial_path_list *sg_partial_path_list_new(void);
+
+void sg_partial_path_list_free(struct sg_partial_path_list *partial_path_list);
+
+size_t sg_partial_path_list_count(const struct sg_partial_path_list *partial_path_list);
+
+const struct sg_partial_path *sg_partial_path_list_paths(const struct sg_partial_path_list *partial_path_list);
+
+// Finds all partial paths in a file that are _productive_ and _as complete as possible_, placing
+// the result into the `partial_path_list` output parameter.  You must free the path list when you
+// are done with it by calling `sg_partial_path_list_done`.
+//
+// This function will not return until all reachable paths have been processed, so `graph` must
+// already contain a complete stack graph.  If you have a very large stack graph stored in some
+// other storage system, and want more control over lazily loading only the necessary pieces, then
+// you should use TODO.
+void sg_partial_path_arena_find_partial_paths_in_file(const struct sg_stack_graph *graph,
+                                                      struct sg_partial_path_arena *partials,
+                                                      sg_file_handle file,
+                                                      struct sg_partial_path_list *partial_path_list);
 
 #ifdef __cplusplus
 } // extern "C"

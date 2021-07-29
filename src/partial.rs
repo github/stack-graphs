@@ -1164,6 +1164,7 @@ impl DisplayWithPartialPaths for PartialPathEdgeList {
 /// (or parts of a scope symbol's attached scope list) whose contents we don't care about.  The
 /// postconditions can _also_ refer to those variables, and describe how those variable parts of
 /// the input scope stacks are carried through unmodified into the resulting scope stack.
+#[repr(C)]
 #[derive(Clone)]
 pub struct PartialPath {
     pub start_node: Handle<Node>,

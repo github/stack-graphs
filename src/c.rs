@@ -19,6 +19,7 @@ use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::partial::PartialPath;
 use crate::partial::PartialPathEdge;
 use crate::partial::PartialPathEdgeList;
 use crate::partial::PartialPaths;
@@ -207,6 +208,12 @@ pub struct sg_file {
 /// `struct sg_file` instances with the same filename.  That means that you can compare file
 /// handles using simple equality, without having to dereference them.
 pub type sg_file_handle = u32;
+
+impl Into<Handle<File>> for sg_file_handle {
+    fn into(self) -> Handle<File> {
+        unsafe { std::mem::transmute(self) }
+    }
+}
 
 /// An array of all of the files in a stack graph.  File handles are indices into this array.
 /// There will never be a valid file at index 0; a handle with the value 0 represents a missing
@@ -1180,4 +1187,97 @@ pub extern "C" fn sg_partial_path_arena_add_partial_path_edge_lists(
         out[i] = list.into();
         unsafe { edges = edges.add(length) };
     }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Partial paths
+
+/// A portion of a name-binding path.
+///
+/// Partial paths can be computed _incrementally_, in which case all of the edges in the partial
+/// path belong to a single file.  At query time, we can efficiently concatenate partial paths to
+/// yield a name-binding path.
+///
+/// Paths describe the contents of the symbol stack and scope stack at the end of the path.
+/// Partial paths, on the other hand, have _preconditions_ and _postconditions_ for each stack.
+/// The precondition describes what the stack must look like for us to be able to concatenate this
+/// partial path onto the end of a path.  The postcondition describes what the resulting stack
+/// looks like after doing so.
+///
+/// The preconditions can contain _scope stack variables_, which describe parts of the scope stack
+/// (or parts of a scope symbol's attached scope list) whose contents we don't care about.  The
+/// postconditions can _also_ refer to those variables, and describe how those variable parts of
+/// the input scope stacks are carried through unmodified into the resulting scope stack.
+#[repr(C)]
+pub struct sg_partial_path {
+    pub start_node: sg_node_handle,
+    pub end_node: sg_node_handle,
+    pub symbol_stack_precondition: sg_partial_symbol_stack,
+    pub symbol_stack_postcondition: sg_partial_symbol_stack,
+    pub scope_stack_precondition: sg_partial_scope_stack,
+    pub scope_stack_postcondition: sg_partial_scope_stack,
+    pub edges: sg_partial_path_edge_list,
+}
+
+/// A list of paths found by the path-finding algorithm.
+#[derive(Default)]
+pub struct sg_partial_path_list {
+    partial_paths: Vec<PartialPath>,
+}
+
+/// Creates a new, empty sg_partial_path_list.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_list_new() -> *mut sg_partial_path_list {
+    Box::into_raw(Box::new(sg_partial_path_list::default()))
+}
+
+#[no_mangle]
+pub extern "C" fn sg_partial_path_list_free(partial_path_list: *mut sg_partial_path_list) {
+    drop(unsafe { Box::from_raw(partial_path_list) });
+}
+
+#[no_mangle]
+pub extern "C" fn sg_partial_path_list_count(
+    partial_path_list: *const sg_partial_path_list,
+) -> usize {
+    let partial_path_list = unsafe { &*partial_path_list };
+    partial_path_list.partial_paths.len()
+}
+
+#[no_mangle]
+pub extern "C" fn sg_partial_path_list_paths(
+    partial_path_list: *const sg_partial_path_list,
+) -> *const sg_partial_path {
+    let partial_path_list = unsafe { &*partial_path_list };
+    partial_path_list.partial_paths.as_ptr() as *const _
+}
+
+/// Finds all partial paths in a file that are _productive_ and _as complete as possible_, placing
+/// the result into the `partial_path_list` output parameter.  You must free the path list when you
+/// are done with it by calling `sg_partial_path_list_done`.
+///
+/// This function will not return until all reachable paths have been processed, so `graph` must
+/// already contain a complete stack graph.  If you have a very large stack graph stored in some
+/// other storage system, and want more control over lazily loading only the necessary pieces, then
+/// you should use TODO.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
+    graph: *const sg_stack_graph,
+    partials: *mut sg_partial_path_arena,
+    file: sg_file_handle,
+    partial_path_list: *mut sg_partial_path_list,
+) {
+    let graph = unsafe { &(*graph).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    let file = file.into();
+    let partial_path_list = unsafe { &mut *partial_path_list };
+    partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
+        if !path.is_complete_as_possible(graph) {
+            return;
+        }
+        if !path.is_productive(partials) {
+            return;
+        }
+        partial_path_list.partial_paths.push(path);
+    });
 }
