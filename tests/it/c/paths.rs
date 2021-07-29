@@ -36,9 +36,7 @@ use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::sg_symbol_stack;
 use stack_graphs::c::sg_symbol_stack_cells;
-use stack_graphs::c::SG_PATH_EDGE_LIST_EMPTY_HANDLE;
-use stack_graphs::c::SG_SCOPE_STACK_EMPTY_HANDLE;
-use stack_graphs::c::SG_SYMBOL_STACK_EMPTY_HANDLE;
+use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
     let strings = [filename.as_bytes().as_ptr() as *const c_char];
@@ -107,7 +105,7 @@ fn symbol_stack_contains(
     let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = stack.cells;
     for node in expected {
-        if current == SG_SYMBOL_STACK_EMPTY_HANDLE {
+        if current == SG_LIST_EMPTY_HANDLE {
             return false;
         }
         let cell = &cells[current as usize];
@@ -116,7 +114,7 @@ fn symbol_stack_contains(
         }
         current = cell.tail;
     }
-    current == SG_SYMBOL_STACK_EMPTY_HANDLE
+    current == SG_LIST_EMPTY_HANDLE
 }
 
 #[test]
@@ -186,7 +184,7 @@ fn scope_stack_contains(
     let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = stack.cells;
     for node in expected {
-        if current == SG_SCOPE_STACK_EMPTY_HANDLE {
+        if current == SG_LIST_EMPTY_HANDLE {
             return false;
         }
         let cell = &cells[current as usize];
@@ -195,7 +193,7 @@ fn scope_stack_contains(
         }
         current = cell.tail;
     }
-    current == SG_SCOPE_STACK_EMPTY_HANDLE
+    current == SG_LIST_EMPTY_HANDLE
 }
 
 #[test]
@@ -260,7 +258,7 @@ fn path_edge_list_contains(
         Either::Right(expected.iter().rev())
     };
     for node in expected {
-        if current == SG_PATH_EDGE_LIST_EMPTY_HANDLE {
+        if current == SG_LIST_EMPTY_HANDLE {
             return false;
         }
         let cell = &cells[current as usize];
@@ -269,7 +267,7 @@ fn path_edge_list_contains(
         }
         current = cell.tail;
     }
-    current == SG_PATH_EDGE_LIST_EMPTY_HANDLE
+    current == SG_LIST_EMPTY_HANDLE
 }
 
 fn path_edge_list_available_in_both_directions(
@@ -278,7 +276,7 @@ fn path_edge_list_available_in_both_directions(
 ) -> bool {
     let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let head = list.cells;
-    if head == SG_PATH_EDGE_LIST_EMPTY_HANDLE {
+    if head == SG_LIST_EMPTY_HANDLE {
         return true;
     }
     let cell = &cells[head as usize];
