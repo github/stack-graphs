@@ -63,6 +63,9 @@ pub extern "C" fn sg_path_arena_free(paths: *mut sg_path_arena) {
     drop(unsafe { Box::from_raw(paths) })
 }
 
+/// The handle of an empty list.
+pub const SG_LIST_EMPTY_HANDLE: u32 = 0xffffffff;
+
 /// Describes in which direction the content of a deque is stored in memory.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -477,8 +480,8 @@ impl Into<ScopedSymbol> for sg_scoped_symbol {
 #[repr(C)]
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct sg_symbol_stack {
-    /// The handle of the first element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if the
-    /// list is empty, or 0 if the list is null.
+    /// The handle of the first element in the symbol stack, or SG_LIST_EMPTY_HANDLE if the list is
+    /// empty, or 0 if the list is null.
     pub cells: sg_symbol_stack_cell_handle,
     pub length: usize,
 }
@@ -493,16 +496,13 @@ impl From<SymbolStack> for sg_symbol_stack {
 /// UINT32_MAX handle represents an empty symbol stack.
 pub type sg_symbol_stack_cell_handle = u32;
 
-/// The handle of the empty symbol stack.
-pub const SG_SYMBOL_STACK_EMPTY_HANDLE: sg_symbol_stack_cell_handle = 0xffffffff;
-
 /// An element of a symbol stack.
 #[repr(C)]
 pub struct sg_symbol_stack_cell {
     /// The scoped symbol at this position in the symbol stack.
     pub head: sg_scoped_symbol,
-    /// The handle of the next element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if this
-    /// is the last element.
+    /// The handle of the next element in the symbol stack, or SG_LIST_EMPTY_HANDLE if this is the
+    /// last element.
     pub tail: sg_symbol_stack_cell_handle,
 }
 
@@ -565,8 +565,8 @@ pub extern "C" fn sg_path_arena_add_symbol_stacks(
 #[repr(C)]
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct sg_scope_stack {
-    /// The handle of the first element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if the
-    /// list is empty, or 0 if the list is null.
+    /// The handle of the first element in the scope stack, or SG_LIST_EMPTY_HANDLE if the list is
+    /// empty, or 0 if the list is null.
     pub cells: sg_scope_stack_cell_handle,
 }
 
@@ -580,16 +580,13 @@ impl From<ScopeStack> for sg_scope_stack {
 /// UINT32_MAX handle represents an empty scope stack.
 pub type sg_scope_stack_cell_handle = u32;
 
-/// The handle of the empty scope stack.
-pub const SG_SCOPE_STACK_EMPTY_HANDLE: sg_scope_stack_cell_handle = 0xffffffff;
-
 /// An element of a scope stack.
 #[repr(C)]
 pub struct sg_scope_stack_cell {
     /// The exported scope at this position in the scope stack.
     pub head: sg_node_handle,
-    /// The handle of the next element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if this
-    /// is the last element.
+    /// The handle of the next element in the scope stack, or SG_LIST_EMPTY_HANDLE if this is the
+    /// last element.
     pub tail: sg_scope_stack_cell_handle,
 }
 
@@ -667,8 +664,8 @@ impl Into<PathEdge> for sg_path_edge {
 #[repr(C)]
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct sg_path_edge_list {
-    /// The handle of the first element in the edge list, or SG_PATH_EDGE_LIST_EMPTY_HANDLE if the
-    /// list is empty, or 0 if the list is null.
+    /// The handle of the first element in the edge list, or SG_LIST_EMPTY_HANDLE if the list is
+    /// empty, or 0 if the list is null.
     pub cells: sg_path_edge_list_cell_handle,
     pub direction: sg_deque_direction,
     pub length: usize,
@@ -684,16 +681,13 @@ impl From<PathEdgeList> for sg_path_edge_list {
 /// A UINT32_MAX handle represents an empty path edge list.
 pub type sg_path_edge_list_cell_handle = u32;
 
-/// The handle of the empty path edge list.
-pub const SG_PATH_EDGE_LIST_EMPTY_HANDLE: sg_path_edge_list_cell_handle = 0xffffffff;
-
 /// An element of a path edge list.
 #[repr(C)]
 pub struct sg_path_edge_list_cell {
     /// The path edge at this position in the path edge list.
     pub head: sg_path_edge,
-    /// The handle of the next element in the path edge list, or SG_PATH_EDGE_LIST_EMPTY_HANDLE if
-    /// this is the last element.
+    /// The handle of the next element in the path edge list, or SG_LIST_EMPTY_HANDLE if this is
+    /// the last element.
     pub tail: sg_path_edge_list_cell_handle,
     /// The handle of the reversal of this list.
     pub reversed: sg_path_edge_list_cell_handle,

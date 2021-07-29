@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// The handle of an empty list.
+#define SG_LIST_EMPTY_HANDLE 4294967295
+
 // The local_id of the singleton root node.
 #define SG_ROOT_NODE_ID 0
 
@@ -167,8 +170,8 @@ typedef uint32_t sg_scope_stack_cell_handle;
 
 // A sequence of exported scopes, used to pass name-binding context around a stack graph.
 struct sg_scope_stack {
-    // The handle of the first element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if the
-    // list is empty, or 0 if the list is null.
+    // The handle of the first element in the scope stack, or SG_LIST_EMPTY_HANDLE if the list is
+    // empty, or 0 if the list is null.
     sg_scope_stack_cell_handle cells;
 };
 
@@ -186,8 +189,8 @@ typedef uint32_t sg_symbol_stack_cell_handle;
 struct sg_symbol_stack_cell {
     // The scoped symbol at this position in the symbol stack.
     struct sg_scoped_symbol head;
-    // The handle of the next element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if this
-    // is the last element.
+    // The handle of the next element in the symbol stack, or SG_LIST_EMPTY_HANDLE if this is the
+    // last element.
     sg_symbol_stack_cell_handle tail;
 };
 
@@ -200,8 +203,8 @@ struct sg_symbol_stack_cells {
 // A sequence of symbols that describe what we are currently looking for while in the middle of
 // the path-finding algorithm.
 struct sg_symbol_stack {
-    // The handle of the first element in the symbol stack, or SG_SYMBOL_STACK_EMPTY_HANDLE if the
-    // list is empty, or 0 if the list is null.
+    // The handle of the first element in the symbol stack, or SG_LIST_EMPTY_HANDLE if the list is
+    // empty, or 0 if the list is null.
     sg_symbol_stack_cell_handle cells;
     size_t length;
 };
@@ -210,8 +213,8 @@ struct sg_symbol_stack {
 struct sg_scope_stack_cell {
     // The exported scope at this position in the scope stack.
     sg_node_handle head;
-    // The handle of the next element in the scope stack, or SG_SCOPE_STACK_EMPTY_HANDLE if this
-    // is the last element.
+    // The handle of the next element in the scope stack, or SG_LIST_EMPTY_HANDLE if this is the
+    // last element.
     sg_scope_stack_cell_handle tail;
 };
 
@@ -235,8 +238,8 @@ typedef uint32_t sg_path_edge_list_cell_handle;
 struct sg_path_edge_list_cell {
     // The path edge at this position in the path edge list.
     struct sg_path_edge head;
-    // The handle of the next element in the path edge list, or SG_PATH_EDGE_LIST_EMPTY_HANDLE if
-    // this is the last element.
+    // The handle of the next element in the path edge list, or SG_LIST_EMPTY_HANDLE if this is
+    // the last element.
     sg_path_edge_list_cell_handle tail;
     // The handle of the reversal of this list.
     sg_path_edge_list_cell_handle reversed;
@@ -251,8 +254,8 @@ struct sg_path_edge_list_cells {
 // The edges in a path keep track of precedence information so that we can correctly handle
 // shadowed definitions.
 struct sg_path_edge_list {
-    // The handle of the first element in the edge list, or SG_PATH_EDGE_LIST_EMPTY_HANDLE if the
-    // list is empty, or 0 if the list is null.
+    // The handle of the first element in the edge list, or SG_LIST_EMPTY_HANDLE if the list is
+    // empty, or 0 if the list is null.
     sg_path_edge_list_cell_handle cells;
     enum sg_deque_direction direction;
     size_t length;
@@ -273,15 +276,6 @@ struct sg_path {
 
 // The handle of the singleton "jump to scope" node.
 #define SG_JUMP_TO_NODE_HANDLE 2
-
-// The handle of the empty symbol stack.
-#define SG_SYMBOL_STACK_EMPTY_HANDLE 4294967295
-
-// The handle of the empty scope stack.
-#define SG_SCOPE_STACK_EMPTY_HANDLE 4294967295
-
-// The handle of the empty path edge list.
-#define SG_PATH_EDGE_LIST_EMPTY_HANDLE 4294967295
 
 #ifdef __cplusplus
 extern "C" {
