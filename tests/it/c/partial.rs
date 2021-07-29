@@ -13,12 +13,17 @@ use stack_graphs::c::sg_node;
 use stack_graphs::c::sg_node_handle;
 use stack_graphs::c::sg_node_id;
 use stack_graphs::c::sg_node_kind;
+use stack_graphs::c::sg_partial_path_arena_add_partial_path_edge_lists;
 use stack_graphs::c::sg_partial_path_arena_add_partial_scope_stacks;
 use stack_graphs::c::sg_partial_path_arena_add_partial_symbol_stacks;
 use stack_graphs::c::sg_partial_path_arena_free;
 use stack_graphs::c::sg_partial_path_arena_new;
+use stack_graphs::c::sg_partial_path_arena_partial_path_edge_list_cells;
 use stack_graphs::c::sg_partial_path_arena_partial_scope_stack_cells;
 use stack_graphs::c::sg_partial_path_arena_partial_symbol_stack_cells;
+use stack_graphs::c::sg_partial_path_edge;
+use stack_graphs::c::sg_partial_path_edge_list;
+use stack_graphs::c::sg_partial_path_edge_list_cells;
 use stack_graphs::c::sg_partial_scope_stack;
 use stack_graphs::c::sg_partial_scope_stack_cells;
 use stack_graphs::c::sg_partial_scoped_symbol;
@@ -272,6 +277,104 @@ fn can_create_partial_scope_stacks() {
     ));
     assert!(partial_scope_stack_available_in_both_directions(
         &cells, &stacks[2]
+    ));
+
+    sg_partial_path_arena_free(partials);
+    sg_stack_graph_free(graph);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Partial path edge lists
+
+fn partial_path_edge(file: sg_file_handle, local_id: u32, precedence: i32) -> sg_partial_path_edge {
+    let source_node_id = sg_node_id { file, local_id };
+    sg_partial_path_edge {
+        source_node_id,
+        precedence,
+    }
+}
+
+fn partial_path_edge_list_contains(
+    cells: &sg_partial_path_edge_list_cells,
+    list: &sg_partial_path_edge_list,
+    expected: &[sg_partial_path_edge],
+) -> bool {
+    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
+    let mut current = list.cells;
+    let expected = if list.direction == sg_deque_direction::SG_DEQUE_FORWARDS {
+        Either::Left(expected.iter())
+    } else {
+        Either::Right(expected.iter().rev())
+    };
+    for node in expected {
+        if current == SG_LIST_EMPTY_HANDLE {
+            return false;
+        }
+        let cell = &cells[current as usize];
+        if cell.head != *node {
+            return false;
+        }
+        current = cell.tail;
+    }
+    current == SG_LIST_EMPTY_HANDLE
+}
+
+fn partial_path_edge_list_available_in_both_directions(
+    cells: &sg_partial_path_edge_list_cells,
+    list: &sg_partial_path_edge_list,
+) -> bool {
+    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
+    let head = list.cells;
+    if head == SG_LIST_EMPTY_HANDLE {
+        return true;
+    }
+    let cell = &cells[head as usize];
+    cell.reversed != 0
+}
+
+#[test]
+fn can_create_partial_path_edge_lists() {
+    let graph = sg_stack_graph_new();
+    let partials = sg_partial_path_arena_new();
+    let file = add_file(graph, "test.py");
+
+    // Build up the arrays of edge list content and add the lists to the path arena.
+    let edges0 = [];
+    let edges1 = [partial_path_edge(file, 25, 25)];
+    let edges2 = [
+        partial_path_edge(file, 1, 11),
+        partial_path_edge(file, 2, 12),
+        partial_path_edge(file, 3, 13),
+    ];
+    let lengths = [edges0.len(), edges1.len(), edges2.len()];
+    let mut edgeses = Vec::new();
+    edgeses.extend_from_slice(&edges0);
+    edgeses.extend_from_slice(&edges1);
+    edgeses.extend_from_slice(&edges2);
+    let mut lists = [sg_partial_path_edge_list::default(); 3];
+    sg_partial_path_arena_add_partial_path_edge_lists(
+        partials,
+        lengths.len(),
+        edgeses.as_slice().as_ptr(),
+        lengths.as_ptr(),
+        lists.as_mut_ptr(),
+    );
+
+    // Then verify that we can dereference all of the new lists.
+    let cells = sg_partial_path_arena_partial_path_edge_list_cells(partials);
+    assert!(partial_path_edge_list_contains(&cells, &lists[0], &edges0));
+    assert!(partial_path_edge_list_contains(&cells, &lists[1], &edges1));
+    assert!(partial_path_edge_list_contains(&cells, &lists[2], &edges2));
+
+    // Verify that each list is available in both directions.
+    assert!(partial_path_edge_list_available_in_both_directions(
+        &cells, &lists[0]
+    ));
+    assert!(partial_path_edge_list_available_in_both_directions(
+        &cells, &lists[1]
+    ));
+    assert!(partial_path_edge_list_available_in_both_directions(
+        &cells, &lists[2]
     ));
 
     sg_partial_path_arena_free(partials);

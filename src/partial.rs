@@ -932,6 +932,7 @@ impl PartialScopeStackBindings {
 //-------------------------------------------------------------------------------------------------
 // Edge lists
 
+#[repr(C)]
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PartialPathEdge {
     pub source_node_id: NodeID,
@@ -983,6 +984,7 @@ impl DisplayWithPartialPaths for PartialPathEdge {
 
 /// The edges in a path keep track of precedence information so that we can correctly handle
 /// shadowed definitions.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialPathEdgeList {
     edges: Deque<PartialPathEdge>,
@@ -1681,7 +1683,7 @@ impl Path {
 pub struct PartialPaths {
     pub(crate) partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
     pub(crate) partial_scope_stacks: DequeArena<Handle<Node>>,
-    partial_path_edges: DequeArena<PartialPathEdge>,
+    pub(crate) partial_path_edges: DequeArena<PartialPathEdge>,
 }
 
 impl PartialPaths {

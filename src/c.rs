@@ -19,6 +19,8 @@ use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::partial::PartialPathEdge;
+use crate::partial::PartialPathEdgeList;
 use crate::partial::PartialPaths;
 use crate::partial::PartialScopeStack;
 use crate::partial::PartialScopedSymbol;
@@ -1068,5 +1070,114 @@ pub extern "C" fn sg_partial_path_arena_add_partial_scope_stacks(
         let _ = stack.iter_scopes(partials);
         out[i] = stack.into();
         unsafe { scopes = scopes.add(length) };
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Partial edge lists
+
+/// Details about one of the edges in a partial path
+#[repr(C)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct sg_partial_path_edge {
+    pub source_node_id: sg_node_id,
+    pub precedence: i32,
+}
+
+impl Into<PartialPathEdge> for sg_partial_path_edge {
+    fn into(self) -> PartialPathEdge {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+/// The edges in a path keep track of precedence information so that we can correctly handle
+/// shadowed definitions.
+#[repr(C)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub struct sg_partial_path_edge_list {
+    /// The handle of the first element in the edge list, or SG_LIST_EMPTY_HANDLE if the list is
+    /// empty, or 0 if the list is null.
+    pub cells: sg_partial_path_edge_list_cell_handle,
+    pub direction: sg_deque_direction,
+    pub length: usize,
+}
+
+impl From<PartialPathEdgeList> for sg_partial_path_edge_list {
+    fn from(edges: PartialPathEdgeList) -> sg_partial_path_edge_list {
+        unsafe { std::mem::transmute(edges) }
+    }
+}
+
+/// A handle to an element of a partial path edge list.  A zero handle represents a missing partial
+/// path edge list.  A UINT32_MAX handle represents an empty partial path edge list.
+pub type sg_partial_path_edge_list_cell_handle = u32;
+
+/// An element of a partial path edge list.
+#[repr(C)]
+pub struct sg_partial_path_edge_list_cell {
+    /// The partial path edge at this position in the partial path edge list.
+    pub head: sg_partial_path_edge,
+    /// The handle of the next element in the partial path edge list, or SG_LIST_EMPTY_HANDLE if
+    /// this is the last element.
+    pub tail: sg_partial_path_edge_list_cell_handle,
+    /// The handle of the reversal of this list.
+    pub reversed: sg_partial_path_edge_list_cell_handle,
+}
+
+/// The array of all of the partial path edge list content in a partial path arena.
+#[repr(C)]
+pub struct sg_partial_path_edge_list_cells {
+    pub cells: *const sg_partial_path_edge_list_cell,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of partial path edge list content in a partial path arena.
+/// The resulting array pointer is only valid until the next call to any function that mutates the
+/// partial path arena.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_partial_path_edge_list_cells(
+    partials: *const sg_partial_path_arena,
+) -> sg_partial_path_edge_list_cells {
+    let partials = unsafe { &(*partials).inner };
+    sg_partial_path_edge_list_cells {
+        cells: partials.partial_path_edges.as_ptr() as *const sg_partial_path_edge_list_cell,
+        count: partials.partial_path_edges.len(),
+    }
+}
+
+/// Adds new partial path edge lists to the partial path arena.  `count` is the number of partial
+/// path edge lists you want to create.  The content of each partial path edge list comes from two
+/// arrays.  The `lengths` array must have `count` elements, and provides the number of edges in
+/// each partial path edge list.  The `edges` array contains the contents of each of these partial
+/// path edge lists in one contiguous array.  Its length must be the sum of all of the counts in
+/// the `lengths` array.
+///
+/// You must also provide an `out` array, which must also have room for `count` elements.  We will
+/// fill this array in with the `sg_partial_path_edge_list` instances for each partial path edge
+/// list that is created.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_add_partial_path_edge_lists(
+    partials: *mut sg_partial_path_arena,
+    count: usize,
+    mut edges: *const sg_partial_path_edge,
+    lengths: *const usize,
+    out: *mut sg_partial_path_edge_list,
+) {
+    let partials = unsafe { &mut (*partials).inner };
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
+    for i in 0..count {
+        let length = lengths[i];
+        let edges_slice = unsafe { std::slice::from_raw_parts(edges, length) };
+        let mut list = PartialPathEdgeList::empty();
+        for j in 0..length {
+            let edge: PartialPathEdge = edges_slice[j].into();
+            list.push_back(partials, edge);
+        }
+        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
+        // before we return ensures that it will also be available in forwards order.
+        let _ = list.iter(partials);
+        out[i] = list.into();
+        unsafe { edges = edges.add(length) };
     }
 }
