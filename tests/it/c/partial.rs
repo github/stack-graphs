@@ -14,16 +14,23 @@ use stack_graphs::c::sg_node_handle;
 use stack_graphs::c::sg_node_id;
 use stack_graphs::c::sg_node_kind;
 use stack_graphs::c::sg_partial_path_arena_add_partial_scope_stacks;
+use stack_graphs::c::sg_partial_path_arena_add_partial_symbol_stacks;
 use stack_graphs::c::sg_partial_path_arena_free;
 use stack_graphs::c::sg_partial_path_arena_new;
 use stack_graphs::c::sg_partial_path_arena_partial_scope_stack_cells;
+use stack_graphs::c::sg_partial_path_arena_partial_symbol_stack_cells;
 use stack_graphs::c::sg_partial_scope_stack;
 use stack_graphs::c::sg_partial_scope_stack_cells;
+use stack_graphs::c::sg_partial_scoped_symbol;
+use stack_graphs::c::sg_partial_symbol_stack;
+use stack_graphs::c::sg_partial_symbol_stack_cells;
 use stack_graphs::c::sg_stack_graph;
 use stack_graphs::c::sg_stack_graph_add_files;
 use stack_graphs::c::sg_stack_graph_add_nodes;
+use stack_graphs::c::sg_stack_graph_add_symbols;
 use stack_graphs::c::sg_stack_graph_free;
 use stack_graphs::c::sg_stack_graph_new;
+use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
@@ -31,6 +38,21 @@ fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
     let lengths = [filename.len()];
     let mut handles: [sg_file_handle; 1] = [0; 1];
     sg_stack_graph_add_files(
+        graph,
+        1,
+        strings.as_ptr(),
+        lengths.as_ptr(),
+        handles.as_mut_ptr(),
+    );
+    assert!(handles[0] != 0);
+    handles[0]
+}
+
+fn add_symbol(graph: *mut sg_stack_graph, value: &str) -> sg_symbol_handle {
+    let strings = [value.as_bytes().as_ptr() as *const c_char];
+    let lengths = [value.len()];
+    let mut handles: [sg_symbol_handle; 1] = [0; 1];
+    sg_stack_graph_add_symbols(
         graph,
         1,
         strings.as_ptr(),
@@ -57,6 +79,107 @@ fn add_exported_scope(
     let mut handles: [sg_node_handle; 1] = [0; 1];
     sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     handles[0]
+}
+
+//-------------------------------------------------------------------------------------------------
+// Partial symbol stacks
+
+fn empty_partial_scope_stack() -> sg_partial_scope_stack {
+    sg_partial_scope_stack {
+        cells: 0,
+        direction: sg_deque_direction::SG_DEQUE_FORWARDS,
+        variable: 0,
+    }
+}
+
+fn partial_scoped_symbol(
+    symbol: sg_symbol_handle,
+    scopes: sg_partial_scope_stack,
+) -> sg_partial_scoped_symbol {
+    sg_partial_scoped_symbol { symbol, scopes }
+}
+
+fn partial_symbol_stack_contains(
+    cells: &sg_partial_symbol_stack_cells,
+    stack: &sg_partial_symbol_stack,
+    expected: &[sg_partial_scoped_symbol],
+) -> bool {
+    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
+    let mut current = stack.cells;
+    let expected = if stack.direction == sg_deque_direction::SG_DEQUE_FORWARDS {
+        Either::Left(expected.iter())
+    } else {
+        Either::Right(expected.iter().rev())
+    };
+    for node in expected {
+        if current == SG_LIST_EMPTY_HANDLE {
+            return false;
+        }
+        let cell = &cells[current as usize];
+        if cell.head != *node {
+            return false;
+        }
+        current = cell.tail;
+    }
+    current == SG_LIST_EMPTY_HANDLE
+}
+
+#[test]
+fn can_create_partial_symbol_stacks() {
+    let graph = sg_stack_graph_new();
+    let partials = sg_partial_path_arena_new();
+
+    // We need a lot of other crap to be able to create any symbol stacks...
+    let file = add_file(graph, "test.py");
+    let a = add_symbol(graph, "a");
+    let b = add_symbol(graph, "b");
+    let c = add_symbol(graph, "c");
+    let node1 = add_exported_scope(graph, file, 1);
+    let node2 = add_exported_scope(graph, file, 2);
+    let scopes = [node1, node2];
+    let lengths = [scopes.len()];
+    let variables = [0];
+    let mut partial_scope_stacks = [sg_partial_scope_stack::default(); 1];
+    sg_partial_path_arena_add_partial_scope_stacks(
+        partials,
+        lengths.len(),
+        scopes.as_ptr(),
+        lengths.as_ptr(),
+        variables.as_ptr(),
+        partial_scope_stacks.as_mut_ptr(),
+    );
+    let partial_scope_stack = partial_scope_stacks[0];
+
+    // Build up the arrays of stack content and add the stacks to the path arena.
+    let symbols0 = [];
+    let symbols1 = [partial_scoped_symbol(a, empty_partial_scope_stack())];
+    let symbols2 = [
+        partial_scoped_symbol(b, partial_scope_stack),
+        partial_scoped_symbol(c, empty_partial_scope_stack()),
+        partial_scoped_symbol(b, empty_partial_scope_stack()),
+    ];
+    let lengths = [symbols0.len(), symbols1.len(), symbols2.len()];
+    let mut symbolses = Vec::new();
+    symbolses.extend_from_slice(&symbols0);
+    symbolses.extend_from_slice(&symbols1);
+    symbolses.extend_from_slice(&symbols2);
+    let mut stacks = [sg_partial_symbol_stack::default(); 3];
+    sg_partial_path_arena_add_partial_symbol_stacks(
+        partials,
+        lengths.len(),
+        symbolses.as_slice().as_ptr(),
+        lengths.as_ptr(),
+        stacks.as_mut_ptr(),
+    );
+
+    // Then verify that we can dereference all of the new stacks.
+    let cells = sg_partial_path_arena_partial_symbol_stack_cells(partials);
+    assert!(partial_symbol_stack_contains(&cells, &stacks[0], &symbols0));
+    assert!(partial_symbol_stack_contains(&cells, &stacks[1], &symbols1));
+    assert!(partial_symbol_stack_contains(&cells, &stacks[2], &symbols2));
+
+    sg_partial_path_arena_free(partials);
+    sg_stack_graph_free(graph);
 }
 
 //-------------------------------------------------------------------------------------------------

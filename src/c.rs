@@ -21,6 +21,8 @@ use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::partial::PartialPaths;
 use crate::partial::PartialScopeStack;
+use crate::partial::PartialScopedSymbol;
+use crate::partial::PartialSymbolStack;
 use crate::paths::Path;
 use crate::paths::PathEdge;
 use crate::paths::PathEdgeList;
@@ -844,6 +846,120 @@ pub extern "C" fn sg_path_arena_find_all_complete_paths(
             }
         },
     );
+}
+
+//-------------------------------------------------------------------------------------------------
+// Partial symbol stacks
+
+/// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
+#[repr(C)]
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct sg_partial_scoped_symbol {
+    pub symbol: sg_symbol_handle,
+    pub scopes: sg_partial_scope_stack,
+}
+
+impl Into<PartialScopedSymbol> for sg_partial_scoped_symbol {
+    fn into(self) -> PartialScopedSymbol {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+/// A pattern that might match against a symbol stack.  Consists of a (possibly empty) list of
+/// partial scoped symbols.
+///
+/// (Note that unlike partial scope stacks, we don't store any "symbol stack variable" here.  We
+/// could!  But with our current path-finding rules, every partial path will always have exactly
+/// one symbol stack variable, which will appear at the end of its precondition and postcondition.
+/// So for simplicity we just leave it out.  At some point in the future we might add it in so that
+/// the symbol and scope stack formalisms and implementations are more obviously symmetric.)
+#[repr(C)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub struct sg_partial_symbol_stack {
+    /// The handle of the first element in the partial symbol stack, or SG_LIST_EMPTY_HANDLE if the
+    /// list is empty, or 0 if the list is null.
+    pub cells: sg_partial_symbol_stack_cell_handle,
+    pub direction: sg_deque_direction,
+}
+
+impl From<PartialSymbolStack> for sg_partial_symbol_stack {
+    fn from(stack: PartialSymbolStack) -> sg_partial_symbol_stack {
+        unsafe { std::mem::transmute(stack) }
+    }
+}
+
+/// A handle to an element of a partial symbol stack.  A zero handle represents a missing partial
+/// symbol stack.  A UINT32_MAX handle represents an empty partial symbol stack.
+pub type sg_partial_symbol_stack_cell_handle = u32;
+
+/// An element of a partial symbol stack.
+#[repr(C)]
+pub struct sg_partial_symbol_stack_cell {
+    /// The partial scoped symbol at this position in the partial symbol stack.
+    pub head: sg_partial_scoped_symbol,
+    /// The handle of the next element in the partial symbol stack, or SG_LIST_EMPTY_HANDLE if this
+    /// is the last element.
+    pub tail: sg_partial_symbol_stack_cell_handle,
+    /// The handle of the reversal of this partial scope stack.
+    pub reversed: sg_partial_symbol_stack_cell_handle,
+}
+
+/// The array of all of the partial symbol stack content in a partial path arena.
+#[repr(C)]
+pub struct sg_partial_symbol_stack_cells {
+    pub cells: *const sg_partial_symbol_stack_cell,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of partial symbol stack content in a partial path arena.  The
+/// resulting array pointer is only valid until the next call to any function that mutates the path
+/// arena.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_partial_symbol_stack_cells(
+    partials: *const sg_partial_path_arena,
+) -> sg_partial_symbol_stack_cells {
+    let partials = unsafe { &(*partials).inner };
+    sg_partial_symbol_stack_cells {
+        cells: partials.partial_symbol_stacks.as_ptr() as *const sg_partial_symbol_stack_cell,
+        count: partials.partial_symbol_stacks.len(),
+    }
+}
+
+/// Adds new partial symbol stacks to the partial path arena.  `count` is the number of partial
+/// symbol stacks you want to create.  The content of each partial symbol stack comes from two
+/// arrays.  The `lengths` array must have `count` elements, and provides the number of symbols in
+/// each partial symbol stack.  The `symbols` array contains the contents of each of these partial
+/// symbol stacks in one contiguous array.  Its length must be the sum of all of the counts in the
+/// `lengths` array.
+///
+/// You must also provide an `out` array, which must also have room for `count` elements.  We will
+/// fill this array in with the `sg_partial_symbol_stack` instances for each partial symbol stack
+/// that is created.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_add_partial_symbol_stacks(
+    partials: *mut sg_partial_path_arena,
+    count: usize,
+    mut symbols: *const sg_partial_scoped_symbol,
+    lengths: *const usize,
+    out: *mut sg_partial_symbol_stack,
+) {
+    let partials = unsafe { &mut (*partials).inner };
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
+    for i in 0..count {
+        let length = lengths[i];
+        let symbols_slice = unsafe { std::slice::from_raw_parts(symbols, length) };
+        let mut stack = PartialSymbolStack::empty();
+        for j in 0..length {
+            let symbol = symbols_slice[j].into();
+            stack.push_back(partials, symbol);
+        }
+        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
+        // before we return ensures that it will also be available in forwards order.
+        let _ = stack.iter(partials);
+        out[i] = stack.into();
+        unsafe { symbols = symbols.add(length) };
+    }
 }
 
 //-------------------------------------------------------------------------------------------------

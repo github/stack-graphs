@@ -297,6 +297,7 @@ impl ScopeStackBindings {
 // Partial symbol stacks
 
 /// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialScopedSymbol {
     pub symbol: Handle<Symbol>,
@@ -424,6 +425,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 /// one symbol stack variable, which will appear at the end of its precondition and postcondition.
 /// So for simplicity we just leave it out.  At some point in the future we might add it in so that
 /// the symbol and scope stack formalisms and implementations are more obviously symmetric.)
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialSymbolStack {
     deque: Deque<PartialScopedSymbol>,
@@ -1677,7 +1679,7 @@ impl Path {
 /// Manages the state of a collection of partial paths built up as part of the partial-path-finding
 /// algorithm or path-stitching algorithm.
 pub struct PartialPaths {
-    partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
+    pub(crate) partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
     pub(crate) partial_scope_stacks: DequeArena<Handle<Node>>,
     partial_path_edges: DequeArena<PartialPathEdge>,
 }

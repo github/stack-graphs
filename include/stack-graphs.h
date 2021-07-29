@@ -274,6 +274,69 @@ struct sg_path {
     struct sg_path_edge_list edges;
 };
 
+// A handle to an element of a partial scope stack.  A zero handle represents a missing partial
+// scope stack.  A UINT32_MAX handle represents an empty partial scope stack.
+typedef uint32_t sg_partial_scope_stack_cell_handle;
+
+// Represents an unknown list of exported scopes.
+typedef uint32_t sg_scope_stack_variable;
+
+// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
+// exported scopes, along with an optional scope stack variable.
+struct sg_partial_scope_stack {
+    // The handle of the first element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if the
+    // list is empty, or 0 if the list is null.
+    sg_partial_scope_stack_cell_handle cells;
+    enum sg_deque_direction direction;
+    // The scope stack variable representing the unknown content of a partial scope stack, or 0 if
+    // the variable is missing.  (If so, this partial scope stack can only match a scope stack
+    // with exactly the list of scopes in `cells`, instead of any scope stack with those scopes as
+    // a prefix.)
+    sg_scope_stack_variable variable;
+};
+
+// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
+struct sg_partial_scoped_symbol {
+    sg_symbol_handle symbol;
+    struct sg_partial_scope_stack scopes;
+};
+
+// A handle to an element of a partial symbol stack.  A zero handle represents a missing partial
+// symbol stack.  A UINT32_MAX handle represents an empty partial symbol stack.
+typedef uint32_t sg_partial_symbol_stack_cell_handle;
+
+// An element of a partial symbol stack.
+struct sg_partial_symbol_stack_cell {
+    // The partial scoped symbol at this position in the partial symbol stack.
+    struct sg_partial_scoped_symbol head;
+    // The handle of the next element in the partial symbol stack, or SG_LIST_EMPTY_HANDLE if this
+    // is the last element.
+    sg_partial_symbol_stack_cell_handle tail;
+    // The handle of the reversal of this partial scope stack.
+    sg_partial_symbol_stack_cell_handle reversed;
+};
+
+// The array of all of the partial symbol stack content in a partial path arena.
+struct sg_partial_symbol_stack_cells {
+    const struct sg_partial_symbol_stack_cell *cells;
+    size_t count;
+};
+
+// A pattern that might match against a symbol stack.  Consists of a (possibly empty) list of
+// partial scoped symbols.
+//
+// (Note that unlike partial scope stacks, we don't store any "symbol stack variable" here.  We
+// could!  But with our current path-finding rules, every partial path will always have exactly
+// one symbol stack variable, which will appear at the end of its precondition and postcondition.
+// So for simplicity we just leave it out.  At some point in the future we might add it in so that
+// the symbol and scope stack formalisms and implementations are more obviously symmetric.)
+struct sg_partial_symbol_stack {
+    // The handle of the first element in the partial symbol stack, or SG_LIST_EMPTY_HANDLE if the
+    // list is empty, or 0 if the list is null.
+    sg_partial_symbol_stack_cell_handle cells;
+    enum sg_deque_direction direction;
+};
+
 // An element of a partial scope stack.
 struct sg_partial_scope_stack_cell {
     // The exported scope at this position in the partial scope stack.
@@ -289,27 +352,6 @@ struct sg_partial_scope_stack_cell {
 struct sg_partial_scope_stack_cells {
     const struct sg_partial_scope_stack_cell *cells;
     size_t count;
-};
-
-// Represents an unknown list of exported scopes.
-typedef uint32_t sg_scope_stack_variable;
-
-// A handle to an element of a partial scope stack.  A zero handle represents a missing partial
-// scope stack.  A UINT32_MAX handle represents an empty partial scope stack.
-typedef uint32_t sg_partial_scope_stack_cell_handle;
-
-// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
-// exported scopes, along with an optional scope stack variable.
-struct sg_partial_scope_stack {
-    // The handle of the first element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if the
-    // list is empty, or 0 if the list is null.
-    sg_partial_scope_stack_cell_handle cells;
-    enum sg_deque_direction direction;
-    // The scope stack variable representing the unknown content of a partial scope stack, or 0 if
-    // the variable is missing.  (If so, this partial scope stack can only match a scope stack
-    // with exactly the list of scopes in `cells`, instead of any scope stack with those scopes as
-    // a prefix.)
-    sg_scope_stack_variable variable;
 };
 
 // The handle of the singleton root node.
@@ -491,6 +533,27 @@ void sg_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
                                            size_t starting_node_count,
                                            const sg_node_handle *starting_nodes,
                                            struct sg_path_list *path_list);
+
+// Returns a reference to the array of partial symbol stack content in a partial path arena.  The
+// resulting array pointer is only valid until the next call to any function that mutates the path
+// arena.
+struct sg_partial_symbol_stack_cells sg_partial_path_arena_partial_symbol_stack_cells(const struct sg_partial_path_arena *partials);
+
+// Adds new partial symbol stacks to the partial path arena.  `count` is the number of partial
+// symbol stacks you want to create.  The content of each partial symbol stack comes from two
+// arrays.  The `lengths` array must have `count` elements, and provides the number of symbols in
+// each partial symbol stack.  The `symbols` array contains the contents of each of these partial
+// symbol stacks in one contiguous array.  Its length must be the sum of all of the counts in the
+// `lengths` array.
+//
+// You must also provide an `out` array, which must also have room for `count` elements.  We will
+// fill this array in with the `sg_partial_symbol_stack` instances for each partial symbol stack
+// that is created.
+void sg_partial_path_arena_add_partial_symbol_stacks(struct sg_partial_path_arena *partials,
+                                                     size_t count,
+                                                     const struct sg_partial_scoped_symbol *symbols,
+                                                     const size_t *lengths,
+                                                     struct sg_partial_symbol_stack *out);
 
 // Returns a reference to the array of partial scope stack content in a partial path arena.  The
 // resulting array pointer is only valid until the next call to any function that mutates the
