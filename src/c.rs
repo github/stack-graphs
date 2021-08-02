@@ -1271,13 +1271,14 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     let partials = unsafe { &mut (*partials).inner };
     let file = file.into();
     let partial_path_list = unsafe { &mut *partial_path_list };
-    partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
+    partials.find_all_partial_paths_in_file(graph, file, |graph, partials, mut path| {
         if !path.is_complete_as_possible(graph) {
             return;
         }
         if !path.is_productive(partials) {
             return;
         }
+        path.ensure_both_directions(partials);
         partial_path_list.partial_paths.push(path);
     });
 }

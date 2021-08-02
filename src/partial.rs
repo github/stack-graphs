@@ -602,6 +602,13 @@ impl PartialSymbolStack {
             .iter_unordered(&partials.partial_symbol_stacks)
             .copied()
     }
+
+    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.deque
+            .ensure_backwards(&mut partials.partial_symbol_stacks);
+        self.deque
+            .ensure_forwards(&mut partials.partial_symbol_stacks);
+    }
 }
 
 impl DisplayWithPartialPaths for PartialSymbolStack {
@@ -815,6 +822,13 @@ impl PartialScopeStack {
         partials: &'a mut PartialPaths,
     ) -> impl Display + 'a {
         display_with(self, graph, partials)
+    }
+
+    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.scopes
+            .ensure_backwards(&mut partials.partial_scope_stacks);
+        self.scopes
+            .ensure_forwards(&mut partials.partial_scope_stacks);
     }
 }
 
@@ -1121,6 +1135,12 @@ impl PartialPathEdgeList {
             .iter_unordered(&partials.partial_path_edges)
             .copied()
     }
+
+    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.edges
+            .ensure_backwards(&mut partials.partial_path_edges);
+        self.edges.ensure_forwards(&mut partials.partial_path_edges);
+    }
 }
 
 impl DisplayWithPartialPaths for PartialPathEdgeList {
@@ -1329,6 +1349,20 @@ impl PartialPath {
             return true;
         }
         false
+    }
+
+    /// Ensures that the content of this partial path is available in both forwards and backwards
+    /// directions.
+    pub fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.symbol_stack_precondition
+            .ensure_both_directions(partials);
+        self.symbol_stack_postcondition
+            .ensure_both_directions(partials);
+        self.scope_stack_precondition
+            .ensure_both_directions(partials);
+        self.scope_stack_postcondition
+            .ensure_both_directions(partials);
+        self.edges.ensure_both_directions(partials);
     }
 
     /// Returns a fresh scope stack variable that is not already used anywhere in this partial

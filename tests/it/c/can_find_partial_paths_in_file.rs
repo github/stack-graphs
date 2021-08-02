@@ -7,17 +7,67 @@
 
 use std::collections::HashSet;
 
+use stack_graphs::c::sg_partial_path_arena;
 use stack_graphs::c::sg_partial_path_arena_find_partial_paths_in_file;
 use stack_graphs::c::sg_partial_path_arena_free;
 use stack_graphs::c::sg_partial_path_arena_new;
+use stack_graphs::c::sg_partial_path_arena_partial_path_edge_list_cells;
+use stack_graphs::c::sg_partial_path_arena_partial_scope_stack_cells;
+use stack_graphs::c::sg_partial_path_arena_partial_symbol_stack_cells;
+use stack_graphs::c::sg_partial_path_edge_list;
 use stack_graphs::c::sg_partial_path_list_count;
 use stack_graphs::c::sg_partial_path_list_free;
 use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
+use stack_graphs::c::sg_partial_scope_stack;
+use stack_graphs::c::sg_partial_symbol_stack;
+use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
 use stack_graphs::partial::PartialPath;
 
 use crate::c::test_graph::TestGraph;
 use crate::test_graphs;
+
+fn partial_symbol_stack_available_in_both_directions(
+    partials: *mut sg_partial_path_arena,
+    list: &sg_partial_symbol_stack,
+) -> bool {
+    let cells = sg_partial_path_arena_partial_symbol_stack_cells(partials);
+    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
+    let head = list.cells;
+    if head == SG_LIST_EMPTY_HANDLE {
+        return true;
+    }
+    let cell = &cells[head as usize];
+    cell.reversed != 0
+}
+
+fn partial_scope_stack_available_in_both_directions(
+    partials: *mut sg_partial_path_arena,
+    list: &sg_partial_scope_stack,
+) -> bool {
+    let cells = sg_partial_path_arena_partial_scope_stack_cells(partials);
+    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
+    let head = list.cells;
+    if head == SG_LIST_EMPTY_HANDLE {
+        return true;
+    }
+    let cell = &cells[head as usize];
+    cell.reversed != 0
+}
+
+fn partial_path_edge_list_available_in_both_directions(
+    partials: *mut sg_partial_path_arena,
+    list: &sg_partial_path_edge_list,
+) -> bool {
+    let cells = sg_partial_path_arena_partial_path_edge_list_cells(partials);
+    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
+    let head = list.cells;
+    if head == SG_LIST_EMPTY_HANDLE {
+        return true;
+    }
+    let cell = &cells[head as usize];
+    cell.reversed != 0
+}
 
 fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[&str]) {
     let rust_graph = unsafe { &(*graph.graph).inner };
@@ -31,6 +81,36 @@ fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[
         file.as_u32(),
         path_list,
     );
+
+    // Ensure that every path has its content available in both directions.
+    let results = unsafe {
+        std::slice::from_raw_parts(
+            sg_partial_path_list_paths(path_list),
+            sg_partial_path_list_count(path_list),
+        )
+    };
+    for path in results {
+        assert!(partial_symbol_stack_available_in_both_directions(
+            partials,
+            &path.symbol_stack_precondition,
+        ));
+        assert!(partial_symbol_stack_available_in_both_directions(
+            partials,
+            &path.symbol_stack_postcondition,
+        ));
+        assert!(partial_scope_stack_available_in_both_directions(
+            partials,
+            &path.scope_stack_precondition,
+        ));
+        assert!(partial_scope_stack_available_in_both_directions(
+            partials,
+            &path.scope_stack_postcondition,
+        ));
+        assert!(partial_path_edge_list_available_in_both_directions(
+            partials,
+            &path.edges,
+        ));
+    }
 
     let rust_partials = unsafe { &mut (*partials).inner };
     let results = unsafe {

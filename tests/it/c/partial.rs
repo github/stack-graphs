@@ -129,6 +129,19 @@ fn partial_symbol_stack_contains(
     current == SG_LIST_EMPTY_HANDLE
 }
 
+fn partial_symbol_stack_available_in_both_directions(
+    cells: &sg_partial_symbol_stack_cells,
+    list: &sg_partial_symbol_stack,
+) -> bool {
+    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
+    let head = list.cells;
+    if head == SG_LIST_EMPTY_HANDLE {
+        return true;
+    }
+    let cell = &cells[head as usize];
+    cell.reversed != 0
+}
+
 #[test]
 fn can_create_partial_symbol_stacks() {
     let graph = sg_stack_graph_new();
@@ -182,6 +195,17 @@ fn can_create_partial_symbol_stacks() {
     assert!(partial_symbol_stack_contains(&cells, &stacks[0], &symbols0));
     assert!(partial_symbol_stack_contains(&cells, &stacks[1], &symbols1));
     assert!(partial_symbol_stack_contains(&cells, &stacks[2], &symbols2));
+
+    // Verify that each stack is available in both directions.
+    assert!(partial_symbol_stack_available_in_both_directions(
+        &cells, &stacks[0]
+    ));
+    assert!(partial_symbol_stack_available_in_both_directions(
+        &cells, &stacks[1]
+    ));
+    assert!(partial_symbol_stack_available_in_both_directions(
+        &cells, &stacks[2]
+    ));
 
     sg_partial_path_arena_free(partials);
     sg_stack_graph_free(graph);
