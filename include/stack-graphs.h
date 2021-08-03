@@ -55,6 +55,17 @@ enum sg_node_kind {
 // Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
 struct sg_partial_path_arena;
 
+// Contains a "database" of partial paths.
+//
+// This type is meant to be a lazily loaded "view" into a proper storage layer.  During the
+// path-stitching algorithm, we repeatedly try to extend a currently incomplete path with any
+// partial paths that are compatible with it.  For large codebases, or projects with a large
+// number of dependencies, it can be prohibitive to load in _all_ of the partial paths up-front.
+// We've written the path-stitching algorithm so that you have a chance to only load in the
+// partial paths that are actually needed, placing them into a sg_partial_path_database instance
+// as they're needed.
+struct sg_partial_path_database;
+
 // A list of paths found by the path-finding algorithm.
 struct sg_partial_path_list;
 
@@ -420,6 +431,30 @@ struct sg_partial_path {
     struct sg_partial_path_edge_list edges;
 };
 
+// Implements a phased forward path-stitching algorithm.
+//
+// Our overall goal is to start with a set of _seed_ paths, and to repeatedly extend each path by
+// appending a compatible partial path onto the end of it.  (If there are multiple compatible
+// partial paths, we append each of them separately, resulting in more than one extension for the
+// current path.)
+//
+// We perform this processing in _phases_.  At the start of each phase, we have a _current set_ of
+// paths that need to be processed.  As we extend those paths, we add the extensions to the set of
+// paths to process in the _next_ phase.  Phases are processed one at a time, each time you invoke
+// `sg_forward_path_stitcher_process_next_phase`.
+//
+// After each phase has completed, the `previous_phase_paths` and `previous_phase_paths_length`
+// fields give you all of the paths that were discovered during that phase.  That gives you a
+// chance to add to the `sg_partial_path_database` all of the partial paths that we might need to
+// extend those paths with before invoking the next phase.
+struct sg_forward_path_stitcher {
+    // The new candidate paths that were discovered in the most recent phase.
+    const struct sg_path *previous_phase_paths;
+    // The number of new candidate paths that were discovered in the most recent phase.  If this
+    // is 0, then the path stitching algorithm is complete.
+    size_t previous_phase_paths_length;
+};
+
 // The handle of the singleton root node.
 #define SG_ROOT_NODE_HANDLE 1
 
@@ -447,6 +482,12 @@ struct sg_partial_path_arena *sg_partial_path_arena_new(void);
 
 // Frees a path arena, and all of its contents.
 void sg_partial_path_arena_free(struct sg_partial_path_arena *partials);
+
+// Creates a new, initially empty partial path database.
+struct sg_partial_path_database *sg_partial_path_database_new(void);
+
+// Frees a partial path database, and all of its contents.
+void sg_partial_path_database_free(struct sg_partial_path_database *db);
 
 // Returns a reference to the array of symbol data in this stack graph.  The resulting array
 // pointer is only valid until the next call to any function that mutates the stack graph.
@@ -593,7 +634,7 @@ const struct sg_path *sg_path_list_paths(const struct sg_path_list *path_list);
 // This function will not return until all reachable paths have been processed, so `graph` must
 // already contain a complete stack graph.  If you have a very large stack graph stored in some
 // other storage system, and want more control over lazily loading only the necessary pieces, then
-// you should use TODO.
+// you should use sg_forward_path_stitcher.
 void sg_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
                                            struct sg_path_arena *paths,
                                            size_t starting_node_count,
@@ -681,11 +722,59 @@ const struct sg_partial_path *sg_partial_path_list_paths(const struct sg_partial
 // This function will not return until all reachable paths have been processed, so `graph` must
 // already contain a complete stack graph.  If you have a very large stack graph stored in some
 // other storage system, and want more control over lazily loading only the necessary pieces, then
-// you should use TODO.
+// you should use sg_forward_path_stitcher.
 void sg_partial_path_arena_find_partial_paths_in_file(const struct sg_stack_graph *graph,
                                                       struct sg_partial_path_arena *partials,
                                                       sg_file_handle file,
                                                       struct sg_partial_path_list *partial_path_list);
+
+// Adds new partial paths to the partial path database.  `paths` is the array of partial paths
+// that you want to add; `count` is the number of them.
+//
+// We copy the partial path content into the partial path database.  The array you pass in does
+// not need to outlive the call to this function.
+//
+// You should take care not to add a partial path to the database multiple times.  This won't
+// cause an _error_, in that nothing will break, but it will probably cause you to get duplicate
+// paths from the path-stitching algorithm.
+void sg_partial_path_database_add_partial_paths(const struct sg_stack_graph *graph,
+                                                struct sg_partial_path_arena *partials,
+                                                struct sg_partial_path_database *db,
+                                                size_t count,
+                                                const struct sg_partial_path *paths);
+
+// Creates a new forward path stitcher that is "seeded" with a set of starting stack graph nodes.
+//
+// Before calling this method, you must ensure that `db` contains all of the possible partial
+// paths that start with any of your requested starting nodes.
+//
+// Before calling `sg_forward_path_stitcher_process_next_phase` for the first time, you must
+// ensure that `db` contains all possible extensions of any of those initial paths.  You can
+// retrieve a list of those extensions via the `previous_phase_paths` and
+// `previous_phase_paths_length` fields.
+struct sg_forward_path_stitcher *sg_forward_path_stitcher_new(const struct sg_stack_graph *graph,
+                                                              struct sg_path_arena *paths,
+                                                              struct sg_partial_path_arena *partials,
+                                                              struct sg_partial_path_database *db,
+                                                              size_t count,
+                                                              const sg_node_handle *starting_nodes);
+
+// Runs the next phase of the path-stitching algorithm.  We will have built up a set of
+// incomplete paths during the _previous_ phase.  Before calling this function, you must
+// ensure that `db` contains all of the possible partial paths that we might want to extend
+// any of those paths with.
+//
+// After this method returns, you can retrieve a list of the (possibly incomplete) paths that were
+// encountered during this phase via the `previous_phase_paths` and `previous_phase_paths_length`
+// fields.
+void sg_forward_path_stitcher_process_next_phase(const struct sg_stack_graph *graph,
+                                                 struct sg_path_arena *paths,
+                                                 struct sg_partial_path_arena *partials,
+                                                 struct sg_partial_path_database *db,
+                                                 struct sg_forward_path_stitcher *stitcher);
+
+// Frees a forward path stitcher.
+void sg_forward_path_stitcher_free(struct sg_forward_path_stitcher *stitcher);
 
 #ifdef __cplusplus
 } // extern "C"

@@ -33,6 +33,8 @@ use crate::paths::Paths;
 use crate::paths::ScopeStack;
 use crate::paths::ScopedSymbol;
 use crate::paths::SymbolStack;
+use crate::stitching::Database;
+use crate::stitching::PathStitcher;
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct sg_stack_graph {
@@ -89,6 +91,33 @@ pub extern "C" fn sg_partial_path_arena_new() -> *mut sg_partial_path_arena {
 #[no_mangle]
 pub extern "C" fn sg_partial_path_arena_free(partials: *mut sg_partial_path_arena) {
     drop(unsafe { Box::from_raw(partials) })
+}
+
+/// Contains a "database" of partial paths.
+///
+/// This type is meant to be a lazily loaded "view" into a proper storage layer.  During the
+/// path-stitching algorithm, we repeatedly try to extend a currently incomplete path with any
+/// partial paths that are compatible with it.  For large codebases, or projects with a large
+/// number of dependencies, it can be prohibitive to load in _all_ of the partial paths up-front.
+/// We've written the path-stitching algorithm so that you have a chance to only load in the
+/// partial paths that are actually needed, placing them into a sg_partial_path_database instance
+/// as they're needed.
+pub struct sg_partial_path_database {
+    pub inner: Database,
+}
+
+/// Creates a new, initially empty partial path database.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_database_new() -> *mut sg_partial_path_database {
+    Box::into_raw(Box::new(sg_partial_path_database {
+        inner: Database::new(),
+    }))
+}
+
+/// Frees a partial path database, and all of its contents.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_database_free(db: *mut sg_partial_path_database) {
+    drop(unsafe { Box::from_raw(db) })
 }
 
 /// The handle of an empty list.
@@ -833,7 +862,7 @@ pub extern "C" fn sg_path_list_paths(path_list: *const sg_path_list) -> *const s
 /// This function will not return until all reachable paths have been processed, so `graph` must
 /// already contain a complete stack graph.  If you have a very large stack graph stored in some
 /// other storage system, and want more control over lazily loading only the necessary pieces, then
-/// you should use TODO.
+/// you should use sg_forward_path_stitcher.
 #[no_mangle]
 pub extern "C" fn sg_path_arena_find_all_complete_paths(
     graph: *const sg_stack_graph,
@@ -1209,6 +1238,7 @@ pub extern "C" fn sg_partial_path_arena_add_partial_path_edge_lists(
 /// postconditions can _also_ refer to those variables, and describe how those variable parts of
 /// the input scope stacks are carried through unmodified into the resulting scope stack.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct sg_partial_path {
     pub start_node: sg_node_handle,
     pub end_node: sg_node_handle,
@@ -1217,6 +1247,12 @@ pub struct sg_partial_path {
     pub scope_stack_precondition: sg_partial_scope_stack,
     pub scope_stack_postcondition: sg_partial_scope_stack,
     pub edges: sg_partial_path_edge_list,
+}
+
+impl Into<PartialPath> for sg_partial_path {
+    fn into(self) -> PartialPath {
+        unsafe { std::mem::transmute(self) }
+    }
 }
 
 /// A list of paths found by the path-finding algorithm.
@@ -1259,7 +1295,7 @@ pub extern "C" fn sg_partial_path_list_paths(
 /// This function will not return until all reachable paths have been processed, so `graph` must
 /// already contain a complete stack graph.  If you have a very large stack graph stored in some
 /// other storage system, and want more control over lazily loading only the necessary pieces, then
-/// you should use TODO.
+/// you should use sg_forward_path_stitcher.
 #[no_mangle]
 pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     graph: *const sg_stack_graph,
@@ -1281,4 +1317,163 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
         path.ensure_both_directions(partials);
         partial_path_list.partial_paths.push(path);
     });
+}
+
+/// A handle to a partial path in a partial path database.  A zero handle represents a missing
+/// partial path.
+pub type sg_partial_path_handle = u32;
+
+/// Adds new partial paths to the partial path database.  `paths` is the array of partial paths
+/// that you want to add; `count` is the number of them.
+///
+/// We copy the partial path content into the partial path database.  The array you pass in does
+/// not need to outlive the call to this function.
+///
+/// You should take care not to add a partial path to the database multiple times.  This won't
+/// cause an _error_, in that nothing will break, but it will probably cause you to get duplicate
+/// paths from the path-stitching algorithm.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_database_add_partial_paths(
+    graph: *const sg_stack_graph,
+    partials: *mut sg_partial_path_arena,
+    db: *mut sg_partial_path_database,
+    count: usize,
+    paths: *const sg_partial_path,
+) {
+    let graph = unsafe { &(*graph).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    let db = unsafe { &mut (*db).inner };
+    let paths = unsafe { std::slice::from_raw_parts(paths, count) };
+    for i in 0..count {
+        db.add_partial_path(graph, partials, paths[i].into());
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Path stitching
+
+/// Implements a phased forward path-stitching algorithm.
+///
+/// Our overall goal is to start with a set of _seed_ paths, and to repeatedly extend each path by
+/// appending a compatible partial path onto the end of it.  (If there are multiple compatible
+/// partial paths, we append each of them separately, resulting in more than one extension for the
+/// current path.)
+///
+/// We perform this processing in _phases_.  At the start of each phase, we have a _current set_ of
+/// paths that need to be processed.  As we extend those paths, we add the extensions to the set of
+/// paths to process in the _next_ phase.  Phases are processed one at a time, each time you invoke
+/// `sg_forward_path_stitcher_process_next_phase`.
+///
+/// After each phase has completed, the `previous_phase_paths` and `previous_phase_paths_length`
+/// fields give you all of the paths that were discovered during that phase.  That gives you a
+/// chance to add to the `sg_partial_path_database` all of the partial paths that we might need to
+/// extend those paths with before invoking the next phase.
+#[repr(C)]
+pub struct sg_forward_path_stitcher {
+    /// The new candidate paths that were discovered in the most recent phase.
+    pub previous_phase_paths: *const sg_path,
+    /// The number of new candidate paths that were discovered in the most recent phase.  If this
+    /// is 0, then the path stitching algorithm is complete.
+    pub previous_phase_paths_length: usize,
+}
+
+// This is the Rust equivalent of a common C trick, where you have two versions of a struct — a
+// publicly visible one and a private one containing internal implementation details.  In our case,
+// `sg_forward_path_stitcher` is the public struct, and `ForwardPathStitcher` is the internal one.
+// The main requirement is that the private struct must start with a copy of all of the fields in
+// the public struct — ensuring that those fields occur at the same offset in both.  The private
+// struct can contain additional (private) fields, but they must appear _after_ all of the publicly
+// visible fields.
+//
+// In our case, we do this because we don't want to expose the existence or details of the
+// PathStitcher type via the C API.
+#[repr(C)]
+struct ForwardPathStitcher {
+    previous_phase_paths: *const Path,
+    previous_phase_paths_length: usize,
+    stitcher: PathStitcher,
+}
+
+impl ForwardPathStitcher {
+    fn new(stitcher: PathStitcher) -> ForwardPathStitcher {
+        let mut this = ForwardPathStitcher {
+            previous_phase_paths: std::ptr::null(),
+            previous_phase_paths_length: 0,
+            stitcher,
+        };
+        this.update_previous_phase_paths();
+        this
+    }
+
+    fn update_previous_phase_paths(&mut self) {
+        let slice = self.stitcher.previous_phase_paths_slice();
+        self.previous_phase_paths = slice.as_ptr();
+        self.previous_phase_paths_length = slice.len();
+    }
+}
+
+/// Creates a new forward path stitcher that is "seeded" with a set of starting stack graph nodes.
+///
+/// Before calling this method, you must ensure that `db` contains all of the possible partial
+/// paths that start with any of your requested starting nodes.
+///
+/// Before calling `sg_forward_path_stitcher_process_next_phase` for the first time, you must
+/// ensure that `db` contains all possible extensions of any of those initial paths.  You can
+/// retrieve a list of those extensions via the `previous_phase_paths` and
+/// `previous_phase_paths_length` fields.
+#[no_mangle]
+pub extern "C" fn sg_forward_path_stitcher_new(
+    graph: *const sg_stack_graph,
+    paths: *mut sg_path_arena,
+    partials: *mut sg_partial_path_arena,
+    db: *mut sg_partial_path_database,
+    count: usize,
+    starting_nodes: *const sg_node_handle,
+) -> *mut sg_forward_path_stitcher {
+    let graph = unsafe { &(*graph).inner };
+    let paths = unsafe { &mut (*paths).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    let db = unsafe { &mut (*db).inner };
+    let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, count) };
+    let stitcher = PathStitcher::new(
+        graph,
+        paths,
+        partials,
+        db,
+        starting_nodes.iter().copied().map(sg_node_handle::into),
+    );
+    Box::into_raw(Box::new(ForwardPathStitcher::new(stitcher))) as *mut _
+}
+
+/// Runs the next phase of the path-stitching algorithm.  We will have built up a set of
+/// incomplete paths during the _previous_ phase.  Before calling this function, you must
+/// ensure that `db` contains all of the possible partial paths that we might want to extend
+/// any of those paths with.
+///
+/// After this method returns, you can retrieve a list of the (possibly incomplete) paths that were
+/// encountered during this phase via the `previous_phase_paths` and `previous_phase_paths_length`
+/// fields.
+#[no_mangle]
+pub extern "C" fn sg_forward_path_stitcher_process_next_phase(
+    graph: *const sg_stack_graph,
+    paths: *mut sg_path_arena,
+    partials: *mut sg_partial_path_arena,
+    db: *mut sg_partial_path_database,
+    stitcher: *mut sg_forward_path_stitcher,
+) {
+    let graph = unsafe { &(*graph).inner };
+    let paths = unsafe { &mut (*paths).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    let db = unsafe { &mut (*db).inner };
+    let stitcher = unsafe { &mut *(stitcher as *mut ForwardPathStitcher) };
+    stitcher
+        .stitcher
+        .process_next_phase(graph, paths, partials, db);
+    stitcher.update_previous_phase_paths();
+}
+
+/// Frees a forward path stitcher.
+#[no_mangle]
+pub extern "C" fn sg_forward_path_stitcher_free(stitcher: *mut sg_forward_path_stitcher) {
+    drop(unsafe { Box::from_raw(stitcher as *mut ForwardPathStitcher) });
 }
