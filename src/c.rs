@@ -306,10 +306,16 @@ pub extern "C" fn sg_stack_graph_add_files(
 /// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
 /// _local ID_ that must be unique within its file.
 #[repr(C)]
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct sg_node_id {
     pub file: sg_file_handle,
     pub local_id: u32,
+}
+
+impl sg_node_id {
+    fn is_empty(self) -> bool {
+        self.file == 0 && self.local_id == 0
+    }
 }
 
 impl Into<NodeID> for sg_node_id {
@@ -319,10 +325,10 @@ impl Into<NodeID> for sg_node_id {
 }
 
 /// The local_id of the singleton root node.
-pub const SG_ROOT_NODE_ID: u32 = 0;
+pub const SG_ROOT_NODE_ID: u32 = 1;
 
 /// The local_id of the singleton "jump to scope" node.
-pub const SG_JUMP_TO_NODE_ID: u32 = 1;
+pub const SG_JUMP_TO_NODE_ID: u32 = 2;
 
 /// A node in a stack graph.
 #[repr(C)]
@@ -337,7 +343,7 @@ pub struct sg_node {
     /// The scope associated with this node.  For push scope nodes, this is the scope that will be
     /// attached to the symbol before it's pushed onto the symbol stack.  For all other node types,
     /// this will be null.
-    pub scope: sg_node_handle,
+    pub scope: sg_node_id,
     /// Whether this node is "clickable".  For push nodes, this indicates that the node represents
     /// a reference in the source.  For pop nodes, this indicates that the node represents a
     /// definition in the source.  For all other node types, this field will be unused.
@@ -480,7 +486,9 @@ fn validate_node(graph: &StackGraph, node: &sg_node) -> Option<Node> {
 
     // Push scoped symbol nodes must have a non-null scope, and all other nodes must have a null
     // scope.
-    if (node.scope != 0) != matches!(&node.kind, sg_node_kind::SG_NODE_KIND_PUSH_SCOPED_SYMBOL) {
+    if (node.scope.is_empty())
+        == matches!(&node.kind, sg_node_kind::SG_NODE_KIND_PUSH_SCOPED_SYMBOL)
+    {
         return None;
     }
 

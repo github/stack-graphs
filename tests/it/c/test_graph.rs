@@ -72,7 +72,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol,
             is_clickable: true,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 
@@ -82,7 +82,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol: 0,
             is_clickable: false,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 
@@ -102,7 +102,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol: 0,
             is_clickable: false,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 
@@ -126,7 +126,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol: 0,
             is_clickable: false,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 
@@ -145,7 +145,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol,
             is_clickable: false,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 
@@ -160,7 +160,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol,
             is_clickable: false,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 
@@ -169,8 +169,13 @@ impl CreateStackGraph for TestGraph {
         file: sg_file_handle,
         local_id: u32,
         symbol: sg_symbol_handle,
-        scope: sg_node_handle,
+        scope_file: sg_file_handle,
+        scope_id: u32,
     ) -> sg_node_handle {
+        let scope = sg_node_id {
+            file: scope_file,
+            local_id: scope_id,
+        };
         self.add_node(sg_node {
             kind: sg_node_kind::SG_NODE_KIND_PUSH_SCOPED_SYMBOL,
             id: sg_node_id { file, local_id },
@@ -191,7 +196,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol,
             is_clickable: false,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 
@@ -206,7 +211,7 @@ impl CreateStackGraph for TestGraph {
             id: sg_node_id { file, local_id },
             symbol,
             is_clickable: true,
-            scope: 0,
+            scope: sg_node_id::default(),
         })
     }
 

@@ -78,7 +78,7 @@ fn add_exported_scope(
         id: sg_node_id { file, local_id },
         symbol: 0,
         is_clickable: false,
-        scope: 0,
+        scope: sg_node_id::default(),
     };
     let nodes = [node];
     let mut handles: [sg_node_handle; 1] = [0; 1];

@@ -552,7 +552,8 @@ impl Path {
         let mut scope_stack = ScopeStack::empty();
         match &graph[node] {
             Node::PushScopedSymbol(node) => {
-                scope_stack.push_front(paths, node.scope);
+                let scope = graph.node_for_id(node.scope)?;
+                scope_stack.push_front(paths, scope);
                 symbol_stack.push_front(
                     paths,
                     ScopedSymbol {
@@ -695,6 +696,8 @@ pub enum PathResolutionError {
     /// The path contains a _pop symbol_ node, but the symbol at the top of the symbol stack has an
     /// attached scope list that we weren't expecting.
     UnexpectedAttachedScopeList,
+    /// A _push scoped symbol_ node referes to an exported scope node that doesn't exist.
+    UnknownAttachedScope,
 }
 
 impl Path {
@@ -720,7 +723,9 @@ impl Path {
             self.symbol_stack.push_front(paths, scoped_symbol);
         } else if let Node::PushScopedSymbol(sink) = sink {
             let sink_symbol = sink.symbol;
-            let sink_scope = sink.scope;
+            let sink_scope = graph
+                .node_for_id(sink.scope)
+                .ok_or(PathResolutionError::UnknownAttachedScope)?;
             let mut attached_scopes = self.scope_stack;
             attached_scopes.push_front(paths, sink_scope);
             let scoped_symbol = ScopedSymbol {
