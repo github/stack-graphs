@@ -107,13 +107,12 @@ impl CreateStackGraph for TestGraph {
     }
 
     fn file(&mut self, name: &str) -> sg_file_handle {
-        let names = [name.as_bytes().as_ptr() as *const c_char];
         let lengths = [name.len()];
         let mut handles: [sg_file_handle; 1] = [0; 1];
         sg_stack_graph_add_files(
             self.graph,
-            names.len(),
-            names.as_ptr(),
+            1,
+            name.as_bytes().as_ptr() as *const c_char,
             lengths.as_ptr(),
             handles.as_mut_ptr(),
         );
@@ -220,13 +219,12 @@ impl CreateStackGraph for TestGraph {
     }
 
     fn symbol(&mut self, value: &str) -> sg_symbol_handle {
-        let symbols = [value.as_bytes().as_ptr() as *const c_char];
         let lengths = [value.len()];
         let mut handles: [sg_symbol_handle; 1] = [0; 1];
         sg_stack_graph_add_symbols(
             self.graph,
-            symbols.len(),
-            symbols.as_ptr(),
+            1,
+            value.as_bytes().as_ptr() as *const c_char,
             lengths.as_ptr(),
             handles.as_mut_ptr(),
         );

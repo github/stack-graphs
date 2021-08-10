@@ -179,9 +179,10 @@ pub extern "C" fn sg_stack_graph_symbols(graph: *const sg_stack_graph) -> sg_sym
     }
 }
 
-/// Adds new symbols to the stack graph.  You provide an array of symbol content, and an output
-/// array, which must have the same length.  We will place each symbol's handle in the output
-/// array.
+/// Adds new symbols to the stack graph.  You provide all of the symbol content concatenated
+/// together into a single string, and an array of the lengths of each symbol.  You also provide an
+/// output array, which must have the same size as `lengths`.  We will place each symbol's handle
+/// in the output array.
 ///
 /// We ensure that there is only ever one copy of a particular symbol stored in the graph — we
 /// guarantee that identical symbols will have the same handles, meaning that you can compare the
@@ -196,22 +197,23 @@ pub extern "C" fn sg_stack_graph_symbols(graph: *const sg_stack_graph) -> sg_sym
 pub extern "C" fn sg_stack_graph_add_symbols(
     graph: *mut sg_stack_graph,
     count: usize,
-    symbols: *const *const c_char,
+    symbols: *const c_char,
     lengths: *const usize,
     handles_out: *mut sg_symbol_handle,
 ) {
     let graph = unsafe { &mut (*graph).inner };
-    let symbols = unsafe { std::slice::from_raw_parts(symbols as *const *const u8, count) };
+    let mut symbols = symbols as *const u8;
     let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
     let handles_out = unsafe {
         std::slice::from_raw_parts_mut(handles_out as *mut Option<Handle<Symbol>>, count)
     };
     for i in 0..count {
-        let symbol = unsafe { std::slice::from_raw_parts(symbols[i], lengths[i]) };
+        let symbol = unsafe { std::slice::from_raw_parts(symbols, lengths[i]) };
         handles_out[i] = match std::str::from_utf8(symbol) {
             Ok(symbol) => Some(graph.add_symbol(symbol)),
             Err(_) => None,
         };
+        unsafe { symbols = symbols.add(lengths[i]) };
     }
 }
 
@@ -264,8 +266,10 @@ pub extern "C" fn sg_stack_graph_files(graph: *const sg_stack_graph) -> sg_files
     }
 }
 
-/// Adds new files to the stack graph.  You provide an array of file content, and an output array,
-/// which must have the same length.  We will place each file's handle in the output array.
+/// Adds new files to the stack graph.  You provide all of the file content concatenated together
+/// into a single string, and an array of the lengths of each file.  You also provide an output
+/// array, which must have the same size as `lengths`.  We will place each file's handle in the
+/// output array.
 ///
 /// There can only ever be one file with a particular name in the graph.  If you try to add a file
 /// with a name that already exists, you'll get the same handle as a result.
@@ -280,21 +284,22 @@ pub extern "C" fn sg_stack_graph_files(graph: *const sg_stack_graph) -> sg_files
 pub extern "C" fn sg_stack_graph_add_files(
     graph: *mut sg_stack_graph,
     count: usize,
-    files: *const *const c_char,
+    files: *const c_char,
     lengths: *const usize,
     handles_out: *mut sg_file_handle,
 ) {
     let graph = unsafe { &mut (*graph).inner };
-    let files = unsafe { std::slice::from_raw_parts(files as *const *const u8, count) };
+    let mut files = files as *const u8;
     let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
     let handles_out =
         unsafe { std::slice::from_raw_parts_mut(handles_out as *mut Option<Handle<File>>, count) };
     for i in 0..count {
-        let file = unsafe { std::slice::from_raw_parts(files[i], lengths[i]) };
+        let file = unsafe { std::slice::from_raw_parts(files, lengths[i]) };
         handles_out[i] = match std::str::from_utf8(file) {
             Ok(file) => Some(graph.get_or_create_file(file)),
             Err(_) => None,
         };
+        unsafe { files = files.add(lengths[i]) };
     }
 }
 

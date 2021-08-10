@@ -15,12 +15,6 @@ use stack_graphs::c::sg_stack_graph_free;
 use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::graph::File;
 
-fn strings(data: &[&'static str]) -> Vec<*const c_char> {
-    data.iter()
-        .map(|s| s.as_bytes().as_ptr() as *const c_char)
-        .collect()
-}
-
 fn lengths(data: &[&'static str]) -> Vec<usize> {
     data.iter().map(|s| s.len()).collect()
 }
@@ -43,7 +37,7 @@ fn can_create_files() {
     sg_stack_graph_add_files(
         graph,
         filenames.len(),
-        strings(&filenames).as_ptr(),
+        filenames.join("").as_ptr() as *const c_char,
         lengths(&filenames).as_ptr(),
         handles.as_mut_ptr() as *mut sg_file_handle,
     );
