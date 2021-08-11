@@ -156,6 +156,7 @@ where
 // Scope stack variables
 
 /// Represents an unknown list of exported scopes.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ScopeStackVariable(NonZeroU32);
 
@@ -296,6 +297,7 @@ impl ScopeStackBindings {
 // Partial symbol stacks
 
 /// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialScopedSymbol {
     pub symbol: Handle<Symbol>,
@@ -423,6 +425,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 /// one symbol stack variable, which will appear at the end of its precondition and postcondition.
 /// So for simplicity we just leave it out.  At some point in the future we might add it in so that
 /// the symbol and scope stack formalisms and implementations are more obviously symmetric.)
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialSymbolStack {
     deque: Deque<PartialScopedSymbol>,
@@ -599,6 +602,13 @@ impl PartialSymbolStack {
             .iter_unordered(&partials.partial_symbol_stacks)
             .copied()
     }
+
+    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.deque
+            .ensure_backwards(&mut partials.partial_symbol_stacks);
+        self.deque
+            .ensure_forwards(&mut partials.partial_symbol_stacks);
+    }
 }
 
 impl DisplayWithPartialPaths for PartialSymbolStack {
@@ -635,6 +645,7 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
 
 /// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
 /// exported scopes, along with an optional scope stack variable.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialScopeStack {
     scopes: Deque<Handle<Node>>,
@@ -812,6 +823,13 @@ impl PartialScopeStack {
     ) -> impl Display + 'a {
         display_with(self, graph, partials)
     }
+
+    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.scopes
+            .ensure_backwards(&mut partials.partial_scope_stacks);
+        self.scopes
+            .ensure_forwards(&mut partials.partial_scope_stacks);
+    }
 }
 
 impl DisplayWithPartialPaths for PartialScopeStack {
@@ -928,6 +946,7 @@ impl PartialScopeStackBindings {
 //-------------------------------------------------------------------------------------------------
 // Edge lists
 
+#[repr(C)]
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PartialPathEdge {
     pub source_node_id: NodeID,
@@ -979,6 +998,7 @@ impl DisplayWithPartialPaths for PartialPathEdge {
 
 /// The edges in a path keep track of precedence information so that we can correctly handle
 /// shadowed definitions.
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PartialPathEdgeList {
     edges: Deque<PartialPathEdge>,
@@ -1115,6 +1135,12 @@ impl PartialPathEdgeList {
             .iter_unordered(&partials.partial_path_edges)
             .copied()
     }
+
+    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.edges
+            .ensure_backwards(&mut partials.partial_path_edges);
+        self.edges.ensure_forwards(&mut partials.partial_path_edges);
+    }
 }
 
 impl DisplayWithPartialPaths for PartialPathEdgeList {
@@ -1158,6 +1184,7 @@ impl DisplayWithPartialPaths for PartialPathEdgeList {
 /// (or parts of a scope symbol's attached scope list) whose contents we don't care about.  The
 /// postconditions can _also_ refer to those variables, and describe how those variable parts of
 /// the input scope stacks are carried through unmodified into the resulting scope stack.
+#[repr(C)]
 #[derive(Clone)]
 pub struct PartialPath {
     pub start_node: Handle<Node>,
@@ -1322,6 +1349,20 @@ impl PartialPath {
             return true;
         }
         false
+    }
+
+    /// Ensures that the content of this partial path is available in both forwards and backwards
+    /// directions.
+    pub fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        self.symbol_stack_precondition
+            .ensure_both_directions(partials);
+        self.symbol_stack_postcondition
+            .ensure_both_directions(partials);
+        self.scope_stack_precondition
+            .ensure_both_directions(partials);
+        self.scope_stack_postcondition
+            .ensure_both_directions(partials);
+        self.edges.ensure_both_directions(partials);
     }
 
     /// Returns a fresh scope stack variable that is not already used anywhere in this partial
@@ -1675,9 +1716,9 @@ impl Path {
 /// Manages the state of a collection of partial paths built up as part of the partial-path-finding
 /// algorithm or path-stitching algorithm.
 pub struct PartialPaths {
-    partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
-    partial_scope_stacks: DequeArena<Handle<Node>>,
-    partial_path_edges: DequeArena<PartialPathEdge>,
+    pub(crate) partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
+    pub(crate) partial_scope_stacks: DequeArena<Handle<Node>>,
+    pub(crate) partial_path_edges: DequeArena<PartialPathEdge>,
 }
 
 impl PartialPaths {

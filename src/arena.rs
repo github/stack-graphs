@@ -68,6 +68,11 @@ impl<T> Handle<T> {
     }
 
     #[inline(always)]
+    pub fn as_u32(self) -> u32 {
+        self.index.get()
+    }
+
+    #[inline(always)]
     pub fn as_usize(self) -> usize {
         self.index.get() as usize
     }
