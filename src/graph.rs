@@ -348,14 +348,14 @@ impl Handle<File> {
 /// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
 /// _local ID_ that must be unique within its file.
 #[repr(C)]
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeID {
     file: Option<Handle<File>>,
     local_id: u32,
 }
 
-const ROOT_NODE_ID: u32 = 0;
-const JUMP_TO_NODE_ID: u32 = 1;
+const ROOT_NODE_ID: u32 = 1;
+const JUMP_TO_NODE_ID: u32 = 2;
 
 impl NodeID {
     /// Returns the ID of the singleton _root node_.
@@ -512,7 +512,7 @@ impl Node {
 
     /// Returns this node's attached scope, if it has one.  (_Push scoped symbol_ nodes have
     /// attached scopes.)
-    pub fn scope(&self) -> Option<Handle<Node>> {
+    pub fn scope(&self) -> Option<NodeID> {
         match self {
             Node::PushScopedSymbol(node) => Some(node.scope),
             _ => None,
@@ -657,7 +657,7 @@ pub struct DropScopesNode {
     /// The unique identifier for this node.
     pub id: NodeID,
     _symbol: Option<Handle<Symbol>>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     _is_clickable: bool,
 }
 
@@ -673,7 +673,7 @@ impl StackGraph {
         let node = DropScopesNode {
             id,
             _symbol: None,
-            _scope: None,
+            _scope: NodeID::default(),
             _is_clickable: false,
         };
         self.add_node(id, node.into())
@@ -712,7 +712,7 @@ pub struct ExportedScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
     _symbol: Option<Handle<Symbol>>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     _is_clickable: bool,
 }
 
@@ -728,7 +728,7 @@ impl StackGraph {
         let node = ExportedScopeNode {
             id,
             _symbol: None,
-            _scope: None,
+            _scope: NodeID::default(),
             _is_clickable: false,
         };
         self.add_node(id, node.into())
@@ -771,7 +771,7 @@ pub struct InternalScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
     _symbol: Option<Handle<Symbol>>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     _is_clickable: bool,
 }
 
@@ -787,7 +787,7 @@ impl StackGraph {
         let node = InternalScopeNode {
             id,
             _symbol: None,
-            _scope: None,
+            _scope: NodeID::default(),
             _is_clickable: false,
         };
         self.add_node(id, node.into())
@@ -829,7 +829,7 @@ impl<'a> Display for DisplayInternalScopeNode<'a> {
 pub struct JumpToNode {
     _id: NodeID,
     _symbol: Option<Handle<Symbol>>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     _is_clickable: bool,
 }
 
@@ -847,7 +847,7 @@ impl JumpToNode {
                 local_id: 0,
             },
             _symbol: None,
-            _scope: None,
+            _scope: NodeID::default(),
             _is_clickable: false,
         }
     }
@@ -868,7 +868,7 @@ pub struct PopScopedSymbolNode {
     pub id: NodeID,
     /// The symbol to pop off the symbol stack.
     pub symbol: Handle<Symbol>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     /// Whether this node represents a reference in the source language.
     pub is_definition: bool,
 }
@@ -890,7 +890,7 @@ impl StackGraph {
         let node = PopScopedSymbolNode {
             id,
             symbol,
-            _scope: None,
+            _scope: NodeID::default(),
             is_definition,
         };
         self.add_node(id, node.into())
@@ -940,7 +940,7 @@ pub struct PopSymbolNode {
     pub id: NodeID,
     /// The symbol to pop off the symbol stack.
     pub symbol: Handle<Symbol>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     /// Whether this node represents a reference in the source language.
     pub is_definition: bool,
 }
@@ -962,7 +962,7 @@ impl StackGraph {
         let node = PopSymbolNode {
             id,
             symbol,
-            _scope: None,
+            _scope: NodeID::default(),
             is_definition,
         };
         self.add_node(id, node.into())
@@ -1011,9 +1011,9 @@ pub struct PushScopedSymbolNode {
     pub id: NodeID,
     /// The symbol to push onto the symbol stack.
     pub symbol: Handle<Symbol>,
-    /// The exported scope node that should be attached to the scoped symbol.  The Handle<Node> must
+    /// The exported scope node that should be attached to the scoped symbol.  The node ID must
     /// refer to an exported scope node.
-    pub scope: Handle<Node>,
+    pub scope: NodeID,
     /// Whether this node represents a reference in the source language.
     pub is_reference: bool,
     _phantom: (),
@@ -1031,7 +1031,7 @@ impl StackGraph {
         &mut self,
         id: NodeID,
         symbol: Handle<Symbol>,
-        scope: Handle<Node>,
+        scope: NodeID,
         is_reference: bool,
     ) -> Option<Handle<Node>> {
         let node = PushScopedSymbolNode {
@@ -1088,7 +1088,7 @@ pub struct PushSymbolNode {
     pub id: NodeID,
     /// The symbol to push onto the symbol stack.
     pub symbol: Handle<Symbol>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     /// Whether this node represents a reference in the source language.
     pub is_reference: bool,
 }
@@ -1110,7 +1110,7 @@ impl StackGraph {
         let node = PushSymbolNode {
             id,
             symbol,
-            _scope: None,
+            _scope: NodeID::default(),
             is_reference,
         };
         self.add_node(id, node.into())
@@ -1157,7 +1157,7 @@ impl<'a> Display for DisplayPushSymbolNode<'a> {
 pub struct RootNode {
     _id: NodeID,
     _symbol: Option<Handle<Symbol>>,
-    _scope: Option<Handle<Node>>,
+    _scope: NodeID,
     _is_clickable: bool,
 }
 
@@ -1175,7 +1175,7 @@ impl RootNode {
                 local_id: 0,
             },
             _symbol: None,
-            _scope: None,
+            _scope: NodeID::default(),
             _is_clickable: false,
         }
     }

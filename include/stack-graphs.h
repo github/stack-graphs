@@ -13,10 +13,10 @@
 #define SG_LIST_EMPTY_HANDLE 4294967295
 
 // The local_id of the singleton root node.
-#define SG_ROOT_NODE_ID 0
+#define SG_ROOT_NODE_ID 1
 
 // The local_id of the singleton "jump to scope" node.
-#define SG_JUMP_TO_NODE_ID 1
+#define SG_JUMP_TO_NODE_ID 2
 
 // Describes in which direction the content of a deque is stored in memory.
 enum sg_deque_direction {
@@ -140,9 +140,6 @@ struct sg_node_id {
     uint32_t local_id;
 };
 
-// A handle to a node in a stack graph.  A zero handle represents a missing node.
-typedef uint32_t sg_node_handle;
-
 // A node in a stack graph.
 struct sg_node {
     enum sg_node_kind kind;
@@ -154,7 +151,7 @@ struct sg_node {
     // The scope associated with this node.  For push scope nodes, this is the scope that will be
     // attached to the symbol before it's pushed onto the symbol stack.  For all other node types,
     // this will be null.
-    sg_node_handle scope;
+    struct sg_node_id scope;
     // Whether this node is "clickable".  For push nodes, this indicates that the node represents
     // a reference in the source.  For pop nodes, this indicates that the node represents a
     // definition in the source.  For all other node types, this field will be unused.
@@ -168,6 +165,9 @@ struct sg_nodes {
     const struct sg_node *nodes;
     size_t count;
 };
+
+// A handle to a node in a stack graph.  A zero handle represents a missing node.
+typedef uint32_t sg_node_handle;
 
 // Connects two nodes in a stack graph.
 //

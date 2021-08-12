@@ -49,7 +49,8 @@ pub trait CreateStackGraph {
         file: Self::File,
         local_id: u32,
         symbol: Self::Symbol,
-        scope: Self::Node,
+        scope_file: Self::File,
+        scope_id: u32,
     ) -> Self::Node;
 
     fn push_symbol(&mut self, file: Self::File, local_id: u32, symbol: Self::Symbol) -> Self::Node;
@@ -128,8 +129,10 @@ impl CreateStackGraph for StackGraph {
         file: Handle<File>,
         local_id: u32,
         symbol: Handle<Symbol>,
-        scope: Handle<Node>,
+        scope_file: Handle<File>,
+        scope_id: u32,
     ) -> Handle<Node> {
+        let scope = NodeID::new_in_file(scope_file, scope_id);
         self.add_push_scoped_symbol_node(NodeID::new_in_file(file, local_id), symbol, scope, false)
             .expect("Duplicate node ID")
     }

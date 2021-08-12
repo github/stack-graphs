@@ -59,7 +59,7 @@ where
     let main_A = graph.reference(main_file, 9, sym_A);
     let main_bar = graph.reference(main_file, 10, sym_bar);
     let main_dot_11 = graph.push_symbol(main_file, 11, sym_dot);
-    let main_call_12 = graph.push_scoped_symbol(main_file, 12, sym_call, main_exported);
+    let main_call_12 = graph.push_scoped_symbol(main_file, 12, sym_call, main_file, 7);
     let main_foo = graph.reference(main_file, 13, sym_foo);
     let main_dot_14 = graph.push_symbol(main_file, 14, sym_dot);
     let main_b = graph.reference(main_file, 15, sym_b);

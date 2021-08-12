@@ -1202,7 +1202,7 @@ impl PartialPath {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         node: Handle<Node>,
-    ) -> PartialPath {
+    ) -> Result<PartialPath, PathResolutionError> {
         let initial_scope_stack = ScopeStackVariable::initial();
         let symbol_stack_precondition = PartialSymbolStack::empty();
         let mut symbol_stack_postcondition = PartialSymbolStack::empty();
@@ -1213,7 +1213,10 @@ impl PartialPath {
         if let Node::PushScopedSymbol(inner_node) = inner_node {
             scope_stack_precondition = PartialScopeStack::empty();
             scope_stack_postcondition = PartialScopeStack::empty();
-            scope_stack_postcondition.push_front(partials, inner_node.scope);
+            let scope = graph
+                .node_for_id(inner_node.scope)
+                .ok_or(PathResolutionError::UnknownAttachedScope)?;
+            scope_stack_postcondition.push_front(partials, scope);
             let initial_symbol = PartialScopedSymbol {
                 symbol: inner_node.symbol,
                 scopes: Some(scope_stack_postcondition),
@@ -1229,7 +1232,7 @@ impl PartialPath {
             symbol_stack_postcondition.push_front(partials, initial_symbol);
         }
 
-        PartialPath {
+        Ok(PartialPath {
             start_node: node,
             end_node: node,
             symbol_stack_precondition,
@@ -1237,7 +1240,7 @@ impl PartialPath {
             scope_stack_precondition,
             scope_stack_postcondition,
             edges: PartialPathEdgeList::empty(),
-        }
+        })
     }
 
     /// Returns whether one path shadows another.  Note that shadowing is not commutative — if path
@@ -1462,7 +1465,9 @@ impl PartialPath {
             // Pushing the scoped symbol onto our postcondition indicates that using this partial
             // path would push the scoped symbol onto the path's symbol stack.
             let sink_symbol = sink.symbol;
-            let sink_scope = sink.scope;
+            let sink_scope = graph
+                .node_for_id(sink.scope)
+                .ok_or(PathResolutionError::UnknownAttachedScope)?;
             let mut attached_scopes = self.scope_stack_postcondition;
             attached_scopes.push_front(partials, sink_scope);
             let postcondition_symbol = PartialScopedSymbol {
@@ -1617,7 +1622,7 @@ impl PartialPaths {
     {
         let mut cycle_detector = CycleDetector::new();
         let mut queue = VecDeque::new();
-        queue.push_back(PartialPath::from_node(graph, self, graph.root_node()));
+        queue.push_back(PartialPath::from_node(graph, self, graph.root_node()).unwrap());
         queue.extend(
             graph
                 .nodes_for_file(file)
@@ -1627,7 +1632,7 @@ impl PartialPaths {
                     Node::ExportedScope(_) => true,
                     _ => false,
                 })
-                .map(|node| PartialPath::from_node(graph, self, node)),
+                .map(|node| PartialPath::from_node(graph, self, node).unwrap()),
         );
         while let Some(path) = queue.pop_front() {
             if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
