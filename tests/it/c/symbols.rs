@@ -15,12 +15,6 @@ use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::sg_symbols;
 use stack_graphs::graph::Symbol;
 
-fn strings(data: &[&'static str]) -> Vec<*const c_char> {
-    data.iter()
-        .map(|s| s.as_bytes().as_ptr() as *const c_char)
-        .collect()
-}
-
 fn lengths(data: &[&'static str]) -> Vec<usize> {
     data.iter().map(|s| s.len()).collect()
 }
@@ -43,7 +37,7 @@ fn can_create_symbols() {
     sg_stack_graph_add_symbols(
         graph,
         symbol_data.len(),
-        strings(&symbol_data).as_ptr(),
+        symbol_data.join("").as_ptr() as *const c_char,
         lengths(&symbol_data).as_ptr(),
         handles.as_mut_ptr() as *mut sg_symbol_handle,
     );

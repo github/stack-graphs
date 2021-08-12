@@ -493,9 +493,10 @@ void sg_partial_path_database_free(struct sg_partial_path_database *db);
 // pointer is only valid until the next call to any function that mutates the stack graph.
 struct sg_symbols sg_stack_graph_symbols(const struct sg_stack_graph *graph);
 
-// Adds new symbols to the stack graph.  You provide an array of symbol content, and an output
-// array, which must have the same length.  We will place each symbol's handle in the output
-// array.
+// Adds new symbols to the stack graph.  You provide all of the symbol content concatenated
+// together into a single string, and an array of the lengths of each symbol.  You also provide an
+// output array, which must have the same size as `lengths`.  We will place each symbol's handle
+// in the output array.
 //
 // We ensure that there is only ever one copy of a particular symbol stored in the graph — we
 // guarantee that identical symbols will have the same handles, meaning that you can compare the
@@ -508,7 +509,7 @@ struct sg_symbols sg_stack_graph_symbols(const struct sg_stack_graph *graph);
 // to the stack graph, and the corresponding entry in the output array will be the null handle.
 void sg_stack_graph_add_symbols(struct sg_stack_graph *graph,
                                 size_t count,
-                                const char *const *symbols,
+                                const char *symbols,
                                 const size_t *lengths,
                                 sg_symbol_handle *handles_out);
 
@@ -516,8 +517,10 @@ void sg_stack_graph_add_symbols(struct sg_stack_graph *graph,
 // is only valid until the next call to any function that mutates the stack graph.
 struct sg_files sg_stack_graph_files(const struct sg_stack_graph *graph);
 
-// Adds new files to the stack graph.  You provide an array of file content, and an output array,
-// which must have the same length.  We will place each file's handle in the output array.
+// Adds new files to the stack graph.  You provide all of the file content concatenated together
+// into a single string, and an array of the lengths of each file.  You also provide an output
+// array, which must have the same size as `lengths`.  We will place each file's handle in the
+// output array.
 //
 // There can only ever be one file with a particular name in the graph.  If you try to add a file
 // with a name that already exists, you'll get the same handle as a result.
@@ -530,7 +533,7 @@ struct sg_files sg_stack_graph_files(const struct sg_stack_graph *graph);
 // handle.
 void sg_stack_graph_add_files(struct sg_stack_graph *graph,
                               size_t count,
-                              const char *const *files,
+                              const char *files,
                               const size_t *lengths,
                               sg_file_handle *handles_out);
 

@@ -39,13 +39,12 @@ use stack_graphs::c::sg_symbol_stack_cells;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
-    let strings = [filename.as_bytes().as_ptr() as *const c_char];
     let lengths = [filename.len()];
     let mut handles: [sg_file_handle; 1] = [0; 1];
     sg_stack_graph_add_files(
         graph,
         1,
-        strings.as_ptr(),
+        filename.as_bytes().as_ptr() as *const c_char,
         lengths.as_ptr(),
         handles.as_mut_ptr(),
     );
@@ -54,13 +53,12 @@ fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
 }
 
 fn add_symbol(graph: *mut sg_stack_graph, value: &str) -> sg_symbol_handle {
-    let strings = [value.as_bytes().as_ptr() as *const c_char];
     let lengths = [value.len()];
     let mut handles: [sg_symbol_handle; 1] = [0; 1];
     sg_stack_graph_add_symbols(
         graph,
         1,
-        strings.as_ptr(),
+        value.as_bytes().as_ptr() as *const c_char,
         lengths.as_ptr(),
         handles.as_mut_ptr(),
     );

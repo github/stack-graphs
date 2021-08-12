@@ -32,13 +32,12 @@ fn node_id(file: sg_file_handle, local_id: u32) -> NodeID {
 }
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
-    let strings = [filename.as_bytes().as_ptr() as *const c_char];
     let lengths = [filename.len()];
     let mut handles: [sg_file_handle; 1] = [0; 1];
     sg_stack_graph_add_files(
         graph,
         1,
-        strings.as_ptr(),
+        filename.as_bytes().as_ptr() as *const c_char,
         lengths.as_ptr(),
         handles.as_mut_ptr(),
     );
@@ -47,13 +46,12 @@ fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
 }
 
 fn add_symbol(graph: *mut sg_stack_graph, symbol: &str) -> sg_symbol_handle {
-    let strings = [symbol.as_bytes().as_ptr() as *const c_char];
     let lengths = [symbol.len()];
     let mut handles: [sg_symbol_handle; 1] = [0; 1];
     sg_stack_graph_add_symbols(
         graph,
         1,
-        strings.as_ptr(),
+        symbol.as_bytes().as_ptr() as *const c_char,
         lengths.as_ptr(),
         handles.as_mut_ptr(),
     );
