@@ -8,6 +8,7 @@
 mod can_create_graph;
 mod can_find_partial_paths_in_file;
 mod can_jump_to_definition;
+mod can_jump_to_definition_with_partial_paths;
 mod files;
 mod nodes;
 mod partial;

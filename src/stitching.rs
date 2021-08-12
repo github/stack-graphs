@@ -77,7 +77,7 @@ pub struct Database {
 }
 
 impl Database {
-    /// Creates a new, empty data.
+    /// Creates a new, empty database.
     pub fn new() -> Database {
         Database {
             partial_paths: Arena::new(),
@@ -329,6 +329,13 @@ impl PathStitcher {
     /// the most recent phase of the path-stitching algorithm.
     pub fn previous_phase_paths(&self) -> impl Iterator<Item = &Path> + '_ {
         self.next_iteration.iter()
+    }
+
+    /// Returns a slice of all of the (possibly incomplete) paths that were encountered during the
+    /// most recent phase of the path-stitching algorithm.
+    pub fn previous_phase_paths_slice(&mut self) -> &[Path] {
+        self.next_iteration.make_contiguous();
+        self.next_iteration.as_slices().0
     }
 
     /// Attempts to extend one path as part of the path-stitching algorithm.  When calling this
