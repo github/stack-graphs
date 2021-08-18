@@ -436,11 +436,14 @@ pub extern "C" fn sg_stack_graph_nodes(graph: *const sg_stack_graph) -> sg_nodes
 /// You cannot add new instances of the root node or "jump to scope" node, since those are
 /// singletons and already exist in the stack graph.
 ///
+/// If you try to add a new node that has the same ID as an existing node in the stack graph, the
+/// new node will be ignored, and the corresponding entry in the `handles_out` array will contain
+/// the handle of the _existing_ node with that ID.
+///
 /// If any node that you pass in is invalid, it will not be added to the graph, and the
-/// corresponding entry in the `handles_out` array will be null.  (Note that includes trying to add
-/// a node with the same ID as an existing node, since all nodes must have unique IDs.)
+/// corresponding entry in the `handles_out` array will be null.
 #[no_mangle]
-pub extern "C" fn sg_stack_graph_add_nodes(
+pub extern "C" fn sg_stack_graph_get_or_create_nodes(
     graph: *mut sg_stack_graph,
     count: usize,
     nodes: *const sg_node,
@@ -452,8 +455,8 @@ pub extern "C" fn sg_stack_graph_add_nodes(
         unsafe { std::slice::from_raw_parts_mut(handles_out as *mut Option<Handle<Node>>, count) };
     for i in 0..count {
         let node_id = nodes[i].id;
-        handles_out[i] =
-            validate_node(graph, &nodes[i]).and_then(|node| graph.add_node(node_id.into(), node));
+        handles_out[i] = validate_node(graph, &nodes[i])
+            .map(|node| graph.get_or_create_node(node_id.into(), node));
     }
 }
 

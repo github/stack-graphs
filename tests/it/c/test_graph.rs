@@ -15,9 +15,9 @@ use stack_graphs::c::sg_node_kind;
 use stack_graphs::c::sg_stack_graph;
 use stack_graphs::c::sg_stack_graph_add_edges;
 use stack_graphs::c::sg_stack_graph_add_files;
-use stack_graphs::c::sg_stack_graph_add_nodes;
 use stack_graphs::c::sg_stack_graph_add_symbols;
 use stack_graphs::c::sg_stack_graph_free;
+use stack_graphs::c::sg_stack_graph_get_or_create_nodes;
 use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::SG_JUMP_TO_NODE_HANDLE;
@@ -46,7 +46,7 @@ impl TestGraph {
     fn add_node(&mut self, node: sg_node) -> sg_node_handle {
         let nodes = [node];
         let mut handles: [sg_node_handle; 1] = [0; 1];
-        sg_stack_graph_add_nodes(
+        sg_stack_graph_get_or_create_nodes(
             self.graph,
             nodes.len(),
             nodes.as_ptr(),

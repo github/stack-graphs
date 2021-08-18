@@ -551,13 +551,16 @@ struct sg_nodes sg_stack_graph_nodes(const struct sg_stack_graph *graph);
 // You cannot add new instances of the root node or "jump to scope" node, since those are
 // singletons and already exist in the stack graph.
 //
+// If you try to add a new node that has the same ID as an existing node in the stack graph, the
+// new node will be ignored, and the corresponding entry in the `handles_out` array will contain
+// the handle of the _existing_ node with that ID.
+//
 // If any node that you pass in is invalid, it will not be added to the graph, and the
-// corresponding entry in the `handles_out` array will be null.  (Note that includes trying to add
-// a node with the same ID as an existing node, since all nodes must have unique IDs.)
-void sg_stack_graph_add_nodes(struct sg_stack_graph *graph,
-                              size_t count,
-                              const struct sg_node *nodes,
-                              sg_node_handle *handles_out);
+// corresponding entry in the `handles_out` array will be null.
+void sg_stack_graph_get_or_create_nodes(struct sg_stack_graph *graph,
+                                        size_t count,
+                                        const struct sg_node *nodes,
+                                        sg_node_handle *handles_out);
 
 // Adds new edges to the stack graph.  You provide an array of `struct sg_edges` instances.  A
 // stack graph can contain at most one edge between any two nodes.  It is not an error if you try
