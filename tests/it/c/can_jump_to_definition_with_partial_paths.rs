@@ -19,6 +19,7 @@ use stack_graphs::c::sg_partial_path_database;
 use stack_graphs::c::sg_partial_path_database_add_partial_paths;
 use stack_graphs::c::sg_partial_path_database_free;
 use stack_graphs::c::sg_partial_path_database_new;
+use stack_graphs::c::sg_partial_path_handle;
 use stack_graphs::c::sg_partial_path_list_count;
 use stack_graphs::c::sg_partial_path_list_free;
 use stack_graphs::c::sg_partial_path_list_new;
@@ -92,12 +93,14 @@ impl StorageLayer {
                     &mut (*partials).inner
                 })
             );
+            let mut out = sg_partial_path_handle::default();
             sg_partial_path_database_add_partial_paths(
                 graph,
                 partials,
                 db,
                 1,
                 path as *const _ as *const sg_partial_path,
+                &mut out,
             );
             false
         });

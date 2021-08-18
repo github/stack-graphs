@@ -1339,6 +1339,29 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
 /// partial path.
 pub type sg_partial_path_handle = u32;
 
+/// An array of all of the partial paths in a partial path database.  Partial path handles are
+/// indices into this array.  There will never be a valid partial path at index 0; a handle with
+/// the value 0 represents a missing partial path.
+#[repr(C)]
+pub struct sg_partial_paths {
+    pub paths: *const sg_partial_path,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of partial path data in this partial path database.  The
+/// resulting array pointer is only valid until the next call to any function that mutates the
+/// partial path database.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_database_partial_paths(
+    db: *const sg_partial_path_database,
+) -> sg_partial_paths {
+    let db = unsafe { &(*db).inner };
+    sg_partial_paths {
+        paths: db.partial_paths.as_ptr() as *const sg_partial_path,
+        count: db.partial_paths.len(),
+    }
+}
+
 /// Adds new partial paths to the partial path database.  `paths` is the array of partial paths
 /// that you want to add; `count` is the number of them.
 ///
@@ -1348,6 +1371,10 @@ pub type sg_partial_path_handle = u32;
 /// You should take care not to add a partial path to the database multiple times.  This won't
 /// cause an _error_, in that nothing will break, but it will probably cause you to get duplicate
 /// paths from the path-stitching algorithm.
+///
+/// You must also provide an `out` array, which must also have room for `count` elements.  We will
+/// fill this array in with the `sg_partial_path_edge_list` instances for each partial path edge
+/// list that is created.
 #[no_mangle]
 pub extern "C" fn sg_partial_path_database_add_partial_paths(
     graph: *const sg_stack_graph,
@@ -1355,13 +1382,15 @@ pub extern "C" fn sg_partial_path_database_add_partial_paths(
     db: *mut sg_partial_path_database,
     count: usize,
     paths: *const sg_partial_path,
+    out: *mut sg_partial_path_handle,
 ) {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let db = unsafe { &mut (*db).inner };
     let paths = unsafe { std::slice::from_raw_parts(paths, count) };
+    let out = unsafe { std::slice::from_raw_parts_mut(out as *mut Handle<PartialPath>, count) };
     for i in 0..count {
-        db.add_partial_path(graph, partials, paths[i].into());
+        out[i] = db.add_partial_path(graph, partials, paths[i].into());
     }
 }
 
