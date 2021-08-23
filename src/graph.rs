@@ -526,12 +526,12 @@ impl Node {
             Node::DropScopes(node) => node.id,
             Node::ExportedScope(node) => node.id,
             Node::InternalScope(node) => node.id,
-            Node::JumpTo(_) => NodeID::jump_to(),
+            Node::JumpTo(node) => node.id,
             Node::PushScopedSymbol(node) => node.id,
             Node::PushSymbol(node) => node.id,
             Node::PopScopedSymbol(node) => node.id,
             Node::PopSymbol(node) => node.id,
-            Node::Root(_) => NodeID::root(),
+            Node::Root(node) => node.id,
         }
     }
 
@@ -837,7 +837,7 @@ impl<'a> Display for DisplayInternalScopeNode<'a> {
 /// the graph.
 #[repr(C)]
 pub struct JumpToNode {
-    _id: NodeID,
+    id: NodeID,
     _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
     _is_clickable: bool,
@@ -852,10 +852,7 @@ impl From<JumpToNode> for Node {
 impl JumpToNode {
     fn new() -> JumpToNode {
         JumpToNode {
-            _id: NodeID {
-                file: ControlledOption::none(),
-                local_id: 0,
-            },
+            id: NodeID::jump_to(),
             _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
             _is_clickable: false,
@@ -1165,7 +1162,7 @@ impl<'a> Display for DisplayPushSymbolNode<'a> {
 /// The singleton root node, which allows a name binding path to cross between files.
 #[repr(C)]
 pub struct RootNode {
-    _id: NodeID,
+    id: NodeID,
     _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
     _is_clickable: bool,
@@ -1180,10 +1177,7 @@ impl From<RootNode> for Node {
 impl RootNode {
     fn new() -> RootNode {
         RootNode {
-            _id: NodeID {
-                file: ControlledOption::none(),
-                local_id: 0,
-            },
+            id: NodeID::root(),
             _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
             _is_clickable: false,
