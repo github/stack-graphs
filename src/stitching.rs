@@ -37,6 +37,8 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
+#[cfg(feature = "copious-debugging")]
+use std::fmt::Display;
 use std::ops::Index;
 
 use crate::arena::Arena;
@@ -97,6 +99,15 @@ impl Database {
         path: PartialPath,
     ) -> Handle<PartialPath> {
         let start_node = path.start_node;
+        copious_debugging!(
+            "    Add {} path to database {}",
+            if graph[start_node].is_root() {
+                "root"
+            } else {
+                "node"
+            },
+            path.display(graph, partials)
+        );
         let symbol_stack_precondition = path.symbol_stack_precondition;
         let handle = self.partial_paths.add(path);
 
@@ -119,9 +130,12 @@ impl Database {
 
     /// Find all partial paths in this database that start at the root node, and have a symbol
     /// stack precondition that is compatible with a given symbol stack.
+    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
     pub fn find_candidate_partial_paths_from_root<R>(
         &mut self,
+        graph: &StackGraph,
         paths: &mut Paths,
+        partials: &mut PartialPaths,
         symbol_stack: SymbolStack,
         result: &mut R,
     ) where
@@ -131,8 +145,21 @@ impl Database {
         // symbol stack precondition is compatible with the path.
         let mut symbol_stack = SymbolStackKey::from_symbol_stack(paths, self, symbol_stack);
         loop {
+            copious_debugging!(
+                "      Search for symbol stack <{}>",
+                symbol_stack.display(graph, self)
+            );
             let key_handle = symbol_stack.back_handle();
             if let Some(paths) = self.root_paths_by_precondition.get(key_handle) {
+                #[cfg(feature = "copious-debugging")]
+                {
+                    for path in paths {
+                        copious_debugging!(
+                            "        Found path {}",
+                            self[*path].display(graph, partials)
+                        );
+                    }
+                }
                 result.extend(paths.iter().copied());
             }
             if symbol_stack.pop_back(self).is_none() {
@@ -145,15 +172,28 @@ impl Database {
     /// results any further than that, since we have to check each partial path for compatibility
     /// as we try to append it to the current incomplete path anyway, and non-root nodes will
     /// typically have a small number of outgoing edges.
+    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
     pub fn find_candidate_partial_paths_from_node<R>(
         &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
         start_node: Handle<Node>,
         result: &mut R,
     ) where
         R: std::iter::Extend<Handle<PartialPath>>,
     {
+        copious_debugging!("      Search for start node {}", start_node.display(graph));
         // Return all of the partial paths that start at the requested node.
         if let Some(paths) = self.paths_by_start_node.get(start_node) {
+            #[cfg(feature = "copious-debugging")]
+            {
+                for path in paths {
+                    copious_debugging!(
+                        "        Found path {}",
+                        self[*path].display(graph, partials)
+                    );
+                }
+            }
             result.extend(paths.iter().copied());
         }
     }
@@ -247,6 +287,35 @@ impl SymbolStackKey {
         // is a handle to the "back" of the key.
         self.symbols.handle()
     }
+
+    #[cfg(feature = "copious-debugging")]
+    fn display<'a>(self, graph: &'a StackGraph, db: &'a Database) -> impl Display + 'a {
+        DisplaySymbolStackKey(self, graph, db)
+    }
+}
+
+#[cfg(feature = "copious-debugging")]
+struct DisplaySymbolStackKey<'a>(SymbolStackKey, &'a StackGraph, &'a Database);
+
+#[cfg(feature = "copious-debugging")]
+impl<'a> Display for DisplaySymbolStackKey<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // Use a recursive function to print the contents of the key out in reverse order.
+        fn display_one(
+            mut key: SymbolStackKey,
+            graph: &StackGraph,
+            db: &Database,
+            f: &mut std::fmt::Formatter,
+        ) -> std::fmt::Result {
+            let last = match key.pop_back(db) {
+                Some(last) => last,
+                None => return Ok(()),
+            };
+            display_one(key, graph, db, f)?;
+            last.display(graph).fmt(f)
+        }
+        display_one(self.0, self.1, self.2, f)
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -283,6 +352,8 @@ pub struct PathStitcher {
     queue: VecDeque<Path>,
     next_iteration: VecDeque<Path>,
     cycle_detector: CycleDetector<Path>,
+    #[cfg(feature = "copious-debugging")]
+    phase_number: usize,
 }
 
 impl PathStitcher {
@@ -307,9 +378,11 @@ impl PathStitcher {
     where
         I: IntoIterator<Item = Handle<Node>>,
     {
+        copious_debugging!("==> Start phase 0");
         let mut candidate_paths = Vec::new();
         for node in starting_nodes {
-            db.find_candidate_partial_paths_from_node(node, &mut candidate_paths);
+            copious_debugging!("    Initial node {}", node.display(graph));
+            db.find_candidate_partial_paths_from_node(graph, partials, node, &mut candidate_paths);
         }
         let next_iteration = candidate_paths
             .iter()
@@ -317,11 +390,14 @@ impl PathStitcher {
                 Path::from_partial_path(graph, paths, partials, &db[*partial_path])
             })
             .collect();
+        copious_debugging!("==> End phase 0");
         PathStitcher {
             candidate_paths,
             queue: VecDeque::new(),
             next_iteration,
             cycle_detector: CycleDetector::new(),
+            #[cfg(feature = "copious-debugging")]
+            phase_number: 1,
         }
     }
 
@@ -356,31 +432,44 @@ impl PathStitcher {
         db: &mut Database,
         path: &Path,
     ) {
+        copious_debugging!("--> Candidate path {}", path.display(graph, paths));
         self.candidate_paths.clear();
         if graph[path.end_node].is_root() {
             db.find_candidate_partial_paths_from_root(
+                graph,
                 paths,
+                partials,
                 path.symbol_stack,
                 &mut self.candidate_paths,
             );
         } else {
-            db.find_candidate_partial_paths_from_node(path.end_node, &mut self.candidate_paths);
+            db.find_candidate_partial_paths_from_node(
+                graph,
+                partials,
+                path.end_node,
+                &mut self.candidate_paths,
+            );
         }
 
         self.next_iteration.reserve(self.candidate_paths.len());
         for extension in &self.candidate_paths {
+            let extension = &db[*extension];
+            copious_debugging!("    Extend {}", path.display(graph, paths),);
+            copious_debugging!("      with {}", extension.display(graph, partials));
             let mut new_path = path.clone();
             // If there are errors adding this partial path to the path, or resolving the resulting
             // path, just skip the partial path — it's not a fatal error.
-            if new_path
-                .append_partial_path(graph, paths, partials, &db[*extension])
-                .is_err()
-            {
+            #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+            if let Err(err) = new_path.append_partial_path(graph, paths, partials, extension) {
+                copious_debugging!("        is invalid: {:?}", err);
                 continue;
             }
-            if new_path.resolve(graph, paths).is_err() {
+            #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+            if let Err(err) = new_path.resolve(graph, paths) {
+                copious_debugging!("        cannot resolve: {:?}", err);
                 continue;
             }
+            copious_debugging!("        is {}", new_path.display(graph, paths));
             self.next_iteration.push_back(new_path);
         }
     }
@@ -406,6 +495,7 @@ impl PathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
     ) {
+        copious_debugging!("==> Start phase {}", self.phase_number);
         std::mem::swap(&mut self.queue, &mut self.next_iteration);
         while let Some(path) = self.queue.pop_front() {
             if !self
@@ -415,6 +505,12 @@ impl PathStitcher {
                 continue;
             }
             self.stitch_path(graph, paths, partials, db, &path);
+        }
+
+        #[cfg(feature = "copious-debugging")]
+        {
+            copious_debugging!("==> End phase {}", self.phase_number);
+            self.phase_number += 1;
         }
     }
 

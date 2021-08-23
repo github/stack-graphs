@@ -58,6 +58,8 @@
 pub mod arena;
 pub mod c;
 pub mod cycles;
+#[macro_use]
+mod debugging;
 pub mod graph;
 pub mod partial;
 pub mod paths;

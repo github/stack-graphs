@@ -50,7 +50,13 @@ fn check_root_partial_paths(
     }
 
     let mut results = Vec::<Handle<PartialPath>>::new();
-    database.find_candidate_partial_paths_from_root(&mut paths, symbol_stack, &mut results);
+    database.find_candidate_partial_paths_from_root(
+        graph,
+        &mut paths,
+        &mut partials,
+        symbol_stack,
+        &mut results,
+    );
 
     let actual_partial_paths = results
         .into_iter()

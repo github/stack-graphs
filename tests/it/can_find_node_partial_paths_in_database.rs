@@ -37,7 +37,7 @@ fn check_node_partial_paths(
     });
 
     let mut results = Vec::<Handle<PartialPath>>::new();
-    database.find_candidate_partial_paths_from_node(node, &mut results);
+    database.find_candidate_partial_paths_from_node(graph, &mut partials, node, &mut results);
 
     let actual_partial_paths = results
         .into_iter()
