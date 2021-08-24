@@ -14,9 +14,9 @@ use stack_graphs::c::sg_node_kind;
 use stack_graphs::c::sg_nodes;
 use stack_graphs::c::sg_stack_graph;
 use stack_graphs::c::sg_stack_graph_add_files;
-use stack_graphs::c::sg_stack_graph_add_nodes;
 use stack_graphs::c::sg_stack_graph_add_symbols;
 use stack_graphs::c::sg_stack_graph_free;
+use stack_graphs::c::sg_stack_graph_get_or_create_nodes;
 use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_stack_graph_nodes;
 use stack_graphs::c::sg_symbol_handle;
@@ -99,7 +99,7 @@ fn cannot_add_singleton_nodes() {
     let graph = sg_stack_graph_new();
     let nodes = [root_node(), jump_to_node()];
     let mut handles: [sg_node_handle; 2] = [0; 2];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles.iter().all(|h| *h == 0));
     sg_stack_graph_free(graph);
 }
@@ -133,14 +133,20 @@ fn can_add_drop_scopes_node() {
     let nodes = [drop_scopes(file, 42)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
     // Add the node and verify its contents after dereferencing it.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
     assert!(matches!(node, Node::DropScopes(_)));
     assert!(node.id() == node_id(file, 42));
-    // Make sure we can't add the same node again.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
-    assert!(handles[0] == 0);
+    // Make sure that we get the same handle if we add the node again.
+    let mut new_handles: [sg_node_handle; 1] = [0; 1];
+    sg_stack_graph_get_or_create_nodes(
+        graph,
+        nodes.len(),
+        nodes.as_ptr(),
+        new_handles.as_mut_ptr(),
+    );
+    assert!(handles == new_handles);
     sg_stack_graph_free(graph);
 }
 
@@ -152,7 +158,7 @@ fn drop_scopes_cannot_have_symbol() {
     let mut nodes = [drop_scopes(file, 42)];
     nodes[0].symbol = symbol;
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -167,7 +173,7 @@ fn drop_scopes_cannot_have_scope() {
         local_id: SG_JUMP_TO_NODE_ID,
     };
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -192,14 +198,20 @@ fn can_add_exported_scope_node() {
     let nodes = [exported_scope(file, 42)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
     // Add the node and verify its contents after dereferencing it.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
     assert!(matches!(node, Node::ExportedScope(_)));
     assert!(node.id() == node_id(file, 42));
-    // Make sure we can't add the same node again.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
-    assert!(handles[0] == 0);
+    // Make sure that we get the same handle if we add the node again.
+    let mut new_handles: [sg_node_handle; 1] = [0; 1];
+    sg_stack_graph_get_or_create_nodes(
+        graph,
+        nodes.len(),
+        nodes.as_ptr(),
+        new_handles.as_mut_ptr(),
+    );
+    assert!(handles == new_handles);
     sg_stack_graph_free(graph);
 }
 
@@ -211,7 +223,7 @@ fn exported_scope_cannot_have_symbol() {
     let mut nodes = [exported_scope(file, 42)];
     nodes[0].symbol = symbol;
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -226,7 +238,7 @@ fn exported_scope_cannot_have_scope() {
         local_id: SG_JUMP_TO_NODE_ID,
     };
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -251,14 +263,20 @@ fn can_add_internal_scope_node() {
     let nodes = [internal_scope(file, 42)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
     // Add the node and verify its contents after dereferencing it.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
     assert!(matches!(node, Node::InternalScope(_)));
     assert!(node.id() == node_id(file, 42));
-    // Make sure we can't add the same node again.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
-    assert!(handles[0] == 0);
+    // Make sure that we get the same handle if we add the node again.
+    let mut new_handles: [sg_node_handle; 1] = [0; 1];
+    sg_stack_graph_get_or_create_nodes(
+        graph,
+        nodes.len(),
+        nodes.as_ptr(),
+        new_handles.as_mut_ptr(),
+    );
+    assert!(handles == new_handles);
     sg_stack_graph_free(graph);
 }
 
@@ -270,7 +288,7 @@ fn internal_scope_cannot_have_symbol() {
     let mut nodes = [internal_scope(file, 42)];
     nodes[0].symbol = symbol;
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -285,7 +303,7 @@ fn internal_scope_cannot_have_scope() {
         local_id: SG_JUMP_TO_NODE_ID,
     };
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -311,16 +329,22 @@ fn can_add_pop_scoped_symbol_node() {
     let nodes = [pop_scoped_symbol(file, 42, symbol)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
     // Add the node and verify its contents after dereferencing it.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
     assert!(matches!(node, Node::PopScopedSymbol(_)));
     assert!(node.id() == node_id(file, 42));
     assert!(node.symbol().unwrap().as_usize() == symbol as usize);
     assert!(node.is_definition());
-    // Make sure we can't add the same node again.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
-    assert!(handles[0] == 0);
+    // Make sure that we get the same handle if we add the node again.
+    let mut new_handles: [sg_node_handle; 1] = [0; 1];
+    sg_stack_graph_get_or_create_nodes(
+        graph,
+        nodes.len(),
+        nodes.as_ptr(),
+        new_handles.as_mut_ptr(),
+    );
+    assert!(handles == new_handles);
     sg_stack_graph_free(graph);
 }
 
@@ -330,7 +354,7 @@ fn pop_scoped_symbol_must_have_symbol() {
     let file = add_file(graph, "test.py");
     let nodes = [pop_scoped_symbol(file, 42, 0)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -346,7 +370,7 @@ fn pop_scoped_symbol_cannot_have_scope() {
         local_id: SG_JUMP_TO_NODE_ID,
     };
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -372,16 +396,22 @@ fn can_add_pop_symbol_node() {
     let nodes = [pop_symbol(file, 42, symbol)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
     // Add the node and verify its contents after dereferencing it.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
     assert!(matches!(node, Node::PopSymbol(_)));
     assert!(node.id() == node_id(file, 42));
     assert!(node.symbol().unwrap().as_usize() == symbol as usize);
     assert!(node.is_definition());
-    // Make sure we can't add the same node again.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
-    assert!(handles[0] == 0);
+    // Make sure that we get the same handle if we add the node again.
+    let mut new_handles: [sg_node_handle; 1] = [0; 1];
+    sg_stack_graph_get_or_create_nodes(
+        graph,
+        nodes.len(),
+        nodes.as_ptr(),
+        new_handles.as_mut_ptr(),
+    );
+    assert!(handles == new_handles);
     sg_stack_graph_free(graph);
 }
 
@@ -391,7 +421,7 @@ fn pop_symbol_must_have_symbol() {
     let file = add_file(graph, "test.py");
     let nodes = [pop_symbol(file, 42, 0)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -407,7 +437,7 @@ fn pop_symbol_cannot_have_scope() {
         local_id: SG_JUMP_TO_NODE_ID,
     };
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -443,7 +473,7 @@ fn can_add_push_scoped_symbol_node() {
     let nodes = [push_scoped_symbol(file, 42, symbol, 0, SG_JUMP_TO_NODE_ID)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
     // Add the node and verify its contents after dereferencing it.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
     assert!(matches!(node, Node::PushScopedSymbol(_)));
@@ -451,9 +481,15 @@ fn can_add_push_scoped_symbol_node() {
     assert!(node.symbol().unwrap().as_usize() == symbol as usize);
     assert!(node.scope().unwrap().is_jump_to());
     assert!(node.is_reference());
-    // Make sure we can't add the same node again.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
-    assert!(handles[0] == 0);
+    // Make sure that we get the same handle if we add the node again.
+    let mut new_handles: [sg_node_handle; 1] = [0; 1];
+    sg_stack_graph_get_or_create_nodes(
+        graph,
+        nodes.len(),
+        nodes.as_ptr(),
+        new_handles.as_mut_ptr(),
+    );
+    assert!(handles == new_handles);
     sg_stack_graph_free(graph);
 }
 
@@ -463,7 +499,7 @@ fn push_scoped_symbol_must_have_symbol() {
     let file = add_file(graph, "test.py");
     let nodes = [push_scoped_symbol(file, 42, 0, 0, SG_JUMP_TO_NODE_ID)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -475,7 +511,7 @@ fn push_scoped_symbol_must_have_scope() {
     let symbol = add_symbol(graph, "a");
     let nodes = [push_scoped_symbol(file, 42, symbol, 0, 0)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -501,16 +537,22 @@ fn can_add_push_symbol_node() {
     let nodes = [push_symbol(file, 42, symbol)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
     // Add the node and verify its contents after dereferencing it.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
     assert!(matches!(node, Node::PushSymbol(_)));
     assert!(node.id() == node_id(file, 42));
     assert!(node.symbol().unwrap().as_usize() == symbol as usize);
     assert!(node.is_reference());
-    // Make sure we can't add the same node again.
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
-    assert!(handles[0] == 0);
+    // Make sure that we get the same handle if we add the node again.
+    let mut new_handles: [sg_node_handle; 1] = [0; 1];
+    sg_stack_graph_get_or_create_nodes(
+        graph,
+        nodes.len(),
+        nodes.as_ptr(),
+        new_handles.as_mut_ptr(),
+    );
+    assert!(handles == new_handles);
     sg_stack_graph_free(graph);
 }
 
@@ -520,7 +562,7 @@ fn push_symbol_must_have_symbol() {
     let file = add_file(graph, "test.py");
     let nodes = [push_symbol(file, 42, 0)];
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }
@@ -536,7 +578,7 @@ fn push_symbol_cannot_have_scope() {
         local_id: SG_JUMP_TO_NODE_ID,
     };
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == 0);
     sg_stack_graph_free(graph);
 }

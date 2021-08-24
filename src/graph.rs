@@ -603,6 +603,15 @@ impl StackGraph {
         self.node_id_handles.set_handle_for_id(id, handle);
         Some(handle)
     }
+
+    pub(crate) fn get_or_create_node(&mut self, id: NodeID, node: Node) -> Handle<Node> {
+        if let Some(handle) = self.node_id_handles.handle_for_id(id) {
+            return handle;
+        }
+        let handle = self.nodes.add(node);
+        self.node_id_handles.set_handle_for_id(id, handle);
+        handle
+    }
 }
 
 #[doc(hidden)]

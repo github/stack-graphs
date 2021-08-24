@@ -31,9 +31,9 @@ use stack_graphs::c::sg_partial_symbol_stack;
 use stack_graphs::c::sg_partial_symbol_stack_cells;
 use stack_graphs::c::sg_stack_graph;
 use stack_graphs::c::sg_stack_graph_add_files;
-use stack_graphs::c::sg_stack_graph_add_nodes;
 use stack_graphs::c::sg_stack_graph_add_symbols;
 use stack_graphs::c::sg_stack_graph_free;
+use stack_graphs::c::sg_stack_graph_get_or_create_nodes;
 use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
@@ -80,7 +80,7 @@ fn add_exported_scope(
     };
     let nodes = [node];
     let mut handles: [sg_node_handle; 1] = [0; 1];
-    sg_stack_graph_add_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     handles[0]
 }
 
