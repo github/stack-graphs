@@ -17,6 +17,7 @@ edition = "2018"
 test = false
 
 [dependencies]
+controlled-option = "0.4"
 either = "1.6"
 fxhash = "0.2"
 libc = "0.2"

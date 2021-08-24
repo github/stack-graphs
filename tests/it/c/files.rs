@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
 use libc::c_char;
 use stack_graphs::arena::Handle;
 use stack_graphs::c::sg_file_handle;
@@ -65,4 +66,14 @@ fn can_create_files() {
     assert_eq!(get_file(&file_arena, c), "c.py");
 
     sg_stack_graph_free(graph);
+}
+
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_file_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<Handle<File>>()];
+    let mut rust: ControlledOption<Handle<File>> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_file_handle = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c, 0);
 }

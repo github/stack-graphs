@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
 use either::Either;
 use libc::c_char;
 use stack_graphs::c::sg_deque_direction;
@@ -37,6 +38,9 @@ use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::sg_symbol_stack;
 use stack_graphs::c::sg_symbol_stack_cells;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
+use stack_graphs::paths::PathEdgeList;
+use stack_graphs::paths::ScopeStack;
+use stack_graphs::paths::SymbolStack;
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
     let lengths = [filename.len()];
@@ -171,6 +175,16 @@ fn can_create_symbol_stacks() {
     sg_stack_graph_free(graph);
 }
 
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_symbol_stack_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<SymbolStack>()];
+    let mut rust: ControlledOption<SymbolStack> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_symbol_stack = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c.cells, 0);
+}
+
 //-------------------------------------------------------------------------------------------------
 // Scope stacks
 
@@ -230,6 +244,16 @@ fn can_create_scope_stacks() {
 
     sg_path_arena_free(paths);
     sg_stack_graph_free(graph);
+}
+
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_scope_stack_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<ScopeStack>()];
+    let mut rust: ControlledOption<ScopeStack> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_scope_stack = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c.cells, 0);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -328,4 +352,14 @@ fn can_create_path_edge_lists() {
 
     sg_path_arena_free(paths);
     sg_stack_graph_free(graph);
+}
+
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_path_edge_list_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<PathEdgeList>()];
+    let mut rust: ControlledOption<PathEdgeList> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_path_edge_list = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c.cells, 0);
 }

@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
 use either::Either;
 use libc::c_char;
 use stack_graphs::c::sg_deque_direction;
@@ -37,6 +38,9 @@ use stack_graphs::c::sg_stack_graph_get_or_create_nodes;
 use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
+use stack_graphs::partial::PartialPathEdgeList;
+use stack_graphs::partial::PartialScopeStack;
+use stack_graphs::partial::PartialSymbolStack;
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
     let lengths = [filename.len()];
@@ -209,6 +213,16 @@ fn can_create_partial_symbol_stacks() {
     sg_stack_graph_free(graph);
 }
 
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_partial_symbol_stack_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<PartialSymbolStack>()];
+    let mut rust: ControlledOption<PartialSymbolStack> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_partial_symbol_stack = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c.cells, 0);
+}
+
 //-------------------------------------------------------------------------------------------------
 // Partial scope stacks
 
@@ -303,6 +317,16 @@ fn can_create_partial_scope_stacks() {
 
     sg_partial_path_arena_free(partials);
     sg_stack_graph_free(graph);
+}
+
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_partial_scope_stack_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<PartialScopeStack>()];
+    let mut rust: ControlledOption<PartialScopeStack> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_partial_scope_stack = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c.cells, 0);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -401,4 +425,14 @@ fn can_create_partial_path_edge_lists() {
 
     sg_partial_path_arena_free(partials);
     sg_stack_graph_free(graph);
+}
+
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_partial_path_edge_list_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<PartialPathEdgeList>()];
+    let mut rust: ControlledOption<PartialPathEdgeList> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_partial_path_edge_list = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c.cells, 0);
 }

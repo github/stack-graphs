@@ -18,6 +18,9 @@
 use std::collections::VecDeque;
 use std::fmt::Display;
 
+use controlled_option::ControlledOption;
+use controlled_option::Niche;
+
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
@@ -126,13 +129,17 @@ where
 #[derive(Clone, Copy)]
 pub struct ScopedSymbol {
     pub symbol: Handle<Symbol>,
-    pub scopes: Option<ScopeStack>,
+    pub scopes: ControlledOption<ScopeStack>,
 }
 
 impl ScopedSymbol {
     pub fn equals(&self, paths: &Paths, other: &ScopedSymbol) -> bool {
         self.symbol == other.symbol
-            && equals_option(self.scopes, other.scopes, |a, b| a.equals(paths, &b))
+            && equals_option(
+                self.scopes.into_option(),
+                other.scopes.into_option(),
+                |a, b| a.equals(paths, &b),
+            )
     }
 
     pub fn cmp(
@@ -143,7 +150,13 @@ impl ScopedSymbol {
     ) -> std::cmp::Ordering {
         std::cmp::Ordering::Equal
             .then_with(|| graph[self.symbol].cmp(&graph[other.symbol]))
-            .then_with(|| cmp_option(self.scopes, other.scopes, |a, b| a.cmp(paths, &b)))
+            .then_with(|| {
+                cmp_option(
+                    self.scopes.into_option(),
+                    other.scopes.into_option(),
+                    |a, b| a.cmp(paths, &b),
+                )
+            })
     }
 
     pub fn display<'a>(self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {
@@ -153,8 +166,9 @@ impl ScopedSymbol {
 
 impl DisplayWithPaths for ScopedSymbol {
     fn prepare(&mut self, graph: &StackGraph, paths: &mut Paths) {
-        if let Some(scopes) = &mut self.scopes {
+        if let Some(mut scopes) = self.scopes.into_option() {
             scopes.prepare(graph, paths);
+            self.scopes = scopes.into();
         }
     }
 
@@ -164,7 +178,7 @@ impl DisplayWithPaths for ScopedSymbol {
         paths: &Paths,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        match self.scopes {
+        match self.scopes.into_option() {
             Some(scopes) => write!(
                 f,
                 "{}/{}",
@@ -179,8 +193,9 @@ impl DisplayWithPaths for ScopedSymbol {
 /// A sequence of symbols that describe what we are currently looking for while in the middle of
 /// the path-finding algorithm.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Niche)]
 pub struct SymbolStack {
+    #[niche]
     list: List<ScopedSymbol>,
     length: usize,
 }
@@ -276,8 +291,9 @@ impl DisplayWithPaths for SymbolStack {
 
 /// A sequence of exported scopes, used to pass name-binding context around a stack graph.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Niche)]
 pub struct ScopeStack {
+    #[niche]
     list: List<Handle<Node>>,
 }
 
@@ -386,8 +402,9 @@ impl DisplayWithPaths for PathEdge {
 /// The edges in a path keep track of precedence information so that we can correctly handle
 /// shadowed definitions.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Niche)]
 pub struct PathEdgeList {
+    #[niche]
     edges: Deque<PathEdge>,
     length: usize,
 }
@@ -558,7 +575,7 @@ impl Path {
                     paths,
                     ScopedSymbol {
                         symbol: node.symbol,
-                        scopes: Some(scope_stack),
+                        scopes: ControlledOption::some(scope_stack),
                     },
                 );
             }
@@ -567,7 +584,7 @@ impl Path {
                     paths,
                     ScopedSymbol {
                         symbol: node.symbol,
-                        scopes: None,
+                        scopes: ControlledOption::none(),
                     },
                 );
             }
@@ -718,7 +735,7 @@ impl Path {
             let sink_symbol = sink.symbol;
             let scoped_symbol = ScopedSymbol {
                 symbol: sink_symbol,
-                scopes: None,
+                scopes: ControlledOption::none(),
             };
             self.symbol_stack.push_front(paths, scoped_symbol);
         } else if let Node::PushScopedSymbol(sink) = sink {
@@ -730,7 +747,7 @@ impl Path {
             attached_scopes.push_front(paths, sink_scope);
             let scoped_symbol = ScopedSymbol {
                 symbol: sink_symbol,
-                scopes: Some(attached_scopes),
+                scopes: ControlledOption::some(attached_scopes),
             };
             self.symbol_stack.push_front(paths, scoped_symbol);
         } else if let Node::PopSymbol(sink) = sink {
@@ -752,7 +769,7 @@ impl Path {
             if top.symbol != sink.symbol {
                 return Err(PathResolutionError::IncorrectPoppedSymbol);
             }
-            let new_scope_stack = match top.scopes {
+            let new_scope_stack = match top.scopes.into_option() {
                 Some(scopes) => scopes,
                 None => return Err(PathResolutionError::MissingAttachedScopeList),
             };

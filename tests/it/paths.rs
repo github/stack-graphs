@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
 use itertools::Itertools;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::Edge;
@@ -36,21 +37,21 @@ fn can_iterate_symbol_stacks() {
         &mut paths,
         ScopedSymbol {
             symbol: sym_b,
-            scopes: Some(scope_stack),
+            scopes: ControlledOption::some(scope_stack),
         },
     );
     symbol_stack.push_front(
         &mut paths,
         ScopedSymbol {
             symbol: sym_dot,
-            scopes: None,
+            scopes: ControlledOption::none(),
         },
     );
     symbol_stack.push_front(
         &mut paths,
         ScopedSymbol {
             symbol: sym_a,
-            scopes: None,
+            scopes: ControlledOption::none(),
         },
     );
 

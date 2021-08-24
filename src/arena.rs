@@ -39,6 +39,8 @@ use std::num::NonZeroU32;
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use controlled_option::Niche;
+
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
 
@@ -75,6 +77,30 @@ impl<T> Handle<T> {
     #[inline(always)]
     pub fn as_usize(self) -> usize {
         self.index.get() as usize
+    }
+}
+
+impl<T> Niche for Handle<T> {
+    type Output = u32;
+
+    #[inline]
+    fn none() -> Self::Output {
+        0
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        *value == 0
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        value.index.get()
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        Self::new(unsafe { NonZeroU32::new_unchecked(value) })
     }
 }
 
@@ -310,10 +336,12 @@ where
 /// linked list implementation _should_ be cache-friendly, since the individual cells are allocated
 /// out of an arena.
 #[repr(C)]
+#[derive(Niche)]
 pub struct List<T> {
     // The value of this handle will be EMPTY_LIST_HANDLE if the list is empty.  For an
     // Option<List<T>>, the value will be zero (via the Option<NonZero> optimization) if the list
     // is None.
+    #[niche]
     cells: Handle<ListCell<T>>,
 }
 
@@ -464,7 +492,9 @@ impl<T> Copy for List<T> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
+#[derive(Niche)]
 pub struct ReversibleList<T> {
+    #[niche]
     cells: Handle<ReversibleListCell<T>>,
 }
 
@@ -729,7 +759,9 @@ impl<T> Copy for ReversibleList<T> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
+#[derive(Niche)]
 pub struct Deque<T> {
+    #[niche]
     list: ReversibleList<T>,
     direction: DequeDirection,
 }

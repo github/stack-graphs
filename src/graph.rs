@@ -55,6 +55,7 @@ use std::fmt::Display;
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use controlled_option::ControlledOption;
 use either::Either;
 use fxhash::FxHashMap;
 use smallvec::SmallVec;
@@ -350,7 +351,7 @@ impl Handle<File> {
 #[repr(C)]
 #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeID {
-    file: Option<Handle<File>>,
+    file: ControlledOption<Handle<File>>,
     local_id: u32,
 }
 
@@ -362,7 +363,7 @@ impl NodeID {
     #[inline(always)]
     pub fn root() -> NodeID {
         NodeID {
-            file: None,
+            file: ControlledOption::none(),
             local_id: ROOT_NODE_ID,
         }
     }
@@ -371,7 +372,7 @@ impl NodeID {
     #[inline(always)]
     pub fn jump_to() -> NodeID {
         NodeID {
-            file: None,
+            file: ControlledOption::none(),
             local_id: JUMP_TO_NODE_ID,
         }
     }
@@ -380,7 +381,7 @@ impl NodeID {
     #[inline(always)]
     pub fn new_in_file(file: Handle<File>, local_id: u32) -> NodeID {
         NodeID {
-            file: Some(file),
+            file: ControlledOption::some(file),
             local_id,
         }
     }
@@ -401,7 +402,7 @@ impl NodeID {
     /// _jump to scope_ nodes, which belong to all files.
     #[inline(always)]
     pub fn file(self) -> Option<Handle<File>> {
-        self.file
+        self.file.into()
     }
 
     /// Returns the local ID of this node within its file.  Panics if this node ID refers to the
@@ -416,7 +417,7 @@ impl NodeID {
     /// singleton _root_ and _jump to scope_ nodes, which belong to all files.
     #[inline(always)]
     pub fn is_in_file(self, file: Handle<File>) -> bool {
-        match self.file {
+        match self.file.into_option() {
             Some(this_file) => this_file == file,
             _ => true,
         }
@@ -431,7 +432,7 @@ pub struct DisplayNodeID<'a> {
 
 impl<'a> Display for DisplayNodeID<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.wrapped.file {
+        match self.wrapped.file.into_option() {
             Some(file) => write!(f, "{}({})", file.display(self.graph), self.wrapped.local_id),
             None => {
                 if self.wrapped.is_root() {
@@ -665,7 +666,7 @@ impl IndexMut<Handle<Node>> for StackGraph {
 pub struct DropScopesNode {
     /// The unique identifier for this node.
     pub id: NodeID,
-    _symbol: Option<Handle<Symbol>>,
+    _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
     _is_clickable: bool,
 }
@@ -681,7 +682,7 @@ impl StackGraph {
     pub fn add_drop_scopes_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
         let node = DropScopesNode {
             id,
-            _symbol: None,
+            _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
             _is_clickable: false,
         };
@@ -720,7 +721,7 @@ impl<'a> Display for DisplayDropScopesNode<'a> {
 pub struct ExportedScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
-    _symbol: Option<Handle<Symbol>>,
+    _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
     _is_clickable: bool,
 }
@@ -736,7 +737,7 @@ impl StackGraph {
     pub fn add_exported_scope_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
         let node = ExportedScopeNode {
             id,
-            _symbol: None,
+            _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
             _is_clickable: false,
         };
@@ -779,7 +780,7 @@ impl<'a> Display for DisplayExportedScopeNode<'a> {
 pub struct InternalScopeNode {
     /// The unique identifier for this node.
     pub id: NodeID,
-    _symbol: Option<Handle<Symbol>>,
+    _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
     _is_clickable: bool,
 }
@@ -795,7 +796,7 @@ impl StackGraph {
     pub fn add_internal_scope_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
         let node = InternalScopeNode {
             id,
-            _symbol: None,
+            _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
             _is_clickable: false,
         };
@@ -837,7 +838,7 @@ impl<'a> Display for DisplayInternalScopeNode<'a> {
 #[repr(C)]
 pub struct JumpToNode {
     _id: NodeID,
-    _symbol: Option<Handle<Symbol>>,
+    _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
     _is_clickable: bool,
 }
@@ -852,10 +853,10 @@ impl JumpToNode {
     fn new() -> JumpToNode {
         JumpToNode {
             _id: NodeID {
-                file: None,
+                file: ControlledOption::none(),
                 local_id: 0,
             },
-            _symbol: None,
+            _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
             _is_clickable: false,
         }
@@ -1165,7 +1166,7 @@ impl<'a> Display for DisplayPushSymbolNode<'a> {
 #[repr(C)]
 pub struct RootNode {
     _id: NodeID,
-    _symbol: Option<Handle<Symbol>>,
+    _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
     _is_clickable: bool,
 }
@@ -1180,10 +1181,10 @@ impl RootNode {
     fn new() -> RootNode {
         RootNode {
             _id: NodeID {
-                file: None,
+                file: ControlledOption::none(),
                 local_id: 0,
             },
-            _symbol: None,
+            _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
             _is_clickable: false,
         }
@@ -1208,7 +1209,7 @@ impl NodeIDHandles {
     }
 
     fn try_handle_for_id(&self, node_id: NodeID) -> Option<Handle<Node>> {
-        let file_entry = self.files.get(node_id.file.unwrap())?;
+        let file_entry = self.files.get(node_id.file().unwrap())?;
         let node_index = node_id.local_id as usize;
         if node_index >= file_entry.len() {
             return None;
@@ -1217,7 +1218,7 @@ impl NodeIDHandles {
     }
 
     fn handle_for_id(&mut self, node_id: NodeID) -> Option<Handle<Node>> {
-        let file_entry = &mut self.files[node_id.file.unwrap()];
+        let file_entry = &mut self.files[node_id.file().unwrap()];
         let node_index = node_id.local_id as usize;
         if node_index >= file_entry.len() {
             file_entry.resize(node_index + 1, None);
@@ -1226,7 +1227,7 @@ impl NodeIDHandles {
     }
 
     fn set_handle_for_id(&mut self, node_id: NodeID, handle: Handle<Node>) {
-        let file_entry = &mut self.files[node_id.file.unwrap()];
+        let file_entry = &mut self.files[node_id.file().unwrap()];
         let node_index = node_id.local_id as usize;
         file_entry[node_index] = Some(handle);
     }
