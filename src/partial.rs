@@ -38,6 +38,8 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::num::NonZeroU32;
 
+use controlled_option::ControlledOption;
+use controlled_option::Niche;
 use smallvec::SmallVec;
 
 use crate::arena::Deque;
@@ -157,8 +159,8 @@ where
 
 /// Represents an unknown list of exported scopes.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ScopeStackVariable(NonZeroU32);
+#[derive(Clone, Copy, Debug, Eq, Hash, Niche, Ord, PartialEq, PartialOrd)]
+pub struct ScopeStackVariable(#[niche] NonZeroU32);
 
 impl ScopeStackVariable {
     /// Creates a new scope stack variable.  This constructor is used when creating a new, empty
@@ -303,7 +305,7 @@ pub struct PartialScopedSymbol {
     pub symbol: Handle<Symbol>,
     // Note that not having an attached scope list is _different_ than having an empty attached
     // scope list.
-    pub scopes: Option<PartialScopeStack>,
+    pub scopes: ControlledOption<PartialScopeStack>,
 }
 
 impl PartialScopedSymbol {
@@ -318,9 +320,11 @@ impl PartialScopedSymbol {
         if graph[self.symbol] != graph[symbol.symbol] {
             return Err(PathResolutionError::SymbolStackUnsatisfied);
         }
-        if !equals_option(self.scopes, symbol.scopes, |pre, sym| {
-            pre.match_stack(sym, scope_bindings).is_ok()
-        }) {
+        if !equals_option(
+            self.scopes.into_option(),
+            symbol.scopes.into_option(),
+            |pre, sym| pre.match_stack(sym, scope_bindings).is_ok(),
+        ) {
             return Err(PathResolutionError::SymbolStackUnsatisfied);
         }
         Ok(())
@@ -340,8 +344,8 @@ impl PartialScopedSymbol {
         }
 
         // Otherwise, if both sides have an attached scope, they have to be compatible.
-        if let Some(precondition_scopes) = self.scopes {
-            if let Some(postcondition_scopes) = postcondition.scopes {
+        if let Some(precondition_scopes) = self.scopes.into_option() {
+            if let Some(postcondition_scopes) = postcondition.scopes.into_option() {
                 return precondition_scopes.matches(partials, postcondition_scopes);
             }
         }
@@ -356,19 +360,23 @@ impl PartialScopedSymbol {
         partials: &mut PartialPaths,
         scope_bindings: &ScopeStackBindings,
     ) -> Result<ScopedSymbol, PathResolutionError> {
-        let scopes = match self.scopes {
+        let scopes = match self.scopes.into_option() {
             Some(scopes) => Some(scopes.apply_bindings(paths, partials, scope_bindings)?),
             None => None,
         };
         Ok(ScopedSymbol {
             symbol: self.symbol,
-            scopes,
+            scopes: scopes.into(),
         })
     }
 
     pub fn equals(&self, partials: &mut PartialPaths, other: &PartialScopedSymbol) -> bool {
         self.symbol == other.symbol
-            && equals_option(self.scopes, other.scopes, |a, b| a.equals(partials, b))
+            && equals_option(
+                self.scopes.into_option(),
+                other.scopes.into_option(),
+                |a, b| a.equals(partials, b),
+            )
     }
 
     pub fn cmp(
@@ -379,7 +387,13 @@ impl PartialScopedSymbol {
     ) -> std::cmp::Ordering {
         std::cmp::Ordering::Equal
             .then_with(|| graph[self.symbol].cmp(&graph[other.symbol]))
-            .then_with(|| cmp_option(self.scopes, other.scopes, |a, b| a.cmp(partials, b)))
+            .then_with(|| {
+                cmp_option(
+                    self.scopes.into_option(),
+                    other.scopes.into_option(),
+                    |a, b| a.cmp(partials, b),
+                )
+            })
     }
 
     pub fn display<'a>(
@@ -393,8 +407,9 @@ impl PartialScopedSymbol {
 
 impl DisplayWithPartialPaths for PartialScopedSymbol {
     fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
-        if let Some(scopes) = &mut self.scopes {
+        if let Some(mut scopes) = self.scopes.into_option() {
             scopes.prepare(graph, partials);
+            self.scopes = scopes.into();
         }
     }
 
@@ -404,7 +419,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
         partials: &PartialPaths,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        if let Some(scopes) = self.scopes {
+        if let Some(scopes) = self.scopes.into_option() {
             write!(
                 f,
                 "{}/{}",
@@ -426,8 +441,9 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 /// So for simplicity we just leave it out.  At some point in the future we might add it in so that
 /// the symbol and scope stack formalisms and implementations are more obviously symmetric.)
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Niche)]
 pub struct PartialSymbolStack {
+    #[niche]
     deque: Deque<PartialScopedSymbol>,
 }
 
@@ -646,10 +662,11 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
 /// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
 /// exported scopes, along with an optional scope stack variable.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Niche)]
 pub struct PartialScopeStack {
+    #[niche]
     scopes: Deque<Handle<Node>>,
-    variable: Option<ScopeStackVariable>,
+    variable: ControlledOption<ScopeStackVariable>,
 }
 
 impl PartialScopeStack {
@@ -669,7 +686,7 @@ impl PartialScopeStack {
     pub fn empty() -> PartialScopeStack {
         PartialScopeStack {
             scopes: Deque::empty(),
-            variable: None,
+            variable: ControlledOption::none(),
         }
     }
 
@@ -677,7 +694,7 @@ impl PartialScopeStack {
     pub fn from_variable(variable: ScopeStackVariable) -> PartialScopeStack {
         PartialScopeStack {
             scopes: Deque::empty(),
-            variable: Some(variable),
+            variable: ControlledOption::some(variable),
         }
     }
 
@@ -688,7 +705,7 @@ impl PartialScopeStack {
         stack: ScopeStack,
         bindings: &mut ScopeStackBindings,
     ) -> Result<(), PathResolutionError> {
-        match self.variable {
+        match self.variable.into_option() {
             Some(variable) => return bindings.add(variable, stack),
             None => {
                 if !stack.is_empty() {
@@ -715,7 +732,7 @@ impl PartialScopeStack {
             // Stacks aren't the same length.
             return false;
         }
-        self.variable == other.variable
+        self.variable.into_option() == other.variable.into_option()
     }
 
     /// Applies a set of scope stack bindings to this partial scope stack, producing a new scope
@@ -726,7 +743,7 @@ impl PartialScopeStack {
         partials: &mut PartialPaths,
         bindings: &ScopeStackBindings,
     ) -> Result<ScopeStack, PathResolutionError> {
-        let mut result = match self.variable {
+        let mut result = match self.variable.into_option() {
             Some(variable) => bindings.get(variable)?,
             None => ScopeStack::empty(),
         };
@@ -773,7 +790,7 @@ impl PartialScopeStack {
     /// Returns the scope stack variable at the end of this partial scope stack.  If the stack does
     /// not contain a scope stack variable, returns `None`.
     pub fn variable(&self) -> Option<ScopeStackVariable> {
-        self.variable
+        self.variable.into_option()
     }
 
     pub fn equals(self, partials: &mut PartialPaths, other: PartialScopeStack) -> bool {
@@ -781,7 +798,11 @@ impl PartialScopeStack {
             .equals_with(&mut partials.partial_scope_stacks, other.scopes, |a, b| {
                 *a == *b
             })
-            && equals_option(self.variable, other.variable, |a, b| a == b)
+            && equals_option(
+                self.variable.into_option(),
+                other.variable.into_option(),
+                |a, b| a == b,
+            )
     }
 
     pub fn cmp(self, partials: &mut PartialPaths, other: PartialScopeStack) -> std::cmp::Ordering {
@@ -792,7 +813,13 @@ impl PartialScopeStack {
                         a.cmp(b)
                     })
             })
-            .then_with(|| cmp_option(self.variable, other.variable, |a, b| a.cmp(&b)))
+            .then_with(|| {
+                cmp_option(
+                    self.variable.into_option(),
+                    other.variable.into_option(),
+                    |a, b| a.cmp(&b),
+                )
+            })
     }
 
     /// Returns an iterator over the scopes in this partial scope stack.
@@ -853,7 +880,7 @@ impl DisplayWithPartialPaths for PartialScopeStack {
             }
             write!(f, "{:#}", scope.display(graph))?;
         }
-        if let Some(variable) = self.variable {
+        if let Some(variable) = self.variable.into_option() {
             if self.scopes.is_empty() {
                 write!(f, "{}", variable)?;
             } else {
@@ -999,8 +1026,9 @@ impl DisplayWithPartialPaths for PartialPathEdge {
 /// The edges in a path keep track of precedence information so that we can correctly handle
 /// shadowed definitions.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Niche)]
 pub struct PartialPathEdgeList {
+    #[niche]
     edges: Deque<PartialPathEdge>,
     length: usize,
 }
@@ -1219,7 +1247,7 @@ impl PartialPath {
             scope_stack_postcondition.push_front(partials, scope);
             let initial_symbol = PartialScopedSymbol {
                 symbol: inner_node.symbol,
-                scopes: Some(scope_stack_postcondition),
+                scopes: ControlledOption::some(scope_stack_postcondition),
             };
             symbol_stack_postcondition.push_front(partials, initial_symbol);
         } else if let Node::PushSymbol(inner_node) = inner_node {
@@ -1227,7 +1255,7 @@ impl PartialPath {
             scope_stack_postcondition = PartialScopeStack::empty();
             let initial_symbol = PartialScopedSymbol {
                 symbol: inner_node.symbol,
-                scopes: None,
+                scopes: ControlledOption::none(),
             };
             symbol_stack_postcondition.push_front(partials, initial_symbol);
         }
@@ -1376,12 +1404,13 @@ impl PartialPath {
         let symbol_stack_precondition_variables = self
             .symbol_stack_precondition
             .iter_unordered(partials)
-            .filter_map(|symbol| symbol.scopes)
-            .filter_map(|scopes| scopes.variable)
+            .filter_map(|symbol| symbol.scopes.into_option())
+            .filter_map(|scopes| scopes.variable.into_option())
             .map(ScopeStackVariable::as_u32);
         let scope_stack_precondition_variables = self
             .scope_stack_precondition
             .variable
+            .into_option()
             .map(ScopeStackVariable::as_u32);
         let max_used_variable = std::iter::empty()
             .chain(symbol_stack_precondition_variables)
@@ -1456,7 +1485,7 @@ impl PartialPath {
             let sink_symbol = sink.symbol;
             let postcondition_symbol = PartialScopedSymbol {
                 symbol: sink_symbol,
-                scopes: None,
+                scopes: ControlledOption::none(),
             };
             self.symbol_stack_postcondition
                 .push_front(partials, postcondition_symbol);
@@ -1472,7 +1501,7 @@ impl PartialPath {
             attached_scopes.push_front(partials, sink_scope);
             let postcondition_symbol = PartialScopedSymbol {
                 symbol: sink_symbol,
-                scopes: Some(attached_scopes),
+                scopes: ControlledOption::some(attached_scopes),
             };
             self.symbol_stack_postcondition
                 .push_front(partials, postcondition_symbol);
@@ -1491,7 +1520,7 @@ impl PartialPath {
                 // order to successfully use this partial path.
                 let precondition_symbol = PartialScopedSymbol {
                     symbol: sink.symbol,
-                    scopes: None,
+                    scopes: ControlledOption::none(),
                 };
                 self.symbol_stack_precondition
                     .push_back(partials, precondition_symbol);
@@ -1503,7 +1532,7 @@ impl PartialPath {
                 if top.symbol != sink.symbol {
                     return Err(PathResolutionError::IncorrectPoppedSymbol);
                 }
-                let new_scope_stack = match top.scopes {
+                let new_scope_stack = match top.scopes.into_option() {
                     Some(scopes) => scopes,
                     None => return Err(PathResolutionError::MissingAttachedScopeList),
                 };
@@ -1515,7 +1544,9 @@ impl PartialPath {
                 let scope_stack_variable = self.fresh_scope_stack_variable(partials);
                 let precondition_symbol = PartialScopedSymbol {
                     symbol: sink.symbol,
-                    scopes: Some(PartialScopeStack::from_variable(scope_stack_variable)),
+                    scopes: ControlledOption::some(PartialScopeStack::from_variable(
+                        scope_stack_variable,
+                    )),
                 };
                 self.symbol_stack_precondition
                     .push_back(partials, precondition_symbol);

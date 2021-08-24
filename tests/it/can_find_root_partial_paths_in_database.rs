@@ -7,6 +7,7 @@
 
 use std::collections::HashSet;
 
+use controlled_option::ControlledOption;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
@@ -43,7 +44,7 @@ fn check_root_partial_paths(
         let symbol = graph.add_symbol(symbol);
         let scoped_symbol = ScopedSymbol {
             symbol,
-            scopes: None,
+            scopes: ControlledOption::none(),
         };
         symbol_stack.push_front(&mut paths, scoped_symbol);
     }

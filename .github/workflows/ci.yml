@@ -47,3 +47,5 @@ jobs:
         run: cargo test
       - name: Run test suite under valgrind
         run: cargo valgrind test
+      - name: Run test suite with all optimizations
+        run: cargo test --release

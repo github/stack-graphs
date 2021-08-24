@@ -5,7 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
 use libc::c_char;
+use stack_graphs::arena::Handle;
 use stack_graphs::c::sg_file_handle;
 use stack_graphs::c::sg_node;
 use stack_graphs::c::sg_node_handle;
@@ -57,6 +59,19 @@ fn add_symbol(graph: *mut sg_stack_graph, symbol: &str) -> sg_symbol_handle {
     );
     assert!(handles[0] != 0);
     handles[0]
+}
+
+//-------------------------------------------------------------------------------------------------
+// Representation
+
+#[test]
+#[allow(unused_assignments)]
+fn verify_null_node_representation() {
+    let bytes = [0x55u8; std::mem::size_of::<Handle<Node>>()];
+    let mut rust: ControlledOption<Handle<Node>> = unsafe { std::mem::transmute(bytes) };
+    rust = ControlledOption::none();
+    let c: sg_node_handle = unsafe { std::mem::transmute(rust) };
+    assert_eq!(c, 0);
 }
 
 //-------------------------------------------------------------------------------------------------
