@@ -69,7 +69,7 @@ use crate::paths::SymbolStack;
 /// partial paths that are actually needed, placing them into a `Database` instance as they're
 /// needed.
 pub struct Database {
-    partial_paths: Arena<PartialPath>,
+    pub(crate) partial_paths: Arena<PartialPath>,
     symbol_stack_keys: ListArena<Handle<Symbol>>,
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,

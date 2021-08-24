@@ -431,6 +431,18 @@ struct sg_partial_path {
     struct sg_partial_path_edge_list edges;
 };
 
+// An array of all of the partial paths in a partial path database.  Partial path handles are
+// indices into this array.  There will never be a valid partial path at index 0; a handle with
+// the value 0 represents a missing partial path.
+struct sg_partial_paths {
+    const struct sg_partial_path *paths;
+    size_t count;
+};
+
+// A handle to a partial path in a partial path database.  A zero handle represents a missing
+// partial path.
+typedef uint32_t sg_partial_path_handle;
+
 // Implements a phased forward path-stitching algorithm.
 //
 // Our overall goal is to start with a set of _seed_ paths, and to repeatedly extend each path by
@@ -734,6 +746,11 @@ void sg_partial_path_arena_find_partial_paths_in_file(const struct sg_stack_grap
                                                       sg_file_handle file,
                                                       struct sg_partial_path_list *partial_path_list);
 
+// Returns a reference to the array of partial path data in this partial path database.  The
+// resulting array pointer is only valid until the next call to any function that mutates the
+// partial path database.
+struct sg_partial_paths sg_partial_path_database_partial_paths(const struct sg_partial_path_database *db);
+
 // Adds new partial paths to the partial path database.  `paths` is the array of partial paths
 // that you want to add; `count` is the number of them.
 //
@@ -743,11 +760,16 @@ void sg_partial_path_arena_find_partial_paths_in_file(const struct sg_stack_grap
 // You should take care not to add a partial path to the database multiple times.  This won't
 // cause an _error_, in that nothing will break, but it will probably cause you to get duplicate
 // paths from the path-stitching algorithm.
+//
+// You must also provide an `out` array, which must also have room for `count` elements.  We will
+// fill this array in with the `sg_partial_path_edge_list` instances for each partial path edge
+// list that is created.
 void sg_partial_path_database_add_partial_paths(const struct sg_stack_graph *graph,
                                                 struct sg_partial_path_arena *partials,
                                                 struct sg_partial_path_database *db,
                                                 size_t count,
-                                                const struct sg_partial_path *paths);
+                                                const struct sg_partial_path *paths,
+                                                sg_partial_path_handle *out);
 
 // Creates a new forward path stitcher that is "seeded" with a set of starting stack graph nodes.
 //
