@@ -810,6 +810,11 @@ impl<T> Deque<T> {
         }
     }
 
+    /// Returns whether we have already calculated the reversal of this deque.
+    pub fn have_reversal(&self, arena: &DequeArena<T>) -> bool {
+        self.list.have_reversal(arena)
+    }
+
     fn is_backwards(&self) -> bool {
         matches!(self.direction, DequeDirection::Backwards)
     }

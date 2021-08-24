@@ -421,6 +421,12 @@ impl PathEdgeList {
         self.length
     }
 
+    /// Returns whether this edge list is iterable in both directions without needing mutable
+    /// access to the arena.
+    pub fn have_reversal(&self, paths: &Paths) -> bool {
+        self.edges.have_reversal(&paths.path_edges)
+    }
+
     /// Returns an empty edge list.
     pub fn empty() -> PathEdgeList {
         PathEdgeList {

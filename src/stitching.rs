@@ -338,6 +338,13 @@ impl PathStitcher {
         self.next_iteration.as_slices().0
     }
 
+    /// Returns a mutable slice of all of the (possibly incomplete) paths that were encountered
+    /// during the most recent phase of the path-stitching algorithm.
+    pub fn previous_phase_paths_slice_mut(&mut self) -> &mut [Path] {
+        self.next_iteration.make_contiguous();
+        self.next_iteration.as_mut_slices().0
+    }
+
     /// Attempts to extend one path as part of the path-stitching algorithm.  When calling this
     /// function, you are responsible for ensuring that `db` already contains all of the possible
     /// partial paths that we might want to extend `path` with.
