@@ -110,3 +110,14 @@ fn can_add_and_remove_edges() {
         hashset! { h2, h4 }
     );
 }
+
+#[test]
+fn singleton_nodes_have_correct_ids() {
+    let graph = StackGraph::new();
+    let root_handle = graph.root_node();
+    let root = &graph[root_handle];
+    assert!(root.is_root());
+    assert!(root.id().is_root());
+    assert_eq!(root.display(&graph).to_string(), "[root]");
+    assert_eq!(root.id().display(&graph).to_string(), "[root]");
+}

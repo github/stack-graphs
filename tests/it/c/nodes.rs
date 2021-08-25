@@ -128,6 +128,23 @@ fn can_dereference_singleton_nodes() {
     sg_stack_graph_free(graph);
 }
 
+#[test]
+fn singleton_nodes_have_correct_ids() {
+    let graph = sg_stack_graph_new();
+    let arena = sg_stack_graph_nodes(graph);
+    let slice = unsafe { std::slice::from_raw_parts(arena.nodes, arena.count) };
+
+    let root = &slice[SG_ROOT_NODE_HANDLE as usize];
+    assert!(root.id.file == 0);
+    assert!(root.id.local_id == SG_ROOT_NODE_ID);
+
+    let jump_to = &slice[SG_JUMP_TO_NODE_HANDLE as usize];
+    assert!(jump_to.id.file == 0);
+    assert!(jump_to.id.local_id == SG_JUMP_TO_NODE_ID);
+
+    sg_stack_graph_free(graph);
+}
+
 //-------------------------------------------------------------------------------------------------
 // Drop scopes node
 
