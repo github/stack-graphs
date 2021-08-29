@@ -155,6 +155,50 @@ where
 }
 
 //-------------------------------------------------------------------------------------------------
+// Symbol stack variables
+
+/// Represents an unknown list of scoped symbols.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Niche, Ord, PartialEq, PartialOrd)]
+pub struct SymbolStackVariable(#[niche] NonZeroU32);
+
+impl SymbolStackVariable {
+    pub fn new(variable: u32) -> Option<SymbolStackVariable> {
+        NonZeroU32::new(variable).map(SymbolStackVariable)
+    }
+
+    /// Creates a new symbol stack variable.  This constructor is used when creating a new, empty
+    /// partial path, since there aren't any other variables that we need to be fresher than.
+    fn initial() -> SymbolStackVariable {
+        SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(1) })
+    }
+
+    fn as_usize(self) -> usize {
+        self.0.get() as usize
+    }
+}
+
+impl Display for SymbolStackVariable {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "%{}", self.0.get())
+    }
+}
+
+impl Into<u32> for SymbolStackVariable {
+    fn into(self) -> u32 {
+        self.0.get()
+    }
+}
+
+impl TryFrom<u32> for SymbolStackVariable {
+    type Error = ();
+    fn try_from(value: u32) -> Result<SymbolStackVariable, ()> {
+        let value = NonZeroU32::new(value).ok_or(())?;
+        Ok(SymbolStackVariable(value))
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Scope stack variables
 
 /// Represents an unknown list of exported scopes.
@@ -211,45 +255,44 @@ impl TryFrom<u32> for ScopeStackVariable {
 //-------------------------------------------------------------------------------------------------
 // Symbol stack bindings
 
-/// The portion of the symbol stack that was not consumed by a partial path's precondition.
-///
-/// For scope stacks, we have actual variables, since there are many places in a partial path's
-/// precondition where we need to match against scope stacks.  So [`ScopeStackBindings`][] is an
-/// actual map from variables to the scope stacks that they match against.
-///
-/// The story is different for the symbol stack.  In theory, a partial path's symbol stack
-/// precondition does have an implicit variable at the end, which matches against whatever portion
-/// of the symbol stack is not consumed by the list of symbols in the precondition.  However,
-/// because there is only ever one symbol stack variable, we don't currently reify that in our data
-/// model anywhere.  Instead the "bindings" just keeps track of that unmatched portion of the
-/// symbol stack.
-///
-/// [`ScopeStackBindings`]: struct.ScopeStackBindings.html
+/// A mapping from symbol stack variables to symbol stacks.
 pub struct SymbolStackBindings {
-    binding: Option<SymbolStack>,
+    bindings: SmallVec<[Option<SymbolStack>; 4]>,
 }
 
 impl SymbolStackBindings {
     /// Creates a new, empty set of symbol stack bindings.
     pub fn new() -> SymbolStackBindings {
-        SymbolStackBindings { binding: None }
+        SymbolStackBindings {
+            bindings: SmallVec::new(),
+        }
     }
 
-    /// Returns the symbol stack that the (unnamed) symbol stack variable matched.  Returns an
-    /// error if that variable didn't match anything.
-    pub fn get(&self) -> Result<SymbolStack, PathResolutionError> {
-        self.binding
-            .ok_or(PathResolutionError::UnboundSymbolStackVariable)
+    /// Returns the symbol stack that a particular symbol stack variable matched.  Returns an error
+    /// if that variable didn't match anything.
+    pub fn get(&self, variable: SymbolStackVariable) -> Result<SymbolStack, PathResolutionError> {
+        let index = variable.as_usize();
+        if self.bindings.len() < index {
+            return Err(PathResolutionError::UnboundSymbolStackVariable);
+        }
+        self.bindings[index - 1].ok_or(PathResolutionError::UnboundSymbolStackVariable)
     }
 
-    /// Adds a new binding from the (unnamed) symbol stack variable to the symbol stack that it
-    /// matched.  Returns an error if you try to bind the (unnamed) symbol stack variable more than
-    /// once.
-    pub fn add(&mut self, symbols: SymbolStack) -> Result<(), PathResolutionError> {
-        if self.binding.is_some() {
+    /// Adds a new binding from a symbol stack variable to the symbol stack that it matched.
+    /// Returns an error if you try to bind a particular variable more than once.
+    pub fn add(
+        &mut self,
+        variable: SymbolStackVariable,
+        symbols: SymbolStack,
+    ) -> Result<(), PathResolutionError> {
+        let index = variable.as_usize();
+        if self.bindings.len() < index {
+            self.bindings.resize_with(index, || None);
+        }
+        if self.bindings[index - 1].is_some() {
             return Err(PathResolutionError::IncompatibleSymbolStackVariables);
         }
-        self.binding = Some(symbols);
+        self.bindings[index - 1] = Some(symbols);
         Ok(())
     }
 }
@@ -437,50 +480,66 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 }
 
 /// A pattern that might match against a symbol stack.  Consists of a (possibly empty) list of
-/// partial scoped symbols.
-///
-/// (Note that unlike partial scope stacks, we don't store any "symbol stack variable" here.  We
-/// could!  But with our current path-finding rules, every partial path will always have exactly
-/// one symbol stack variable, which will appear at the end of its precondition and postcondition.
-/// So for simplicity we just leave it out.  At some point in the future we might add it in so that
-/// the symbol and scope stack formalisms and implementations are more obviously symmetric.)
+/// partial scoped symbols, along with an optional symbol stack variable.
 #[repr(C)]
 #[derive(Clone, Copy, Niche)]
 pub struct PartialSymbolStack {
     #[niche]
-    deque: Deque<PartialScopedSymbol>,
+    symbols: Deque<PartialScopedSymbol>,
+    variable: ControlledOption<SymbolStackVariable>,
 }
 
 impl PartialSymbolStack {
-    /// Returns whether this partial symbol stack is empty.
+    /// Returns whether this partial symbol stack can match the empty symbol stack.
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
-        self.deque.is_empty()
+    pub fn can_match_empty(&self) -> bool {
+        self.symbols.is_empty()
+    }
+
+    /// Returns whether this partial symbol stack can _only_ match the empty symbol stack.
+    #[inline(always)]
+    pub fn can_only_match_empty(&self) -> bool {
+        self.symbols.is_empty() && self.variable.is_none()
+    }
+
+    /// Returns whether this partial symbol stack contains any symbols.
+    #[inline(always)]
+    pub fn contains_symbols(&self) -> bool {
+        !self.symbols.is_empty()
     }
 
     /// Returns an empty partial symbol stack.
     pub fn empty() -> PartialSymbolStack {
         PartialSymbolStack {
-            deque: Deque::empty(),
+            symbols: Deque::empty(),
+            variable: ControlledOption::none(),
+        }
+    }
+
+    /// Returns a partial symbol stack containing only a symbol stack variable.
+    pub fn from_variable(variable: SymbolStackVariable) -> PartialSymbolStack {
+        PartialSymbolStack {
+            symbols: Deque::empty(),
+            variable: ControlledOption::some(variable),
         }
     }
 
     /// Pushes a new [`PartialScopedSymbol`][] onto the front of this partial symbol stack.
     pub fn push_front(&mut self, partials: &mut PartialPaths, symbol: PartialScopedSymbol) {
-        self.deque
+        self.symbols
             .push_front(&mut partials.partial_symbol_stacks, symbol);
     }
 
     /// Pushes a new [`PartialScopedSymbol`][] onto the back of this partial symbol stack.
     pub fn push_back(&mut self, partials: &mut PartialPaths, symbol: PartialScopedSymbol) {
-        self.deque
+        self.symbols
             .push_back(&mut partials.partial_symbol_stacks, symbol);
     }
 
     /// Removes and returns the [`PartialScopedSymbol`][] at the front of this partial symbol
     /// stack.  If the stack is empty, returns `None`.
     pub fn pop_front(&mut self, partials: &mut PartialPaths) -> Option<PartialScopedSymbol> {
-        self.deque
+        self.symbols
             .pop_front(&mut partials.partial_symbol_stacks)
             .copied()
     }
@@ -488,7 +547,7 @@ impl PartialSymbolStack {
     /// Removes and returns the [`PartialScopedSymbol`][] at the back of this partial symbol stack.
     /// If the stack is empty, returns `None`.
     pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<PartialScopedSymbol> {
-        self.deque
+        self.symbols
             .pop_back(&mut partials.partial_symbol_stacks)
             .copied()
     }
@@ -524,9 +583,13 @@ impl PartialSymbolStack {
             }
         }
 
-        // Anything remaining on the symbol stack is stashed away as the binding of the implicit
-        // symbol stack variable.
-        symbol_bindings.add(stack)
+        // If there's anything remaining on the symbol stack, there must be a symbol stack variable
+        // that can capture those symbols.
+        match self.variable.into_option() {
+            Some(variable) => symbol_bindings.add(variable, stack),
+            None if !stack.is_empty() => Err(PathResolutionError::SymbolStackUnsatisfied),
+            _ => Ok(()),
+        }
     }
 
     /// Returns whether two partial symbol stacks "match".  They must be the same length, and each
@@ -542,11 +605,11 @@ impl PartialSymbolStack {
                 return false;
             }
         }
-        if !other.is_empty() {
+        if other.contains_symbols() {
             // Stacks aren't the same length.
             return false;
         }
-        true
+        self.variable.into_option() == other.variable.into_option()
     }
 
     /// Applies a set of bindings to this partial symbol stack, producing a new symbol stack.
@@ -557,7 +620,10 @@ impl PartialSymbolStack {
         symbol_bindings: &SymbolStackBindings,
         scope_bindings: &ScopeStackBindings,
     ) -> Result<SymbolStack, PathResolutionError> {
-        let mut result = symbol_bindings.get()?;
+        let mut result = match self.variable.into_option() {
+            Some(variable) => symbol_bindings.get(variable)?,
+            None => SymbolStack::empty(),
+        };
         while let Some(partial_symbol) = self.pop_back(partials) {
             let symbol = partial_symbol.apply_bindings(paths, partials, scope_bindings)?;
             result.push_front(paths, symbol);
@@ -575,7 +641,14 @@ impl PartialSymbolStack {
                 return false;
             }
         }
-        other.deque.is_empty()
+        if !other.symbols.is_empty() {
+            return false;
+        }
+        equals_option(
+            self.variable.into_option(),
+            other.variable.into_option(),
+            |a, b| a == b,
+        )
     }
 
     pub fn cmp(
@@ -595,11 +668,14 @@ impl PartialSymbolStack {
                 return Ordering::Greater;
             }
         }
-        if other.deque.is_empty() {
-            Ordering::Equal
-        } else {
-            Ordering::Less
+        if !other.symbols.is_empty() {
+            return Ordering::Less;
         }
+        cmp_option(
+            self.variable.into_option(),
+            other.variable.into_option(),
+            |a, b| a.cmp(&b),
+        )
     }
 
     /// Returns an iterator over the contents of this partial symbol stack.
@@ -607,7 +683,7 @@ impl PartialSymbolStack {
         &self,
         partials: &'a mut PartialPaths,
     ) -> impl Iterator<Item = PartialScopedSymbol> + 'a {
-        self.deque
+        self.symbols
             .iter(&mut partials.partial_symbol_stacks)
             .copied()
     }
@@ -618,15 +694,15 @@ impl PartialSymbolStack {
         &self,
         partials: &'a PartialPaths,
     ) -> impl Iterator<Item = PartialScopedSymbol> + 'a {
-        self.deque
+        self.symbols
             .iter_unordered(&partials.partial_symbol_stacks)
             .copied()
     }
 
     fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
-        self.deque
+        self.symbols
             .ensure_backwards(&mut partials.partial_symbol_stacks);
-        self.deque
+        self.symbols
             .ensure_forwards(&mut partials.partial_symbol_stacks);
     }
 }
@@ -635,11 +711,11 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
     fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
         // Ensure that our deque is pointed forwards while we still have a mutable reference to the
         // arena.
-        self.deque
+        self.symbols
             .ensure_forwards(&mut partials.partial_symbol_stacks);
         // And then prepare each symbol in the stack.
-        let mut deque = self.deque;
-        while let Some(mut symbol) = deque
+        let mut symbols = self.symbols;
+        while let Some(mut symbol) = symbols
             .pop_front(&mut partials.partial_symbol_stacks)
             .copied()
         {
@@ -653,8 +729,15 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
         partials: &PartialPaths,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        for symbol in self.deque.iter_reused(&partials.partial_symbol_stacks) {
+        for symbol in self.symbols.iter_reused(&partials.partial_symbol_stacks) {
             symbol.display_with(graph, partials, f)?;
+        }
+        if let Some(variable) = self.variable.into_option() {
+            if self.symbols.is_empty() {
+                write!(f, "{}", variable)?;
+            } else {
+                write!(f, ",{}", variable)?;
+            }
         }
         Ok(())
     }
@@ -714,14 +797,10 @@ impl PartialScopeStack {
         // validate this more carefully.
         assert!(self.scopes.is_empty());
         match self.variable.into_option() {
-            Some(variable) => return bindings.add(variable, stack),
-            None => {
-                if !stack.is_empty() {
-                    return Err(PathResolutionError::ScopeStackUnsatisfied);
-                }
-            }
+            Some(variable) => bindings.add(variable, stack),
+            None if !stack.is_empty() => Err(PathResolutionError::ScopeStackUnsatisfied),
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     /// Returns whether two partial scope stacks match exactly the same set of scope stacks.
@@ -1004,30 +1083,45 @@ impl DisplayWithPartialPaths for PartialScopeStack {
 // Partial symbol bindings
 
 pub struct PartialSymbolStackBindings {
-    binding: Option<PartialSymbolStack>,
+    bindings: SmallVec<[Option<PartialSymbolStack>; 4]>,
 }
 
 impl PartialSymbolStackBindings {
     /// Creates a new, empty set of partial symbol stack bindings.
     pub fn new() -> PartialSymbolStackBindings {
-        PartialSymbolStackBindings { binding: None }
+        PartialSymbolStackBindings {
+            bindings: SmallVec::new(),
+        }
     }
 
-    /// Returns the partial symbol stack that the (unnamed) partial symbol stack variable matched.  Returns an
+    /// Returns the partial symbol stack that a particular symbol stack variable matched.  Returns an
     /// error if that variable didn't match anything.
-    pub fn get(&self) -> Result<PartialSymbolStack, PathResolutionError> {
-        self.binding
-            .ok_or(PathResolutionError::UnboundSymbolStackVariable)
+    pub fn get(
+        &self,
+        variable: SymbolStackVariable,
+    ) -> Result<PartialSymbolStack, PathResolutionError> {
+        let index = variable.as_usize();
+        if self.bindings.len() < index {
+            return Err(PathResolutionError::UnboundSymbolStackVariable);
+        }
+        self.bindings[index - 1].ok_or(PathResolutionError::UnboundSymbolStackVariable)
     }
 
-    /// Adds a new binding from the (unnamed) partial symbol stack variable to the partial symbol stack that it
-    /// matched.  Returns an error if you try to bind the (unnamed) symbol stack variable more than
-    /// once.
-    pub fn add(&mut self, symbols: PartialSymbolStack) -> Result<(), PathResolutionError> {
-        if self.binding.is_some() {
+    /// Adds a new binding from a symbol stack variable to the partial symbol stack that it
+    /// matched.  Returns an error if you try to bind a particular variable more than once.
+    pub fn add(
+        &mut self,
+        variable: SymbolStackVariable,
+        symbols: PartialSymbolStack,
+    ) -> Result<(), PathResolutionError> {
+        let index = variable.as_usize();
+        if self.bindings.len() < index {
+            self.bindings.resize_with(index, || None);
+        }
+        if self.bindings[index - 1].is_some() {
             return Err(PathResolutionError::IncompatibleSymbolStackVariables);
         }
-        self.binding = Some(symbols);
+        self.bindings[index - 1] = Some(symbols);
         Ok(())
     }
 }
@@ -1385,9 +1479,11 @@ impl PartialPath {
         partials: &mut PartialPaths,
         node: Handle<Node>,
     ) -> Result<PartialPath, PathResolutionError> {
+        let initial_symbol_stack = SymbolStackVariable::initial();
         let initial_scope_stack = ScopeStackVariable::initial();
-        let symbol_stack_precondition = PartialSymbolStack::empty();
-        let mut symbol_stack_postcondition = PartialSymbolStack::empty();
+        let symbol_stack_precondition = PartialSymbolStack::from_variable(initial_symbol_stack);
+        let mut symbol_stack_postcondition =
+            PartialSymbolStack::from_variable(initial_symbol_stack);
         let mut scope_stack_precondition = PartialScopeStack::from_variable(initial_scope_stack);
         let mut scope_stack_postcondition = PartialScopeStack::from_variable(initial_scope_stack);
 
@@ -1490,7 +1586,7 @@ impl PartialPath {
             node @ Node::PushScopedSymbol(_) | node @ Node::PushSymbol(_) => {
                 if !node.is_reference() {
                     return false;
-                } else if !self.symbol_stack_precondition.is_empty() {
+                } else if !self.symbol_stack_precondition.can_match_empty() {
                     return false;
                 }
             }
@@ -1503,7 +1599,7 @@ impl PartialPath {
             node @ Node::PopScopedSymbol(_) | node @ Node::PopSymbol(_) => {
                 if !node.is_definition() {
                     return false;
-                } else if !self.symbol_stack_postcondition.is_empty() {
+                } else if !self.symbol_stack_postcondition.can_match_empty() {
                     return false;
                 }
             }

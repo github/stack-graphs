@@ -905,6 +905,9 @@ pub extern "C" fn sg_path_arena_find_all_complete_paths(
 //-------------------------------------------------------------------------------------------------
 // Partial symbol stacks
 
+/// Represents an unknown list of scoped symbols.
+pub type sg_symbol_stack_variable = u32;
+
 /// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
 #[repr(C)]
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -934,6 +937,11 @@ pub struct sg_partial_symbol_stack {
     /// list is empty, or 0 if the list is null.
     pub cells: sg_partial_symbol_stack_cell_handle,
     pub direction: sg_deque_direction,
+    /// The symbol stack variable representing the unknown content of a partial symbol stack, or 0
+    /// if the variable is missing.  (If so, this partial symbol stack can only match a symbol
+    /// stack with exactly the list of symbols in `cells`, instead of any symbol stack with those
+    /// symbols as a prefix.)
+    pub variable: sg_symbol_stack_variable,
 }
 
 impl From<PartialSymbolStack> for sg_partial_symbol_stack {
@@ -984,7 +992,8 @@ pub extern "C" fn sg_partial_path_arena_partial_symbol_stack_cells(
 /// arrays.  The `lengths` array must have `count` elements, and provides the number of symbols in
 /// each partial symbol stack.  The `symbols` array contains the contents of each of these partial
 /// symbol stacks in one contiguous array.  Its length must be the sum of all of the counts in the
-/// `lengths` array.
+/// `lengths` array.  The `variables` array must have `count` elements, and provides the optional
+/// symbol stack variable for each partial symbol stack.
 ///
 /// You must also provide an `out` array, which must also have room for `count` elements.  We will
 /// fill this array in with the `sg_partial_symbol_stack` instances for each partial symbol stack
@@ -995,15 +1004,21 @@ pub extern "C" fn sg_partial_path_arena_add_partial_symbol_stacks(
     count: usize,
     mut symbols: *const sg_partial_scoped_symbol,
     lengths: *const usize,
+    variables: *const sg_symbol_stack_variable,
     out: *mut sg_partial_symbol_stack,
 ) {
     let partials = unsafe { &mut (*partials).inner };
     let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let variables = unsafe { std::slice::from_raw_parts(variables, count) };
     let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
     for i in 0..count {
         let length = lengths[i];
         let symbols_slice = unsafe { std::slice::from_raw_parts(symbols, length) };
-        let mut stack = PartialSymbolStack::empty();
+        let mut stack = if variables[i] == 0 {
+            PartialSymbolStack::empty()
+        } else {
+            PartialSymbolStack::from_variable(variables[i].try_into().unwrap())
+        };
         for j in 0..length {
             let symbol = symbols_slice[j].into();
             stack.push_back(partials, symbol);
