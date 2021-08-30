@@ -163,6 +163,9 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_paths: &[&st
         for path in paths_slice {
             eprintln!("--> {}", path.display(rust_graph, rust_paths));
 
+            // Verify that path's edge list is available in both directions.
+            assert!(path.edges.have_reversal(rust_paths));
+
             // If we found a complete path, add it to the result set.
             if path.is_complete(rust_graph) {
                 eprintln!("    COMPLETE");

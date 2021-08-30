@@ -1440,17 +1440,22 @@ struct ForwardPathStitcher {
 }
 
 impl ForwardPathStitcher {
-    fn new(stitcher: PathStitcher) -> ForwardPathStitcher {
+    fn new(stitcher: PathStitcher, paths: &mut Paths) -> ForwardPathStitcher {
         let mut this = ForwardPathStitcher {
             previous_phase_paths: std::ptr::null(),
             previous_phase_paths_length: 0,
             stitcher,
         };
-        this.update_previous_phase_paths();
+        this.update_previous_phase_paths(paths);
         this
     }
 
-    fn update_previous_phase_paths(&mut self) {
+    fn update_previous_phase_paths(&mut self, paths: &mut Paths) {
+        for path in self.stitcher.previous_phase_paths_slice_mut() {
+            // Each path's edge list comes out in backwards order.  Requesting a forwards iterator
+            // before we return ensures that it will also be available in forwards order.
+            let _ = path.edges.iter(paths);
+        }
         let slice = self.stitcher.previous_phase_paths_slice();
         self.previous_phase_paths = slice.as_ptr();
         self.previous_phase_paths_length = slice.len();
@@ -1487,7 +1492,7 @@ pub extern "C" fn sg_forward_path_stitcher_new(
         db,
         starting_nodes.iter().copied().map(sg_node_handle::into),
     );
-    Box::into_raw(Box::new(ForwardPathStitcher::new(stitcher))) as *mut _
+    Box::into_raw(Box::new(ForwardPathStitcher::new(stitcher, paths))) as *mut _
 }
 
 /// Runs the next phase of the path-stitching algorithm.  We will have built up a set of
@@ -1514,7 +1519,7 @@ pub extern "C" fn sg_forward_path_stitcher_process_next_phase(
     stitcher
         .stitcher
         .process_next_phase(graph, paths, partials, db);
-    stitcher.update_previous_phase_paths();
+    stitcher.update_previous_phase_paths(paths);
 }
 
 /// Frees a forward path stitcher.
