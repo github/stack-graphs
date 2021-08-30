@@ -57,8 +57,8 @@ fn class_field_through_function_parameter() {
         &mut graph,
         ("main.py", 10),
         &[
-            "<%1> () [main.py(10) reference bar] -> [root] <a.foo()/[main.py(7)].bar,%1> ()",
-            "<%1> () [main.py(10) reference bar] -> [root] <b.foo()/[main.py(7)].bar,%1> ()",
+            "<%1> () [main.py(10) reference bar] -> [root] <a.foo()/([main.py(7)]).bar,%1> ()",
+            "<%1> () [main.py(10) reference bar] -> [root] <b.foo()/([main.py(7)]).bar,%1> ()",
         ],
     );
     check_node_partial_paths(

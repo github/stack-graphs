@@ -469,7 +469,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
         if let Some(scopes) = self.scopes.into_option() {
             write!(
                 f,
-                "{}/{}",
+                "{}/({})",
                 self.symbol.display(graph),
                 display_prepared(scopes, graph, partials)
             )
