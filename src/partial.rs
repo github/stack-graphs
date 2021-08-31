@@ -173,6 +173,17 @@ impl SymbolStackVariable {
         SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(1) })
     }
 
+    /// Applies an offset to this variable.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(self, symbol_variable_offset: u32) -> SymbolStackVariable {
+        let offset_value = self.0.get() + symbol_variable_offset;
+        SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(offset_value) })
+    }
+
     fn as_usize(self) -> usize {
         self.0.get() as usize
     }
@@ -221,6 +232,17 @@ impl ScopeStackVariable {
     /// path.  (You must calculate the maximum variable number already in use.)
     fn fresher_than(max_used: u32) -> ScopeStackVariable {
         ScopeStackVariable(unsafe { NonZeroU32::new_unchecked(max_used + 1) })
+    }
+
+    /// Applies an offset to this variable.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(self, scope_variable_offset: u32) -> ScopeStackVariable {
+        let offset_value = self.0.get() + scope_variable_offset;
+        ScopeStackVariable(unsafe { NonZeroU32::new_unchecked(offset_value) })
     }
 
     fn as_u32(self) -> u32 {
@@ -356,6 +378,21 @@ pub struct PartialScopedSymbol {
 }
 
 impl PartialScopedSymbol {
+    /// Applies an offset to this scoped symbol.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(mut self, scope_variable_offset: u32) -> PartialScopedSymbol {
+        let scopes = self
+            .scopes
+            .into_option()
+            .map(|stack| stack.with_offset(scope_variable_offset));
+        self.scopes = ControlledOption::from_option(scopes);
+        self
+    }
+
     /// Matches this precondition symbol against a scoped symbol, unifying its contents with an
     /// existing set of bindings.
     pub fn match_symbol(
@@ -566,6 +603,28 @@ impl PartialSymbolStack {
             length: 0,
             variable: ControlledOption::some(variable),
         }
+    }
+
+    /// Applies an offset to this partial symbol stack.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(
+        mut self,
+        partials: &mut PartialPaths,
+        symbol_variable_offset: u32,
+        scope_variable_offset: u32,
+    ) -> PartialSymbolStack {
+        let mut result = match self.variable.into_option() {
+            Some(variable) => Self::from_variable(variable.with_offset(symbol_variable_offset)),
+            None => Self::empty(),
+        };
+        while let Some(symbol) = self.pop_front(partials) {
+            result.push_back(partials, symbol.with_offset(scope_variable_offset));
+        }
+        result
     }
 
     fn prepend(&mut self, partials: &mut PartialPaths, mut head: Deque<PartialScopedSymbol>) {
@@ -1004,6 +1063,22 @@ impl PartialScopeStack {
             length: 0,
             variable: ControlledOption::some(variable),
         }
+    }
+
+    /// Applies an offset to this partial scope stack.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(mut self, scope_variable_offset: u32) -> PartialScopeStack {
+        match self.variable.into_option() {
+            Some(variable) => {
+                self.variable = ControlledOption::some(variable.with_offset(scope_variable_offset));
+            }
+            None => {}
+        };
+        self
     }
 
     /// Matches this partial scope stack against a scope stack, unifying any scope stack variables

@@ -47,6 +47,64 @@ fn create_symbol_stack(
 }
 
 #[test]
+fn can_apply_offset_to_partial_symbol_stacks() {
+    fn verify(
+        stack: NiceSymbolStack,
+        symbol_variable_offset: u32,
+        scope_variable_offset: u32,
+        expected: &str,
+    ) {
+        let mut graph = StackGraph::new();
+        let mut partials = PartialPaths::new();
+        let stack = create_symbol_stack(&mut graph, &mut partials, stack);
+        let with_offset =
+            stack.with_offset(&mut partials, symbol_variable_offset, scope_variable_offset);
+        let actual = with_offset.display(&graph, &mut partials).to_string();
+        assert_eq!(actual, expected);
+    }
+
+    verify((&[], None), 0, 0, "");
+    verify((&[], None), 0, 1, "");
+    verify((&[], None), 1, 0, "");
+    verify((&[], None), 1, 1, "");
+
+    let a = ("a", None);
+    verify((&[a], None), 0, 0, "a");
+    verify((&[a], None), 0, 1, "a");
+    verify((&[a], None), 1, 0, "a");
+    verify((&[a], None), 1, 1, "a");
+
+    let var1 = Some(SymbolStackVariable::new(1).unwrap());
+    verify((&[a], var1), 0, 0, "a,%1");
+    verify((&[a], var1), 0, 1, "a,%1");
+    verify((&[a], var1), 1, 0, "a,%2");
+    verify((&[a], var1), 1, 1, "a,%2");
+
+    let empty_scopes: NiceScopeStack = (&[], None);
+    let a_empty = ("a", Some(empty_scopes));
+    verify((&[a_empty], None), 0, 0, "a/()");
+    verify((&[a_empty], None), 0, 1, "a/()");
+    verify((&[a_empty], None), 1, 0, "a/()");
+    verify((&[a_empty], None), 1, 1, "a/()");
+    verify((&[a_empty], var1), 0, 0, "a/(),%1");
+    verify((&[a_empty], var1), 0, 1, "a/(),%1");
+    verify((&[a_empty], var1), 1, 0, "a/(),%2");
+    verify((&[a_empty], var1), 1, 1, "a/(),%2");
+
+    let scope_var1 = Some(ScopeStackVariable::new(1).unwrap());
+    let scopes_var1: NiceScopeStack = (&[], scope_var1);
+    let a_var1 = ("a", Some(scopes_var1));
+    verify((&[a_var1], None), 0, 0, "a/($1)");
+    verify((&[a_var1], None), 0, 1, "a/($2)");
+    verify((&[a_var1], None), 1, 0, "a/($1)");
+    verify((&[a_var1], None), 1, 1, "a/($2)");
+    verify((&[a_var1], var1), 0, 0, "a/($1),%1");
+    verify((&[a_var1], var1), 0, 1, "a/($2),%1");
+    verify((&[a_var1], var1), 1, 0, "a/($1),%2");
+    verify((&[a_var1], var1), 1, 1, "a/($2),%2");
+}
+
+#[test]
 fn can_unify_partial_symbol_stacks() -> Result<(), PathResolutionError> {
     fn verify(
         lhs: NiceSymbolStack,
