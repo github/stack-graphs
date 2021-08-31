@@ -12,6 +12,9 @@ authors = [
 ]
 edition = "2018"
 
+[features]
+copious-debugging = []
+
 [lib]
 # All of our tests are in the tests/it "integration" test executable.
 test = false

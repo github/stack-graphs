@@ -27,6 +27,7 @@ use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_path_arena_free;
 use stack_graphs::c::sg_path_arena_new;
 use stack_graphs::c::sg_stack_graph;
+use stack_graphs::copious_debugging;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::ScopeStackBindings;
 use stack_graphs::partial::SymbolStackBindings;
@@ -87,12 +88,6 @@ impl StorageLayer {
 
             // If it _does_ satsify the predicate, we add it to the database.  We also _remove_ it
             // from the storage layer so that we never add it again.
-            eprintln!(
-                "    add {}",
-                path.display(unsafe { &(*graph).inner }, unsafe {
-                    &mut (*partials).inner
-                })
-            );
             let mut out = sg_partial_path_handle::default();
             sg_partial_path_database_add_partial_paths(
                 graph,
@@ -130,13 +125,12 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_paths: &[&st
         .collect::<Vec<_>>();
 
     // Seed the database with the partial paths that start at any of the starting nodes.
-    eprintln!("==> Add initial partial paths");
+    copious_debugging!("==> Add initial partial paths");
     storage_layer.add_to_database(graph.graph, partials, db, |partial_path| {
         references.contains(&partial_path.start_node)
     });
 
     // Create the forward path stitcher.
-    eprintln!("==> Starting first phase");
     let stitcher = sg_forward_path_stitcher_new(
         graph.graph,
         paths,
@@ -150,10 +144,6 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_paths: &[&st
     // Keep processing phases until the stitching algorithm is done.
     let mut results = HashSet::new();
     while rust_stitcher.previous_phase_paths_length > 0 {
-        eprintln!(
-            "    new path count {}",
-            rust_stitcher.previous_phase_paths_length
-        );
         let paths_slice = unsafe {
             std::slice::from_raw_parts(
                 rust_stitcher.previous_phase_paths as *const Path,
@@ -161,14 +151,12 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_paths: &[&st
             )
         };
         for path in paths_slice {
-            eprintln!("--> {}", path.display(rust_graph, rust_paths));
-
             // Verify that path's edge list is available in both directions.
             assert!(path.edges.have_reversal(rust_paths));
 
             // If we found a complete path, add it to the result set.
             if path.is_complete(rust_graph) {
-                eprintln!("    COMPLETE");
+                copious_debugging!("    COMPLETE PATH {}", path.display(rust_graph, rust_paths));
                 results.insert(path.display(rust_graph, rust_paths).to_string());
             }
 
@@ -205,10 +193,9 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_paths: &[&st
         }
 
         // And then kick off the next phase!
-        eprintln!("==> Starting next phase");
         sg_forward_path_stitcher_process_next_phase(graph.graph, paths, partials, db, stitcher);
     }
-    eprintln!("==> Path stitching done");
+    copious_debugging!("==> Path stitching done");
 
     // And finally verify that we found all of the paths that we expected to.
     let expected_paths = expected_paths
