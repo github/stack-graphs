@@ -609,6 +609,12 @@ impl PartialSymbolStack {
         }
     }
 
+    /// Returns whether this partial symbol stack is iterable in both directions without needing
+    /// mutable access to the arena.
+    pub fn have_reversal(&self, partials: &PartialPaths) -> bool {
+        self.symbols.have_reversal(&partials.partial_symbol_stacks)
+    }
+
     /// Applies an offset to this partial symbol stack.
     ///
     /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
@@ -1073,6 +1079,12 @@ impl PartialScopeStack {
             length: 0,
             variable: ControlledOption::some(variable),
         }
+    }
+
+    /// Returns whether this partial scope stack is iterable in both directions without needing
+    /// mutable access to the arena.
+    pub fn have_reversal(&self, partials: &PartialPaths) -> bool {
+        self.scopes.have_reversal(&partials.partial_scope_stacks)
     }
 
     /// Applies an offset to this partial scope stack.
@@ -1675,6 +1687,12 @@ impl PartialPathEdgeList {
         self.length as usize
     }
 
+    /// Returns whether this edge list is iterable in both directions without needing mutable
+    /// access to the arena.
+    pub fn have_reversal(&self, partials: &PartialPaths) -> bool {
+        self.edges.have_reversal(&partials.partial_path_edges)
+    }
+
     /// Returns an empty edge list.
     pub fn empty() -> PartialPathEdgeList {
         PartialPathEdgeList {
@@ -2048,6 +2066,20 @@ impl PartialPath {
         self.scope_stack_postcondition
             .ensure_both_directions(partials);
         self.edges.ensure_both_directions(partials);
+
+        let mut stack = self.symbol_stack_precondition;
+        while let Some(symbol) = stack.pop_front(partials) {
+            if let Some(mut scopes) = symbol.scopes.into_option() {
+                scopes.ensure_both_directions(partials);
+            }
+        }
+
+        let mut stack = self.symbol_stack_postcondition;
+        while let Some(symbol) = stack.pop_front(partials) {
+            if let Some(mut scopes) = symbol.scopes.into_option() {
+                scopes.ensure_both_directions(partials);
+            }
+        }
     }
 
     /// Returns the largest value of any symbol stack variable in this partial path.
