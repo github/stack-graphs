@@ -184,6 +184,10 @@ impl SymbolStackVariable {
         SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(offset_value) })
     }
 
+    fn as_u32(self) -> u32 {
+        self.0.get()
+    }
+
     fn as_usize(self) -> usize {
         self.0.get() as usize
     }
@@ -2018,9 +2022,19 @@ impl PartialPath {
         self.edges.ensure_both_directions(partials);
     }
 
-    /// Returns a fresh scope stack variable that is not already used anywhere in this partial
-    /// path.
-    pub fn fresh_scope_stack_variable(&self, partials: &mut PartialPaths) -> ScopeStackVariable {
+    /// Returns the largest value of any symbol stack variable in this partial path.
+    pub fn largest_symbol_stack_variable(&self) -> u32 {
+        // We don't have to check the postconditions, because it's not valid for a postcondition to
+        // refer to a variable that doesn't exist in the precondition.
+        self.symbol_stack_precondition
+            .variable
+            .into_option()
+            .map(SymbolStackVariable::as_u32)
+            .unwrap_or(0)
+    }
+
+    /// Returns the largest value of any scope stack variable in this partial path.
+    pub fn largest_scope_stack_variable(&self, partials: &PartialPaths) -> u32 {
         // We don't have to check the postconditions, because it's not valid for a postcondition to
         // refer to a variable that doesn't exist in the precondition.
         let symbol_stack_precondition_variables = self
@@ -2034,12 +2048,17 @@ impl PartialPath {
             .variable
             .into_option()
             .map(ScopeStackVariable::as_u32);
-        let max_used_variable = std::iter::empty()
+        std::iter::empty()
             .chain(symbol_stack_precondition_variables)
             .chain(scope_stack_precondition_variables)
             .max()
-            .unwrap_or(0);
-        ScopeStackVariable::fresher_than(max_used_variable)
+            .unwrap_or(0)
+    }
+
+    /// Returns a fresh scope stack variable that is not already used anywhere in this partial
+    /// path.
+    pub fn fresh_scope_stack_variable(&self, partials: &PartialPaths) -> ScopeStackVariable {
+        ScopeStackVariable::fresher_than(self.largest_scope_stack_variable(partials))
     }
 
     pub fn display<'a>(
@@ -2087,6 +2106,33 @@ impl<'a> DisplayWithPartialPaths for &'a PartialPath {
 }
 
 impl PartialPath {
+    /// Modifies this partial path so that it has no symbol or scope stack variables in common with
+    /// another partial path.
+    pub fn ensure_no_overlapping_variables(
+        &mut self,
+        partials: &mut PartialPaths,
+        other: &PartialPath,
+    ) {
+        let symbol_variable_offset = other.largest_symbol_stack_variable();
+        let scope_variable_offset = other.largest_scope_stack_variable(partials);
+        self.symbol_stack_precondition = self.symbol_stack_precondition.with_offset(
+            partials,
+            symbol_variable_offset,
+            scope_variable_offset,
+        );
+        self.symbol_stack_postcondition = self.symbol_stack_postcondition.with_offset(
+            partials,
+            symbol_variable_offset,
+            scope_variable_offset,
+        );
+        self.scope_stack_precondition = self
+            .scope_stack_precondition
+            .with_offset(scope_variable_offset);
+        self.scope_stack_postcondition = self
+            .scope_stack_postcondition
+            .with_offset(scope_variable_offset);
+    }
+
     /// Attempts to append an edge to the end of a partial path.  If the edge is not a valid
     /// extension of this partial path, we return an error describing why.
     pub fn append(
