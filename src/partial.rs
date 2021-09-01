@@ -439,6 +439,20 @@ impl PartialScopedSymbol {
         })
     }
 
+    /// Applies a set of bindings to this partial scoped symbol, producing a new scoped symbol.
+    pub fn apply_partial_bindings(
+        mut self,
+        partials: &mut PartialPaths,
+        scope_bindings: &PartialScopeStackBindings,
+    ) -> Result<PartialScopedSymbol, PathResolutionError> {
+        let scopes = match self.scopes.into_option() {
+            Some(scopes) => Some(scopes.apply_partial_bindings(partials, scope_bindings)?),
+            None => None,
+        };
+        self.scopes = scopes.into();
+        Ok(self)
+    }
+
     pub fn equals(&self, partials: &mut PartialPaths, other: &PartialScopedSymbol) -> bool {
         self.symbol == other.symbol
             && equals_option(
@@ -655,6 +669,33 @@ impl PartialSymbolStack {
         while let Some(partial_symbol) = self.pop_back(partials) {
             let symbol = partial_symbol.apply_bindings(paths, partials, scope_bindings)?;
             result.push_front(paths, symbol);
+        }
+        Ok(result)
+    }
+
+    /// Applies a set of bindings to this partial symbol stack, producing a new partial symbol
+    /// stack.
+    pub fn apply_partial_bindings(
+        mut self,
+        partials: &mut PartialPaths,
+        symbol_bindings: &PartialSymbolStackBindings,
+        scope_bindings: &PartialScopeStackBindings,
+    ) -> Result<PartialSymbolStack, PathResolutionError> {
+        // If this partial symbol stack ends in a variable, see if we have a binding for it.  If
+        // so, substitute that binding in.  If not, leave the variable as-is.
+        let mut result = match self.variable.into_option() {
+            Some(variable) => match symbol_bindings.get(variable) {
+                Some(bound) => bound,
+                None => PartialSymbolStack::from_variable(variable),
+            },
+            None => PartialSymbolStack::empty(),
+        };
+
+        // Then prepend all of the scoped symbols that appear at the beginning of this stack,
+        // applying the bindings to any attached scopes as well.
+        while let Some(partial_symbol) = self.pop_back(partials) {
+            let partial_symbol = partial_symbol.apply_partial_bindings(partials, scope_bindings)?;
+            result.push_front(partials, partial_symbol);
         }
         Ok(result)
     }
@@ -992,6 +1033,30 @@ impl PartialScopeStack {
         Ok(result)
     }
 
+    /// Applies a set of partial scope stack bindings to this partial scope stack, producing a new
+    /// partial scope stack.
+    pub fn apply_partial_bindings(
+        mut self,
+        partials: &mut PartialPaths,
+        scope_bindings: &PartialScopeStackBindings,
+    ) -> Result<PartialScopeStack, PathResolutionError> {
+        // If this partial scope stack ends in a variable, see if we have a binding for it.  If so,
+        // substitute that binding in.  If not, leave the variable as-is.
+        let mut result = match self.variable.into_option() {
+            Some(variable) => match scope_bindings.get(variable) {
+                Some(bound) => bound,
+                None => PartialScopeStack::from_variable(variable),
+            },
+            None => PartialScopeStack::empty(),
+        };
+
+        // Then prepend all of the scopes that appear at the beginning of this stack.
+        while let Some(scope) = self.pop_back(partials) {
+            result.push_front(partials, scope);
+        }
+        Ok(result)
+    }
+
     /// Given two partial scope stacks, returns the largest possible partial scope stack such that
     /// any scope stack that satisfies the result also satisfies both inputs.  This takes into
     /// account any existing variable assignments, and updates those variable assignments with
@@ -1248,15 +1313,12 @@ impl PartialSymbolStackBindings {
 
     /// Returns the partial symbol stack that a particular symbol stack variable matched.  Returns an
     /// error if that variable didn't match anything.
-    pub fn get(
-        &self,
-        variable: SymbolStackVariable,
-    ) -> Result<PartialSymbolStack, PathResolutionError> {
+    pub fn get(&self, variable: SymbolStackVariable) -> Option<PartialSymbolStack> {
         let index = variable.as_usize();
         if self.bindings.len() < index {
-            return Err(PathResolutionError::UnboundSymbolStackVariable);
+            return None;
         }
-        self.bindings[index - 1].ok_or(PathResolutionError::UnboundSymbolStackVariable)
+        self.bindings[index - 1]
     }
 
     /// Adds a new binding from a symbol stack variable to the partial symbol stack that it
@@ -1341,15 +1403,12 @@ impl PartialScopeStackBindings {
 
     /// Returns the partial scope stack that a particular scope stack variable matched.  Returns an error
     /// if that variable didn't match anything.
-    pub fn get(
-        &self,
-        variable: ScopeStackVariable,
-    ) -> Result<PartialScopeStack, PathResolutionError> {
+    pub fn get(&self, variable: ScopeStackVariable) -> Option<PartialScopeStack> {
         let index = variable.as_usize();
         if self.bindings.len() < index {
-            return Err(PathResolutionError::UnboundScopeStackVariable);
+            return None;
         }
-        self.bindings[index - 1].ok_or(PathResolutionError::UnboundScopeStackVariable)
+        self.bindings[index - 1]
     }
 
     /// Adds a new binding from a scope stack variable to the partial scope stack that it matched.  Returns
