@@ -16,6 +16,7 @@ use stack_graphs::paths::Paths;
 use stack_graphs::paths::ScopedSymbol;
 use stack_graphs::paths::SymbolStack;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::SymbolStackKey;
 
 use crate::test_graphs;
 
@@ -50,13 +51,8 @@ fn check_root_partial_paths(
     }
 
     let mut results = Vec::<Handle<PartialPath>>::new();
-    database.find_candidate_partial_paths_from_root(
-        graph,
-        &mut paths,
-        &mut partials,
-        symbol_stack,
-        &mut results,
-    );
+    let key = SymbolStackKey::from_symbol_stack(&mut paths, &mut database, symbol_stack);
+    database.find_candidate_partial_paths_from_root(graph, &mut partials, key, &mut results);
 
     let actual_partial_paths = results
         .into_iter()

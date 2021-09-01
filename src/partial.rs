@@ -1034,6 +1034,12 @@ pub struct PartialScopeStack {
 }
 
 impl PartialScopeStack {
+    /// Returns whether this partial scope stack can match the empty scope stack.
+    #[inline(always)]
+    pub fn can_match_empty(&self) -> bool {
+        self.scopes.is_empty()
+    }
+
     /// Returns whether this partial scope stack can _only_ match the empty scope stack.
     #[inline(always)]
     pub fn can_only_match_empty(&self) -> bool {
@@ -1950,6 +1956,28 @@ impl PartialPath {
                     .cmp(partials, other.scope_stack_postcondition)
             })
             .then_with(|| self.edges.cmp(partials, other.edges))
+    }
+
+    /// Returns whether a partial path represents the start of a name binding from a reference to a
+    /// definition.
+    pub fn starts_at_reference(&self, graph: &StackGraph) -> bool {
+        graph[self.start_node].is_reference()
+            && self.symbol_stack_precondition.can_match_empty()
+            && self.scope_stack_precondition.can_match_empty()
+    }
+
+    /// Returns whether a partial path represents the end of a name binding from a reference to a
+    /// definition.
+    pub fn ends_at_definition(&self, graph: &StackGraph) -> bool {
+        graph[self.end_node].is_definition()
+            && self.symbol_stack_postcondition.can_match_empty()
+            && self.scope_stack_postcondition.can_match_empty()
+    }
+
+    /// A _complete_ partial path represents a full name binding that resolves a reference to a
+    /// definition.
+    pub fn is_complete(&self, graph: &StackGraph) -> bool {
+        self.starts_at_reference(graph) && self.ends_at_definition(graph)
     }
 
     /// A partial path is _as complete as possible_ if we cannot extend it any further within the
