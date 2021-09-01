@@ -2254,6 +2254,87 @@ impl Path {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Extending partial paths with partial paths
+
+impl PartialPath {
+    /// Attempts to concatenate two partial paths.  If the postcondition of the “left” partial path
+    /// is not compatible with the precondition of the “right” path, we return an error describing
+    /// why.
+    ///
+    /// If the left- and right-hand partial paths have any symbol or scope stack variables in
+    /// common, then we ensure that the variables bind to the same values on both sides.  It's your
+    /// responsibility to update the two partial paths so that they have no variables in common, if
+    /// that's needed for your use case.
+    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+    pub fn concatenate(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        rhs: &PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        let lhs = self;
+
+        if lhs.end_node != rhs.start_node {
+            return Err(PathResolutionError::IncorrectSourceNode);
+        }
+
+        let mut symbol_bindings = PartialSymbolStackBindings::new();
+        let mut scope_bindings = PartialScopeStackBindings::new();
+
+        let unified_scope_stack = lhs.scope_stack_postcondition.unify(
+            partials,
+            rhs.scope_stack_precondition,
+            &mut scope_bindings,
+        )?;
+        let unified_symbol_stack = lhs.symbol_stack_postcondition.unify(
+            partials,
+            rhs.symbol_stack_precondition,
+            &mut symbol_bindings,
+            &mut scope_bindings,
+        )?;
+        #[cfg(feature = "copious-debugging")]
+        {
+            let unified_symbol_stack = unified_symbol_stack.display(graph, partials).to_string();
+            let unified_scope_stack = unified_scope_stack.display(graph, partials).to_string();
+            let symbol_bindings = symbol_bindings.display(graph, partials).to_string();
+            let scope_bindings = scope_bindings.display(graph, partials).to_string();
+            copious_debugging!(
+                "       via <{}> ({}) {} {}",
+                unified_symbol_stack,
+                unified_scope_stack,
+                symbol_bindings,
+                scope_bindings,
+            );
+        }
+
+        lhs.symbol_stack_precondition = lhs.symbol_stack_precondition.apply_partial_bindings(
+            partials,
+            &symbol_bindings,
+            &scope_bindings,
+        )?;
+        lhs.symbol_stack_postcondition = rhs.symbol_stack_postcondition.apply_partial_bindings(
+            partials,
+            &symbol_bindings,
+            &scope_bindings,
+        )?;
+
+        lhs.scope_stack_precondition = lhs
+            .scope_stack_precondition
+            .apply_partial_bindings(partials, &scope_bindings)?;
+        lhs.scope_stack_postcondition = rhs
+            .scope_stack_postcondition
+            .apply_partial_bindings(partials, &scope_bindings)?;
+
+        let mut edges = rhs.edges;
+        while let Some(edge) = edges.pop_front(partials) {
+            lhs.edges.push_back(partials, edge);
+        }
+        lhs.end_node = rhs.end_node;
+        Ok(())
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Partial path resolution state
 
 /// Manages the state of a collection of partial paths built up as part of the partial-path-finding
