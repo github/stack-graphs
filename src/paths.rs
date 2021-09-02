@@ -197,7 +197,7 @@ impl DisplayWithPaths for ScopedSymbol {
 pub struct SymbolStack {
     #[niche]
     list: List<ScopedSymbol>,
-    length: usize,
+    length: u32,
 }
 
 impl SymbolStack {
@@ -209,7 +209,7 @@ impl SymbolStack {
 
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.length
+        self.length as usize
     }
 
     /// Returns an empty symbol stack.
@@ -295,6 +295,7 @@ impl DisplayWithPaths for SymbolStack {
 pub struct ScopeStack {
     #[niche]
     list: List<Handle<Node>>,
+    length: u32,
 }
 
 impl ScopeStack {
@@ -304,10 +305,16 @@ impl ScopeStack {
         self.list.is_empty()
     }
 
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length as usize
+    }
+
     /// Returns an empty scope stack.
     pub fn empty() -> ScopeStack {
         ScopeStack {
             list: List::empty(),
+            length: 0,
         }
     }
 
@@ -326,13 +333,18 @@ impl ScopeStack {
     ///
     /// [`Node`]: ../graph/enum.Node.html
     pub fn push_front(&mut self, paths: &mut Paths, node: Handle<Node>) {
+        self.length += 1;
         self.list.push_front(&mut paths.scope_stacks, node);
     }
 
     /// Removes and returns the [`Node`][] at the front of this scope stack.  If the stack is
     /// empty, returns `None`.
     pub fn pop_front(&mut self, paths: &Paths) -> Option<Handle<Node>> {
-        self.list.pop_front(&paths.scope_stacks).copied()
+        let result = self.list.pop_front(&paths.scope_stacks).copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     pub fn display<'a>(self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {
@@ -406,7 +418,7 @@ impl DisplayWithPaths for PathEdge {
 pub struct PathEdgeList {
     #[niche]
     edges: Deque<PathEdge>,
-    length: usize,
+    length: u32,
 }
 
 impl PathEdgeList {
@@ -418,7 +430,7 @@ impl PathEdgeList {
 
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.length
+        self.length as usize
     }
 
     /// Returns whether this edge list is iterable in both directions without needing mutable

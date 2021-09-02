@@ -522,6 +522,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 pub struct PartialSymbolStack {
     #[niche]
     symbols: Deque<PartialScopedSymbol>,
+    length: u32,
     variable: ControlledOption<SymbolStackVariable>,
 }
 
@@ -544,10 +545,16 @@ impl PartialSymbolStack {
         !self.symbols.is_empty()
     }
 
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length as usize
+    }
+
     /// Returns an empty partial symbol stack.
     pub fn empty() -> PartialSymbolStack {
         PartialSymbolStack {
             symbols: Deque::empty(),
+            length: 0,
             variable: ControlledOption::none(),
         }
     }
@@ -556,6 +563,7 @@ impl PartialSymbolStack {
     pub fn from_variable(variable: SymbolStackVariable) -> PartialSymbolStack {
         PartialSymbolStack {
             symbols: Deque::empty(),
+            length: 0,
             variable: ControlledOption::some(variable),
         }
     }
@@ -568,12 +576,14 @@ impl PartialSymbolStack {
 
     /// Pushes a new [`PartialScopedSymbol`][] onto the front of this partial symbol stack.
     pub fn push_front(&mut self, partials: &mut PartialPaths, symbol: PartialScopedSymbol) {
+        self.length += 1;
         self.symbols
             .push_front(&mut partials.partial_symbol_stacks, symbol);
     }
 
     /// Pushes a new [`PartialScopedSymbol`][] onto the back of this partial symbol stack.
     pub fn push_back(&mut self, partials: &mut PartialPaths, symbol: PartialScopedSymbol) {
+        self.length += 1;
         self.symbols
             .push_back(&mut partials.partial_symbol_stacks, symbol);
     }
@@ -581,17 +591,27 @@ impl PartialSymbolStack {
     /// Removes and returns the [`PartialScopedSymbol`][] at the front of this partial symbol
     /// stack.  If the stack is empty, returns `None`.
     pub fn pop_front(&mut self, partials: &mut PartialPaths) -> Option<PartialScopedSymbol> {
-        self.symbols
+        let result = self
+            .symbols
             .pop_front(&mut partials.partial_symbol_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     /// Removes and returns the [`PartialScopedSymbol`][] at the back of this partial symbol stack.
     /// If the stack is empty, returns `None`.
     pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<PartialScopedSymbol> {
-        self.symbols
+        let result = self
+            .symbols
             .pop_back(&mut partials.partial_symbol_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     pub fn display<'a>(
@@ -946,6 +966,7 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
 pub struct PartialScopeStack {
     #[niche]
     scopes: Deque<Handle<Node>>,
+    length: u32,
     variable: ControlledOption<ScopeStackVariable>,
 }
 
@@ -962,10 +983,16 @@ impl PartialScopeStack {
         !self.scopes.is_empty()
     }
 
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length as usize
+    }
+
     /// Returns an empty partial scope stack.
     pub fn empty() -> PartialScopeStack {
         PartialScopeStack {
             scopes: Deque::empty(),
+            length: 0,
             variable: ControlledOption::none(),
         }
     }
@@ -974,6 +1001,7 @@ impl PartialScopeStack {
     pub fn from_variable(variable: ScopeStackVariable) -> PartialScopeStack {
         PartialScopeStack {
             scopes: Deque::empty(),
+            length: 0,
             variable: ControlledOption::some(variable),
         }
     }
@@ -1163,6 +1191,7 @@ impl PartialScopeStack {
     ///
     /// [`Node`]: ../graph/enum.Node.html
     pub fn push_front(&mut self, partials: &mut PartialPaths, node: Handle<Node>) {
+        self.length += 1;
         self.scopes
             .push_front(&mut partials.partial_scope_stacks, node);
     }
@@ -1172,6 +1201,7 @@ impl PartialScopeStack {
     ///
     /// [`Node`]: ../graph/enum.Node.html
     pub fn push_back(&mut self, partials: &mut PartialPaths, node: Handle<Node>) {
+        self.length += 1;
         self.scopes
             .push_back(&mut partials.partial_scope_stacks, node);
     }
@@ -1179,17 +1209,27 @@ impl PartialScopeStack {
     /// Removes and returns the [`Node`][] at the front of this partial scope stack.  If the stack
     /// does not contain any exported scope nodes, returns `None`.
     pub fn pop_front(&mut self, partials: &mut PartialPaths) -> Option<Handle<Node>> {
-        self.scopes
+        let result = self
+            .scopes
             .pop_front(&mut partials.partial_scope_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     /// Removes and returns the [`Node`][] at the back of this partial scope stack.  If the stack
     /// does not contain any exported scope nodes, returns `None`.
     pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<Handle<Node>> {
-        self.scopes
+        let result = self
+            .scopes
             .pop_back(&mut partials.partial_scope_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     /// Returns the scope stack variable at the end of this partial scope stack.  If the stack does
@@ -1535,7 +1575,7 @@ impl DisplayWithPartialPaths for PartialPathEdge {
 pub struct PartialPathEdgeList {
     #[niche]
     edges: Deque<PartialPathEdge>,
-    length: usize,
+    length: u32,
 }
 
 impl PartialPathEdgeList {
@@ -1547,7 +1587,7 @@ impl PartialPathEdgeList {
 
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.length
+        self.length as usize
     }
 
     /// Returns an empty edge list.

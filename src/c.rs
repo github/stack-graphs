@@ -562,7 +562,7 @@ pub struct sg_symbol_stack {
     /// The handle of the first element in the symbol stack, or SG_LIST_EMPTY_HANDLE if the list is
     /// empty, or 0 if the list is null.
     pub cells: sg_symbol_stack_cell_handle,
-    pub length: usize,
+    pub length: u32,
 }
 
 impl From<SymbolStack> for sg_symbol_stack {
@@ -647,6 +647,7 @@ pub struct sg_scope_stack {
     /// The handle of the first element in the scope stack, or SG_LIST_EMPTY_HANDLE if the list is
     /// empty, or 0 if the list is null.
     pub cells: sg_scope_stack_cell_handle,
+    pub length: u32,
 }
 
 impl From<ScopeStack> for sg_scope_stack {
@@ -747,7 +748,7 @@ pub struct sg_path_edge_list {
     /// empty, or 0 if the list is null.
     pub cells: sg_path_edge_list_cell_handle,
     pub direction: sg_deque_direction,
-    pub length: usize,
+    pub length: u32,
 }
 
 impl From<PathEdgeList> for sg_path_edge_list {
@@ -937,6 +938,7 @@ pub struct sg_partial_symbol_stack {
     /// list is empty, or 0 if the list is null.
     pub cells: sg_partial_symbol_stack_cell_handle,
     pub direction: sg_deque_direction,
+    pub length: u32,
     /// The symbol stack variable representing the unknown content of a partial symbol stack, or 0
     /// if the variable is missing.  (If so, this partial symbol stack can only match a symbol
     /// stack with exactly the list of symbols in `cells`, instead of any symbol stack with those
@@ -1046,6 +1048,7 @@ pub struct sg_partial_scope_stack {
     /// list is empty, or 0 if the list is null.
     pub cells: sg_partial_scope_stack_cell_handle,
     pub direction: sg_deque_direction,
+    pub length: u32,
     /// The scope stack variable representing the unknown content of a partial scope stack, or 0 if
     /// the variable is missing.  (If so, this partial scope stack can only match a scope stack
     /// with exactly the list of scopes in `cells`, instead of any scope stack with those scopes as
@@ -1166,7 +1169,7 @@ pub struct sg_partial_path_edge_list {
     /// empty, or 0 if the list is null.
     pub cells: sg_partial_path_edge_list_cell_handle,
     pub direction: sg_deque_direction,
-    pub length: usize,
+    pub length: u32,
 }
 
 impl From<PartialPathEdgeList> for sg_partial_path_edge_list {

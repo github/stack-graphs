@@ -92,7 +92,10 @@ fn add_exported_scope(
 // Symbol stacks
 
 fn empty_scope_stack() -> sg_scope_stack {
-    sg_scope_stack { cells: 0 }
+    sg_scope_stack {
+        cells: 0,
+        length: 0,
+    }
 }
 
 fn scoped_symbol(symbol: sg_symbol_handle, scopes: sg_scope_stack) -> sg_scoped_symbol {
