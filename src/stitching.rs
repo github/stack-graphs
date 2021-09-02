@@ -75,7 +75,9 @@ pub struct Database {
     symbol_stack_keys: ListArena<Handle<Symbol>>,
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
+    paths_by_end_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
     root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
+    root_paths_by_postcondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
 }
 
 impl Database {
@@ -86,7 +88,9 @@ impl Database {
             symbol_stack_keys: List::new_arena(),
             symbol_stack_key_cache: HashMap::new(),
             paths_by_start_node: SupplementalArena::new(),
+            paths_by_end_node: SupplementalArena::new(),
             root_paths_by_precondition: SupplementalArena::new(),
+            root_paths_by_postcondition: SupplementalArena::new(),
         }
     }
 
@@ -99,9 +103,15 @@ impl Database {
         path: PartialPath,
     ) -> Handle<PartialPath> {
         let start_node = path.start_node;
+        let end_node = path.end_node;
         copious_debugging!(
-            "    Add {} path to database {}",
+            "    Add {}->{} path to database {}",
             if graph[start_node].is_root() {
+                "root"
+            } else {
+                "node"
+            },
+            if graph[end_node].is_root() {
                 "root"
             } else {
                 "node"
@@ -109,6 +119,7 @@ impl Database {
             path.display(graph, partials)
         );
         let symbol_stack_precondition = path.symbol_stack_precondition;
+        let symbol_stack_postcondition = path.symbol_stack_postcondition;
         let handle = self.partial_paths.add(path);
 
         // If the partial path starts at the root node, index it by its symbol stack precondition.
@@ -118,11 +129,42 @@ impl Database {
                 self,
                 symbol_stack_precondition,
             );
+            copious_debugging!(
+                "      Indexing at precondition <{}>",
+                key.display(graph, self)
+            );
             let key_handle = key.back_handle();
             self.root_paths_by_precondition[key_handle].push(handle);
         } else {
             // Otherwise index it by its source node.
+            copious_debugging!(
+                "      Indexing at start node <{}>",
+                graph[start_node].display(graph),
+            );
             self.paths_by_start_node[start_node].push(handle);
+        }
+
+        // If the partial path ends at the root node, index it again by its symbol stack
+        // postcondition.
+        if graph[end_node].is_root() {
+            let key = SymbolStackKey::from_partial_symbol_stack(
+                partials,
+                self,
+                symbol_stack_postcondition,
+            );
+            copious_debugging!(
+                "      Indexing at postcondition <{}>",
+                key.display(graph, self)
+            );
+            let key_handle = key.back_handle();
+            self.root_paths_by_postcondition[key_handle].push(handle);
+        } else {
+            // Otherwise index it again by its end node.
+            copious_debugging!(
+                "      Indexing at end node <{}>",
+                graph[end_node].display(graph),
+            );
+            self.paths_by_end_node[end_node].push(handle);
         }
 
         handle
@@ -144,7 +186,7 @@ impl Database {
         // symbol stack precondition is compatible with the path.
         loop {
             copious_debugging!(
-                "      Search for symbol stack <{}>",
+                "      Search for symbol stack precondition <{}>",
                 symbol_stack.display(graph, self)
             );
             let key_handle = symbol_stack.back_handle();
@@ -171,7 +213,7 @@ impl Database {
     /// as we try to append it to the current incomplete path anyway, and non-root nodes will
     /// typically have a small number of outgoing edges.
     #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
-    pub fn find_candidate_partial_paths_from_node<R>(
+    pub fn find_candidate_partial_paths_from_start_node<R>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -183,6 +225,74 @@ impl Database {
         copious_debugging!("      Search for start node {}", start_node.display(graph));
         // Return all of the partial paths that start at the requested node.
         if let Some(paths) = self.paths_by_start_node.get(start_node) {
+            #[cfg(feature = "copious-debugging")]
+            {
+                for path in paths {
+                    copious_debugging!(
+                        "        Found path {}",
+                        self[*path].display(graph, partials)
+                    );
+                }
+            }
+            result.extend(paths.iter().copied());
+        }
+    }
+
+    /// Find all partial paths in this database that end at the root node, and have a symbol
+    /// stack precondition that is compatible with a given symbol stack.
+    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+    pub fn find_candidate_partial_paths_to_root<R>(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        mut symbol_stack: SymbolStackKey,
+        result: &mut R,
+    ) where
+        R: std::iter::Extend<Handle<PartialPath>>,
+    {
+        // If the path currently ends at the root node, then we need to look up partial paths whose
+        // symbol stack postcondition is compatible with the path.
+        loop {
+            copious_debugging!(
+                "      Search for symbol stack postcondition <{}>",
+                symbol_stack.display(graph, self)
+            );
+            let key_handle = symbol_stack.back_handle();
+            if let Some(paths) = self.root_paths_by_postcondition.get(key_handle) {
+                #[cfg(feature = "copious-debugging")]
+                {
+                    for path in paths {
+                        copious_debugging!(
+                            "        Found path {}",
+                            self[*path].display(graph, partials)
+                        );
+                    }
+                }
+                result.extend(paths.iter().copied());
+            }
+            if symbol_stack.pop_back(self).is_none() {
+                break;
+            }
+        }
+    }
+
+    /// Find all partial paths in the database that end at the given node.  We don't filter the
+    /// results any further than that, since we have to check each partial path for compatibility
+    /// as we try to append it to the current incomplete path anyway, and non-root nodes will
+    /// typically have a small number of outgoing edges.
+    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+    pub fn find_candidate_partial_paths_to_end_node<R>(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        end_node: Handle<Node>,
+        result: &mut R,
+    ) where
+        R: std::iter::Extend<Handle<PartialPath>>,
+    {
+        copious_debugging!("      Search for end node {}", end_node.display(graph));
+        // Return all of the partial paths that end at the requested node.
+        if let Some(paths) = self.paths_by_end_node.get(end_node) {
             #[cfg(feature = "copious-debugging")]
             {
                 for path in paths {
@@ -382,7 +492,12 @@ impl PathStitcher {
         let mut candidate_paths = Vec::new();
         for node in starting_nodes {
             copious_debugging!("    Initial node {}", node.display(graph));
-            db.find_candidate_partial_paths_from_node(graph, partials, node, &mut candidate_paths);
+            db.find_candidate_partial_paths_from_start_node(
+                graph,
+                partials,
+                node,
+                &mut candidate_paths,
+            );
         }
         let next_iteration = candidate_paths
             .iter()
@@ -443,7 +558,7 @@ impl PathStitcher {
                 &mut self.candidate_paths,
             );
         } else {
-            db.find_candidate_partial_paths_from_node(
+            db.find_candidate_partial_paths_from_start_node(
                 graph,
                 partials,
                 path.end_node,
@@ -611,7 +726,7 @@ impl ForwardPartialPathStitcher {
         let mut candidate_partial_paths = Vec::new();
         for node in starting_nodes {
             copious_debugging!("    Initial node {}", node.display(graph));
-            db.find_candidate_partial_paths_from_node(
+            db.find_candidate_partial_paths_from_start_node(
                 graph,
                 partials,
                 node,
@@ -679,7 +794,7 @@ impl ForwardPartialPathStitcher {
                 &mut self.candidate_partial_paths,
             );
         } else {
-            db.find_candidate_partial_paths_from_node(
+            db.find_candidate_partial_paths_from_start_node(
                 graph,
                 partials,
                 partial_path.end_node,
