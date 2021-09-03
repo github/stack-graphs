@@ -499,6 +499,11 @@ impl Node {
         matches!(self, Node::Root(_))
     }
 
+    #[inline(always)]
+    pub fn is_exported_scope(&self) -> bool {
+        matches!(self, Node::ExportedScope(_))
+    }
+
     /// Returns this node's symbol, if it has one.  (_Pop symbol_, _pop scoped symbol_, _push
     /// symbol_, and _push scoped symbol_ nodes have symbols.)
     pub fn symbol(&self) -> Option<Handle<Symbol>> {

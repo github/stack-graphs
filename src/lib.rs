@@ -55,11 +55,12 @@
 //! importantly, each “chunk” of the overall graph only depends on “local” information from the
 //! original source file.  (a.k.a., it’s incremental!)
 
+#[macro_use]
+mod debugging;
+
 pub mod arena;
 pub mod c;
 pub mod cycles;
-#[macro_use]
-mod debugging;
 pub mod graph;
 pub mod partial;
 pub mod paths;

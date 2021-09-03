@@ -2323,6 +2323,25 @@ impl PartialPath {
         Ok(())
     }
 
+    /// Attempts to unresolve any _exported scope_ node at the start of a partial path.  If the
+    /// partial path does not start with an _exported scope_ node, we do nothing.
+    pub fn unresolve(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
+        let start_node = &graph[self.start_node];
+        if !start_node.is_exported_scope() {
+            return;
+        }
+        self.scope_stack_precondition
+            .push_front(partials, self.start_node);
+        self.edges.push_front(
+            partials,
+            PartialPathEdge {
+                source_node_id: start_node.id(),
+                precedence: 0,
+            },
+        );
+        self.start_node = graph.jump_to_node();
+    }
+
     /// Attempts to extend one partial path as part of the partial-path-finding algorithm, using
     /// only outgoing edges that belong to a particular file.  When calling this function, you are
     /// responsible for ensuring that `graph` already contains data for all of the possible edges

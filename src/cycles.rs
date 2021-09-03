@@ -108,7 +108,10 @@ where
         let paths_with_same_nodes = self.paths.entry(key).or_default();
         let index = match paths_with_same_nodes.binary_search_by(cmp) {
             // We've already seen this exact path before; no need to process it again.
-            Ok(_) => return false,
+            Ok(_) => {
+                copious_debugging!("    Already processed path");
+                return false;
+            }
             // Otherwise add it to the list.
             Err(index) => index,
         };
@@ -120,6 +123,7 @@ where
             .filter(|similar_path| similar_path.is_shorter_than(path))
             .count();
         if similar_path_count > MAX_SIMILAR_PATH_COUNT {
+            copious_debugging!("    Found {} smaller similar paths", similar_path_count);
             return false;
         }
 

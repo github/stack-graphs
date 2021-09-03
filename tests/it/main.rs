@@ -10,6 +10,7 @@ pub mod test_graphs;
 mod arena;
 mod c;
 mod can_create_graph;
+mod can_find_all_references_with_reverse_partial_path_stitching;
 mod can_find_partial_paths_from_root_in_database;
 mod can_find_partial_paths_from_start_node_in_database;
 mod can_find_partial_paths_in_file;
