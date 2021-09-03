@@ -78,6 +78,7 @@ pub struct Database {
     paths_by_end_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
     root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
     root_paths_by_postcondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
+    jump_to_paths_by_postcondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
 }
 
 impl Database {
@@ -91,6 +92,7 @@ impl Database {
             paths_by_end_node: SupplementalArena::new(),
             root_paths_by_precondition: SupplementalArena::new(),
             root_paths_by_postcondition: SupplementalArena::new(),
+            jump_to_paths_by_postcondition: SupplementalArena::new(),
         }
     }
 
@@ -108,11 +110,15 @@ impl Database {
             "    Add {}->{} path to database {}",
             if graph[start_node].is_root() {
                 "root"
+            } else if graph[start_node].is_jump_to() {
+                "jump"
             } else {
                 "node"
             },
             if graph[end_node].is_root() {
                 "root"
+            } else if graph[end_node].is_jump_to() {
+                "jump"
             } else {
                 "node"
             },
@@ -144,8 +150,8 @@ impl Database {
             self.paths_by_start_node[start_node].push(handle);
         }
 
-        // If the partial path ends at the root node, index it again by its symbol stack
-        // postcondition.
+        // If the partial path ends at the root node or jump to scope node, index it again by its
+        // symbol stack postcondition.
         if graph[end_node].is_root() {
             let key = SymbolStackKey::from_partial_symbol_stack(
                 partials,
@@ -158,6 +164,18 @@ impl Database {
             );
             let key_handle = key.back_handle();
             self.root_paths_by_postcondition[key_handle].push(handle);
+        } else if graph[end_node].is_jump_to() {
+            let key = SymbolStackKey::from_partial_symbol_stack(
+                partials,
+                self,
+                symbol_stack_postcondition,
+            );
+            copious_debugging!(
+                "      Indexing at postcondition <{}>",
+                key.display(graph, self)
+            );
+            let key_handle = key.back_handle();
+            self.jump_to_paths_by_postcondition[key_handle].push(handle);
         } else {
             // Otherwise index it again by its end node.
             copious_debugging!(
@@ -259,6 +277,44 @@ impl Database {
             );
             let key_handle = symbol_stack.back_handle();
             if let Some(paths) = self.root_paths_by_postcondition.get(key_handle) {
+                #[cfg(feature = "copious-debugging")]
+                {
+                    for path in paths {
+                        copious_debugging!(
+                            "        Found path {}",
+                            self[*path].display(graph, partials)
+                        );
+                    }
+                }
+                result.extend(paths.iter().copied());
+            }
+            if symbol_stack.pop_back(self).is_none() {
+                break;
+            }
+        }
+    }
+
+    /// Find all partial paths in this database that end at the jump to scope node, and have a
+    /// symbol stack precondition that is compatible with a given symbol stack.
+    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+    pub fn find_candidate_partial_paths_to_jump_to<R>(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        mut symbol_stack: SymbolStackKey,
+        result: &mut R,
+    ) where
+        R: std::iter::Extend<Handle<PartialPath>>,
+    {
+        // If the path currently ends at the jump to node, then we need to look up partial paths
+        // whose symbol stack postcondition is compatible with the path.
+        loop {
+            copious_debugging!(
+                "      Search for symbol stack postcondition <{}>",
+                symbol_stack.display(graph, self)
+            );
+            let key_handle = symbol_stack.back_handle();
+            if let Some(paths) = self.jump_to_paths_by_postcondition.get(key_handle) {
                 #[cfg(feature = "copious-debugging")]
                 {
                     for path in paths {

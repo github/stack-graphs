@@ -14,6 +14,7 @@ mod can_find_partial_paths_from_root_in_database;
 mod can_find_partial_paths_from_start_node_in_database;
 mod can_find_partial_paths_in_file;
 mod can_find_partial_paths_to_end_node_in_database;
+mod can_find_partial_paths_to_jump_to_in_database;
 mod can_find_partial_paths_to_root_in_database;
 mod can_jump_to_definition;
 mod can_jump_to_definition_with_forward_partial_path_stitching;
