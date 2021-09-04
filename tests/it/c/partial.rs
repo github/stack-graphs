@@ -179,6 +179,7 @@ fn can_create_partial_symbol_stacks() {
         partial_scoped_symbol(b, empty_partial_scope_stack()),
     ];
     let lengths = [symbols0.len(), symbols1.len(), symbols2.len()];
+    let variables = [0, 0, 1];
     let mut symbolses = Vec::new();
     symbolses.extend_from_slice(&symbols0);
     symbolses.extend_from_slice(&symbols1);
@@ -189,6 +190,7 @@ fn can_create_partial_symbol_stacks() {
         lengths.len(),
         symbolses.as_slice().as_ptr(),
         lengths.as_ptr(),
+        variables.as_ptr(),
         stacks.as_mut_ptr(),
     );
 
@@ -197,6 +199,10 @@ fn can_create_partial_symbol_stacks() {
     assert!(partial_symbol_stack_contains(&cells, &stacks[0], &symbols0));
     assert!(partial_symbol_stack_contains(&cells, &stacks[1], &symbols1));
     assert!(partial_symbol_stack_contains(&cells, &stacks[2], &symbols2));
+
+    assert_eq!(stacks[0].variable, variables[0]);
+    assert_eq!(stacks[1].variable, variables[1]);
+    assert_eq!(stacks[2].variable, variables[2]);
 
     // Verify that each stack is available in both directions.
     assert!(partial_symbol_stack_available_in_both_directions(

@@ -77,22 +77,22 @@ fn class_field_through_function_parameter() {
         "main.py",
         &["__main__", ".", "baz"],
         &[
-            "<__main__.> ($1) [root] -> [root] <a.> ($1)",
-            "<__main__.> ($1) [root] -> [root] <b.> ($1)",
-            "<__main__> ($1) [root] -> [main.py(0) definition __main__] <> ($1)",
+            "<__main__.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
+            "<__main__.,%1> ($1) [root] -> [root] <b.,%1> ($1)",
+            "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
         ],
     );
     check_root_partial_paths(
         &mut graph,
         "a.py",
         &["a", ".", "baz"],
-        &["<a> ($1) [root] -> [a.py(0) definition a] <> ($1)"],
+        &["<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)"],
     );
     check_root_partial_paths(
         &mut graph,
         "b.py",
         &["b", ".", "baz"],
-        &["<b> ($1) [root] -> [b.py(0) definition b] <> ($1)"],
+        &["<b,%1> ($1) [root] -> [b.py(0) definition b] <%1> ($1)"],
     );
 }
 
@@ -104,8 +104,8 @@ fn cyclic_imports_python() {
         "main.py",
         &["__main__", ".", "baz"],
         &[
-            "<__main__> ($1) [root] -> [main.py(0) definition __main__] <> ($1)",
-            "<__main__.> ($1) [root] -> [root] <a.> ($1)",
+            "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
+            "<__main__.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
         ],
     );
     check_root_partial_paths(
@@ -113,8 +113,8 @@ fn cyclic_imports_python() {
         "a.py",
         &["a", ".", "baz"],
         &[
-            "<a> ($1) [root] -> [a.py(0) definition a] <> ($1)",
-            "<a.> ($1) [root] -> [root] <b.> ($1)",
+            "<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)",
+            "<a.,%1> ($1) [root] -> [root] <b.,%1> ($1)",
         ],
     );
     check_root_partial_paths(
@@ -122,8 +122,8 @@ fn cyclic_imports_python() {
         "b.py",
         &["b", ".", "baz"],
         &[
-            "<b> ($1) [root] -> [b.py(0) definition b] <> ($1)",
-            "<b.> ($1) [root] -> [root] <a.> ($1)",
+            "<b,%1> ($1) [root] -> [b.py(0) definition b] <%1> ($1)",
+            "<b.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
         ],
     );
 }
@@ -149,8 +149,8 @@ fn sequenced_import_star() {
         "main.py",
         &["__main__", ".", "baz"],
         &[
-            "<__main__> ($1) [root] -> [main.py(0) definition __main__] <> ($1)",
-            "<__main__.> ($1) [root] -> [root] <a.> ($1)",
+            "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
+            "<__main__.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
         ],
     );
     check_root_partial_paths(
@@ -158,14 +158,14 @@ fn sequenced_import_star() {
         "a.py",
         &["a", ".", "baz"],
         &[
-            "<a> ($1) [root] -> [a.py(0) definition a] <> ($1)",
-            "<a.> ($1) [root] -> [root] <b.> ($1)",
+            "<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)",
+            "<a.,%1> ($1) [root] -> [root] <b.,%1> ($1)",
         ],
     );
     check_root_partial_paths(
         &mut graph,
         "b.py",
         &["b", ".", "baz"],
-        &["<b> ($1) [root] -> [b.py(0) definition b] <> ($1)"],
+        &["<b,%1> ($1) [root] -> [b.py(0) definition b] <%1> ($1)"],
     );
 }

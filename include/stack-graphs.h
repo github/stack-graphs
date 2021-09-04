@@ -336,6 +336,9 @@ struct sg_partial_symbol_stack_cells {
     size_t count;
 };
 
+// Represents an unknown list of scoped symbols.
+typedef uint32_t sg_symbol_stack_variable;
+
 // A pattern that might match against a symbol stack.  Consists of a (possibly empty) list of
 // partial scoped symbols.
 //
@@ -349,6 +352,11 @@ struct sg_partial_symbol_stack {
     // list is empty, or 0 if the list is null.
     sg_partial_symbol_stack_cell_handle cells;
     enum sg_deque_direction direction;
+    // The symbol stack variable representing the unknown content of a partial symbol stack, or 0
+    // if the variable is missing.  (If so, this partial symbol stack can only match a symbol
+    // stack with exactly the list of symbols in `cells`, instead of any symbol stack with those
+    // symbols as a prefix.)
+    sg_symbol_stack_variable variable;
 };
 
 // An element of a partial scope stack.
@@ -669,7 +677,8 @@ struct sg_partial_symbol_stack_cells sg_partial_path_arena_partial_symbol_stack_
 // arrays.  The `lengths` array must have `count` elements, and provides the number of symbols in
 // each partial symbol stack.  The `symbols` array contains the contents of each of these partial
 // symbol stacks in one contiguous array.  Its length must be the sum of all of the counts in the
-// `lengths` array.
+// `lengths` array.  The `variables` array must have `count` elements, and provides the optional
+// symbol stack variable for each partial symbol stack.
 //
 // You must also provide an `out` array, which must also have room for `count` elements.  We will
 // fill this array in with the `sg_partial_symbol_stack` instances for each partial symbol stack
@@ -678,6 +687,7 @@ void sg_partial_path_arena_add_partial_symbol_stacks(struct sg_partial_path_aren
                                                      size_t count,
                                                      const struct sg_partial_scoped_symbol *symbols,
                                                      const size_t *lengths,
+                                                     const sg_symbol_stack_variable *variables,
                                                      struct sg_partial_symbol_stack *out);
 
 // Returns a reference to the array of partial scope stack content in a partial path arena.  The
