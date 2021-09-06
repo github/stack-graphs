@@ -1,0 +1,37 @@
+#!/usr/bin/env node
+
+/** Render Markdown+Math
+ * This script replicates the rendering of https://github.com/goessner/mdmath/blob/master/extension.js with the delimiters set to 'julia'.
+ */
+
+const fs = require('fs'),
+      md = require('markdown-it')(),
+      tm = require('markdown-it-texmath'),
+      mk = require('katex');
+
+// shared macro object ensures gdefs/newcommands are available in subsequent blocks
+katexMacros = {
+};
+
+md.use(tm, { engine: mk
+           , delimiters: 'julia'
+           , katexOptions: { macros: katexMacros
+                           , throwOnError: true
+                           }
+           }
+      );
+
+const file = process.argv[2];
+const markdown = fs.readFileSync(file, 'utf8');
+
+var html = md.render(markdown);
+
+process.stdout.write(`<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@4.0.0/github-markdown.min.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@${mk.version}/dist/katex.min.css"/>
+</head>
+${html}
+</html>
+`);
