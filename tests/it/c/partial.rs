@@ -95,6 +95,7 @@ fn empty_partial_scope_stack() -> sg_partial_scope_stack {
     sg_partial_scope_stack {
         cells: 0,
         direction: sg_deque_direction::SG_DEQUE_FORWARDS,
+        length: 0,
         variable: 0,
     }
 }

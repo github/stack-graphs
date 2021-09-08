@@ -190,6 +190,7 @@ struct sg_scope_stack {
     // The handle of the first element in the scope stack, or SG_LIST_EMPTY_HANDLE if the list is
     // empty, or 0 if the list is null.
     sg_scope_stack_cell_handle cells;
+    uint32_t length;
 };
 
 // A symbol with a possibly empty list of exported scopes attached to it.
@@ -223,7 +224,7 @@ struct sg_symbol_stack {
     // The handle of the first element in the symbol stack, or SG_LIST_EMPTY_HANDLE if the list is
     // empty, or 0 if the list is null.
     sg_symbol_stack_cell_handle cells;
-    size_t length;
+    uint32_t length;
 };
 
 // An element of a scope stack.
@@ -275,7 +276,7 @@ struct sg_path_edge_list {
     // empty, or 0 if the list is null.
     sg_path_edge_list_cell_handle cells;
     enum sg_deque_direction direction;
-    size_t length;
+    uint32_t length;
 };
 
 // A sequence of edges from a stack graph.  A _complete_ path represents a full name binding in a
@@ -302,6 +303,7 @@ struct sg_partial_scope_stack {
     // list is empty, or 0 if the list is null.
     sg_partial_scope_stack_cell_handle cells;
     enum sg_deque_direction direction;
+    uint32_t length;
     // The scope stack variable representing the unknown content of a partial scope stack, or 0 if
     // the variable is missing.  (If so, this partial scope stack can only match a scope stack
     // with exactly the list of scopes in `cells`, instead of any scope stack with those scopes as
@@ -352,6 +354,7 @@ struct sg_partial_symbol_stack {
     // list is empty, or 0 if the list is null.
     sg_partial_symbol_stack_cell_handle cells;
     enum sg_deque_direction direction;
+    uint32_t length;
     // The symbol stack variable representing the unknown content of a partial symbol stack, or 0
     // if the variable is missing.  (If so, this partial symbol stack can only match a symbol
     // stack with exactly the list of symbols in `cells`, instead of any symbol stack with those
@@ -410,7 +413,7 @@ struct sg_partial_path_edge_list {
     // empty, or 0 if the list is null.
     sg_partial_path_edge_list_cell_handle cells;
     enum sg_deque_direction direction;
-    size_t length;
+    uint32_t length;
 };
 
 // A portion of a name-binding path.

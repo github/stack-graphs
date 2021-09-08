@@ -173,6 +173,21 @@ impl SymbolStackVariable {
         SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(1) })
     }
 
+    /// Applies an offset to this variable.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(self, symbol_variable_offset: u32) -> SymbolStackVariable {
+        let offset_value = self.0.get() + symbol_variable_offset;
+        SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(offset_value) })
+    }
+
+    fn as_u32(self) -> u32 {
+        self.0.get()
+    }
+
     fn as_usize(self) -> usize {
         self.0.get() as usize
     }
@@ -221,6 +236,17 @@ impl ScopeStackVariable {
     /// path.  (You must calculate the maximum variable number already in use.)
     fn fresher_than(max_used: u32) -> ScopeStackVariable {
         ScopeStackVariable(unsafe { NonZeroU32::new_unchecked(max_used + 1) })
+    }
+
+    /// Applies an offset to this variable.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(self, scope_variable_offset: u32) -> ScopeStackVariable {
+        let offset_value = self.0.get() + scope_variable_offset;
+        ScopeStackVariable(unsafe { NonZeroU32::new_unchecked(offset_value) })
     }
 
     fn as_u32(self) -> u32 {
@@ -356,6 +382,21 @@ pub struct PartialScopedSymbol {
 }
 
 impl PartialScopedSymbol {
+    /// Applies an offset to this scoped symbol.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(mut self, scope_variable_offset: u32) -> PartialScopedSymbol {
+        let scopes = self
+            .scopes
+            .into_option()
+            .map(|stack| stack.with_offset(scope_variable_offset));
+        self.scopes = ControlledOption::from_option(scopes);
+        self
+    }
+
     /// Matches this precondition symbol against a scoped symbol, unifying its contents with an
     /// existing set of bindings.
     pub fn match_symbol(
@@ -522,6 +563,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 pub struct PartialSymbolStack {
     #[niche]
     symbols: Deque<PartialScopedSymbol>,
+    length: u32,
     variable: ControlledOption<SymbolStackVariable>,
 }
 
@@ -544,10 +586,16 @@ impl PartialSymbolStack {
         !self.symbols.is_empty()
     }
 
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length as usize
+    }
+
     /// Returns an empty partial symbol stack.
     pub fn empty() -> PartialSymbolStack {
         PartialSymbolStack {
             symbols: Deque::empty(),
+            length: 0,
             variable: ControlledOption::none(),
         }
     }
@@ -556,8 +604,31 @@ impl PartialSymbolStack {
     pub fn from_variable(variable: SymbolStackVariable) -> PartialSymbolStack {
         PartialSymbolStack {
             symbols: Deque::empty(),
+            length: 0,
             variable: ControlledOption::some(variable),
         }
+    }
+
+    /// Applies an offset to this partial symbol stack.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(
+        mut self,
+        partials: &mut PartialPaths,
+        symbol_variable_offset: u32,
+        scope_variable_offset: u32,
+    ) -> PartialSymbolStack {
+        let mut result = match self.variable.into_option() {
+            Some(variable) => Self::from_variable(variable.with_offset(symbol_variable_offset)),
+            None => Self::empty(),
+        };
+        while let Some(symbol) = self.pop_front(partials) {
+            result.push_back(partials, symbol.with_offset(scope_variable_offset));
+        }
+        result
     }
 
     fn prepend(&mut self, partials: &mut PartialPaths, mut head: Deque<PartialScopedSymbol>) {
@@ -568,12 +639,14 @@ impl PartialSymbolStack {
 
     /// Pushes a new [`PartialScopedSymbol`][] onto the front of this partial symbol stack.
     pub fn push_front(&mut self, partials: &mut PartialPaths, symbol: PartialScopedSymbol) {
+        self.length += 1;
         self.symbols
             .push_front(&mut partials.partial_symbol_stacks, symbol);
     }
 
     /// Pushes a new [`PartialScopedSymbol`][] onto the back of this partial symbol stack.
     pub fn push_back(&mut self, partials: &mut PartialPaths, symbol: PartialScopedSymbol) {
+        self.length += 1;
         self.symbols
             .push_back(&mut partials.partial_symbol_stacks, symbol);
     }
@@ -581,17 +654,27 @@ impl PartialSymbolStack {
     /// Removes and returns the [`PartialScopedSymbol`][] at the front of this partial symbol
     /// stack.  If the stack is empty, returns `None`.
     pub fn pop_front(&mut self, partials: &mut PartialPaths) -> Option<PartialScopedSymbol> {
-        self.symbols
+        let result = self
+            .symbols
             .pop_front(&mut partials.partial_symbol_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     /// Removes and returns the [`PartialScopedSymbol`][] at the back of this partial symbol stack.
     /// If the stack is empty, returns `None`.
     pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<PartialScopedSymbol> {
-        self.symbols
+        let result = self
+            .symbols
             .pop_back(&mut partials.partial_symbol_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     pub fn display<'a>(
@@ -946,10 +1029,17 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
 pub struct PartialScopeStack {
     #[niche]
     scopes: Deque<Handle<Node>>,
+    length: u32,
     variable: ControlledOption<ScopeStackVariable>,
 }
 
 impl PartialScopeStack {
+    /// Returns whether this partial scope stack can match the empty scope stack.
+    #[inline(always)]
+    pub fn can_match_empty(&self) -> bool {
+        self.scopes.is_empty()
+    }
+
     /// Returns whether this partial scope stack can _only_ match the empty scope stack.
     #[inline(always)]
     pub fn can_only_match_empty(&self) -> bool {
@@ -962,10 +1052,16 @@ impl PartialScopeStack {
         !self.scopes.is_empty()
     }
 
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.length as usize
+    }
+
     /// Returns an empty partial scope stack.
     pub fn empty() -> PartialScopeStack {
         PartialScopeStack {
             scopes: Deque::empty(),
+            length: 0,
             variable: ControlledOption::none(),
         }
     }
@@ -974,8 +1070,25 @@ impl PartialScopeStack {
     pub fn from_variable(variable: ScopeStackVariable) -> PartialScopeStack {
         PartialScopeStack {
             scopes: Deque::empty(),
+            length: 0,
             variable: ControlledOption::some(variable),
         }
+    }
+
+    /// Applies an offset to this partial scope stack.
+    ///
+    /// When concatenating partial paths, we have to ensure that the left- and right-hand sides
+    /// have non-overlapping sets of variables.  To do this, we find the maximum value of any
+    /// variable on the left-hand side, and add this “offset” to the values of all of the variables
+    /// on the right-hand side.
+    pub fn with_offset(mut self, scope_variable_offset: u32) -> PartialScopeStack {
+        match self.variable.into_option() {
+            Some(variable) => {
+                self.variable = ControlledOption::some(variable.with_offset(scope_variable_offset));
+            }
+            None => {}
+        };
+        self
     }
 
     /// Matches this partial scope stack against a scope stack, unifying any scope stack variables
@@ -1163,6 +1276,7 @@ impl PartialScopeStack {
     ///
     /// [`Node`]: ../graph/enum.Node.html
     pub fn push_front(&mut self, partials: &mut PartialPaths, node: Handle<Node>) {
+        self.length += 1;
         self.scopes
             .push_front(&mut partials.partial_scope_stacks, node);
     }
@@ -1172,6 +1286,7 @@ impl PartialScopeStack {
     ///
     /// [`Node`]: ../graph/enum.Node.html
     pub fn push_back(&mut self, partials: &mut PartialPaths, node: Handle<Node>) {
+        self.length += 1;
         self.scopes
             .push_back(&mut partials.partial_scope_stacks, node);
     }
@@ -1179,17 +1294,27 @@ impl PartialScopeStack {
     /// Removes and returns the [`Node`][] at the front of this partial scope stack.  If the stack
     /// does not contain any exported scope nodes, returns `None`.
     pub fn pop_front(&mut self, partials: &mut PartialPaths) -> Option<Handle<Node>> {
-        self.scopes
+        let result = self
+            .scopes
             .pop_front(&mut partials.partial_scope_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     /// Removes and returns the [`Node`][] at the back of this partial scope stack.  If the stack
     /// does not contain any exported scope nodes, returns `None`.
     pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<Handle<Node>> {
-        self.scopes
+        let result = self
+            .scopes
             .pop_back(&mut partials.partial_scope_stacks)
-            .copied()
+            .copied();
+        if result.is_some() {
+            self.length -= 1;
+        }
+        result
     }
 
     /// Returns the scope stack variable at the end of this partial scope stack.  If the stack does
@@ -1535,7 +1660,7 @@ impl DisplayWithPartialPaths for PartialPathEdge {
 pub struct PartialPathEdgeList {
     #[niche]
     edges: Deque<PartialPathEdge>,
-    length: usize,
+    length: u32,
 }
 
 impl PartialPathEdgeList {
@@ -1547,7 +1672,7 @@ impl PartialPathEdgeList {
 
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.length
+        self.length as usize
     }
 
     /// Returns an empty edge list.
@@ -1833,6 +1958,28 @@ impl PartialPath {
             .then_with(|| self.edges.cmp(partials, other.edges))
     }
 
+    /// Returns whether a partial path represents the start of a name binding from a reference to a
+    /// definition.
+    pub fn starts_at_reference(&self, graph: &StackGraph) -> bool {
+        graph[self.start_node].is_reference()
+            && self.symbol_stack_precondition.can_match_empty()
+            && self.scope_stack_precondition.can_match_empty()
+    }
+
+    /// Returns whether a partial path represents the end of a name binding from a reference to a
+    /// definition.
+    pub fn ends_at_definition(&self, graph: &StackGraph) -> bool {
+        graph[self.end_node].is_definition()
+            && self.symbol_stack_postcondition.can_match_empty()
+            && self.scope_stack_postcondition.can_match_empty()
+    }
+
+    /// A _complete_ partial path represents a full name binding that resolves a reference to a
+    /// definition.
+    pub fn is_complete(&self, graph: &StackGraph) -> bool {
+        self.starts_at_reference(graph) && self.ends_at_definition(graph)
+    }
+
     /// A partial path is _as complete as possible_ if we cannot extend it any further within the
     /// current file.  This represents the maximal amount of work that we can pre-compute at index
     /// time.
@@ -1903,9 +2050,19 @@ impl PartialPath {
         self.edges.ensure_both_directions(partials);
     }
 
-    /// Returns a fresh scope stack variable that is not already used anywhere in this partial
-    /// path.
-    pub fn fresh_scope_stack_variable(&self, partials: &mut PartialPaths) -> ScopeStackVariable {
+    /// Returns the largest value of any symbol stack variable in this partial path.
+    pub fn largest_symbol_stack_variable(&self) -> u32 {
+        // We don't have to check the postconditions, because it's not valid for a postcondition to
+        // refer to a variable that doesn't exist in the precondition.
+        self.symbol_stack_precondition
+            .variable
+            .into_option()
+            .map(SymbolStackVariable::as_u32)
+            .unwrap_or(0)
+    }
+
+    /// Returns the largest value of any scope stack variable in this partial path.
+    pub fn largest_scope_stack_variable(&self, partials: &PartialPaths) -> u32 {
         // We don't have to check the postconditions, because it's not valid for a postcondition to
         // refer to a variable that doesn't exist in the precondition.
         let symbol_stack_precondition_variables = self
@@ -1919,12 +2076,17 @@ impl PartialPath {
             .variable
             .into_option()
             .map(ScopeStackVariable::as_u32);
-        let max_used_variable = std::iter::empty()
+        std::iter::empty()
             .chain(symbol_stack_precondition_variables)
             .chain(scope_stack_precondition_variables)
             .max()
-            .unwrap_or(0);
-        ScopeStackVariable::fresher_than(max_used_variable)
+            .unwrap_or(0)
+    }
+
+    /// Returns a fresh scope stack variable that is not already used anywhere in this partial
+    /// path.
+    pub fn fresh_scope_stack_variable(&self, partials: &PartialPaths) -> ScopeStackVariable {
+        ScopeStackVariable::fresher_than(self.largest_scope_stack_variable(partials))
     }
 
     pub fn display<'a>(
@@ -1972,6 +2134,33 @@ impl<'a> DisplayWithPartialPaths for &'a PartialPath {
 }
 
 impl PartialPath {
+    /// Modifies this partial path so that it has no symbol or scope stack variables in common with
+    /// another partial path.
+    pub fn ensure_no_overlapping_variables(
+        &mut self,
+        partials: &mut PartialPaths,
+        other: &PartialPath,
+    ) {
+        let symbol_variable_offset = other.largest_symbol_stack_variable();
+        let scope_variable_offset = other.largest_scope_stack_variable(partials);
+        self.symbol_stack_precondition = self.symbol_stack_precondition.with_offset(
+            partials,
+            symbol_variable_offset,
+            scope_variable_offset,
+        );
+        self.symbol_stack_postcondition = self.symbol_stack_postcondition.with_offset(
+            partials,
+            symbol_variable_offset,
+            scope_variable_offset,
+        );
+        self.scope_stack_precondition = self
+            .scope_stack_precondition
+            .with_offset(scope_variable_offset);
+        self.scope_stack_postcondition = self
+            .scope_stack_postcondition
+            .with_offset(scope_variable_offset);
+    }
+
     /// Attempts to append an edge to the end of a partial path.  If the edge is not a valid
     /// extension of this partial path, we return an error describing why.
     pub fn append(

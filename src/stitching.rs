@@ -134,16 +134,14 @@ impl Database {
     pub fn find_candidate_partial_paths_from_root<R>(
         &mut self,
         graph: &StackGraph,
-        paths: &mut Paths,
         partials: &mut PartialPaths,
-        symbol_stack: SymbolStack,
+        mut symbol_stack: SymbolStackKey,
         result: &mut R,
     ) where
         R: std::iter::Extend<Handle<PartialPath>>,
     {
         // If the path currently ends at the root node, then we need to look up partial paths whose
         // symbol stack precondition is compatible with the path.
-        let mut symbol_stack = SymbolStackKey::from_symbol_stack(paths, self, symbol_stack);
         loop {
             copious_debugging!(
                 "      Search for symbol stack <{}>",
@@ -207,8 +205,10 @@ impl Index<Handle<PartialPath>> for Database {
     }
 }
 
+/// The key type that we use to find partial paths that start from the root node and have a
+/// particular symbol stack as their precondition.
 #[derive(Clone, Copy)]
-struct SymbolStackKey {
+pub struct SymbolStackKey {
     // Note: the symbols are stored in reverse order, with the "front" of the List being the "back"
     // of the symbol stack.  That lets us easily get a handle to the back of the symbol stack, and
     // also lets us easily pops items off the back of key, which we need to do to search for all
@@ -256,7 +256,7 @@ impl SymbolStackKey {
     }
 
     /// Extracts a new symbol stack key from a symbol stack.
-    fn from_symbol_stack(
+    pub fn from_symbol_stack(
         paths: &mut Paths,
         db: &mut Database,
         mut stack: SymbolStack,
@@ -269,7 +269,7 @@ impl SymbolStackKey {
     }
 
     /// Extracts a new symbol stack key from a partial symbol stack.
-    fn from_partial_symbol_stack(
+    pub fn from_partial_symbol_stack(
         partials: &mut PartialPaths,
         db: &mut Database,
         mut stack: PartialSymbolStack,
@@ -435,11 +435,11 @@ impl PathStitcher {
         copious_debugging!("--> Candidate path {}", path.display(graph, paths));
         self.candidate_paths.clear();
         if graph[path.end_node].is_root() {
+            let key = SymbolStackKey::from_symbol_stack(paths, db, path.symbol_stack);
             db.find_candidate_partial_paths_from_root(
                 graph,
-                paths,
                 partials,
-                path.symbol_stack,
+                key,
                 &mut self.candidate_paths,
             );
         } else {
@@ -542,6 +542,260 @@ impl PathStitcher {
                 .filter(|path| path.is_complete(graph));
             result.extend(complete_paths.cloned());
             stitcher.process_next_phase(graph, paths, partials, db);
+        }
+        result
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Stitching partial paths together
+
+/// Implements a phased forward partial path stitching algorithm.
+///
+/// Our overall goal is to start with a set of _seed_ partial paths, and to repeatedly extend each
+/// partial path by concatenating another, compatible partial path onto the end of it.  (If there
+/// are multiple compatible partial paths, we concatenate each of them separately, resulting in
+/// more than one extension for the current path.)
+///
+/// We perform this processing in _phases_.  At the start of each phase, we have a _current set_ of
+/// partial paths that need to be processed.  As we extend those partial paths, we add the
+/// extensions to the set of partial paths to process in the _next_ phase.  Phases are processed
+/// one at a time, each time you invoke the [`process_next_phase`][] method.
+///
+/// [`process_next_phase`]: #method.process_next_phase
+///
+/// After each phase has completed, you can use the [`previous_phase_partial_paths`][] method to
+/// retrieve all of the partial paths that were discovered during that phase.  That gives you a
+/// chance to add to the `Database` all of the other partial paths that we might need to extend
+/// those partial paths with before invoking the next phase.
+///
+/// [`previous_phase_partial_paths`]: #method.previous_phase_partial_paths
+///
+/// If you don't care about this phasing nonsense, you can instead preload your `Database` with all
+/// possible partial paths, and run the forward partial path stitching algorithm all the way to
+/// completion, using the [`find_all_complete_partial_paths`][] method.
+///
+/// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
+pub struct ForwardPartialPathStitcher {
+    candidate_partial_paths: Vec<Handle<PartialPath>>,
+    queue: VecDeque<PartialPath>,
+    next_iteration: VecDeque<PartialPath>,
+    cycle_detector: CycleDetector<PartialPath>,
+    #[cfg(feature = "copious-debugging")]
+    phase_number: usize,
+}
+
+impl ForwardPartialPathStitcher {
+    /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack
+    /// graph nodes.
+    ///
+    /// Before calling this method, you must ensure that `db` contains all of the possible partial
+    /// paths that start with any of your requested starting nodes.
+    ///
+    /// Before calling [`process_next_phase`][] for the first time, you must ensure that `db`
+    /// contains all possible extensions of any of those initial partial paths.  You can retrieve a
+    /// list of those extensions via [`previous_phase_partial paths`][].
+    ///
+    /// [`previous_phase_partial paths`]: #method.previous_phase_partial paths
+    /// [`process_next_phase`]: #method.process_next_phase
+    pub fn new<I>(
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+        starting_nodes: I,
+    ) -> ForwardPartialPathStitcher
+    where
+        I: IntoIterator<Item = Handle<Node>>,
+    {
+        copious_debugging!("==> Start phase 0");
+        let mut candidate_partial_paths = Vec::new();
+        for node in starting_nodes {
+            copious_debugging!("    Initial node {}", node.display(graph));
+            db.find_candidate_partial_paths_from_node(
+                graph,
+                partials,
+                node,
+                &mut candidate_partial_paths,
+            );
+        }
+        let next_iteration = candidate_partial_paths
+            .iter()
+            .copied()
+            .filter(|handle| db[*handle].starts_at_reference(graph))
+            .map(|handle| db[handle].clone())
+            .collect();
+        copious_debugging!("==> End phase 0");
+        ForwardPartialPathStitcher {
+            candidate_partial_paths,
+            queue: VecDeque::new(),
+            next_iteration,
+            cycle_detector: CycleDetector::new(),
+            #[cfg(feature = "copious-debugging")]
+            phase_number: 1,
+        }
+    }
+
+    /// Returns an iterator of all of the (possibly incomplete) partial paths that were encountered
+    /// during the most recent phase of the algorithm.
+    pub fn previous_phase_partial_paths(&self) -> impl Iterator<Item = &PartialPath> + '_ {
+        self.next_iteration.iter()
+    }
+
+    /// Returns a slice of all of the (possibly incomplete) partial paths that were encountered
+    /// during the most recent phase of the algorithm.
+    pub fn previous_phase_partial_paths_slice(&mut self) -> &[PartialPath] {
+        self.next_iteration.make_contiguous();
+        self.next_iteration.as_slices().0
+    }
+
+    /// Returns a mutable slice of all of the (possibly incomplete) partial paths that were
+    /// encountered during the most recent phase of the algorithm.
+    pub fn previous_phase_partial_paths_slice_mut(&mut self) -> &mut [PartialPath] {
+        self.next_iteration.make_contiguous();
+        self.next_iteration.as_mut_slices().0
+    }
+
+    /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
+    /// you are responsible for ensuring that `db` already contains all of the possible partial
+    /// paths that we might want to extend `partial_path` with.
+    fn stitch_partial_path(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+        partial_path: &PartialPath,
+    ) {
+        self.candidate_partial_paths.clear();
+        if graph[partial_path.end_node].is_root() {
+            let key = SymbolStackKey::from_partial_symbol_stack(
+                partials,
+                db,
+                partial_path.symbol_stack_postcondition,
+            );
+            db.find_candidate_partial_paths_from_root(
+                graph,
+                partials,
+                key,
+                &mut self.candidate_partial_paths,
+            );
+        } else {
+            db.find_candidate_partial_paths_from_node(
+                graph,
+                partials,
+                partial_path.end_node,
+                &mut self.candidate_partial_paths,
+            );
+        }
+
+        self.next_iteration
+            .reserve(self.candidate_partial_paths.len());
+        for extension in &self.candidate_partial_paths {
+            let mut extension = db[*extension].clone();
+            copious_debugging!("    Extend {}", partial_path.display(graph, partials));
+            copious_debugging!("      with {}", extension.display(graph, partials));
+            extension.ensure_no_overlapping_variables(partials, partial_path);
+            copious_debugging!("        -> {}", extension.display(graph, partials));
+
+            let mut new_partial_path = partial_path.clone();
+            // If there are errors concatenating these partial paths, or resolving the resulting
+            // partial path, just skip the extension — it's not a fatal error.
+            #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+            {
+                if let Err(err) = new_partial_path.concatenate(graph, partials, &extension) {
+                    copious_debugging!("        is invalid: {:?}", err);
+                    continue;
+                }
+                if !new_partial_path.starts_at_reference(graph) {
+                    copious_debugging!("        is invalid: slips off of reference");
+                    continue;
+                }
+                if let Err(err) = new_partial_path.resolve(graph, partials) {
+                    copious_debugging!("        is invalid: cannot resolve: {:?}", err);
+                    continue;
+                }
+                if graph[new_partial_path.end_node].is_jump_to() {
+                    copious_debugging!("        is invalid: cannot resolve: ambiguous scope stack");
+                    continue;
+                }
+            }
+            copious_debugging!("        is {}", new_partial_path.display(graph, partials));
+            self.next_iteration.push_back(new_partial_path);
+        }
+    }
+
+    /// Returns whether the algorithm has completed.
+    pub fn is_complete(&self) -> bool {
+        self.next_iteration.is_empty()
+    }
+
+    /// Runs the next phase of the algorithm.  We will have built up a set of incomplete partial
+    /// paths during the _previous_ phase.  Before calling this function, you must ensure that `db`
+    /// contains all of the possible other partial paths that we might want to extend any of those
+    /// candidate partial paths with.
+    ///
+    /// After this method returns, you can use [`previous_phase_partial_paths`][] to retrieve a
+    /// list of the (possibly incomplete) partial paths that were encountered during this phase.
+    ///
+    /// [`previous_phase_partial_paths`]: #method.previous_phase_partial_paths
+    pub fn process_next_phase(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+    ) {
+        copious_debugging!("==> Start phase {}", self.phase_number);
+        std::mem::swap(&mut self.queue, &mut self.next_iteration);
+        while let Some(partial_path) = self.queue.pop_front() {
+            copious_debugging!(
+                "--> Candidate partial path {}",
+                partial_path.display(graph, partials)
+            );
+            if !self
+                .cycle_detector
+                .should_process_path(&partial_path, |probe| {
+                    probe.cmp(graph, partials, &partial_path)
+                })
+            {
+                copious_debugging!("    Cycle detected");
+                continue;
+            }
+            self.stitch_partial_path(graph, partials, db, &partial_path);
+        }
+
+        #[cfg(feature = "copious-debugging")]
+        {
+            copious_debugging!("==> End phase {}", self.phase_number);
+            self.phase_number += 1;
+        }
+    }
+
+    /// Returns all of the complete partial paths that are reachable from a set of starting nodes,
+    /// building them up by stitching together partial paths from this database.
+    ///
+    /// This function will not return until all reachable partial paths have been processed, so
+    /// your database must already contain all partial paths that might be needed.  If you have a
+    /// very large stack graph stored in some other storage system, and want more control over
+    /// lazily loading only the necessary pieces, then you should code up your own loop that calls
+    /// [`process_next_phase`][] manually.
+    ///
+    /// [`process_next_phase`]: #method.process_next_phase
+    pub fn find_all_complete_partial_paths<I>(
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+        starting_nodes: I,
+    ) -> Vec<PartialPath>
+    where
+        I: IntoIterator<Item = Handle<Node>>,
+    {
+        let mut result = Vec::new();
+        let mut stitcher = ForwardPartialPathStitcher::new(graph, partials, db, starting_nodes);
+        while !stitcher.is_complete() {
+            let complete_partial_paths = stitcher
+                .previous_phase_partial_paths()
+                .filter(|partial_path| partial_path.is_complete(graph));
+            result.extend(complete_partial_paths.cloned());
+            stitcher.process_next_phase(graph, partials, db);
         }
         result
     }
