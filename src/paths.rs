@@ -181,7 +181,7 @@ impl DisplayWithPaths for ScopedSymbol {
         match self.scopes.into_option() {
             Some(scopes) => write!(
                 f,
-                "{}/{}",
+                "{}/({})",
                 self.symbol.display(graph),
                 display_prepared(scopes, graph, paths),
             ),

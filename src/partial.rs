@@ -377,6 +377,28 @@ impl PartialScopedSymbol {
         Ok(())
     }
 
+    /// Matches this precondition symbol against another, unifying its contents with an existing
+    /// set of bindings.
+    pub fn unify(
+        &mut self,
+        partials: &mut PartialPaths,
+        rhs: PartialScopedSymbol,
+        scope_bindings: &mut PartialScopeStackBindings,
+    ) -> Result<(), PathResolutionError> {
+        if self.symbol != rhs.symbol {
+            return Err(PathResolutionError::SymbolStackUnsatisfied);
+        }
+        match (self.scopes.into_option(), rhs.scopes.into_option()) {
+            (Some(lhs), Some(rhs)) => {
+                let unified = lhs.unify(partials, rhs, scope_bindings)?;
+                self.scopes = ControlledOption::some(unified);
+            }
+            (None, None) => {}
+            _ => return Err(PathResolutionError::SymbolStackUnsatisfied),
+        }
+        Ok(())
+    }
+
     /// Returns whether two partial scoped symbols "match".  The symbols must be identical, and any
     /// attached scopes must also match.
     pub fn matches(self, partials: &mut PartialPaths, postcondition: PartialScopedSymbol) -> bool {
@@ -469,7 +491,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
         if let Some(scopes) = self.scopes.into_option() {
             write!(
                 f,
-                "{}/{}",
+                "{}/({})",
                 self.symbol.display(graph),
                 display_prepared(scopes, graph, partials)
             )
@@ -521,6 +543,12 @@ impl PartialSymbolStack {
         PartialSymbolStack {
             symbols: Deque::empty(),
             variable: ControlledOption::some(variable),
+        }
+    }
+
+    fn prepend(&mut self, partials: &mut PartialPaths, mut head: Deque<PartialScopedSymbol>) {
+        while let Some(head) = head.pop_back(&mut partials.partial_symbol_stacks).copied() {
+            self.push_front(partials, head);
         }
     }
 
@@ -629,6 +657,130 @@ impl PartialSymbolStack {
             result.push_front(paths, symbol);
         }
         Ok(result)
+    }
+
+    /// Given two partial symbol stacks, returns the largest possible partial symbol stack such that
+    /// any symbol stack that satisfies the result also satisfies both inputs.  This takes into
+    /// account any existing variable assignments, and updates those variable assignments with
+    /// whatever constraints are necessary to produce a correct result.
+    ///
+    /// Note that this operation is commutative.  (Concatenating partial paths, defined in
+    /// [`PartialPath::concatenate`][], is not.)
+    pub fn unify(
+        self,
+        partials: &mut PartialPaths,
+        mut rhs: PartialSymbolStack,
+        symbol_bindings: &mut PartialSymbolStackBindings,
+        scope_bindings: &mut PartialScopeStackBindings,
+    ) -> Result<PartialSymbolStack, PathResolutionError> {
+        let mut lhs = self;
+
+        // First, look at the shortest common prefix of lhs and rhs, and verify that they match.
+        let mut head = Deque::empty();
+        while lhs.contains_symbols() && rhs.contains_symbols() {
+            let mut lhs_front = lhs.pop_front(partials).unwrap();
+            let rhs_front = rhs.pop_front(partials).unwrap();
+            lhs_front.unify(partials, rhs_front, scope_bindings)?;
+            head.push_back(&mut partials.partial_symbol_stacks, lhs_front);
+        }
+
+        // Now at most one stack still has symbols.  Zero, one, or both of them have variables.
+        // Let's do a case analysis on all of those possibilities.
+
+        // CASE 1:
+        // Both lhs and rhs have no more symbols.  The answer is always yes, and any variables that
+        // are present get bound.  (If both sides have variables, then one variable gets bound to
+        // the other, since both lhs and rhs will match _any other symbol stack_ at this point.  If
+        // only one side has a variable, then the variable gets bound to the empty stack.)
+        //
+        //     lhs           rhs
+        // ============  ============
+        //  ()            ()            => yes either
+        //  ()            () $2         => yes rhs, $2 => ()
+        //  () $1         ()            => yes lhs, $1 => ()
+        //  () $1         () $2         => yes lhs, $2 => $1
+        if !lhs.contains_symbols() && !rhs.contains_symbols() {
+            match (lhs.variable.into_option(), rhs.variable.into_option()) {
+                (None, None) => {
+                    lhs.prepend(partials, head);
+                    return Ok(lhs);
+                }
+                (None, Some(var)) => {
+                    symbol_bindings.add(
+                        partials,
+                        var,
+                        PartialSymbolStack::empty(),
+                        scope_bindings,
+                    )?;
+                    rhs.prepend(partials, head);
+                    return Ok(rhs);
+                }
+                (Some(var), None) => {
+                    symbol_bindings.add(
+                        partials,
+                        var,
+                        PartialSymbolStack::empty(),
+                        scope_bindings,
+                    )?;
+                    lhs.prepend(partials, head);
+                    return Ok(lhs);
+                }
+                (Some(lhs_var), Some(rhs_var)) => {
+                    symbol_bindings.add(
+                        partials,
+                        rhs_var,
+                        PartialSymbolStack::from_variable(lhs_var),
+                        scope_bindings,
+                    )?;
+                    lhs.prepend(partials, head);
+                    return Ok(lhs);
+                }
+            }
+        }
+
+        // CASE 2:
+        // One of the stacks contains symbols and the other doesn't, and the “empty” stack doesn't
+        // have a variable.  Since there's no variable on the empty side to capture the remaining
+        // content on the non-empty side, the answer is always no.
+        //
+        //     lhs           rhs
+        // ============  ============
+        //  ()            (stuff)       => NO
+        //  ()            (stuff) $2    => NO
+        //  (stuff)       ()            => NO
+        //  (stuff) $1    ()            => NO
+        if !lhs.contains_symbols() && lhs.variable.is_none() {
+            return Err(PathResolutionError::SymbolStackUnsatisfied);
+        }
+        if !rhs.contains_symbols() && rhs.variable.is_none() {
+            return Err(PathResolutionError::SymbolStackUnsatisfied);
+        }
+
+        // CASE 3:
+        // One of the stacks contains symbols and the other doesn't, and the “empty” stack _does_
+        // have a variable.  That means the answer is YES, and the “empty” side's variable needs to
+        // capture the entirety of the non-empty side.
+        //
+        //     lhs           rhs
+        // ============  ============
+        //  () $1         (stuff)       => yes rhs,  $1 => rhs
+        //  () $1         (stuff) $2    => yes rhs,  $1 => rhs
+        //  (stuff)       () $2         => yes lhs,  $2 => lhs
+        //  (stuff) $1    () $2         => yes lhs,  $2 => lhs
+        if lhs.contains_symbols() {
+            let rhs_variable = rhs.variable.into_option().unwrap();
+            symbol_bindings.add(partials, rhs_variable, lhs, scope_bindings)?;
+            lhs.prepend(partials, head);
+            return Ok(lhs);
+        }
+        if rhs.contains_symbols() {
+            let lhs_variable = lhs.variable.into_option().unwrap();
+            symbol_bindings.add(partials, lhs_variable, rhs, scope_bindings)?;
+            rhs.prepend(partials, head);
+            return Ok(rhs);
+        }
+
+        unreachable!();
     }
 
     pub fn equals(mut self, partials: &mut PartialPaths, mut other: PartialSymbolStack) -> bool {
@@ -1111,18 +1263,64 @@ impl PartialSymbolStackBindings {
     /// matched.  Returns an error if you try to bind a particular variable more than once.
     pub fn add(
         &mut self,
+        partials: &mut PartialPaths,
         variable: SymbolStackVariable,
-        symbols: PartialSymbolStack,
+        mut symbols: PartialSymbolStack,
+        scope_bindings: &mut PartialScopeStackBindings,
     ) -> Result<(), PathResolutionError> {
         let index = variable.as_usize();
         if self.bindings.len() < index {
             self.bindings.resize_with(index, || None);
         }
-        if self.bindings[index - 1].is_some() {
-            return Err(PathResolutionError::IncompatibleSymbolStackVariables);
+        if let Some(old_binding) = self.bindings[index - 1] {
+            symbols = symbols.unify(partials, old_binding, self, scope_bindings)?;
         }
         self.bindings[index - 1] = Some(symbols);
         Ok(())
+    }
+
+    pub fn display<'a>(
+        &'a mut self,
+        graph: &'a StackGraph,
+        partials: &'a mut PartialPaths,
+    ) -> impl Display + 'a {
+        display_with(self, graph, partials)
+    }
+}
+
+impl<'a> DisplayWithPartialPaths for &'a mut PartialSymbolStackBindings {
+    fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
+        for binding in &mut self.bindings {
+            if let Some(binding) = binding.as_mut() {
+                binding.prepare(graph, partials);
+            }
+        }
+    }
+
+    fn display_with(
+        &self,
+        graph: &StackGraph,
+        partials: &PartialPaths,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
+        write!(f, "{{")?;
+        let mut first = true;
+        for (idx, binding) in self.bindings.iter().enumerate() {
+            if let Some(binding) = binding.as_ref() {
+                if first {
+                    first = false;
+                } else {
+                    write!(f, ", ")?;
+                }
+                write!(
+                    f,
+                    "%{} => <{}>",
+                    idx + 1,
+                    display_prepared(*binding, graph, partials)
+                )?;
+            }
+        }
+        write!(f, "}}")
     }
 }
 

@@ -52,8 +52,8 @@ fn class_field_through_function_parameter() {
             // we can look for every reference in either `a` or `b`
             "<%1> () [main.py(9) reference A] -> [root] <a.A,%1> ()",
             "<%1> () [main.py(9) reference A] -> [root] <b.A,%1> ()",
-            "<%1> () [main.py(10) reference bar] -> [root] <a.foo()/[main.py(7)].bar,%1> ()",
-            "<%1> () [main.py(10) reference bar] -> [root] <b.foo()/[main.py(7)].bar,%1> ()",
+            "<%1> () [main.py(10) reference bar] -> [root] <a.foo()/([main.py(7)]).bar,%1> ()",
+            "<%1> () [main.py(10) reference bar] -> [root] <b.foo()/([main.py(7)]).bar,%1> ()",
             "<%1> () [main.py(13) reference foo] -> [root] <a.foo,%1> ()",
             "<%1> () [main.py(13) reference foo] -> [root] <b.foo,%1> ()",
             // parameter 0 of function call is `A`, which we can look up in either `a` or `b`
@@ -72,11 +72,11 @@ fn class_field_through_function_parameter() {
             // reference to `x` in function body can resolve to formal parameter
             "<%1> () [a.py(8) reference x] -> [a.py(14) definition x] <%1> ()",
             // result of function is `x`, which is passed in as a formal parameter...
-            "<a.foo()/$2,%1> ($1) [root] -> [a.py(14) definition x] <%1> ()",
+            "<a.foo()/($2),%1> ($1) [root] -> [a.py(14) definition x] <%1> ()",
             // ...which we can look up either the 0th actual positional parameter...
-            "<a.foo()/$2,%1> ($1) [root] -> [jump to scope] <0,%1> ($2)",
+            "<a.foo()/($2),%1> ($1) [root] -> [jump to scope] <0,%1> ($2)",
             // ...or the actual named parameter `x`
-            "<a.foo()/$2,%1> ($1) [root] -> [jump to scope] <x,%1> ($2)",
+            "<a.foo()/($2),%1> ($1) [root] -> [jump to scope] <x,%1> ($2)",
         ],
     );
     check_partial_paths_in_file(
@@ -90,7 +90,7 @@ fn class_field_through_function_parameter() {
             // definition of class member `A.bar`
             "<b.A.bar,%1> ($1) [root] -> [b.py(8) definition bar] <%1> ($1)",
             // `bar` can also be accessed as an instance member
-            "<b.A()/$2.bar,%1> ($1) [root] -> [b.py(8) definition bar] <%1> ($2)",
+            "<b.A()/($2).bar,%1> ($1) [root] -> [b.py(8) definition bar] <%1> ($2)",
         ],
     );
 }

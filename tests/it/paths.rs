@@ -60,7 +60,7 @@ fn can_iterate_symbol_stacks() {
         .into_iter()
         .map(|symbol| symbol.display(&graph, &mut paths).to_string())
         .collect();
-    assert_eq!(rendered, "a.b/[test.py(0)]");
+    assert_eq!(rendered, "a.b/([test.py(0)])");
 }
 
 #[test]
