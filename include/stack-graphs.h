@@ -502,6 +502,30 @@ struct sg_forward_partial_path_stitcher {
     size_t previous_phase_partial_paths_length;
 };
 
+// Implements a phased reverse partial path stitching algorithm.
+//
+// Our overall goal is to start with a set of _seed_ partial paths, and to repeatedly extend each
+// partial path by concatenating another, compatible partial path onto the beginning of it.  (If
+// there are multiple compatible partial paths, we concatenate each of them separately, resulting
+// in more than one extension for the current path.)
+//
+// We perform this processing in _phases_.  At the start of each phase, we have a _current set_ of
+// partial paths that need to be processed.  As we extend those partial paths, we add the
+// extensions to the set of partial paths to process in the _next_ phase.  Phases are processed
+// one at a time, each time you invoke `sg_reverse_partial_path_stitcher_process_next_phase`.
+//
+// After each phase has completed, the `previous_phase_paths` and `previous_phase_paths_length`
+// fields give you all of the partial paths that were discovered during that phase.  That gives
+// you a chance to add to the `sg_partial_path_database` all of the other partial paths that we
+// might need to extend those partial paths with before invoking the next phase.
+struct sg_reverse_partial_path_stitcher {
+    // The new candidate partial paths that were discovered in the most recent phase.
+    const struct sg_partial_path *previous_phase_partial_paths;
+    // The number of new candidate partial paths that were discovered in the most recent phase.
+    // If this is 0, then the partial path stitching algorithm is complete.
+    size_t previous_phase_partial_paths_length;
+};
+
 // The handle of the singleton root node.
 #define SG_ROOT_NODE_HANDLE 1
 
@@ -872,6 +896,38 @@ void sg_forward_partial_path_stitcher_process_next_phase(const struct sg_stack_g
 
 // Frees a forward path stitcher.
 void sg_forward_partial_path_stitcher_free(struct sg_forward_partial_path_stitcher *stitcher);
+
+// Creates a new reverse partial path stitcher that is "seeded" with a set of ending stack graph
+// nodes.
+//
+// Before calling this method, you must ensure that `db` contains all of the possible partial
+// paths that end with any of your requested ending nodes.
+//
+// Before calling `sg_reverse_partial_path_stitcher_process_next_phase` for the first time, you
+// must ensure that `db` contains all possible extensions of any of those initial partial paths.
+// You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
+// `previous_phase_partial_paths_length` fields.
+struct sg_reverse_partial_path_stitcher *sg_reverse_partial_path_stitcher_new(const struct sg_stack_graph *graph,
+                                                                              struct sg_partial_path_arena *partials,
+                                                                              struct sg_partial_path_database *db,
+                                                                              size_t count,
+                                                                              const sg_node_handle *ending_nodes);
+
+// Runs the next phase of the algorithm.  We will have built up a set of incomplete partial paths
+// during the _previous_ phase.  Before calling this function, you must ensure that `db` contains
+// all of the possible partial paths that we might want to extend any of those candidate partial
+// paths with.
+//
+// After this method returns, you can retrieve a list of the (possibly incomplete) partial paths
+// that were encountered during this phase via the `previous_phase_partial_paths` and
+// `previous_phase_partial_paths_length` fields.
+void sg_reverse_partial_path_stitcher_process_next_phase(const struct sg_stack_graph *graph,
+                                                         struct sg_partial_path_arena *partials,
+                                                         struct sg_partial_path_database *db,
+                                                         struct sg_reverse_partial_path_stitcher *stitcher);
+
+// Frees a reverse path stitcher.
+void sg_reverse_partial_path_stitcher_free(struct sg_reverse_partial_path_stitcher *stitcher);
 
 #ifdef __cplusplus
 } // extern "C"

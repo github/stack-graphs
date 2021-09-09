@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 mod can_create_graph;
+mod can_find_all_references_with_phased_partial_path_stitching;
 mod can_find_partial_paths_in_file;
 mod can_jump_to_definition;
 mod can_jump_to_definition_with_phased_partial_path_stitching;

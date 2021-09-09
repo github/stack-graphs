@@ -36,6 +36,7 @@ use crate::paths::SymbolStack;
 use crate::stitching::Database;
 use crate::stitching::ForwardPartialPathStitcher;
 use crate::stitching::PathStitcher;
+use crate::stitching::ReversePartialPathStitcher;
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct sg_stack_graph {
@@ -1678,4 +1679,137 @@ pub extern "C" fn sg_forward_partial_path_stitcher_free(
     stitcher: *mut sg_forward_partial_path_stitcher,
 ) {
     drop(unsafe { Box::from_raw(stitcher as *mut InternalForwardPartialPathStitcher) });
+}
+
+//-------------------------------------------------------------------------------------------------
+// Reverse partial path stitching
+
+/// Implements a phased reverse partial path stitching algorithm.
+///
+/// Our overall goal is to start with a set of _seed_ partial paths, and to repeatedly extend each
+/// partial path by concatenating another, compatible partial path onto the beginning of it.  (If
+/// there are multiple compatible partial paths, we concatenate each of them separately, resulting
+/// in more than one extension for the current path.)
+///
+/// We perform this processing in _phases_.  At the start of each phase, we have a _current set_ of
+/// partial paths that need to be processed.  As we extend those partial paths, we add the
+/// extensions to the set of partial paths to process in the _next_ phase.  Phases are processed
+/// one at a time, each time you invoke `sg_reverse_partial_path_stitcher_process_next_phase`.
+///
+/// After each phase has completed, the `previous_phase_paths` and `previous_phase_paths_length`
+/// fields give you all of the partial paths that were discovered during that phase.  That gives
+/// you a chance to add to the `sg_partial_path_database` all of the other partial paths that we
+/// might need to extend those partial paths with before invoking the next phase.
+#[repr(C)]
+pub struct sg_reverse_partial_path_stitcher {
+    /// The new candidate partial paths that were discovered in the most recent phase.
+    pub previous_phase_partial_paths: *const sg_partial_path,
+    /// The number of new candidate partial paths that were discovered in the most recent phase.
+    /// If this is 0, then the partial path stitching algorithm is complete.
+    pub previous_phase_partial_paths_length: usize,
+}
+
+// This is the Rust equivalent of a common C trick, where you have two versions of a struct — a
+// publicly visible one and a private one containing internal implementation details.  In our case,
+// `sg_reverse_partial_path_stitcher` is the public struct, and
+// `InternalReversePartialPathStitcher` is the internal one.  The main requirement is that the
+// private struct must start with a copy of all of the fields in the public struct — ensuring that
+// those fields occur at the same offset in both.  The private struct can contain additional
+// (private) fields, but they must appear _after_ all of the publicly visible fields.
+//
+// In our case, we do this because we don't want to expose the existence or details of the
+// ReversePartialPathStitcher type via the C API.
+#[repr(C)]
+struct InternalReversePartialPathStitcher {
+    previous_phase_partial_paths: *const PartialPath,
+    previous_phase_partial_paths_length: usize,
+    stitcher: ReversePartialPathStitcher,
+}
+
+impl InternalReversePartialPathStitcher {
+    fn new(
+        stitcher: ReversePartialPathStitcher,
+        partials: &mut PartialPaths,
+    ) -> InternalReversePartialPathStitcher {
+        let mut this = InternalReversePartialPathStitcher {
+            previous_phase_partial_paths: std::ptr::null(),
+            previous_phase_partial_paths_length: 0,
+            stitcher,
+        };
+        this.update_previous_phase_partial_paths(partials);
+        this
+    }
+
+    fn update_previous_phase_partial_paths(&mut self, partials: &mut PartialPaths) {
+        for path in self.stitcher.previous_phase_partial_paths_slice_mut() {
+            path.ensure_both_directions(partials);
+        }
+        let slice = self.stitcher.previous_phase_partial_paths_slice();
+        self.previous_phase_partial_paths = slice.as_ptr();
+        self.previous_phase_partial_paths_length = slice.len();
+    }
+}
+
+/// Creates a new reverse partial path stitcher that is "seeded" with a set of ending stack graph
+/// nodes.
+///
+/// Before calling this method, you must ensure that `db` contains all of the possible partial
+/// paths that end with any of your requested ending nodes.
+///
+/// Before calling `sg_reverse_partial_path_stitcher_process_next_phase` for the first time, you
+/// must ensure that `db` contains all possible extensions of any of those initial partial paths.
+/// You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
+/// `previous_phase_partial_paths_length` fields.
+#[no_mangle]
+pub extern "C" fn sg_reverse_partial_path_stitcher_new(
+    graph: *const sg_stack_graph,
+    partials: *mut sg_partial_path_arena,
+    db: *mut sg_partial_path_database,
+    count: usize,
+    ending_nodes: *const sg_node_handle,
+) -> *mut sg_reverse_partial_path_stitcher {
+    let graph = unsafe { &(*graph).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    let db = unsafe { &mut (*db).inner };
+    let ending_nodes = unsafe { std::slice::from_raw_parts(ending_nodes, count) };
+    let stitcher = ReversePartialPathStitcher::new(
+        graph,
+        partials,
+        db,
+        ending_nodes.iter().copied().map(sg_node_handle::into),
+    );
+    Box::into_raw(Box::new(InternalReversePartialPathStitcher::new(
+        stitcher, partials,
+    ))) as *mut _
+}
+
+/// Runs the next phase of the algorithm.  We will have built up a set of incomplete partial paths
+/// during the _previous_ phase.  Before calling this function, you must ensure that `db` contains
+/// all of the possible partial paths that we might want to extend any of those candidate partial
+/// paths with.
+///
+/// After this method returns, you can retrieve a list of the (possibly incomplete) partial paths
+/// that were encountered during this phase via the `previous_phase_partial_paths` and
+/// `previous_phase_partial_paths_length` fields.
+#[no_mangle]
+pub extern "C" fn sg_reverse_partial_path_stitcher_process_next_phase(
+    graph: *const sg_stack_graph,
+    partials: *mut sg_partial_path_arena,
+    db: *mut sg_partial_path_database,
+    stitcher: *mut sg_reverse_partial_path_stitcher,
+) {
+    let graph = unsafe { &(*graph).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    let db = unsafe { &mut (*db).inner };
+    let stitcher = unsafe { &mut *(stitcher as *mut InternalReversePartialPathStitcher) };
+    stitcher.stitcher.process_next_phase(graph, partials, db);
+    stitcher.update_previous_phase_partial_paths(partials);
+}
+
+/// Frees a reverse path stitcher.
+#[no_mangle]
+pub extern "C" fn sg_reverse_partial_path_stitcher_free(
+    stitcher: *mut sg_reverse_partial_path_stitcher,
+) {
+    drop(unsafe { Box::from_raw(stitcher as *mut InternalReversePartialPathStitcher) });
 }
