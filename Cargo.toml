@@ -29,3 +29,4 @@ smallvec = { version="1.6", features=["union"] }
 [dev-dependencies]
 itertools = "0.10"
 maplit = "1.0"
+pretty_assertions = "0.7"

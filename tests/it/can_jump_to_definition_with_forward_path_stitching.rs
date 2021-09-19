@@ -5,8 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
+use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::paths::Paths;
@@ -46,13 +47,13 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
     let results = complete_paths
         .into_iter()
         .map(|path| path.display(graph, &mut paths).to_string())
-        .collect::<HashSet<_>>();
+        .collect::<BTreeSet<_>>();
 
     let expected_paths = expected_paths
         .iter()
         .map(|s| s.to_string())
-        .collect::<HashSet<_>>();
-    assert_eq!(results, expected_paths);
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected_paths, results);
 }
 
 #[test]

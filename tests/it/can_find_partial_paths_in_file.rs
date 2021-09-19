@@ -5,8 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
+use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 
@@ -15,7 +16,7 @@ use crate::test_graphs;
 fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &[&str]) {
     let file = graph.get_file_unchecked(file);
     let mut partials = PartialPaths::new();
-    let mut results = HashSet::new();
+    let mut results = BTreeSet::new();
     partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
         if !path.is_complete_as_possible(graph) {
             return;
@@ -28,8 +29,8 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
     let expected_paths = expected_paths
         .iter()
         .map(|s| s.to_string())
-        .collect::<HashSet<_>>();
-    assert_eq!(results, expected_paths);
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected_paths, results);
 }
 
 #[test]

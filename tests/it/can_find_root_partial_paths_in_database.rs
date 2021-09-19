@@ -5,9 +5,10 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use controlled_option::ControlledOption;
+use pretty_assertions::assert_eq;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
@@ -57,12 +58,12 @@ fn check_root_partial_paths(
     let actual_partial_paths = results
         .into_iter()
         .map(|path| database[path].display(graph, &mut partials).to_string())
-        .collect::<HashSet<_>>();
+        .collect::<BTreeSet<_>>();
     let expected_partial_paths = expected_partial_paths
         .iter()
         .map(|s| s.to_string())
-        .collect::<HashSet<_>>();
-    assert_eq!(actual_partial_paths, expected_partial_paths);
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected_partial_paths, actual_partial_paths);
 }
 
 #[test]

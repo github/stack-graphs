@@ -5,8 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
+use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
 
@@ -14,7 +15,7 @@ use crate::test_graphs;
 
 fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
     let mut paths = Paths::new();
-    let mut results = HashSet::new();
+    let mut results = BTreeSet::new();
     let references = graph
         .iter_nodes()
         .filter(|handle| graph[*handle].is_reference());
@@ -26,8 +27,8 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
     let expected_paths = expected_paths
         .iter()
         .map(|s| s.to_string())
-        .collect::<HashSet<_>>();
-    assert_eq!(results, expected_paths);
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected_paths, results);
 }
 
 #[test]
