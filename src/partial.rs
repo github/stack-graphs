@@ -1942,7 +1942,6 @@ impl PartialPath {
             && self
                 .scope_stack_postcondition
                 .equals(partials, other.scope_stack_postcondition)
-            && self.edges.equals(partials, other.edges)
     }
 
     pub fn cmp(
@@ -1973,7 +1972,6 @@ impl PartialPath {
                 self.scope_stack_postcondition
                     .cmp(partials, other.scope_stack_postcondition)
             })
-            .then_with(|| self.edges.cmp(partials, other.edges))
     }
 
     /// Returns whether a partial path represents the start of a name binding from a reference to a
