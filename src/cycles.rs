@@ -106,12 +106,12 @@ where
     {
         let key = path.key();
         let paths_with_same_nodes = self.paths.entry(key).or_default();
-        match paths_with_same_nodes.binary_search_by(cmp) {
+        let index = match paths_with_same_nodes.binary_search_by(cmp) {
             // We've already seen this exact path before; no need to process it again.
             Ok(_) => return false,
             // Otherwise add it to the list.
-            Err(index) => paths_with_same_nodes.insert(index, path.clone()),
-        }
+            Err(index) => index,
+        };
 
         // Count how many paths we've already processed that have the same endpoints and are
         // "shorter".
@@ -119,6 +119,11 @@ where
             .iter()
             .filter(|similar_path| similar_path.is_shorter_than(path))
             .count();
-        return similar_path_count <= MAX_SIMILAR_PATH_COUNT;
+        if similar_path_count > MAX_SIMILAR_PATH_COUNT {
+            return false;
+        }
+
+        paths_with_same_nodes.insert(index, path.clone());
+        true
     }
 }
