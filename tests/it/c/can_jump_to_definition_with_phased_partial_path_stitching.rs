@@ -5,8 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
+use pretty_assertions::assert_eq;
 use stack_graphs::c::sg_forward_partial_path_stitcher_free;
 use stack_graphs::c::sg_forward_partial_path_stitcher_new;
 use stack_graphs::c::sg_forward_partial_path_stitcher_process_next_phase;
@@ -136,7 +137,7 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
     let rust_stitcher = unsafe { &mut *stitcher };
 
     // Keep processing phases until the stitching algorithm is done.
-    let mut results = HashSet::new();
+    let mut results = BTreeSet::new();
     while rust_stitcher.previous_phase_partial_paths_length > 0 {
         let partial_paths_slice = unsafe {
             std::slice::from_raw_parts(
@@ -222,8 +223,8 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
     let expected_partial_paths = expected_partial_paths
         .iter()
         .map(|s| s.to_string())
-        .collect::<HashSet<_>>();
-    assert_eq!(results, expected_partial_paths);
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected_partial_paths, results);
 
     sg_forward_partial_path_stitcher_free(stitcher);
     sg_partial_path_database_free(db);

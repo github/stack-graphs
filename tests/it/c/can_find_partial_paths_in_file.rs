@@ -5,8 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
+use pretty_assertions::assert_eq;
 use stack_graphs::c::sg_partial_path_arena;
 use stack_graphs::c::sg_partial_path_arena_find_partial_paths_in_file;
 use stack_graphs::c::sg_partial_path_arena_free;
@@ -122,12 +123,12 @@ fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[
     let results = results
         .iter()
         .map(|s| s.display(rust_graph, rust_partials).to_string())
-        .collect::<HashSet<_>>();
+        .collect::<BTreeSet<_>>();
     let expected_paths = expected_paths
         .iter()
         .map(|s| s.to_string())
-        .collect::<HashSet<_>>();
-    assert_eq!(results, expected_paths);
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected_paths, results);
 
     sg_partial_path_list_free(path_list);
     sg_partial_path_arena_free(partials);

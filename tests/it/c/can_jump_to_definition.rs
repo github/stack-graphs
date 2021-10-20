@@ -5,9 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
-use crate::c::test_graph::TestGraph;
+use pretty_assertions::assert_eq;
 use stack_graphs::c::sg_path_arena_find_all_complete_paths;
 use stack_graphs::c::sg_path_arena_free;
 use stack_graphs::c::sg_path_arena_new;
@@ -17,6 +17,7 @@ use stack_graphs::c::sg_path_list_new;
 use stack_graphs::c::sg_path_list_paths;
 use stack_graphs::paths::Path;
 
+use crate::c::test_graph::TestGraph;
 use crate::test_graphs;
 
 fn check_jump_to_definition(graph: &TestGraph, expected_paths: &[&str]) {
@@ -45,12 +46,12 @@ fn check_jump_to_definition(graph: &TestGraph, expected_paths: &[&str]) {
     let results = results
         .iter()
         .map(|s| s.display(rust_graph, rust_paths).to_string())
-        .collect::<HashSet<_>>();
+        .collect::<BTreeSet<_>>();
     let expected_paths = expected_paths
         .iter()
         .map(|s| s.to_string())
-        .collect::<HashSet<_>>();
-    assert_eq!(results, expected_paths);
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected_paths, results);
 
     sg_path_list_free(path_list);
     sg_path_arena_free(paths);
