@@ -1,19 +1,9 @@
-# stack-graphs
+# Stack graphs
 
-The `stack-graphs` crate provides a Rust implementation of _stack graphs_, which
-allow you to define the name resolution rules for an arbitrary programming
+The crates in this repository provide a Rust implementation of _stack graphs_,
+which allow you to define the name resolution rules for an arbitrary programming
 language in a way that is efficient, incremental, and does not need to tap into
 existing build or program analysis tools.
-
-To use this library, add the following to your `Cargo.toml`:
-
-``` toml
-[dependencies]
-stack-graphs = "0.3"
-```
-
-Check out our [documentation](https://docs.rs/stack-graphs/) for more details on
-how to use this library.
 
 ## How to contribute
 
