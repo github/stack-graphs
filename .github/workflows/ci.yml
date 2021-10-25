@@ -46,7 +46,8 @@ jobs:
       - name: Run test suite
         run: cargo test
       - name: Run test suite under valgrind
-        run: cargo valgrind test
+        # We only need to use valgrind to test the crates that have C bindings.
+        run: cargo valgrind test -p stack-graphs
       - name: Run test suite with copious debugging
         run: cargo test --features copious-debugging
       - name: Run test suite with all optimizations

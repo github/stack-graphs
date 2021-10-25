@@ -8,7 +8,7 @@
 # ------------------------------------------------------------------------------
 
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../stack-graphs"
 
 if ! which cbindgen >/dev/null 2>/dev/null; then
     echo "Cannot find cbindgen!  Try `cargo install cbindgen`." >&2
