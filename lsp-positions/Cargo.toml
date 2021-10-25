@@ -1,0 +1,24 @@
+[package]
+name = "lsp-positions"
+version = "0.1.0"
+description = "LSP-compatible character positions"
+homepage = "https://github.com/github/stack-graphs/lsp-positions"
+repository = "https://github.com/github/stack-graphs/"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+authors = [
+  "GitHub <opensource+stack-graphs@github.com>",
+  "Douglas Creager <dcreager@dcreager.net>"
+]
+edition = "2018"
+
+[lib]
+# All of our tests are in the tests/it "integration" test executable.
+test = false
+
+[features]
+default = ["tree-sitter"]
+
+[dependencies]
+memchr = "2.4"
+tree-sitter = { version=">= 0.19", optional=true }
