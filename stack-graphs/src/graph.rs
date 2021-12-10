@@ -234,6 +234,80 @@ impl Handle<Symbol> {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Interned strings
+
+/// Arbitrary string content associated with some part of a stack graph.
+#[repr(C)]
+pub struct InternedString {
+    content: InternedStringContent,
+}
+
+impl InternedString {
+    fn as_str(&self) -> &str {
+        self.content.as_str()
+    }
+}
+
+impl PartialEq<&str> for InternedString {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl StackGraph {
+    /// Adds an interned string to the stack graph, ensuring that there's only ever one copy of a
+    /// particular string stored in the graph.
+    pub fn add_string<S: AsRef<str> + ?Sized>(&mut self, string: &S) -> Handle<InternedString> {
+        let string = string.as_ref();
+        if let Some(handle) = self.string_handles.get(string) {
+            return *handle;
+        }
+
+        let interned = self.interned_strings.add(string);
+        let hash_key = unsafe { interned.as_hash_key() };
+        let handle = self.strings.add(InternedString { content: interned });
+        self.string_handles.insert(hash_key, handle);
+        handle
+    }
+
+    /// Returns an iterator over all of the handles of all of the interned strings in this stack
+    /// graph. (Note that because we're only returning _handles_, this iterator does not retain a
+    /// reference to the `StackGraph`.)
+    pub fn iter_strings(&self) -> impl Iterator<Item = Handle<InternedString>> {
+        self.strings.iter_handles()
+    }
+}
+
+impl Index<Handle<InternedString>> for StackGraph {
+    type Output = str;
+    #[inline(always)]
+    fn index(&self, handle: Handle<InternedString>) -> &str {
+        self.strings.get(handle).as_str()
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayInternedString<'a> {
+    wrapped: Handle<InternedString>,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayInternedString<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", &self.graph[self.wrapped])
+    }
+}
+
+impl Handle<InternedString> {
+    pub fn display(self, graph: &StackGraph) -> impl Display + '_ {
+        DisplayInternedString {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Files
 
 /// A source file that we have extracted stack graph data from.
@@ -1303,6 +1377,8 @@ pub struct StackGraph {
     interned_strings: InternedStringArena,
     pub(crate) symbols: Arena<Symbol>,
     symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
+    pub(crate) strings: Arena<InternedString>,
+    string_handles: FxHashMap<&'static str, Handle<InternedString>>,
     pub(crate) files: Arena<File>,
     file_handles: FxHashMap<&'static str, Handle<File>>,
     pub(crate) nodes: Arena<Node>,
@@ -1329,6 +1405,8 @@ impl Default for StackGraph {
             interned_strings: InternedStringArena::new(),
             symbols: Arena::new(),
             symbol_handles: FxHashMap::default(),
+            strings: Arena::new(),
+            string_handles: FxHashMap::default(),
             files: Arena::new(),
             file_handles: FxHashMap::default(),
             nodes,

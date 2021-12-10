@@ -68,6 +68,61 @@ fn can_display_symbols() {
 }
 
 #[test]
+fn can_create_strings() {
+    let mut graph = StackGraph::new();
+    let a1 = graph.add_string("a");
+    let a2 = graph.add_string("a");
+    let b = graph.add_string("b");
+    let c = graph.add_string("c");
+    let empty1 = graph.add_string("");
+    // The content of each string be comparable
+    assert_eq!(graph[a1], graph[a2]);
+    assert_ne!(graph[a1], graph[b]);
+    assert_ne!(graph[a1], graph[c]);
+    assert_ne!(graph[a2], graph[b]);
+    assert_ne!(graph[a2], graph[c]);
+    assert_ne!(graph[b], graph[c]);
+    assert_ne!(graph[empty1], graph[a1]);
+    // and because we deduplicate strings, the handles should be comparable too.
+    assert_eq!(a1, a2);
+    assert_ne!(a1, b);
+    assert_ne!(a1, c);
+    assert_ne!(a2, b);
+    assert_ne!(a2, c);
+    assert_ne!(b, c);
+    assert_ne!(empty1, a1);
+}
+
+#[test]
+fn can_iterate_strings() {
+    let mut graph = StackGraph::new();
+    graph.add_string("a");
+    graph.add_string("b");
+    graph.add_string("c");
+    // We should get all of the strings that we've created — though there's no guarantee in which
+    // order they'll come out of the iterator.
+    let strings = graph
+        .iter_strings()
+        .map(|string| &graph[string])
+        .collect::<HashSet<_>>();
+    assert_eq!(strings, hashset! {"a", "b", "c"});
+}
+
+#[test]
+fn can_display_strings() {
+    let mut graph = StackGraph::new();
+    graph.add_string("a");
+    graph.add_string("b");
+    graph.add_string("c");
+    let mut strings = graph
+        .iter_strings()
+        .map(|string| string.display(&graph).to_string())
+        .collect::<Vec<_>>();
+    strings.sort();
+    assert_eq!(strings, vec!["a", "b", "c"]);
+}
+
+#[test]
 fn can_iterate_nodes() {
     let mut graph = StackGraph::new();
     let file = graph.get_or_create_file("test.py");

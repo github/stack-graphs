@@ -104,6 +104,27 @@ struct sg_symbols {
 // handles using simple equality, without having to dereference them.
 typedef uint32_t sg_symbol_handle;
 
+// Arbitrary string content associated with some part of a stack graph.
+struct sg_string {
+    const char *content;
+    size_t length;
+};
+
+// An array of all of the interned strings in a stack graph.  String handles are indices into this
+// array. There will never be a valid string at index 0; a handle with the value 0 represents a
+// missing string.
+struct sg_strings {
+    const struct sg_string *strings;
+    size_t count;
+};
+
+// A handle to an interned string in a stack graph.  A zero handle represents a missing string.
+//
+// We deduplicate strings in a stack graph — that is, we ensure that there are never multiple
+// `struct sg_string` instances with the same content.  That means that you can compare string
+// handles using simple equality, without having to dereference them.
+typedef uint32_t sg_string_handle;
+
 // A source file that we have extracted stack graph data from.
 //
 // It's up to you to choose what names to use for your files, but they must be unique within a
@@ -559,6 +580,30 @@ void sg_stack_graph_add_symbols(struct sg_stack_graph *graph,
                                 const char *symbols,
                                 const size_t *lengths,
                                 sg_symbol_handle *handles_out);
+
+// Returns a reference to the array of string data in this stack graph.  The resulting array
+// pointer is only valid until the next call to any function that mutates the stack graph.
+struct sg_strings sg_stack_graph_strings(const struct sg_stack_graph *graph);
+
+// Adds new strings to the stack graph.  You provide all of the string content concatenated
+// together into a single string, and an array of the lengths of each string.  You also provide an
+// output array, which must have the same size as `lengths`.  We will place each string's handle
+// in the output array.
+//
+// We ensure that there is only ever one copy of a particular string stored in the graph — we
+// guarantee that identical strings will have the same handles, meaning that you can compare the
+// handles using simple integer equality.
+//
+// We copy the string data into the stack graph.  The string content you pass in does not need to
+// outlive the call to this function.
+//
+// Each string must be a valid UTF-8 string.  If any string isn't valid UTF-8, it won't be added
+// to the stack graph, and the corresponding entry in the output array will be the null handle.
+void sg_stack_graph_add_strings(struct sg_stack_graph *graph,
+                                size_t count,
+                                const char *strings,
+                                const size_t *lengths,
+                                sg_string_handle *handles_out);
 
 // Returns a reference to the array of file data in this stack graph.  The resulting array pointer
 // is only valid until the next call to any function that mutates the stack graph.
