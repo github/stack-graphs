@@ -68,31 +68,31 @@ use crate::arena::SupplementalArena;
 // String content
 
 #[repr(C)]
-struct InternedString {
-    // See InternedStringContent below for how we fill in these fields safely.
+struct InternedStringContent {
+    // See InternedStringArena below for how we fill in these fields safely.
     start: *const u8,
     len: usize,
 }
 
 const INITIAL_STRING_CAPACITY: usize = 512;
 
-/// The content of each `InternedString` is stored in one of the buffers inside of a
-/// `InternedStringContent` instance, following the trick [described by Aleksey Kladov][interner].
+/// The content of each interned string is stored in one of the buffers inside of a
+/// `InternedStringArena` instance, following the trick [described by Aleksey Kladov][interner].
 ///
 /// The buffers stored in this type are preallocated, and are never allowed to grow.  That ensures
 /// that pointers into the buffer are stable, as long as the buffer has not been destroyed.
-/// (`InternedString` instances are also stored in an arena, ensuring that the strings that we hand
-/// out don't outlive the buffers.)
+/// (`InternedStringContent` instances are also stored in an arena, ensuring that the strings that
+/// we hand out don't outlive the buffers.)
 ///
 /// [interner]: https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
-struct InternedStringContent {
+struct InternedStringArena {
     current_buffer: Vec<u8>,
     full_buffers: Vec<Vec<u8>>,
 }
 
-impl InternedStringContent {
-    fn new() -> InternedStringContent {
-        InternedStringContent {
+impl InternedStringArena {
+    fn new() -> InternedStringArena {
+        InternedStringArena {
             current_buffer: Vec::with_capacity(INITIAL_STRING_CAPACITY),
             full_buffers: Vec::new(),
         }
@@ -100,7 +100,7 @@ impl InternedStringContent {
 
     // Adds a new string.  This does not check whether we've already stored a string with the same
     // content; that is handled down below in `StackGraph::add_symbol` and `add_file`.
-    fn add(&mut self, value: &str) -> InternedString {
+    fn add(&mut self, value: &str) -> InternedStringContent {
         // Is there enough room in current_buffer to hold this string?
         let value = value.as_bytes();
         let len = value.len();
@@ -122,15 +122,15 @@ impl InternedStringContent {
         let start_index = self.current_buffer.len();
         self.current_buffer.extend_from_slice(value);
         let start = unsafe { self.current_buffer.as_ptr().add(start_index) };
-        InternedString { start, len }
+        InternedStringContent { start, len }
     }
 }
 
-impl InternedString {
+impl InternedStringContent {
     /// Returns the content of this string as a `str`.  This is safe as long as the lifetime of the
-    /// InternedString is outlived by the lifetime of the InternedStringContent that holds its
+    /// InternedStringContent is outlived by the lifetime of the InternedStringArena that holds its
     /// data.  That is guaranteed because we store the InternedStrings in an Arena alongside the
-    /// InternedStringContent, and only hand out references to them.
+    /// InternedStringArena, and only hand out references to them.
     fn as_str(&self) -> &str {
         unsafe {
             let bytes = std::slice::from_raw_parts(self.start, self.len);
@@ -141,7 +141,7 @@ impl InternedString {
     // Returns a supposedly 'static reference to the string's data.  The string data isn't really
     // static, but we are careful only to use this as a key in the HashMap that StackGraph uses to
     // track whether we've stored a particular symbol already.  That HashMap lives alongside the
-    // InternedStringContent that holds the data, so we can get away with a technically incorrect
+    // InternedStringArena that holds the data, so we can get away with a technically incorrect
     // 'static lifetime here.  As an extra precaution, this method is is marked as unsafe so that
     // we don't inadvertently call it from anywhere else in the crate.
     unsafe fn as_hash_key(&self) -> &'static str {
@@ -165,7 +165,7 @@ impl InternedString {
 /// to symbols using simple equality, without having to dereference into the `StackGraph` arena.
 #[repr(C)]
 pub struct Symbol {
-    content: InternedString,
+    content: InternedStringContent,
 }
 
 impl Symbol {
@@ -245,7 +245,7 @@ impl Handle<Symbol> {
 /// each other.
 pub struct File {
     /// The name of this source file.
-    name: InternedString,
+    name: InternedStringContent,
 }
 
 impl File {
@@ -1300,7 +1300,7 @@ impl StackGraph {
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct StackGraph {
-    interned_strings: InternedStringContent,
+    interned_strings: InternedStringArena,
     pub(crate) symbols: Arena<Symbol>,
     symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
     pub(crate) files: Arena<File>,
@@ -1326,7 +1326,7 @@ impl Default for StackGraph {
         let jump_to_node = nodes.add(JumpToNode::new().into());
 
         StackGraph {
-            interned_strings: InternedStringContent::new(),
+            interned_strings: InternedStringArena::new(),
             symbols: Arena::new(),
             symbol_handles: FxHashMap::default(),
             files: Arena::new(),
