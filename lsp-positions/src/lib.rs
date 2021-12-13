@@ -30,6 +30,7 @@ fn utf16_len(string: &str) -> usize {
 }
 
 /// All of the position information that we have about a character in a source file
+#[repr(C)]
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Position {
     /// The 0-indexed line number containing the character
@@ -91,6 +92,7 @@ impl PartialOrd<tree_sitter::Point> for Position {
 }
 
 /// All of the position information that we have about a range of content in a source file
+#[repr(C)]
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct Span {
     pub start: Position,

@@ -205,6 +205,76 @@ struct sg_edge {
     int32_t precedence;
 };
 
+// The offset of a character within a string (typically a line of source code), using several
+// different units
+//
+// All offsets are 0-indexed.
+struct sg_offset {
+    // The number of UTF-8-encoded bytes appearing before this character in the string
+    size_t utf8_offset;
+    // The number of UTF-16 code units appearing before this character in the string
+    size_t utf16_offset;
+};
+
+// A half-open range identifying a range of characters in a string.
+struct sg_utf8_bounds {
+    // The UTF-8 byte index of the first character in the range.
+    size_t start;
+    // The UTF-8 byte index of the first character _after_ the range.
+    size_t end;
+};
+
+// All of the position information that we have about a character in a source file
+struct sg_position {
+    // The 0-indexed line number containing the character
+    size_t line;
+    // The offset of the character within its containing line, expressed as both a UTF-8 byte
+    // index and a UTF-16 code point index
+    struct sg_offset column;
+    // The UTF-8 byte indexes (within the file) of the start and end of the line containing the
+    // character
+    struct sg_utf8_bounds containing_line;
+    // The UTF-8 byte indexes (within the file) of the start and end of the line containing the
+    // character, with any leading and trailing whitespace removed
+    struct sg_utf8_bounds trimmed_line;
+};
+
+// All of the position information that we have about a range of content in a source file
+struct sg_span {
+    struct sg_position start;
+    struct sg_position end;
+};
+
+// Contains information about a range of code in a source code file.
+struct sg_source_info {
+    // The location in its containing file of the source code that this node represents.
+    struct sg_span span;
+    // The kind of syntax entity this node represents (e.g. `function`, `class`, `method`, etc.).
+    sg_string_handle syntax_type;
+    // The full content of the line containing this node in its source file.
+    sg_string_handle containing_line;
+};
+
+// An array of all of the source information in a stack graph.  Source information is associated
+// with nodes, so node handles are indices into this array.  It is _not_ guaranteed that there
+// will an entry in this array for every node handle; if you have a node handle whose value is
+// larger than `count`, then use a 0-valued `sg_source_info` if you need source information for
+// that node.
+//
+// There will never be a valid entry at index 0; a handle with the value 0 represents a missing
+// node.
+struct sg_source_infos {
+    const struct sg_source_info *infos;
+    size_t count;
+};
+
+// A tuple of a node handle and source information for that node.  Used with the
+// `sg_add_source_info` function to add source information to a stack graph.
+struct sg_node_source_info {
+    sg_node_handle node;
+    struct sg_source_info source_info;
+};
+
 // A handle to an element of a scope stack.  A zero handle represents a missing scope stack.  A
 // UINT32_MAX handle represents an empty scope stack.
 typedef uint32_t sg_scope_stack_cell_handle;
@@ -663,6 +733,16 @@ void sg_stack_graph_get_or_create_nodes(struct sg_stack_graph *graph,
 void sg_stack_graph_add_edges(struct sg_stack_graph *graph,
                               size_t count,
                               const struct sg_edge *edges);
+
+// Returns a reference to the array of source information in this stack graph.  The resulting
+// array pointer is only valid until the next call to any function that mutates the stack graph.
+struct sg_source_infos sg_stack_graph_source_infos(const struct sg_stack_graph *graph);
+
+// Adds new source information to the stack graph.  You provide an array of `sg_node_source_info`
+// instances.  Any existing source information for any node mentioned in the array is overwritten.
+void sg_stack_graph_add_source_infos(struct sg_stack_graph *graph,
+                                     size_t count,
+                                     const struct sg_node_source_info *infos);
 
 // Returns a reference to the array of symbol stack content in a path arena.  The resulting array
 // pointer is only valid until the next call to any function that mutates the path arena.

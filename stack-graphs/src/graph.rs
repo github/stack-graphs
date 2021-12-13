@@ -1370,6 +1370,34 @@ impl StackGraph {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Source code
+
+/// Contains information about a range of code in a source code file.
+#[repr(C)]
+#[derive(Default)]
+pub struct SourceInfo {
+    /// The location in its containing file of the source code that this node represents.
+    pub span: lsp_positions::Span,
+    /// The kind of syntax entity this node represents (e.g. `function`, `class`, `method`, etc.).
+    pub syntax_type: Option<Handle<InternedString>>,
+    /// The full content of the line containing this node in its source file.
+    pub containing_line: ControlledOption<Handle<InternedString>>,
+}
+
+impl StackGraph {
+    /// Returns information about the source code that a stack graph node represents.
+    pub fn source_info(&self, node: Handle<Node>) -> Option<&SourceInfo> {
+        self.source_info.get(node)
+    }
+
+    /// Returns a mutable reference to the information about the source code that a stack graph
+    /// node represents.
+    pub fn source_info_mut(&mut self, node: Handle<Node>) -> &mut SourceInfo {
+        &mut self.source_info[node]
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Stack graphs
 
 /// Contains all of the nodes and edges that make up a stack graph.
@@ -1382,6 +1410,7 @@ pub struct StackGraph {
     pub(crate) files: Arena<File>,
     file_handles: FxHashMap<&'static str, Handle<File>>,
     pub(crate) nodes: Arena<Node>,
+    pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
     jump_to_node: Handle<Node>,
     root_node: Handle<Node>,
@@ -1410,6 +1439,7 @@ impl Default for StackGraph {
             files: Arena::new(),
             file_handles: FxHashMap::default(),
             nodes,
+            source_info: SupplementalArena::new(),
             node_id_handles: NodeIDHandles::new(),
             jump_to_node,
             root_node,
