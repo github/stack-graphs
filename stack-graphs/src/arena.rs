@@ -257,15 +257,24 @@ impl<T> Arena<T> {
 /// [`Arena`]: struct.Arena.html
 /// [`get`]: #method.get
 pub struct SupplementalArena<H, T> {
-    items: Vec<T>,
+    items: Vec<MaybeUninit<T>>,
     _phantom: PhantomData<H>,
+}
+
+impl<H, T> Drop for SupplementalArena<H, T> {
+    fn drop(&mut self) {
+        unsafe {
+            let items = std::mem::transmute::<_, &mut [T]>(&mut self.items[1..]) as *mut [T];
+            items.drop_in_place();
+        }
+    }
 }
 
 impl<H, T> SupplementalArena<H, T> {
     /// Creates a new, empty supplemental arena.
     pub fn new() -> SupplementalArena<H, T> {
         SupplementalArena {
-            items: Vec::new(),
+            items: vec![MaybeUninit::uninit()],
             _phantom: PhantomData,
         }
     }
@@ -273,20 +282,26 @@ impl<H, T> SupplementalArena<H, T> {
     /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental
     /// data for all of the instances that have already been allocated in a (regular) arena.
     pub fn with_capacity(arena: &Arena<H>) -> SupplementalArena<H, T> {
+        let mut items = Vec::with_capacity(arena.items.len());
+        items[0] = MaybeUninit::uninit();
         SupplementalArena {
-            items: Vec::with_capacity(arena.items.len()),
+            items,
             _phantom: PhantomData,
         }
     }
 
     /// Returns the item belonging to a particular handle, if it exists.
     pub fn get(&self, handle: Handle<H>) -> Option<&T> {
-        self.items.get(handle.as_usize() - 1)
+        self.items
+            .get(handle.as_usize())
+            .map(|x| unsafe { &*(x.as_ptr()) })
     }
 
     /// Returns a mutable reference to the item belonging to a particular handle, if it exists.
     pub fn get_mut(&mut self, handle: Handle<H>) -> Option<&mut T> {
-        self.items.get_mut(handle.as_usize() - 1)
+        self.items
+            .get_mut(handle.as_usize())
+            .map(|x| unsafe { &mut *(x.as_mut_ptr()) })
     }
 }
 
@@ -298,10 +313,11 @@ where
     /// (using the type's `Default` implementation) if it doesn't already exist.
     pub fn get_mut_or_default(&mut self, handle: Handle<H>) -> &mut T {
         let index = handle.as_usize();
-        if self.items.len() < index {
-            self.items.resize_with(index, || T::default());
+        if self.items.len() <= index {
+            self.items
+                .resize_with(index + 1, || MaybeUninit::new(T::default()));
         }
-        unsafe { self.items.get_unchecked_mut(index - 1) }
+        unsafe { std::mem::transmute(&mut self.items[handle.as_usize()]) }
     }
 }
 
@@ -314,7 +330,7 @@ impl<H, T> Default for SupplementalArena<H, T> {
 impl<H, T> Index<Handle<H>> for SupplementalArena<H, T> {
     type Output = T;
     fn index(&self, handle: Handle<H>) -> &T {
-        &self.items[handle.as_usize() - 1]
+        unsafe { std::mem::transmute(&self.items[handle.as_usize()]) }
     }
 }
 
