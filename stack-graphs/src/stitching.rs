@@ -195,6 +195,13 @@ impl Database {
             result.extend(paths.iter().copied());
         }
     }
+
+    /// Returns an iterator over all of the handles of all of the partial paths in this database.
+    /// (Note that because we're only returning _handles_, this iterator does not retain a
+    /// reference to the `Database`.)
+    pub fn iter_partial_paths(&self) -> impl Iterator<Item = Handle<PartialPath>> {
+        self.partial_paths.iter_handles()
+    }
 }
 
 impl Index<Handle<PartialPath>> for Database {
