@@ -548,6 +548,25 @@ struct sg_partial_paths {
 // partial path.
 typedef uint32_t sg_partial_path_handle;
 
+// Encodes a set of node handles.
+//
+// The elements are encoded in a bit set.  Use the traditional mask and shift pattern to determine
+// if a particular handle is in the set:
+//
+// ``` c
+// size_t element_index = handle / 32;
+// size_t bit_index = handle % 32;
+// size_t bit_mask = 1 << bit_index;
+// bool bit_is_set =
+//     element_index < set.length &&
+//     (set.elements[element_index] & bit_mask) != 0;
+// ```
+struct sg_node_handle_set {
+    const uint32_t *elements;
+    // Note that this is the number of uint32_t's in `elements`, NOT the number of bits in the set.
+    size_t length;
+};
+
 // Implements a phased forward path-stitching algorithm.
 //
 // Our overall goal is to start with a set of _seed_ paths, and to repeatedly extend each path by
@@ -935,6 +954,31 @@ void sg_partial_path_database_add_partial_paths(const struct sg_stack_graph *gra
                                                 size_t count,
                                                 const struct sg_partial_path *paths,
                                                 sg_partial_path_handle *out);
+
+// Determines which nodes in the stack graph are “local”, taking into account the partial paths in
+// this database.  The result is valid until the next call to this function, or until the database
+// is freed.
+//
+// A local node has no partial path that connects it to the root node in either direction. That
+// means that it cannot participate in any paths that leave the file.
+//
+// This method is meant to be used at index time, to calculate the set of nodes that are local
+// after having just calculated the set of partial paths for the file.
+void sg_partial_path_database_find_local_nodes(struct sg_partial_path_database *db);
+
+// Marks that a list of stack graph nodes are local.
+//
+// This method is meant to be used at query time.  You will have precalculated the set of local
+// nodes for a file at index time; at query time, you will load this information from your storage
+// layer and use this method to update our internal view of which nodes are local.
+void sg_partial_path_database_mark_local_nodes(struct sg_partial_path_database *db,
+                                               size_t count,
+                                               const sg_node_handle *nodes);
+
+// Returns a reference to the set of stack graph nodes that are local, according to this database
+// of partial paths.  The resulting set is only valid until the next call to any function that
+// mutates the partial path database.
+struct sg_node_handle_set sg_partial_path_database_local_nodes(const struct sg_partial_path_database *db);
 
 // Creates a new forward path stitcher that is "seeded" with a set of starting stack graph nodes.
 //

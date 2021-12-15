@@ -39,6 +39,7 @@ use std::num::NonZeroU32;
 use std::ops::Index;
 use std::ops::IndexMut;
 
+use bitvec::vec::BitVec;
 use controlled_option::Niche;
 
 use crate::utils::cmp_option;
@@ -351,6 +352,79 @@ where
 {
     fn index_mut(&mut self, handle: Handle<H>) -> &mut T {
         self.get_mut_or_default(handle)
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Handle sets
+
+/// Contains a set of handles, encoded efficiently using a bit set.
+#[repr(C)]
+pub struct HandleSet<T> {
+    elements: BitVec<bitvec::order::Lsb0, u32>,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> HandleSet<T> {
+    /// Creates a new, empty handle set.
+    pub fn new() -> HandleSet<T> {
+        HandleSet::default()
+    }
+
+    /// Removes all elements from this handle set.
+    pub fn clear(&mut self) {
+        self.elements.clear();
+    }
+
+    /// Returns whether this set contains a particular handle.
+    pub fn contains(&self, handle: Handle<T>) -> bool {
+        let index = handle.as_usize();
+        self.elements.get(index).map(|bit| *bit).unwrap_or(false)
+    }
+
+    /// Adds a handle to this set.
+    pub fn add(&mut self, handle: Handle<T>) {
+        let index = handle.as_usize();
+        if self.elements.len() <= index {
+            self.elements.resize(index + 1, false);
+        }
+        let mut bit = unsafe { self.elements.get_unchecked_mut(index) };
+        *bit = true;
+    }
+
+    /// Removes a handle from this set.
+    pub fn remove(&mut self, handle: Handle<T>) {
+        let index = handle.as_usize();
+        if let Some(mut bit) = self.elements.get_mut(index) {
+            *bit = false;
+        }
+    }
+
+    /// Returns an iterator of all of the handles in this set.
+    pub fn iter(&self) -> impl Iterator<Item = Handle<T>> + '_ {
+        self.elements
+            .iter_ones()
+            .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    }
+
+    /// Returns a pointer to this set's storage.
+    pub(crate) fn as_ptr(&self) -> *const u32 {
+        self.elements.as_raw_ptr()
+    }
+
+    /// Returns the number of instances stored in this arena.
+    #[inline(always)]
+    pub(crate) fn len(&self) -> usize {
+        self.elements.as_raw_slice().len()
+    }
+}
+
+impl<T> Default for HandleSet<T> {
+    fn default() -> HandleSet<T> {
+        HandleSet {
+            elements: BitVec::default(),
+            _phantom: PhantomData,
+        }
     }
 }
 
