@@ -15,6 +15,7 @@ use libc::c_char;
 
 use crate::arena::Handle;
 use crate::graph::File;
+use crate::graph::InternedString;
 use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
@@ -121,6 +122,9 @@ pub extern "C" fn sg_partial_path_database_free(db: *mut sg_partial_path_databas
     drop(unsafe { Box::from_raw(db) })
 }
 
+/// The null value for all of our handles.
+pub const SG_NULL_HANDLE: u32 = 0;
+
 /// The handle of an empty list.
 pub const SG_LIST_EMPTY_HANDLE: u32 = 0xffffffff;
 
@@ -215,6 +219,81 @@ pub extern "C" fn sg_stack_graph_add_symbols(
             Err(_) => None,
         };
         unsafe { symbols = symbols.add(lengths[i]) };
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Interned strings
+
+/// Arbitrary string content associated with some part of a stack graph.
+#[repr(C)]
+pub struct sg_string {
+    pub content: *const c_char,
+    pub length: usize,
+}
+
+/// A handle to an interned string in a stack graph.  A zero handle represents a missing string.
+///
+/// We deduplicate strings in a stack graph — that is, we ensure that there are never multiple
+/// `struct sg_string` instances with the same content.  That means that you can compare string
+/// handles using simple equality, without having to dereference them.
+pub type sg_string_handle = u32;
+
+/// An array of all of the interned strings in a stack graph.  String handles are indices into this
+/// array. There will never be a valid string at index 0; a handle with the value 0 represents a
+/// missing string.
+#[repr(C)]
+pub struct sg_strings {
+    pub strings: *const sg_string,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of string data in this stack graph.  The resulting array
+/// pointer is only valid until the next call to any function that mutates the stack graph.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_strings(graph: *const sg_stack_graph) -> sg_strings {
+    let graph = unsafe { &(*graph).inner };
+    sg_strings {
+        strings: graph.strings.as_ptr() as *const sg_string,
+        count: graph.strings.len(),
+    }
+}
+
+/// Adds new strings to the stack graph.  You provide all of the string content concatenated
+/// together into a single string, and an array of the lengths of each string.  You also provide an
+/// output array, which must have the same size as `lengths`.  We will place each string's handle
+/// in the output array.
+///
+/// We ensure that there is only ever one copy of a particular string stored in the graph — we
+/// guarantee that identical strings will have the same handles, meaning that you can compare the
+/// handles using simple integer equality.
+///
+/// We copy the string data into the stack graph.  The string content you pass in does not need to
+/// outlive the call to this function.
+///
+/// Each string must be a valid UTF-8 string.  If any string isn't valid UTF-8, it won't be added
+/// to the stack graph, and the corresponding entry in the output array will be the null handle.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_add_strings(
+    graph: *mut sg_stack_graph,
+    count: usize,
+    strings: *const c_char,
+    lengths: *const usize,
+    handles_out: *mut sg_string_handle,
+) {
+    let graph = unsafe { &mut (*graph).inner };
+    let mut strings = strings as *const u8;
+    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
+    let handles_out = unsafe {
+        std::slice::from_raw_parts_mut(handles_out as *mut Option<Handle<InternedString>>, count)
+    };
+    for i in 0..count {
+        let string = unsafe { std::slice::from_raw_parts(strings, lengths[i]) };
+        handles_out[i] = match std::str::from_utf8(string) {
+            Ok(string) => Some(graph.add_string(string)),
+            Err(_) => None,
+        };
+        unsafe { strings = strings.add(lengths[i]) };
     }
 }
 

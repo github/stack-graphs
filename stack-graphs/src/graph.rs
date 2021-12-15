@@ -68,31 +68,31 @@ use crate::arena::SupplementalArena;
 // String content
 
 #[repr(C)]
-struct InternedString {
-    // See InternedStringContent below for how we fill in these fields safely.
+struct InternedStringContent {
+    // See InternedStringArena below for how we fill in these fields safely.
     start: *const u8,
     len: usize,
 }
 
 const INITIAL_STRING_CAPACITY: usize = 512;
 
-/// The content of each `InternedString` is stored in one of the buffers inside of a
-/// `InternedStringContent` instance, following the trick [described by Aleksey Kladov][interner].
+/// The content of each interned string is stored in one of the buffers inside of a
+/// `InternedStringArena` instance, following the trick [described by Aleksey Kladov][interner].
 ///
 /// The buffers stored in this type are preallocated, and are never allowed to grow.  That ensures
 /// that pointers into the buffer are stable, as long as the buffer has not been destroyed.
-/// (`InternedString` instances are also stored in an arena, ensuring that the strings that we hand
-/// out don't outlive the buffers.)
+/// (`InternedStringContent` instances are also stored in an arena, ensuring that the strings that
+/// we hand out don't outlive the buffers.)
 ///
 /// [interner]: https://matklad.github.io/2020/03/22/fast-simple-rust-interner.html
-struct InternedStringContent {
+struct InternedStringArena {
     current_buffer: Vec<u8>,
     full_buffers: Vec<Vec<u8>>,
 }
 
-impl InternedStringContent {
-    fn new() -> InternedStringContent {
-        InternedStringContent {
+impl InternedStringArena {
+    fn new() -> InternedStringArena {
+        InternedStringArena {
             current_buffer: Vec::with_capacity(INITIAL_STRING_CAPACITY),
             full_buffers: Vec::new(),
         }
@@ -100,7 +100,7 @@ impl InternedStringContent {
 
     // Adds a new string.  This does not check whether we've already stored a string with the same
     // content; that is handled down below in `StackGraph::add_symbol` and `add_file`.
-    fn add(&mut self, value: &str) -> InternedString {
+    fn add(&mut self, value: &str) -> InternedStringContent {
         // Is there enough room in current_buffer to hold this string?
         let value = value.as_bytes();
         let len = value.len();
@@ -122,15 +122,15 @@ impl InternedStringContent {
         let start_index = self.current_buffer.len();
         self.current_buffer.extend_from_slice(value);
         let start = unsafe { self.current_buffer.as_ptr().add(start_index) };
-        InternedString { start, len }
+        InternedStringContent { start, len }
     }
 }
 
-impl InternedString {
+impl InternedStringContent {
     /// Returns the content of this string as a `str`.  This is safe as long as the lifetime of the
-    /// InternedString is outlived by the lifetime of the InternedStringContent that holds its
+    /// InternedStringContent is outlived by the lifetime of the InternedStringArena that holds its
     /// data.  That is guaranteed because we store the InternedStrings in an Arena alongside the
-    /// InternedStringContent, and only hand out references to them.
+    /// InternedStringArena, and only hand out references to them.
     fn as_str(&self) -> &str {
         unsafe {
             let bytes = std::slice::from_raw_parts(self.start, self.len);
@@ -141,7 +141,7 @@ impl InternedString {
     // Returns a supposedly 'static reference to the string's data.  The string data isn't really
     // static, but we are careful only to use this as a key in the HashMap that StackGraph uses to
     // track whether we've stored a particular symbol already.  That HashMap lives alongside the
-    // InternedStringContent that holds the data, so we can get away with a technically incorrect
+    // InternedStringArena that holds the data, so we can get away with a technically incorrect
     // 'static lifetime here.  As an extra precaution, this method is is marked as unsafe so that
     // we don't inadvertently call it from anywhere else in the crate.
     unsafe fn as_hash_key(&self) -> &'static str {
@@ -165,7 +165,7 @@ impl InternedString {
 /// to symbols using simple equality, without having to dereference into the `StackGraph` arena.
 #[repr(C)]
 pub struct Symbol {
-    content: InternedString,
+    content: InternedStringContent,
 }
 
 impl Symbol {
@@ -234,6 +234,80 @@ impl Handle<Symbol> {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Interned strings
+
+/// Arbitrary string content associated with some part of a stack graph.
+#[repr(C)]
+pub struct InternedString {
+    content: InternedStringContent,
+}
+
+impl InternedString {
+    fn as_str(&self) -> &str {
+        self.content.as_str()
+    }
+}
+
+impl PartialEq<&str> for InternedString {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl StackGraph {
+    /// Adds an interned string to the stack graph, ensuring that there's only ever one copy of a
+    /// particular string stored in the graph.
+    pub fn add_string<S: AsRef<str> + ?Sized>(&mut self, string: &S) -> Handle<InternedString> {
+        let string = string.as_ref();
+        if let Some(handle) = self.string_handles.get(string) {
+            return *handle;
+        }
+
+        let interned = self.interned_strings.add(string);
+        let hash_key = unsafe { interned.as_hash_key() };
+        let handle = self.strings.add(InternedString { content: interned });
+        self.string_handles.insert(hash_key, handle);
+        handle
+    }
+
+    /// Returns an iterator over all of the handles of all of the interned strings in this stack
+    /// graph. (Note that because we're only returning _handles_, this iterator does not retain a
+    /// reference to the `StackGraph`.)
+    pub fn iter_strings(&self) -> impl Iterator<Item = Handle<InternedString>> {
+        self.strings.iter_handles()
+    }
+}
+
+impl Index<Handle<InternedString>> for StackGraph {
+    type Output = str;
+    #[inline(always)]
+    fn index(&self, handle: Handle<InternedString>) -> &str {
+        self.strings.get(handle).as_str()
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayInternedString<'a> {
+    wrapped: Handle<InternedString>,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayInternedString<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", &self.graph[self.wrapped])
+    }
+}
+
+impl Handle<InternedString> {
+    pub fn display(self, graph: &StackGraph) -> impl Display + '_ {
+        DisplayInternedString {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Files
 
 /// A source file that we have extracted stack graph data from.
@@ -245,7 +319,7 @@ impl Handle<Symbol> {
 /// each other.
 pub struct File {
     /// The name of this source file.
-    name: InternedString,
+    name: InternedStringContent,
 }
 
 impl File {
@@ -1300,9 +1374,11 @@ impl StackGraph {
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct StackGraph {
-    interned_strings: InternedStringContent,
+    interned_strings: InternedStringArena,
     pub(crate) symbols: Arena<Symbol>,
     symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
+    pub(crate) strings: Arena<InternedString>,
+    string_handles: FxHashMap<&'static str, Handle<InternedString>>,
     pub(crate) files: Arena<File>,
     file_handles: FxHashMap<&'static str, Handle<File>>,
     pub(crate) nodes: Arena<Node>,
@@ -1326,9 +1402,11 @@ impl Default for StackGraph {
         let jump_to_node = nodes.add(JumpToNode::new().into());
 
         StackGraph {
-            interned_strings: InternedStringContent::new(),
+            interned_strings: InternedStringArena::new(),
             symbols: Arena::new(),
             symbol_handles: FxHashMap::default(),
+            strings: Arena::new(),
+            string_handles: FxHashMap::default(),
             files: Arena::new(),
             file_handles: FxHashMap::default(),
             nodes,

@@ -14,6 +14,7 @@ use stack_graphs::c::sg_stack_graph_add_files;
 use stack_graphs::c::sg_stack_graph_files;
 use stack_graphs::c::sg_stack_graph_free;
 use stack_graphs::c::sg_stack_graph_new;
+use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::graph::File;
 
 fn lengths(data: &[&'static str]) -> Vec<usize> {
@@ -75,5 +76,5 @@ fn verify_null_file_representation() {
     let mut rust: ControlledOption<Handle<File>> = unsafe { std::mem::transmute(bytes) };
     rust = ControlledOption::none();
     let c: sg_file_handle = unsafe { std::mem::transmute(rust) };
-    assert_eq!(c, 0);
+    assert_eq!(c, SG_NULL_HANDLE);
 }

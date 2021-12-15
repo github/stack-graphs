@@ -21,6 +21,7 @@ use stack_graphs::c::sg_stack_graph_get_or_create_nodes;
 use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::SG_JUMP_TO_NODE_HANDLE;
+use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::c::SG_ROOT_NODE_HANDLE;
 
 use crate::test_graphs::CreateStackGraph;
@@ -45,7 +46,7 @@ impl Drop for TestGraph {
 impl TestGraph {
     fn add_node(&mut self, node: sg_node) -> sg_node_handle {
         let nodes = [node];
-        let mut handles: [sg_node_handle; 1] = [0; 1];
+        let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
         sg_stack_graph_get_or_create_nodes(
             self.graph,
             nodes.len(),
@@ -80,7 +81,7 @@ impl CreateStackGraph for TestGraph {
         self.add_node(sg_node {
             kind: sg_node_kind::SG_NODE_KIND_DROP_SCOPES,
             id: sg_node_id { file, local_id },
-            symbol: 0,
+            symbol: SG_NULL_HANDLE,
             is_clickable: false,
             scope: sg_node_id::default(),
         })
@@ -100,7 +101,7 @@ impl CreateStackGraph for TestGraph {
         self.add_node(sg_node {
             kind: sg_node_kind::SG_NODE_KIND_EXPORTED_SCOPE,
             id: sg_node_id { file, local_id },
-            symbol: 0,
+            symbol: SG_NULL_HANDLE,
             is_clickable: false,
             scope: sg_node_id::default(),
         })
@@ -108,7 +109,7 @@ impl CreateStackGraph for TestGraph {
 
     fn file(&mut self, name: &str) -> sg_file_handle {
         let lengths = [name.len()];
-        let mut handles: [sg_file_handle; 1] = [0; 1];
+        let mut handles: [sg_file_handle; 1] = [SG_NULL_HANDLE; 1];
         sg_stack_graph_add_files(
             self.graph,
             1,
@@ -123,7 +124,7 @@ impl CreateStackGraph for TestGraph {
         self.add_node(sg_node {
             kind: sg_node_kind::SG_NODE_KIND_INTERNAL_SCOPE,
             id: sg_node_id { file, local_id },
-            symbol: 0,
+            symbol: SG_NULL_HANDLE,
             is_clickable: false,
             scope: sg_node_id::default(),
         })
@@ -220,7 +221,7 @@ impl CreateStackGraph for TestGraph {
 
     fn symbol(&mut self, value: &str) -> sg_symbol_handle {
         let lengths = [value.len()];
-        let mut handles: [sg_symbol_handle; 1] = [0; 1];
+        let mut handles: [sg_symbol_handle; 1] = [SG_NULL_HANDLE; 1];
         sg_stack_graph_add_symbols(
             self.graph,
             1,
