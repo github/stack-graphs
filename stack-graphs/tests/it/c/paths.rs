@@ -38,13 +38,14 @@ use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::sg_symbol_stack;
 use stack_graphs::c::sg_symbol_stack_cells;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
+use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::paths::PathEdgeList;
 use stack_graphs::paths::ScopeStack;
 use stack_graphs::paths::SymbolStack;
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
     let lengths = [filename.len()];
-    let mut handles: [sg_file_handle; 1] = [0; 1];
+    let mut handles: [sg_file_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_add_files(
         graph,
         1,
@@ -52,13 +53,13 @@ fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
         lengths.as_ptr(),
         handles.as_mut_ptr(),
     );
-    assert!(handles[0] != 0);
+    assert!(handles[0] != SG_NULL_HANDLE);
     handles[0]
 }
 
 fn add_symbol(graph: *mut sg_stack_graph, value: &str) -> sg_symbol_handle {
     let lengths = [value.len()];
-    let mut handles: [sg_symbol_handle; 1] = [0; 1];
+    let mut handles: [sg_symbol_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_add_symbols(
         graph,
         1,
@@ -66,7 +67,7 @@ fn add_symbol(graph: *mut sg_stack_graph, value: &str) -> sg_symbol_handle {
         lengths.as_ptr(),
         handles.as_mut_ptr(),
     );
-    assert!(handles[0] != 0);
+    assert!(handles[0] != SG_NULL_HANDLE);
     handles[0]
 }
 
@@ -78,12 +79,12 @@ fn add_exported_scope(
     let node = sg_node {
         kind: sg_node_kind::SG_NODE_KIND_EXPORTED_SCOPE,
         id: sg_node_id { file, local_id },
-        symbol: 0,
+        symbol: SG_NULL_HANDLE,
         is_clickable: false,
         scope: sg_node_id::default(),
     };
     let nodes = [node];
-    let mut handles: [sg_node_handle; 1] = [0; 1];
+    let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     handles[0]
 }
@@ -93,7 +94,7 @@ fn add_exported_scope(
 
 fn empty_scope_stack() -> sg_scope_stack {
     sg_scope_stack {
-        cells: 0,
+        cells: SG_NULL_HANDLE,
         length: 0,
     }
 }
@@ -185,7 +186,7 @@ fn verify_null_symbol_stack_representation() {
     let mut rust: ControlledOption<SymbolStack> = unsafe { std::mem::transmute(bytes) };
     rust = ControlledOption::none();
     let c: sg_symbol_stack = unsafe { std::mem::transmute(rust) };
-    assert_eq!(c.cells, 0);
+    assert_eq!(c.cells, SG_NULL_HANDLE);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -256,7 +257,7 @@ fn verify_null_scope_stack_representation() {
     let mut rust: ControlledOption<ScopeStack> = unsafe { std::mem::transmute(bytes) };
     rust = ControlledOption::none();
     let c: sg_scope_stack = unsafe { std::mem::transmute(rust) };
-    assert_eq!(c.cells, 0);
+    assert_eq!(c.cells, SG_NULL_HANDLE);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -305,7 +306,7 @@ fn path_edge_list_available_in_both_directions(
         return true;
     }
     let cell = &cells[head as usize];
-    cell.reversed != 0
+    cell.reversed != SG_NULL_HANDLE
 }
 
 #[test]
@@ -364,5 +365,5 @@ fn verify_null_path_edge_list_representation() {
     let mut rust: ControlledOption<PathEdgeList> = unsafe { std::mem::transmute(bytes) };
     rust = ControlledOption::none();
     let c: sg_path_edge_list = unsafe { std::mem::transmute(rust) };
-    assert_eq!(c.cells, 0);
+    assert_eq!(c.cells, SG_NULL_HANDLE);
 }

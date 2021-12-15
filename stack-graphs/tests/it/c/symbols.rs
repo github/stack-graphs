@@ -14,6 +14,7 @@ use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_stack_graph_symbols;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::sg_symbols;
+use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::graph::Symbol;
 
 fn lengths(data: &[&'static str]) -> Vec<usize> {
@@ -75,5 +76,5 @@ fn verify_null_symbol_representation() {
     let mut rust: ControlledOption<Handle<Symbol>> = unsafe { std::mem::transmute(bytes) };
     rust = ControlledOption::none();
     let c: sg_symbol_handle = unsafe { std::mem::transmute(rust) };
-    assert_eq!(c, 0);
+    assert_eq!(c, SG_NULL_HANDLE);
 }

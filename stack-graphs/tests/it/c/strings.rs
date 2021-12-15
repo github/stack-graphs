@@ -14,6 +14,7 @@ use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_stack_graph_strings;
 use stack_graphs::c::sg_string_handle;
 use stack_graphs::c::sg_strings;
+use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::graph::InternedString;
 
 fn lengths(data: &[&'static str]) -> Vec<usize> {
@@ -75,5 +76,5 @@ fn verify_null_string_representation() {
     let mut rust: ControlledOption<Handle<InternedString>> = unsafe { std::mem::transmute(bytes) };
     rust = ControlledOption::none();
     let c: sg_string_handle = unsafe { std::mem::transmute(rust) };
-    assert_eq!(c, 0);
+    assert_eq!(c, SG_NULL_HANDLE);
 }

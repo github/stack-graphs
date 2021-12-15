@@ -122,6 +122,9 @@ pub extern "C" fn sg_partial_path_database_free(db: *mut sg_partial_path_databas
     drop(unsafe { Box::from_raw(db) })
 }
 
+/// The null value for all of our handles.
+pub const SG_NULL_HANDLE: u32 = 0;
+
 /// The handle of an empty list.
 pub const SG_LIST_EMPTY_HANDLE: u32 = 0xffffffff;
 

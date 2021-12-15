@@ -23,6 +23,7 @@ use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_partial_scope_stack;
 use stack_graphs::c::sg_partial_symbol_stack;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
+use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::partial::PartialPath;
 
 use crate::c::test_graph::TestGraph;
@@ -39,7 +40,7 @@ fn partial_symbol_stack_available_in_both_directions(
         return true;
     }
     let cell = &cells[head as usize];
-    cell.reversed != 0
+    cell.reversed != SG_NULL_HANDLE
 }
 
 fn partial_scope_stack_available_in_both_directions(
@@ -53,7 +54,7 @@ fn partial_scope_stack_available_in_both_directions(
         return true;
     }
     let cell = &cells[head as usize];
-    cell.reversed != 0
+    cell.reversed != SG_NULL_HANDLE
 }
 
 fn partial_path_edge_list_available_in_both_directions(
@@ -67,7 +68,7 @@ fn partial_path_edge_list_available_in_both_directions(
         return true;
     }
     let cell = &cells[head as usize];
-    cell.reversed != 0
+    cell.reversed != SG_NULL_HANDLE
 }
 
 fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[&str]) {

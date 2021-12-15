@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// The null value for all of our handles.
+#define SG_NULL_HANDLE 0
+
 // The handle of an empty list.
 #define SG_LIST_EMPTY_HANDLE 4294967295
 
