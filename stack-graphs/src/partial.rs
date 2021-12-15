@@ -2391,7 +2391,7 @@ impl PartialPaths {
     {
         let mut cycle_detector = CycleDetector::new();
         let mut queue = VecDeque::new();
-        queue.push_back(PartialPath::from_node(graph, self, graph.root_node()).unwrap());
+        queue.push_back(PartialPath::from_node(graph, self, StackGraph::root_node()).unwrap());
         queue.extend(
             graph
                 .nodes_for_file(file)

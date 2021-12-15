@@ -62,7 +62,7 @@ pub struct Handle<T> {
 }
 
 impl<T> Handle<T> {
-    fn new(index: NonZeroU32) -> Handle<T> {
+    pub(crate) fn new(index: NonZeroU32) -> Handle<T> {
         Handle {
             index,
             _phantom: PhantomData,

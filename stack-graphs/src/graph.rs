@@ -52,6 +52,7 @@
 //! [`File`]: struct.File.html
 
 use std::fmt::Display;
+use std::num::NonZeroU32;
 use std::ops::Index;
 use std::ops::IndexMut;
 
@@ -634,14 +635,14 @@ impl Node {
 impl StackGraph {
     /// Returns a handle to the stack graph's singleton _jump to scope_ node.
     #[inline(always)]
-    pub fn jump_to_node(&self) -> Handle<Node> {
-        self.jump_to_node
+    pub fn jump_to_node() -> Handle<Node> {
+        Handle::new(unsafe { NonZeroU32::new_unchecked(2) })
     }
 
     /// Returns a handle to the stack graph's singleton _root node_.
     #[inline(always)]
-    pub fn root_node(&self) -> Handle<Node> {
-        self.root_node
+    pub fn root_node() -> Handle<Node> {
+        Handle::new(unsafe { NonZeroU32::new_unchecked(1) })
     }
 
     /// Returns an unused [`NodeID`][] for the given file.
@@ -662,9 +663,9 @@ impl StackGraph {
         if id.file().is_some() {
             self.node_id_handles.try_handle_for_id(id)
         } else if id.is_root() {
-            Some(self.root_node())
+            Some(StackGraph::root_node())
         } else if id.is_jump_to() {
-            Some(self.jump_to_node())
+            Some(StackGraph::jump_to_node())
         } else {
             None
         }
@@ -1412,8 +1413,6 @@ pub struct StackGraph {
     pub(crate) nodes: Arena<Node>,
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
-    jump_to_node: Handle<Node>,
-    root_node: Handle<Node>,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
 }
 
@@ -1427,8 +1426,8 @@ impl StackGraph {
 impl Default for StackGraph {
     fn default() -> StackGraph {
         let mut nodes = Arena::new();
-        let root_node = nodes.add(RootNode::new().into());
-        let jump_to_node = nodes.add(JumpToNode::new().into());
+        nodes.add(RootNode::new().into());
+        nodes.add(JumpToNode::new().into());
 
         StackGraph {
             interned_strings: InternedStringArena::new(),
@@ -1441,8 +1440,6 @@ impl Default for StackGraph {
             nodes,
             source_info: SupplementalArena::new(),
             node_id_handles: NodeIDHandles::new(),
-            jump_to_node,
-            root_node,
             outgoing_edges: SupplementalArena::new(),
         }
     }
