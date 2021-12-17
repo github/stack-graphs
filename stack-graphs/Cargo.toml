@@ -20,6 +20,7 @@ copious-debugging = []
 test = false
 
 [dependencies]
+bitvec = "0.22"
 controlled-option = "0.4"
 either = "1.6"
 fxhash = "0.2"

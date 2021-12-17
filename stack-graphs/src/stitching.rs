@@ -43,6 +43,7 @@ use std::ops::Index;
 
 use crate::arena::Arena;
 use crate::arena::Handle;
+use crate::arena::HandleSet;
 use crate::arena::List;
 use crate::arena::ListArena;
 use crate::arena::ListCell;
@@ -72,6 +73,7 @@ use crate::paths::SymbolStack;
 /// needed.
 pub struct Database {
     pub(crate) partial_paths: Arena<PartialPath>,
+    pub(crate) local_nodes: HandleSet<Node>,
     symbol_stack_keys: ListArena<Handle<Symbol>>,
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
@@ -83,6 +85,7 @@ impl Database {
     pub fn new() -> Database {
         Database {
             partial_paths: Arena::new(),
+            local_nodes: HandleSet::new(),
             symbol_stack_keys: List::new_arena(),
             symbol_stack_key_cache: HashMap::new(),
             paths_by_start_node: SupplementalArena::new(),
@@ -194,6 +197,82 @@ impl Database {
             }
             result.extend(paths.iter().copied());
         }
+    }
+
+    /// Determines which nodes in the stack graph are “local”, taking into account the partial
+    /// paths in this database.
+    ///
+    /// A local node has no partial path that connects it to the root node in either direction.
+    /// That means that it cannot participate in any paths that leave the file.
+    ///
+    /// This method is meant to be used at index time, to calculate the set of nodes that are local
+    /// after having just calculated the set of partial paths for the file.
+    pub fn find_local_nodes(&mut self) {
+        // Assume that any node that is the start or end of a partial path is local to this file
+        // until we see a path connecting the root node to it (in either direction).
+        self.local_nodes.clear();
+        for handle in self.iter_partial_paths() {
+            self.local_nodes.add(self[handle].start_node);
+            self.local_nodes.add(self[handle].end_node);
+        }
+
+        // The root node and jump-to-scope node are the most obvious non-local nodes.
+        let mut nonlocal_start_nodes = HandleSet::new();
+        let mut nonlocal_end_nodes = HandleSet::new();
+        self.local_nodes.remove(StackGraph::root_node());
+        nonlocal_start_nodes.add(StackGraph::root_node());
+        nonlocal_end_nodes.add(StackGraph::root_node());
+        self.local_nodes.remove(StackGraph::jump_to_node());
+        nonlocal_start_nodes.add(StackGraph::jump_to_node());
+        nonlocal_end_nodes.add(StackGraph::jump_to_node());
+
+        // Other nodes are non-local if we see any partial path that connects it to another
+        // non-local node.  Repeat until we reach a fixed point.
+        let mut keep_checking = true;
+        while keep_checking {
+            keep_checking = false;
+            for handle in self.iter_partial_paths() {
+                let start_node = self[handle].start_node;
+                let end_node = self[handle].end_node;
+
+                // First check forwards paths, where non-localness propagates from the start node
+                // of each path.
+                let start_node_is_nonlocal = nonlocal_start_nodes.contains(start_node);
+                let end_node_is_nonlocal = nonlocal_start_nodes.contains(end_node);
+                if start_node_is_nonlocal && !end_node_is_nonlocal {
+                    keep_checking = true;
+                    nonlocal_start_nodes.add(end_node);
+                    self.local_nodes.remove(end_node);
+                }
+
+                // Then check reverse paths, where non-localness propagates from the end node of
+                // each path.
+                let start_node_is_nonlocal = nonlocal_end_nodes.contains(start_node);
+                let end_node_is_nonlocal = nonlocal_end_nodes.contains(end_node);
+                if !start_node_is_nonlocal && end_node_is_nonlocal {
+                    keep_checking = true;
+                    nonlocal_end_nodes.add(start_node);
+                    self.local_nodes.remove(start_node);
+                }
+            }
+        }
+    }
+
+    /// Marks that a stack graph node is local.
+    ///
+    /// This method is meant to be used at query time.  You will have precalculated the set of
+    /// local nodes for a file at index time; at query time, you will load this information from
+    /// your storage layer and use this method to update our internal view of which nodes are
+    /// local.
+    pub fn mark_local_node(&mut self, node: Handle<Node>) {
+        self.local_nodes.add(node);
+    }
+
+    /// Returns whether a node is local according to the partial paths in this database.  You must
+    /// have already called [`find_local_nodes`][] or [`mark_local_node`][], depending on whether
+    /// it is index time or query time.
+    pub fn node_is_local(&self, node: Handle<Node>) -> bool {
+        self.local_nodes.contains(node)
     }
 
     /// Returns an iterator over all of the handles of all of the partial paths in this database.

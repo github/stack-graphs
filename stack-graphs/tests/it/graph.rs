@@ -169,7 +169,7 @@ fn can_add_and_remove_edges() {
 #[test]
 fn singleton_nodes_have_correct_ids() {
     let graph = StackGraph::new();
-    let root_handle = graph.root_node();
+    let root_handle = StackGraph::root_node();
     let root = &graph[root_handle];
     assert!(root.is_root());
     assert!(root.id().is_root());

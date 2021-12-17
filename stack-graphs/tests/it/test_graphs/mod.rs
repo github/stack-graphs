@@ -101,7 +101,7 @@ impl CreateStackGraph for StackGraph {
     }
 
     fn jump_to_node(&mut self) -> Handle<Node> {
-        StackGraph::jump_to_node(self)
+        StackGraph::jump_to_node()
     }
 
     fn pop_scoped_symbol(
@@ -158,7 +158,7 @@ impl CreateStackGraph for StackGraph {
     }
 
     fn root_node(&mut self) -> Handle<Node> {
-        StackGraph::root_node(self)
+        StackGraph::root_node()
     }
 
     fn symbol(&mut self, value: &str) -> Handle<Symbol> {
