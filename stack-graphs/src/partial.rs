@@ -199,6 +199,12 @@ impl Display for SymbolStackVariable {
     }
 }
 
+impl From<NonZeroU32> for SymbolStackVariable {
+    fn from(value: NonZeroU32) -> SymbolStackVariable {
+        SymbolStackVariable(value)
+    }
+}
+
 impl Into<u32> for SymbolStackVariable {
     fn into(self) -> u32 {
         self.0.get()
@@ -261,6 +267,12 @@ impl ScopeStackVariable {
 impl Display for ScopeStackVariable {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "${}", self.0.get())
+    }
+}
+
+impl From<NonZeroU32> for ScopeStackVariable {
+    fn from(value: NonZeroU32) -> ScopeStackVariable {
+        ScopeStackVariable(value)
     }
 }
 
