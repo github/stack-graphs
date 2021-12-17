@@ -303,6 +303,17 @@ impl<H, T> SupplementalArena<H, T> {
             .get_mut(handle.as_usize())
             .map(|x| unsafe { &mut *(x.as_mut_ptr()) })
     }
+
+    /// Returns a pointer to this arena's storage.
+    pub(crate) fn as_ptr(&self) -> *const T {
+        self.items.as_ptr() as *const T
+    }
+
+    /// Returns the number of instances stored in this arena.
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
 }
 
 impl<H, T> SupplementalArena<H, T>

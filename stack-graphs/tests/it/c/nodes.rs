@@ -13,14 +13,21 @@ use stack_graphs::c::sg_node;
 use stack_graphs::c::sg_node_handle;
 use stack_graphs::c::sg_node_id;
 use stack_graphs::c::sg_node_kind;
+use stack_graphs::c::sg_node_source_info;
 use stack_graphs::c::sg_nodes;
+use stack_graphs::c::sg_source_info;
+use stack_graphs::c::sg_span;
 use stack_graphs::c::sg_stack_graph;
 use stack_graphs::c::sg_stack_graph_add_files;
+use stack_graphs::c::sg_stack_graph_add_source_infos;
+use stack_graphs::c::sg_stack_graph_add_strings;
 use stack_graphs::c::sg_stack_graph_add_symbols;
 use stack_graphs::c::sg_stack_graph_free;
 use stack_graphs::c::sg_stack_graph_get_or_create_nodes;
 use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_stack_graph_nodes;
+use stack_graphs::c::sg_stack_graph_source_infos;
+use stack_graphs::c::sg_string_handle;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::SG_JUMP_TO_NODE_HANDLE;
 use stack_graphs::c::SG_JUMP_TO_NODE_ID;
@@ -59,6 +66,20 @@ fn add_symbol(graph: *mut sg_stack_graph, symbol: &str) -> sg_symbol_handle {
         handles.as_mut_ptr(),
     );
     assert!(handles[0] != SG_NULL_HANDLE);
+    handles[0]
+}
+
+fn add_string(graph: *mut sg_stack_graph, string: &str) -> sg_string_handle {
+    let lengths = [string.len()];
+    let mut handles: [sg_string_handle; 1] = [0; 1];
+    sg_stack_graph_add_strings(
+        graph,
+        1,
+        string.as_bytes().as_ptr() as *const c_char,
+        lengths.as_ptr(),
+        handles.as_mut_ptr(),
+    );
+    assert!(handles[0] != 0);
     handles[0]
 }
 
@@ -625,5 +646,54 @@ fn push_symbol_cannot_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
+    sg_stack_graph_free(graph);
+}
+
+//-------------------------------------------------------------------------------------------------
+// Source info
+
+fn get_source_info(graph: *const sg_stack_graph, node: sg_node_handle) -> Option<sg_source_info> {
+    let infos = sg_stack_graph_source_infos(graph);
+    let infos = unsafe { std::slice::from_raw_parts(infos.infos, infos.count) };
+    infos.get(node as usize).copied()
+}
+
+#[test]
+fn can_create_source_info() {
+    let graph = sg_stack_graph_new();
+    let file = add_file(graph, "test.py");
+    let nodes = [
+        exported_scope(file, 0),
+        exported_scope(file, 1),
+        exported_scope(file, 2),
+    ];
+    let mut handles: [sg_node_handle; 3] = [0; 3];
+    sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
+
+    let syntax_type = add_string(graph, "function");
+    let containing_line = add_string(graph, "def foo():");
+
+    let mut infos = [sg_node_source_info {
+        node: handles[1],
+        source_info: sg_source_info {
+            span: sg_span::default(),
+            syntax_type,
+            containing_line,
+        },
+    }];
+    infos[0].source_info.span.start.line = 17;
+    infos[0].source_info.span.end.column.utf8_offset = 23;
+    sg_stack_graph_add_source_infos(graph, infos.len(), infos.as_ptr());
+
+    assert!(get_source_info(graph, handles[0]).is_some());
+    assert!(get_source_info(graph, handles[1]).is_some());
+    assert!(get_source_info(graph, handles[2]).is_none());
+
+    let actual = get_source_info(graph, handles[1]).unwrap();
+    assert_eq!(actual.syntax_type, syntax_type);
+    assert_eq!(actual.containing_line, containing_line);
+    assert_eq!(actual.span.start.line, 17);
+    assert_eq!(actual.span.end.column.utf8_offset, 23);
+
     sg_stack_graph_free(graph);
 }

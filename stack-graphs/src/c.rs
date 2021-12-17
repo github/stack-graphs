@@ -618,6 +618,120 @@ pub extern "C" fn sg_stack_graph_add_edges(
 }
 
 //-------------------------------------------------------------------------------------------------
+// Source info
+
+/// Contains information about a range of code in a source code file.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct sg_source_info {
+    /// The location in its containing file of the source code that this node represents.
+    pub span: sg_span,
+    /// The kind of syntax entity this node represents (e.g. `function`, `class`, `method`, etc.).
+    pub syntax_type: sg_string_handle,
+    /// The full content of the line containing this node in its source file.
+    pub containing_line: sg_string_handle,
+}
+
+/// All of the position information that we have about a range of content in a source file
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct sg_span {
+    pub start: sg_position,
+    pub end: sg_position,
+}
+
+/// All of the position information that we have about a character in a source file
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct sg_position {
+    /// The 0-indexed line number containing the character
+    pub line: usize,
+    /// The offset of the character within its containing line, expressed as both a UTF-8 byte
+    /// index and a UTF-16 code point index
+    pub column: sg_offset,
+    /// The UTF-8 byte indexes (within the file) of the start and end of the line containing the
+    /// character
+    pub containing_line: sg_utf8_bounds,
+    /// The UTF-8 byte indexes (within the file) of the start and end of the line containing the
+    /// character, with any leading and trailing whitespace removed
+    pub trimmed_line: sg_utf8_bounds,
+}
+
+/// The offset of a character within a string (typically a line of source code), using several
+/// different units
+///
+/// All offsets are 0-indexed.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct sg_offset {
+    /// The number of UTF-8-encoded bytes appearing before this character in the string
+    pub utf8_offset: usize,
+    /// The number of UTF-16 code units appearing before this character in the string
+    pub utf16_offset: usize,
+}
+
+/// A half-open range identifying a range of characters in a string.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct sg_utf8_bounds {
+    /// The UTF-8 byte index of the first character in the range.
+    pub start: usize,
+    /// The UTF-8 byte index of the first character _after_ the range.
+    pub end: usize,
+}
+
+/// An array of all of the source information in a stack graph.  Source information is associated
+/// with nodes, so node handles are indices into this array.  It is _not_ guaranteed that there
+/// will an entry in this array for every node handle; if you have a node handle whose value is
+/// larger than `count`, then use a 0-valued `sg_source_info` if you need source information for
+/// that node.
+///
+/// There will never be a valid entry at index 0; a handle with the value 0 represents a missing
+/// node.
+#[repr(C)]
+pub struct sg_source_infos {
+    pub infos: *const sg_source_info,
+    pub count: usize,
+}
+
+/// Returns a reference to the array of source information in this stack graph.  The resulting
+/// array pointer is only valid until the next call to any function that mutates the stack graph.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_source_infos(graph: *const sg_stack_graph) -> sg_source_infos {
+    let graph = unsafe { &(*graph).inner };
+    sg_source_infos {
+        infos: graph.source_info.as_ptr() as *const sg_source_info,
+        count: graph.source_info.len(),
+    }
+}
+
+/// A tuple of a node handle and source information for that node.  Used with the
+/// `sg_add_source_info` function to add source information to a stack graph.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct sg_node_source_info {
+    pub node: sg_node_handle,
+    pub source_info: sg_source_info,
+}
+
+/// Adds new source information to the stack graph.  You provide an array of `sg_node_source_info`
+/// instances.  Any existing source information for any node mentioned in the array is overwritten.
+#[no_mangle]
+pub extern "C" fn sg_stack_graph_add_source_infos(
+    graph: *mut sg_stack_graph,
+    count: usize,
+    infos: *const sg_node_source_info,
+) {
+    let graph = unsafe { &mut (*graph).inner };
+    let infos = unsafe { std::slice::from_raw_parts(infos, count) };
+    for i in 0..count {
+        let node = unsafe { std::mem::transmute(infos[i].node) };
+        let info = graph.source_info_mut(node);
+        *info = unsafe { std::mem::transmute(infos[i].source_info) };
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Symbol stacks
 
 /// A symbol with a possibly empty list of exported scopes attached to it.
