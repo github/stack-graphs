@@ -9,14 +9,20 @@
 //!
 //! When writing a tool that analyzes or operates on source code, there's a good chance you need to
 //! interoperate with the [Language Server Protocol][lsp].  This seemingly simple requirement makes
-//! it surprisingly difficult to deal with _character locations_.  This is because Rust wants to
-//! store Unicode string content (i.e., the source code you're analyzing) in UTF-8, while
-//! LSP wants to specify character locations using [_UTF-16 code points_][lsp-utf16].
+//! it surprisingly difficult to deal with _character locations_.  This is because Rust stores
+//! Unicode string content (i.e., the source code you're analyzing) in UTF-8, while LSP specifies
+//! character locations using [_UTF-16 code units_][lsp-utf16].
 //!
-//! That means that we ideally need to keep track of each source code position using at least two
-//! units: the UTF-8 offset within the file or containing line (to make it easy to index into UTF-8
-//! encoded strings), as well as the UTF-16 code point offset within the line (to make it possible
-//! to generate `Position` values for LSP).
+//! For some background, Unicode characters, or code points, are encoded as one or more code units.
+//! In UTF-8 a code unit is 1 byte, and a character is encoded in 1–4 code units (1–4 bytes).  In
+//! UTF-16 a code unit is 2 bytes, and characters are encoded in 1–2 code units (2 or 4 bytes).
+//! Rust strings are encoded as UTF-8, and indexed by byte (which is the same as by code unit).
+//! Indices are only valid if they point to the first code unit of a code point.
+//!
+//! We keep track of each source code position using two units: the UTF-8 byte position within the
+//! file or containing line, which can be used to index into UTF-8 encoded `str` and `[u8]` data,
+//! and the UTF-16 code unit position within the line, which can be used to generate `Position`
+//! values for LSP.
 //!
 //! [lsp]: https://microsoft.github.io/language-server-protocol/
 //! [lsp-utf16]: https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocuments
@@ -36,7 +42,7 @@ pub struct Position {
     /// The 0-indexed line number containing the character
     pub line: usize,
     /// The offset of the character within its containing line, expressed as both a UTF-8 byte
-    /// index and a UTF-16 code point index
+    /// index and a UTF-16 code unit index
     pub column: Offset,
     /// The UTF-8 byte indexes (within the file) of the start and end of the line containing the
     /// character
@@ -182,7 +188,7 @@ pub struct PositionedSubstring<'a> {
     pub content: &'a str,
     /// The UTF-8 byte offsets of the beginning and end of the substring within the larger string
     pub utf8_bounds: Range<usize>,
-    /// The number of UTF-16 code points in the substring
+    /// The number of UTF-16 code units in the substring
     pub utf16_length: usize,
 }
 
