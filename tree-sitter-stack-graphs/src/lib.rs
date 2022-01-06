@@ -5,6 +5,8 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
+use lsp_positions::SpanCalculator;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
@@ -78,6 +80,8 @@ impl StackGraphLanguage<'_> {
             stack_graph,
             file,
             graph: &graph,
+            source,
+            span_calculator: SpanCalculator::new(source),
         };
         loader.load()
     }
@@ -102,13 +106,15 @@ struct StackGraphLoader<'a> {
     stack_graph: &'a mut StackGraph,
     file: Handle<File>,
     graph: &'a Graph<'a>,
+    source: &'a str,
+    span_calculator: SpanCalculator<'a>,
 }
 
 impl<'a> StackGraphLoader<'a> {
     fn load(&mut self) -> Result<(), LoadError> {
         for node_ref in self.graph.iter_nodes() {
             let node = &self.graph[node_ref];
-            match get_node_type(node)? {
+            let handle = match get_node_type(node)? {
                 NodeType::Definition => self.load_definition(node, node_ref)?,
                 NodeType::DropScopes => self.load_drop_scopes(node_ref),
                 NodeType::ExportedScope => self.load_exported_scope(node_ref),
@@ -117,6 +123,7 @@ impl<'a> StackGraphLoader<'a> {
                 NodeType::PushSymbol => self.load_push_symbol(node, node_ref)?,
                 NodeType::Reference => self.load_reference(node, node_ref)?,
             };
+            self.load_span(node, handle)?;
         }
         Ok(())
     }
@@ -259,5 +266,19 @@ impl<'a> StackGraphLoader<'a> {
             .stack_graph
             .add_push_symbol_node(id, symbol, true)
             .unwrap())
+    }
+
+    fn load_span(&mut self, node: &GraphNode, node_handle: Handle<Node>) -> Result<(), LoadError> {
+        let source_node = match node.attributes.get("source_node") {
+            Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
+            None => return Ok(()),
+        };
+        let span = self.span_calculator.for_node(source_node);
+        let containing_line = &self.source[span.start.containing_line.clone()];
+        let containing_line = self.stack_graph.add_string(containing_line);
+        let source_info = self.stack_graph.source_info_mut(node_handle);
+        source_info.span = span;
+        source_info.containing_line = ControlledOption::some(containing_line);
+        Ok(())
     }
 }
