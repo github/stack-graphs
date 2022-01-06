@@ -247,3 +247,33 @@ fn cannot_create_reference_node_without_symbol() {
     let result = load_stack_graph(python, tsg);
     assert!(matches!(result, Err(LoadError::MissingSymbol(_))));
 }
+
+#[test]
+fn can_calculate_spans() {
+    let tsg = r#"
+      (identifier) @id {
+         node result
+         attr (result) type = "definition", symbol = "test", source_node = @id
+      }
+    "#;
+    let python = "  a  ";
+    let graph = load_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.iter_nodes().nth(2).unwrap();
+    let source_info = graph.source_info(node_handle).unwrap();
+
+    let span = format!(
+        "{}:{}-{}:{}",
+        source_info.span.start.line,
+        source_info.span.start.column.utf8_offset,
+        source_info.span.end.line,
+        source_info.span.end.column.utf8_offset,
+    );
+    assert_eq!("0:2-0:3", span);
+
+    let containing_line = source_info.containing_line.into_option().unwrap();
+    let containing_line = &graph[containing_line];
+    assert_eq!(containing_line, "  a  ");
+
+    let trimmed_line = &python[source_info.span.start.trimmed_line.clone()];
+    assert_eq!(trimmed_line, "a");
+}
