@@ -17,6 +17,7 @@ edition = "2018"
 test = false
 
 [dependencies]
+controlled-option = ">=0.4"
 lsp-positions = { version="0.2", path="../lsp-positions" }
 stack-graphs = { version="0.6", path="../stack-graphs" }
 thiserror = "1.0"
