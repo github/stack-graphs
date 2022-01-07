@@ -5,6 +5,229 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+//! This crate lets you construct [stack graphs][] using tree-sitter's [graph construction DSL][].
+//! The graph DSL lets you construct arbitrary graph structures from the parsed syntax tree of a
+//! source file.  If you construct a graph using the vocabulary of attributes described below, then
+//! the result of executing the graph DSL will be a valid stack graph, which we can then use for
+//! name binding lookups.
+//!
+//! ## Prerequisites
+//!
+//! [stack graphs]: https://docs.rs/stack-graphs/*/
+//! [graph construction DSL]: https://docs.rs/tree-sitter-graph/*/
+//!
+//! To process a particular source language, you will first need a tree-sitter grammar for that
+//! language.  There are already tree-sitter grammars [available][] for many languages.  If you do
+//! not have a tree-sitter grammar for your language, you will need to create that first.  (Check
+//! out the tree-sitter [discussion forum][] if you have questions or need pointers on how to do
+//! that.)
+//!
+//! [available]: https://tree-sitter.github.io/tree-sitter/#available-parsers
+//! [discussion forum]: https://github.com/tree-sitter/tree-sitter/discussions
+//!
+//! You will then need to create _stack graph construction rules_ for your language.  These rules
+//! are implemented using tree-sitter's [graph construction DSL][].  They define the particular
+//! stack graph nodes and edges that should be created for each part of the parsed syntax tree of a
+//! source file.
+//!
+//! ## Graph DSL vocabulary
+//!
+//! **Please note**: This documentation assumes you are already familiar with stack graphs, and how
+//! to use different stack graph node types, and the connectivity between nodes, to implement the
+//! name binding semantics of your language.  We assume that you know what kind of stack graph you
+//! want to produce; this documentation focuses only on the mechanics of _how_ to create that stack
+//! graph content.
+//!
+//! As mentioned above, your stack graph construction rules should create stack graph nodes and
+//! edges from the parsed content of a source file.  You will use TSG [stanzas][] to match on
+//! different parts of the parsed syntax tree, and create stack graph content for each match.
+//!
+//! ### Creating stack graph nodes
+//!
+//! To create a stack graph node for each identifier in a Python file, you could use the following
+//! TSG stanza:
+//!
+//! ``` skip
+//! (identifier) {
+//!   node new_node
+//! }
+//! ```
+//!
+//! (Here, `node` is a TSG statement that creates a new node, and `new_node` is the name of a local
+//! variable that the new node is assigned to, letting you refer to the new node in the rest of the
+//! stanza.)
+//!
+//! [stanzas]: https://docs.rs/tree-sitter-graph/*/tree_sitter_graph/reference/index.html#high-level-structure
+//!
+//! By default, this new node will be an _internal scope node_.  If you need to create a different
+//! kind of stack graph node, set the `type` attribute on the new node:
+//!
+//! ``` skip
+//! (identifier) {
+//!   node new_node
+//!   attr (new_node) type = "drop"
+//! }
+//! ```
+//!
+//! The valid `type` values are:
+//!
+//! - `definition`: a _definition_ node
+//! - `drop`: a _drop scopes_ node
+//! - `exported` or `endpoint`: an _exported scope_ node
+//! - `internal`: an _internal scope node_ (note that this is the default if you don't provide a
+//!   `type` attribute)
+//! - `pop`: a _pop symbol_ or _pop scoped symbol_ node
+//! - `push`: a _push symbol_ or _push scoped symbol_ node
+//! - `reference`: a _reference_ node
+//!
+//! Certain node types — `definition`, `pop`, `push`, and `reference` — also require you to provide
+//! a `symbol` attribute.  Its value must be a string, but will typically come from the content of
+//! a parsed syntax node using the [`source-text`][] function and a syntax capture:
+//!
+//! [`source-text`]: https://docs.rs/tree-sitter-graph/*/tree_sitter_graph/reference/functions/index.html#source-text
+//!
+//! ``` skip
+//! (identifier) @id {
+//!   node new_node
+//!   attr (new_node) type = "reference", symbol = (source-text @id)
+//! }
+//! ```
+//!
+//! To make a _push scoped symbol_ node, you must provide a `scope` attribute.  Its value must be a
+//! reference to an `exported` node that you've already created. (This is the exported scope node
+//! that will be pushed onto the scope stack.)  For instance:
+//!
+//! ``` skip
+//! (identifier) @id {
+//!   node new_exported_scope_node
+//!   attr (new_exported_scope_node) type = "exported"
+//!   node new_push_scoped_symbol_node
+//!   attr (new_push_scoped_symbol_node)
+//!     type = "push",
+//!     symbol = (source-text @id),
+//!     scope = new_exported_scope_node
+//! }
+//! ```
+//!
+//! To make a _pop scoped symbol_ node, you must provide a `scoped` attribute, whose value must be
+//! `#true`.  (You don't know in advance which particular scope stack will be popped off.) For
+//! instance:
+//!
+//! ``` skip
+//! (identifier) @id {
+//!   node new_pop_scoped_symbol_node
+//!   attr (new_pop_scoped_symbol_node)
+//!     type = "pop",
+//!     symbol = (source-text @id),
+//!     scoped = #true
+//! }
+//! ```
+//!
+//! ### Annotating nodes with location information
+//!
+//! You can annotate any stack graph node that you create with location information, identifying
+//! the portion of the source file that the node “belongs to”.  This is _required_ for `definition`
+//! and `reference` nodes, since the location information determines which parts of the source file
+//! the user can “click on”, and the “destination” of any code navigation queries the user makes.
+//! To do this, add a `source_node` attribute, whose value is a syntax node capture:
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   node def
+//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//! }
+//! ```
+//!
+//! Note how in this example, we use a different syntax node for the “target” of the definition
+//! (the entirety of the function definition) and for the _name_ of the definition (the content of
+//! the function's `name`).
+//!
+//! ### Connecting stack graph nodes with edges
+//!
+//! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   node def
+//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   node body
+//!   edge def -> body
+//! }
+//! ```
+//!
+//! To implement shadowing (where later definitions of the same name in the same scope “replace” or
+//! “shadow” earlier ones), you can add a `precedence` attribute to each edge to indicate which
+//! paths are prioritized:
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   node def
+//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   node body
+//!   edge def -> body
+//!   attr (def -> body) precedence = 1
+//! }
+//! ```
+//!
+//! (If you don't specify a `precedence`, the default is 0.)
+//!
+//! ### Referring to the singleton nodes
+//!
+//! The _root node_ and _jump to scope node_ are singleton nodes that always exist for all stack
+//! graphs.  You can refer to them using the `ROOT_NODE` and `JUMP_TO_SCOPE_NODE` global variables:
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   node def
+//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   edge (ROOT_NODE -> def)
+//! }
+//! ```
+//!
+//! ## Using this crate from Rust
+//!
+//! If you need very fine-grained control over how to use the resulting stack graphs, you can
+//! construct and operate on [`StackGraph`][stack_graphs::graph::StackGraph] instances directly
+//! from Rust code.  You will need Rust bindings for the tree-sitter grammar for your source
+//! language — for instance, [`tree-sitter-python`][].  Grammar Rust bindings provide two global
+//! symbols that you will need: [`language`][] and [`STACK_GRAPH_RULES`][].
+//!
+//! [`tree-sitter-python`]: https://docs.rs/tree-sitter-python/*/
+//! [`language`]: https://docs.rs/tree-sitter-python/*/tree_sitter_python/fn.language.html
+//! [`STACK_GRAPH_RULES`]: https://docs.rs/tree-sitter-python/*/tree_sitter_python/constant.STACK_GRAPH_RULES.html
+//!
+//! Once you have those, and the contents of the source file you want to analyze, you can construct
+//! a stack graph as follows:
+//!
+//! ```
+//! # use stack_graphs::graph::StackGraph;
+//! # use tree_sitter_stack_graphs::StackGraphLanguage;
+//! # use tree_sitter_stack_graphs::LoadError;
+//! #
+//! # // This module is a hack to override the STACK_GRAPH_RULES from the actual tree-sitter-python
+//! # // crate.  This documentation test is not meant to test Python's actual stack graph
+//! # // construction rules.  An empty TSG file is perfectly valid (it just won't produce any stack
+//! # // graph content).  This minimizes the amount of work that we do when running `cargo test`.
+//! # mod tree_sitter_python {
+//! #   pub use ::tree_sitter_python::language;
+//! #   pub static STACK_GRAPH_RULES: &str = "";
+//! # }
+//! #
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let python_source = r#"
+//!   import sys
+//!   print(sys.path)
+//! "#;
+//! let grammar = tree_sitter_python::language();
+//! let tsg_source = tree_sitter_python::STACK_GRAPH_RULES;
+//! let mut language = StackGraphLanguage::new(grammar, tsg_source)?;
+//! let mut stack_graph = StackGraph::new();
+//! let file_handle = stack_graph.get_or_create_file("test.py");
+//! language.load_stack_graph(&mut stack_graph, file_handle, python_source)?;
+//! # Ok(())
+//! # }
+//! ```
+
 use controlled_option::ControlledOption;
 use lsp_positions::SpanCalculator;
 use stack_graphs::arena::Handle;
