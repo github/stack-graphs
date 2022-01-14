@@ -17,6 +17,7 @@ struct Cli {
     command: Commands,
 }
 
+mod loader;
 mod test;
 
 #[derive(Subcommand)]
