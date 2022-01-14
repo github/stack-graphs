@@ -22,7 +22,7 @@ name = "tree-sitter-stack-graphs"
 required-features = ["cli"]
 
 [features]
-cli = ["clap", "env_logger", "tree-sitter-config"]
+cli = ["clap", "env_logger", "tree-sitter-config", "walkdir"]
 
 [dependencies]
 anyhow = "1.0"
@@ -39,6 +39,7 @@ tree-sitter = ">= 0.19"
 tree-sitter-config = { version = "0.19", optional = true }
 tree-sitter-graph = "0.3"
 tree-sitter-loader = "0.20"
+walkdir = { version = "2.3", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
