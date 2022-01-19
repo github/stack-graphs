@@ -20,6 +20,7 @@ struct Cli {
     command: Commands,
 }
 
+mod functions; // move to lib or tree-sitter-graph
 mod loader;
 mod test;
 
