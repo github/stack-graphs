@@ -5,7 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use anyhow::anyhow;
 use anyhow::Result;
 use clap::AppSettings;
 use clap::Parser;
@@ -21,14 +20,16 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Subcommand)]
-enum Commands {}
+mod test;
 
-#[allow(unused_variables)]
-#[allow(unreachable_code)]
+#[derive(Subcommand)]
+enum Commands {
+    Test(test::Command),
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
-        _ => Err(anyhow!("no commands defined")),
+        Commands::Test(cmd) => cmd.run(),
     }
 }
