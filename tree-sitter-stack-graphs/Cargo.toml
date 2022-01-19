@@ -8,7 +8,8 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 authors = [
   "GitHub <opensource+stack-graphs@github.com>",
-  "Douglas Creager <dcreager@dcreager.net>"
+  "Douglas Creager <dcreager@dcreager.net>",
+  "Hendrik van Antwerpen <hendrikvanantwerpen@github.com>",
 ]
 edition = "2018"
 
@@ -16,17 +17,27 @@ edition = "2018"
 # All of our tests are in the tests/it "integration" test executable.
 test = false
 
+[[bin]]
+name = "tree-sitter-stack-graphs"
+required-features = ["cli"]
+
+[features]
+cli = ["clap", "env_logger", "tree-sitter-config"]
+
 [dependencies]
 anyhow = "1.0"
+clap = { version = "3", optional = true, features=["derive"] }
 controlled-option = ">=0.4"
+env_logger = { version = "0.9", optional = true }
 itertools = "0.10"
 lazy_static = "1.4"
+log = "0.4"
 lsp-positions = { version="0.2", path="../lsp-positions" }
 regex = "1"
 stack-graphs = { version="0.6", path="../stack-graphs" }
 thiserror = "1.0"
 tree-sitter = ">= 0.19"
-tree-sitter-config = "0.19"
+tree-sitter-config = { version = "0.19", optional = true }
 tree-sitter-graph = "0.3"
 tree-sitter-loader = "0.20"
 
