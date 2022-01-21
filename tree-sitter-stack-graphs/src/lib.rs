@@ -201,6 +201,8 @@
 //!
 //! ```
 //! # use stack_graphs::graph::StackGraph;
+//! # use tree_sitter_graph::Variables;
+//! # use tree_sitter_graph::functions::Functions;
 //! # use tree_sitter_stack_graphs::StackGraphLanguage;
 //! # use tree_sitter_stack_graphs::LoadError;
 //! #
@@ -220,10 +222,12 @@
 //! "#;
 //! let grammar = tree_sitter_python::language();
 //! let tsg_source = tree_sitter_python::STACK_GRAPH_RULES;
-//! let mut language = StackGraphLanguage::new(grammar, tsg_source)?;
+//! let functions = Functions::stdlib();
+//! let mut language = StackGraphLanguage::from_str(grammar, tsg_source, functions)?;
 //! let mut stack_graph = StackGraph::new();
 //! let file_handle = stack_graph.get_or_create_file("test.py");
-//! language.load_stack_graph(&mut stack_graph, file_handle, python_source)?;
+//! let mut globals = Variables::new();
+//! language.build_stack_graph_into(&mut stack_graph, file_handle, python_source, &mut globals)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -251,16 +255,33 @@ pub struct StackGraphLanguage {
 }
 
 impl StackGraphLanguage {
-    /// Creates a new stack graph language, loading in the TSG graph construction rules from a
-    /// string.
+    /// Creates a new stack graph language for the given language and
+    /// TSG stack graph construction rules.
     pub fn new(
         language: tree_sitter::Language,
+        tsg: tree_sitter_graph::ast::File,
+        functions: tree_sitter_graph::functions::Functions,
+    ) -> Result<StackGraphLanguage, LanguageError> {
+        debug_assert_eq!(language, tsg.language);
+        let mut parser = Parser::new();
+        parser.set_language(language)?;
+        Ok(StackGraphLanguage {
+            parser,
+            tsg,
+            functions,
+        })
+    }
+
+    /// Creates a new stack graph language for the given language, loading the
+    /// TSG stack graph construction rules from a string.
+    pub fn from_str(
+        language: tree_sitter::Language,
         tsg_source: &str,
+        functions: tree_sitter_graph::functions::Functions,
     ) -> Result<StackGraphLanguage, LanguageError> {
         let mut parser = Parser::new();
         parser.set_language(language)?;
         let tsg = tree_sitter_graph::ast::File::from_str(language, tsg_source)?;
-        let functions = Functions::stdlib();
         Ok(StackGraphLanguage {
             parser,
             tsg,
@@ -283,18 +304,19 @@ impl StackGraphLanguage {
     /// nodes and edges in `stack_graph`.  Any new nodes that we create will belong to `file`.
     /// (The source file must be implemented in this language, otherwise you'll probably get a
     /// parse error.)
-    pub fn load_stack_graph(
+    pub fn build_stack_graph_into(
         &mut self,
         stack_graph: &mut StackGraph,
         file: Handle<File>,
         source: &str,
+        globals: &mut Variables,
     ) -> Result<(), LoadError> {
         let tree = self
             .parser
             .parse(source, None)
             .ok_or(LoadError::ParseError)?;
+
         let mut graph = Graph::new();
-        let mut globals = Variables::new();
         globals
             .add("ROOT_NODE".into(), graph.add_graph_node().into())
             .unwrap();
@@ -302,14 +324,9 @@ impl StackGraphLanguage {
             .add("JUMP_TO_SCOPE_NODE".into(), graph.add_graph_node().into())
             .unwrap();
         self.tsg
-            .execute_into(&mut graph, &tree, source, &mut self.functions, &mut globals)?;
-        let mut loader = StackGraphLoader {
-            stack_graph,
-            file,
-            graph: &graph,
-            source,
-            span_calculator: SpanCalculator::new(source),
-        };
+            .execute_lazy_into(&mut graph, &tree, source, &mut self.functions, globals)?;
+
+        let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
         loader.load()
     }
 }
@@ -335,6 +352,24 @@ struct StackGraphLoader<'a> {
     graph: &'a Graph<'a>,
     source: &'a str,
     span_calculator: SpanCalculator<'a>,
+}
+
+impl<'a> StackGraphLoader<'a> {
+    fn new(
+        stack_graph: &'a mut StackGraph,
+        file: Handle<File>,
+        graph: &'a Graph<'a>,
+        source: &'a str,
+    ) -> Self {
+        let span_calculator = SpanCalculator::new(source);
+        StackGraphLoader {
+            stack_graph,
+            file,
+            graph,
+            source,
+            span_calculator,
+        }
+    }
 }
 
 impl<'a> StackGraphLoader<'a> {
