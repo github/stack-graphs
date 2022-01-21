@@ -245,6 +245,7 @@ use tree_sitter_graph::functions::Functions;
 use tree_sitter_graph::graph::Graph;
 use tree_sitter_graph::graph::GraphNode;
 use tree_sitter_graph::graph::GraphNodeRef;
+use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::Variables;
 
 /// Holds information about how to construct stack graphs for a particular language
@@ -326,8 +327,103 @@ impl StackGraphLanguage {
         self.tsg
             .execute_lazy_into(&mut graph, &tree, source, &mut self.functions, globals)?;
 
+        GraphConverter::convert_shorthands(&mut graph, source)?;
+
         let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
         loader.load()
+    }
+}
+
+struct GraphConverter;
+
+impl GraphConverter {
+    fn convert_shorthands<'a>(graph: &mut Graph<'a>, source: &str) -> Result<(), LoadError> {
+        for node_ref in graph.iter_nodes().skip(2) {
+            Self::convert_node_shorthands(graph, source, node_ref).map_err(|(name, value)| {
+                LoadError::ConversionError(
+                    name.to_string(),
+                    format!("{}", node_ref),
+                    format!("{}", value),
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    fn convert_node_shorthands<'a>(
+        graph: &mut Graph<'a>,
+        source: &str,
+        node_ref: GraphNodeRef,
+    ) -> Result<(), (&'static str, Value)> {
+        let node = &graph[node_ref];
+        let mut new_attributes: Vec<(&'static str, Value)> = Vec::new();
+        if let Some(value) = node.attributes.get("push") {
+            new_attributes.push(("type", "push".into()));
+            let symbol = Self::convert_symbol(value).map_err(|_| ("push".into(), value.clone()))?;
+            new_attributes.push(("symbol", symbol.clone().into()));
+        } else if let Some(value) = node.attributes.get("push_node") {
+            new_attributes.push(("type", "push".into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| ("push_node".into(), value.clone()))?;
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push(("symbol", symbol.into()));
+        } else if let Some(value) = node.attributes.get("pop") {
+            new_attributes.push(("type", "pop".into()));
+            let symbol = Self::convert_symbol(value).map_err(|_| ("pop".into(), value.clone()))?;
+            new_attributes.push(("symbol", symbol.clone().into()));
+        } else if let Some(value) = node.attributes.get("pop_node") {
+            new_attributes.push(("type", "pop".into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| ("pop_node", value.clone()))?;
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push(("symbol", symbol.into()));
+        } else if let Some(value) = node.attributes.get("reference") {
+            new_attributes.push(("type", "reference".into()));
+            // source_node must be defined already
+            let symbol =
+                Self::convert_symbol(value).map_err(|_| ("reference".into(), value.clone()))?;
+            new_attributes.push(("symbol", symbol.clone().into()));
+        } else if let Some(value) = node.attributes.get("reference_node") {
+            new_attributes.push(("type", "reference".into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| ("reference_node".into(), value.clone()))?;
+            new_attributes.push(("source_node", node.clone().into()));
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push(("symbol", symbol.into()));
+        } else if let Some(value) = node.attributes.get("definition") {
+            new_attributes.push(("type", "definition".into()));
+            // source_node must be defined already
+            let symbol =
+                Self::convert_symbol(value).map_err(|_| ("definition".into(), value.clone()))?;
+            new_attributes.push(("symbol", symbol.clone().into()));
+        } else if let Some(value) = node.attributes.get("definition_node") {
+            new_attributes.push(("type", "definition".into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| ("definition_node".into(), value.clone()))?;
+            new_attributes.push(("source_node", node.clone().into()));
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push(("symbol", symbol.into()));
+        }
+        if !new_attributes.is_empty() {
+            for (name, value) in new_attributes {
+                graph[node_ref]
+                    .attributes
+                    .add(name.into(), value.clone())
+                    .map_err(|_| (name, value))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn convert_symbol<'a>(value: &Value) -> Result<Value, ()> {
+        match value {
+            Value::String(_) | Value::Integer(_) => Ok(value.clone()),
+            _ => Err(()),
+        }
     }
 }
 
@@ -340,10 +436,14 @@ pub enum LoadError {
     MissingSymbol(GraphNodeRef),
     #[error("Unknown node type {0}")]
     UnknownNodeType(String),
+    #[error("Unknown symbol type {0}")]
+    UnknownSymbolType(String),
     #[error(transparent)]
     ExecutionError(#[from] tree_sitter_graph::ExecutionError),
     #[error("Error parsing source")]
     ParseError,
+    #[error("Error converting shorthand ‘{0}’ on {1} with value {2}")]
+    ConversionError(String, String, String),
 }
 
 struct StackGraphLoader<'a> {
@@ -467,10 +567,10 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         Ok(self
             .stack_graph
@@ -499,10 +599,10 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         if let Some(scoped) = node.attributes.get("scoped") {
             if scoped.as_boolean()? {
@@ -524,10 +624,10 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         if let Some(scope) = node.attributes.get("scope") {
             let scope = scope.as_graph_node_ref()?;
@@ -549,15 +649,23 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         Ok(self
             .stack_graph
             .add_push_symbol_node(id, symbol, true)
             .unwrap())
+    }
+
+    fn load_symbol(&self, value: &Value) -> Result<String, LoadError> {
+        match value {
+            Value::Integer(i) => Ok(i.to_string()),
+            Value::String(s) => Ok(s.clone()),
+            _ => Err(LoadError::UnknownSymbolType(format!("{}", value))),
+        }
     }
 
     fn load_span(&mut self, node: &GraphNode, node_handle: Handle<Node>) -> Result<(), LoadError> {
