@@ -245,6 +245,7 @@ use tree_sitter_graph::functions::Functions;
 use tree_sitter_graph::graph::Graph;
 use tree_sitter_graph::graph::GraphNode;
 use tree_sitter_graph::graph::GraphNodeRef;
+use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::Variables;
 
 /// Holds information about how to construct stack graphs for a particular language
@@ -340,10 +341,14 @@ pub enum LoadError {
     MissingSymbol(GraphNodeRef),
     #[error("Unknown node type {0}")]
     UnknownNodeType(String),
+    #[error("Unknown symbol type {0}")]
+    UnknownSymbolType(String),
     #[error(transparent)]
     ExecutionError(#[from] tree_sitter_graph::ExecutionError),
     #[error("Error parsing source")]
     ParseError,
+    #[error("Error converting shorthand ‘{0}’ on {1} with value {2}")]
+    ConversionError(String, String, String),
 }
 
 struct StackGraphLoader<'a> {
@@ -467,10 +472,10 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         Ok(self
             .stack_graph
@@ -499,10 +504,10 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         if let Some(scoped) = node.attributes.get("scoped") {
             if scoped.as_boolean()? {
@@ -524,10 +529,10 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         if let Some(scope) = node.attributes.get("scope") {
             let scope = scope.as_graph_node_ref()?;
@@ -549,15 +554,23 @@ impl<'a> StackGraphLoader<'a> {
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
         let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => symbol.as_str()?,
+            Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
-        let symbol = self.stack_graph.add_symbol(symbol);
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         Ok(self
             .stack_graph
             .add_push_symbol_node(id, symbol, true)
             .unwrap())
+    }
+
+    fn load_symbol(&self, value: &Value) -> Result<String, LoadError> {
+        match value {
+            Value::Integer(i) => Ok(i.to_string()),
+            Value::String(s) => Ok(s.clone()),
+            _ => Err(LoadError::UnknownSymbolType(format!("{}", value))),
+        }
     }
 
     fn load_span(&mut self, node: &GraphNode, node_handle: Handle<Node>) -> Result<(), LoadError> {
