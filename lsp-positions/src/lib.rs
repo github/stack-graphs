@@ -31,6 +31,12 @@ use std::ops::Range;
 
 use memchr::memchr;
 
+use unicode_segmentation::UnicodeSegmentation as _;
+
+fn grapheme_len(string: &str) -> usize {
+    string.graphemes(true).count()
+}
+
 fn utf16_len(string: &str) -> usize {
     string.chars().map(char::len_utf16).sum()
 }
@@ -140,6 +146,8 @@ pub struct Offset {
     pub utf8_offset: usize,
     /// The number of UTF-16 code units appearing before this character in the string
     pub utf16_offset: usize,
+    /// The number of graphemes appearing before this character in the string
+    pub grapheme_offset: usize,
 }
 
 impl Offset {
@@ -149,6 +157,7 @@ impl Offset {
         Offset {
             utf8_offset: string.len(),
             utf16_offset: utf16_len(string),
+            grapheme_offset: grapheme_len(string),
         }
     }
 
@@ -166,13 +175,29 @@ impl Offset {
     ///
     /// [lsp-utf16]: https://microsoft.github.io/language-server-protocol/specification#textDocuments
     pub fn all_chars(line: &str) -> impl Iterator<Item = Offset> + '_ {
+        let mut grapheme_utf8_offsets = line
+            .grapheme_indices(true)
+            .map(|(utf8_offset, cluster)| Range {
+                start: utf8_offset,
+                end: utf8_offset + cluster.len(),
+            })
+            .peekable();
         // We want the output to include an entry for the end of the string — i.e., for the byte
         // offset immediately after the last character of the string.  To do this, we add a dummy
         // character to list of actual characters from the string.
         line.chars()
             .chain(std::iter::once(' '))
-            .scan(Offset::default(), |offset, ch| {
+            .scan(Offset::default(), move |offset, ch| {
                 let result = Some(*offset);
+                // If there is no next grapheme, we assume it is the extra ' ' that was chained
+                if grapheme_utf8_offsets
+                    .peek()
+                    .map(|r| r.start == offset.utf8_offset)
+                    .unwrap_or(true)
+                {
+                    grapheme_utf8_offsets.next();
+                    offset.grapheme_offset += 1;
+                }
                 offset.utf8_offset += ch.len_utf8();
                 offset.utf16_offset += ch.len_utf16();
                 result
@@ -190,6 +215,8 @@ pub struct PositionedSubstring<'a> {
     pub utf8_bounds: Range<usize>,
     /// The number of UTF-16 code units in the substring
     pub utf16_length: usize,
+    /// The number of graphemes in the substring
+    pub grapheme_length: usize,
 }
 
 impl<'a> PositionedSubstring<'a> {
@@ -201,6 +228,7 @@ impl<'a> PositionedSubstring<'a> {
             content: substring,
             utf8_bounds,
             utf16_length: utf16_len(substring),
+            grapheme_length: grapheme_len(substring),
         }
     }
 
@@ -226,6 +254,7 @@ impl<'a> PositionedSubstring<'a> {
                 end: line_utf8_offset + length.utf8_offset,
             },
             utf16_length: length.utf16_offset,
+            grapheme_length: length.grapheme_offset,
         }
     }
 
@@ -259,6 +288,8 @@ impl<'a> PositionedSubstring<'a> {
         self.utf8_bounds.end -= right_whitespace.len();
         self.utf16_length -= utf16_len(left_whitespace);
         self.utf16_length -= utf16_len(right_whitespace);
+        self.grapheme_length -= grapheme_len(left_whitespace);
+        self.grapheme_length -= grapheme_len(right_whitespace);
     }
 }
 
@@ -300,10 +331,7 @@ impl<'a> SpanCalculator<'a> {
         self.replace_current_line(line_utf8_offset);
         Position {
             line: line,
-            column: Offset {
-                utf8_offset: column_utf8_offset,
-                utf16_offset: self.utf16_offset(column_utf8_offset),
-            },
+            column: *self.for_utf8_offset(column_utf8_offset),
             containing_line: self.containing_line.as_ref().unwrap().utf8_bounds.clone(),
             trimmed_line: self.trimmed_line.as_ref().unwrap().utf8_bounds.clone(),
         }
@@ -330,6 +358,24 @@ impl<'a> SpanCalculator<'a> {
         self.for_line_and_column(position.row, line_utf8_offset, position.column)
     }
 
+    /// Constructs a [`Position`][] instance for a particular line and column in the source file.
+    /// You must provide the 0-indexed line number, the byte offset of the line within the file,
+    /// and the grapheme offset of the character within the line.
+    pub fn for_line_and_grapheme(
+        &mut self,
+        line: usize,
+        line_utf8_offset: usize,
+        column_grapheme_offset: usize,
+    ) -> Position {
+        self.replace_current_line(line_utf8_offset);
+        Position {
+            line: line,
+            column: *self.for_grapheme_offset(column_grapheme_offset),
+            containing_line: self.containing_line.as_ref().unwrap().utf8_bounds.clone(),
+            trimmed_line: self.trimmed_line.as_ref().unwrap().utf8_bounds.clone(),
+        }
+    }
+
     /// Updates our internal state to represent the information about the line that starts at a
     /// particular byte offset within the file.
     fn replace_current_line(&mut self, line_utf8_offset: usize) {
@@ -347,13 +393,33 @@ impl<'a> SpanCalculator<'a> {
         self.trimmed_line = Some(trimmed);
     }
 
-    /// Returns the UTF-16 offset of the character at a particular UTF-8 offset in the line.
+    /// Returns the offset of the character at a particular UTF-8 offset in the line.
     /// Assumes that you've already called `replace_current_line` for the containing line.
-    fn utf16_offset(&self, utf8_offset: usize) -> usize {
+    fn for_utf8_offset(&self, utf8_offset: usize) -> &Offset {
         let index = self
             .columns
             .binary_search_by_key(&utf8_offset, |pos| pos.utf8_offset)
             .unwrap();
-        self.columns[index].utf16_offset
+        &self.columns[index]
+    }
+
+    /// Returns the offset of the character at a particular grapheme offset in the line.
+    /// Assumes that you've already called `replace_current_line` for the containing line.
+    fn for_grapheme_offset(&self, grapheme_offset: usize) -> &Offset {
+        let mut index = self
+            .columns
+            .binary_search_by_key(&grapheme_offset, |pos| pos.grapheme_offset)
+            .unwrap();
+        // make sure to return the first offset for this grapheme
+        let mut offset = &self.columns[index];
+        while index > 0 {
+            index -= 1;
+            let prev_offset = &self.columns[index];
+            if prev_offset.grapheme_offset != offset.grapheme_offset {
+                break;
+            }
+            offset = prev_offset;
+        }
+        offset
     }
 }

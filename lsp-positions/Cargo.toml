@@ -22,3 +22,4 @@ default = ["tree-sitter"]
 [dependencies]
 memchr = "2.4"
 tree-sitter = { version=">= 0.19", optional=true }
+unicode-segmentation = { version="1.8" }
