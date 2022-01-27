@@ -214,6 +214,8 @@ struct sg_offset {
     size_t utf8_offset;
     // The number of UTF-16 code units appearing before this character in the string
     size_t utf16_offset;
+    // The number of graphemes appearing before this character in the string
+    size_t grapheme_offset;
 };
 
 // A half-open range identifying a range of characters in a string.

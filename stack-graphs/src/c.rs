@@ -668,6 +668,8 @@ pub struct sg_offset {
     pub utf8_offset: usize,
     /// The number of UTF-16 code units appearing before this character in the string
     pub utf16_offset: usize,
+    /// The number of graphemes appearing before this character in the string
+    pub grapheme_offset: usize,
 }
 
 /// A half-open range identifying a range of characters in a string.
