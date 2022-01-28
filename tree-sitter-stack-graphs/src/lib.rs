@@ -251,6 +251,7 @@ use tree_sitter_graph::graph::GraphNodeRef;
 use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::Variables;
 
+pub mod functions;
 pub mod loader;
 pub mod test;
 
