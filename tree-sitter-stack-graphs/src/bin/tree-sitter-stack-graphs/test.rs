@@ -36,9 +36,20 @@ pub struct Command {
     #[clap(long)]
     hide_failure_errors: bool,
 
-    /// Show paths for failed tests.
+    /// Save graph for failed tests.
     #[clap(long)]
-    show_paths_on_failure: bool,
+    #[clap(short = 'G')]
+    save_graph_on_failure: bool,
+
+    /// Save paths for failed tests.
+    #[clap(long)]
+    #[clap(short = 'P')]
+    save_paths_on_failure: bool,
+
+    /// Save visualization for failed tests.  Implies saving paths and graph.
+    #[clap(long)]
+    #[clap(short = 'W')]
+    save_visualization_on_failure: bool,
 }
 
 impl Command {
@@ -138,46 +149,24 @@ impl Command {
                     }
                 }
             }
-            if self.show_paths_on_failure {
-                println!("  complete paths:");
-                paths.find_all_paths(
-                    &stack_graph,
-                    stack_graph.nodes_for_file(file),
-                    |sg, ps, p| {
-                        if p.is_complete(sg) {
-                            println!("  * {}", p.display(sg, ps));
-                        }
-                    },
-                );
-                println!("  incomplete reference paths:");
-                paths.find_all_paths(
-                    &stack_graph,
-                    stack_graph.nodes_for_file(file),
-                    |sg, ps, p| {
-                        if !p.edges.is_empty()
-                            && !p.is_complete(sg)
-                            && sg[p.start_node].is_reference()
-                        {
-                            println!("  * {}", p.display(sg, ps));
-                        }
-                    },
-                );
-                println!("  incomplete definition paths:");
-                paths.find_all_paths(
-                    &stack_graph,
-                    stack_graph.nodes_for_file(file).filter(|n| {
-                        let n = &stack_graph[*n];
-                        n.is_root() || n.is_reference()
-                    }),
-                    |sg, ps, p| {
-                        if !p.edges.is_empty()
-                            && !p.is_complete(sg)
-                            && sg[p.end_node].is_definition()
-                        {
-                            println!("  * {}", p.display(sg, ps));
-                        }
-                    },
-                );
+            let graph_path = source_path.with_extension("graph.json");
+            let paths_path = source_path.with_extension("paths.json");
+            let visualization_path = source_path.with_extension("html");
+            if self.save_graph_on_failure {
+                let json = stack_graph.to_json_string_pretty()?;
+                std::fs::write(&graph_path, json).expect("Unable to write graph");
+                println!("  Graph: {}", graph_path.display());
+            }
+            if self.save_paths_on_failure {
+                let json = paths.to_json_string_pretty(&stack_graph)?;
+                std::fs::write(&paths_path, json).expect("Unable to write paths");
+                println!("  Paths: {}", paths_path.display());
+            }
+            if self.save_visualization_on_failure {
+                let html = stack_graph
+                    .to_html_string(&mut paths, &format!("{}", source_path.display()))?;
+                std::fs::write(&visualization_path, html).expect("Unable to write visualization");
+                println!("  Visualization: {}", visualization_path.display());
             }
             Err(TestError::AssertionsFailed(result.failure_count()))
         }
@@ -188,6 +177,8 @@ impl Command {
 pub enum TestError {
     #[error("{0} assertions failed")]
     AssertionsFailed(usize),
+    #[error(transparent)]
+    Json(#[from] stack_graphs::json::JsonError),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

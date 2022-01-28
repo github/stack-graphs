@@ -22,7 +22,7 @@ name = "tree-sitter-stack-graphs"
 required-features = ["cli"]
 
 [features]
-cli = ["clap", "colored", "env_logger", "tree-sitter-config", "walkdir"]
+cli = ["clap", "colored", "env_logger", "stack-graphs/json", "tree-sitter-config", "walkdir"]
 
 [dependencies]
 anyhow = "1.0"
