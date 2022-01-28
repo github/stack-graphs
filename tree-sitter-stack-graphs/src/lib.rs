@@ -253,6 +253,7 @@ use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
 use tree_sitter_graph::Variables;
 
+pub mod functions;
 pub mod loader;
 pub mod test;
 
