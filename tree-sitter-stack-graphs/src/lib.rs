@@ -252,6 +252,7 @@ use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::Variables;
 
 pub mod assert;
+pub mod loader;
 
 // Node type values
 static DROP_SCOPES_TYPE: &'static str = "drop_scopes";

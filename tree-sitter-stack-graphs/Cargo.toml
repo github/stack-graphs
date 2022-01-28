@@ -17,6 +17,7 @@ edition = "2018"
 test = false
 
 [dependencies]
+anyhow = "1.0"
 controlled-option = ">=0.4"
 lazy_static = "1.4"
 lsp-positions = { version="0.1", path="../lsp-positions" }
@@ -24,7 +25,9 @@ regex = "1"
 stack-graphs = { version="0.4", path="../stack-graphs" }
 thiserror = "1.0"
 tree-sitter = ">= 0.19"
+tree-sitter-config = "0.19"
 tree-sitter-graph = "0.3"
+tree-sitter-loader = "0.20"
 
 [dev-dependencies]
 pretty_assertions = "0.7"
