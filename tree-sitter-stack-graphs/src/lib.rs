@@ -251,6 +251,7 @@ use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::ExecutionConfig;
 use tree_sitter_graph::Variables;
 
+pub mod loader;
 pub mod test;
 
 // Node type values
