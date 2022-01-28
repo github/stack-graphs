@@ -40,8 +40,6 @@ jobs:
         run: cargo build
       - name: Ensure C headers are up to date
         run: |
-          cargo install cbindgen
-          script/cbindgen
           test -z "$(git status --porcelain)"
       - name: Run test suite
         run: cargo test
