@@ -251,6 +251,8 @@ use tree_sitter_graph::graph::GraphNodeRef;
 use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::Variables;
 
+pub mod test;
+
 // Node type values
 static DROP_SCOPES_TYPE: &'static str = "drop_scopes";
 static POP_SCOPED_SYMBOL_TYPE: &'static str = "pop_scoped_symbol";
