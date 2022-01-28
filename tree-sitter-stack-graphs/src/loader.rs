@@ -46,7 +46,8 @@ impl Loader {
         let index = match index {
             Some(index) => index,
             None => {
-                let functions = Functions::stdlib();
+                let mut functions = Functions::stdlib();
+                crate::functions::add_path_functions(&mut functions);
                 let tsg = self.load_tsg_for_language(language, &path)?;
                 let sgl =
                     StackGraphLanguage::new(language, tsg, functions).map_err(LoadError::other)?;
