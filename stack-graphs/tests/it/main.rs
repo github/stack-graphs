@@ -5,6 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+// increase recursion limit for json macro
+#![recursion_limit = "256"]
+
 pub mod test_graphs;
 
 mod arena;
@@ -18,5 +21,7 @@ mod can_jump_to_definition;
 mod can_jump_to_definition_with_forward_partial_path_stitching;
 mod can_jump_to_definition_with_forward_path_stitching;
 mod graph;
+#[cfg(feature = "json")]
+mod json;
 mod partial;
 mod paths;
