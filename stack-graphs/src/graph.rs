@@ -170,7 +170,7 @@ pub struct Symbol {
 }
 
 impl Symbol {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.content.as_str()
     }
 }
@@ -426,8 +426,8 @@ impl Handle<File> {
 #[repr(C)]
 #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeID {
-    file: ControlledOption<Handle<File>>,
-    local_id: u32,
+    pub(crate) file: ControlledOption<Handle<File>>,
+    pub(crate) local_id: u32,
 }
 
 const ROOT_NODE_ID: u32 = 1;
