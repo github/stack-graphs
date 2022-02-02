@@ -2014,7 +2014,11 @@ impl PartialPath {
     pub fn is_complete_as_possible(&self, graph: &StackGraph) -> bool {
         match &graph[self.start_node] {
             Node::Root(_) => (),
-            Node::ExportedScope(_) => (),
+            node @ Node::Scope(_) => {
+                if !node.is_exported() {
+                    return false;
+                }
+            }
             node @ Node::PushScopedSymbol(_) | node @ Node::PushSymbol(_) => {
                 if !node.is_reference() {
                     return false;
@@ -2395,10 +2399,10 @@ impl PartialPaths {
         queue.extend(
             graph
                 .nodes_for_file(file)
-                .filter(|node| match graph[*node] {
+                .filter(|node| match &graph[*node] {
                     Node::PushScopedSymbol(_) => true,
                     Node::PushSymbol(_) => true,
-                    Node::ExportedScope(_) => true,
+                    node @ Node::Scope(_) => node.is_exported(),
                     _ => false,
                 })
                 .map(|node| PartialPath::from_node(graph, self, node).unwrap()),

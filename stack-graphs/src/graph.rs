@@ -535,17 +535,24 @@ impl NodeID {
 #[repr(C)]
 pub enum Node {
     DropScopes(DropScopesNode),
-    ExportedScope(ExportedScopeNode),
-    InternalScope(InternalScopeNode),
     JumpTo(JumpToNode),
     PopScopedSymbol(PopScopedSymbolNode),
     PopSymbol(PopSymbolNode),
     PushScopedSymbol(PushScopedSymbolNode),
     PushSymbol(PushSymbolNode),
     Root(RootNode),
+    Scope(ScopeNode),
 }
 
 impl Node {
+    #[inline(always)]
+    pub fn is_exported(&self) -> bool {
+        match self {
+            Node::Scope(node) => node.is_exported,
+            _ => false,
+        }
+    }
+
     #[inline(always)]
     pub fn is_definition(&self) -> bool {
         match self {
@@ -599,14 +606,13 @@ impl Node {
     pub fn id(&self) -> NodeID {
         match self {
             Node::DropScopes(node) => node.id,
-            Node::ExportedScope(node) => node.id,
-            Node::InternalScope(node) => node.id,
             Node::JumpTo(node) => node.id,
             Node::PushScopedSymbol(node) => node.id,
             Node::PushSymbol(node) => node.id,
             Node::PopScopedSymbol(node) => node.id,
             Node::PopSymbol(node) => node.id,
             Node::Root(node) => node.id,
+            Node::Scope(node) => node.id,
         }
     }
 
@@ -700,14 +706,13 @@ impl<'a> Display for DisplayNode<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self.wrapped {
             Node::DropScopes(node) => node.display(self.graph).fmt(f),
-            Node::ExportedScope(node) => node.display(self.graph).fmt(f),
-            Node::InternalScope(node) => node.display(self.graph).fmt(f),
             Node::JumpTo(node) => node.fmt(f),
             Node::PushScopedSymbol(node) => node.display(self.graph).fmt(f),
             Node::PushSymbol(node) => node.display(self.graph).fmt(f),
             Node::PopScopedSymbol(node) => node.display(self.graph).fmt(f),
             Node::PopSymbol(node) => node.display(self.graph).fmt(f),
             Node::Root(node) => node.fmt(f),
+            Node::Scope(node) => node.display(self.graph).fmt(f),
         }
     }
 }
@@ -743,7 +748,7 @@ pub struct DropScopesNode {
     pub id: NodeID,
     _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
-    _is_clickable: bool,
+    _is_endpoint: bool,
 }
 
 impl From<DropScopesNode> for Node {
@@ -759,7 +764,7 @@ impl StackGraph {
             id,
             _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
-            _is_clickable: false,
+            _is_endpoint: false,
         };
         self.add_node(id, node.into())
     }
@@ -790,124 +795,6 @@ impl<'a> Display for DisplayDropScopesNode<'a> {
     }
 }
 
-/// A node that can be referred to on the scope stack, which allows "jump to" nodes in any other
-/// part of the graph can jump back here.
-#[repr(C)]
-pub struct ExportedScopeNode {
-    /// The unique identifier for this node.
-    pub id: NodeID,
-    _symbol: ControlledOption<Handle<Symbol>>,
-    _scope: NodeID,
-    _is_clickable: bool,
-}
-
-impl From<ExportedScopeNode> for Node {
-    fn from(node: ExportedScopeNode) -> Node {
-        Node::ExportedScope(node)
-    }
-}
-
-impl StackGraph {
-    /// Adds a _exported scope_ node to the stack graph.
-    pub fn add_exported_scope_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
-        let node = ExportedScopeNode {
-            id,
-            _symbol: ControlledOption::none(),
-            _scope: NodeID::default(),
-            _is_clickable: false,
-        };
-        self.add_node(id, node.into())
-    }
-}
-
-impl ExportedScopeNode {
-    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
-        DisplayExportedScopeNode {
-            wrapped: self,
-            graph,
-        }
-    }
-}
-
-#[doc(hidden)]
-pub struct DisplayExportedScopeNode<'a> {
-    wrapped: &'a ExportedScopeNode,
-    graph: &'a StackGraph,
-}
-
-impl<'a> Display for DisplayExportedScopeNode<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if f.alternate() {
-            write!(f, "[{}]", self.wrapped.id.display(self.graph))
-        } else {
-            write!(
-                f,
-                "[{} exported scope]",
-                self.wrapped.id.display(self.graph),
-            )
-        }
-    }
-}
-
-/// A node internal to a single file.  This node has no effect on the symbol or scope stacks;
-/// it's just used to add structure to the graph.
-#[repr(C)]
-pub struct InternalScopeNode {
-    /// The unique identifier for this node.
-    pub id: NodeID,
-    _symbol: ControlledOption<Handle<Symbol>>,
-    _scope: NodeID,
-    _is_clickable: bool,
-}
-
-impl From<InternalScopeNode> for Node {
-    fn from(node: InternalScopeNode) -> Node {
-        Node::InternalScope(node)
-    }
-}
-
-impl StackGraph {
-    /// Adds a _internal scope_ node to the stack graph.
-    pub fn add_internal_scope_node(&mut self, id: NodeID) -> Option<Handle<Node>> {
-        let node = InternalScopeNode {
-            id,
-            _symbol: ControlledOption::none(),
-            _scope: NodeID::default(),
-            _is_clickable: false,
-        };
-        self.add_node(id, node.into())
-    }
-}
-
-impl InternalScopeNode {
-    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
-        DisplayInternalScopeNode {
-            wrapped: self,
-            graph,
-        }
-    }
-}
-
-#[doc(hidden)]
-pub struct DisplayInternalScopeNode<'a> {
-    wrapped: &'a InternalScopeNode,
-    graph: &'a StackGraph,
-}
-
-impl<'a> Display for DisplayInternalScopeNode<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if f.alternate() {
-            write!(f, "[{}]", self.wrapped.id.display(self.graph))
-        } else {
-            write!(
-                f,
-                "[{} internal scope]",
-                self.wrapped.id.display(self.graph),
-            )
-        }
-    }
-}
-
 /// The singleton "jump to" node, which allows a name binding path to jump back to another part of
 /// the graph.
 #[repr(C)]
@@ -915,7 +802,7 @@ pub struct JumpToNode {
     id: NodeID,
     _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
-    _is_clickable: bool,
+    _is_endpoint: bool,
 }
 
 impl From<JumpToNode> for Node {
@@ -930,7 +817,7 @@ impl JumpToNode {
             id: NodeID::jump_to(),
             _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
-            _is_clickable: false,
+            _is_endpoint: false,
         }
     }
 }
@@ -1240,7 +1127,7 @@ pub struct RootNode {
     id: NodeID,
     _symbol: ControlledOption<Handle<Symbol>>,
     _scope: NodeID,
-    _is_clickable: bool,
+    _is_endpoint: bool,
 }
 
 impl From<RootNode> for Node {
@@ -1255,7 +1142,7 @@ impl RootNode {
             id: NodeID::root(),
             _symbol: ControlledOption::none(),
             _scope: NodeID::default(),
-            _is_clickable: false,
+            _is_endpoint: false,
         }
     }
 }
@@ -1316,6 +1203,71 @@ impl NodeIDHandles {
             None => return Either::Left(std::iter::empty()),
         };
         Either::Right(file_entry.iter().filter_map(|entry| *entry))
+    }
+}
+
+/// A node that adds structure to the graph. If the node is exported, it can be
+/// referred to on the scope stack, which allows "jump to" nodes in any other
+/// part of the graph can jump back here.
+#[repr(C)]
+pub struct ScopeNode {
+    /// The unique identifier for this node.
+    pub id: NodeID,
+    _symbol: ControlledOption<Handle<Symbol>>,
+    _scope: NodeID,
+    pub is_exported: bool,
+}
+
+impl From<ScopeNode> for Node {
+    fn from(node: ScopeNode) -> Node {
+        Node::Scope(node)
+    }
+}
+
+impl StackGraph {
+    /// Adds a _exported scope_ node to the stack graph.
+    pub fn add_scope_node(&mut self, id: NodeID, is_exported: bool) -> Option<Handle<Node>> {
+        let node = ScopeNode {
+            id,
+            _symbol: ControlledOption::none(),
+            _scope: NodeID::default(),
+            is_exported,
+        };
+        self.add_node(id, node.into())
+    }
+}
+
+impl ScopeNode {
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl Display + 'a {
+        DisplayScopeNode {
+            wrapped: self,
+            graph,
+        }
+    }
+}
+
+#[doc(hidden)]
+pub struct DisplayScopeNode<'a> {
+    wrapped: &'a ScopeNode,
+    graph: &'a StackGraph,
+}
+
+impl<'a> Display for DisplayScopeNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "[{}]", self.wrapped.id.display(self.graph))
+        } else {
+            write!(
+                f,
+                "[{}{} scope]",
+                self.wrapped.id.display(self.graph),
+                if self.wrapped.is_exported {
+                    " exported"
+                } else {
+                    ""
+                },
+            )
+        }
     }
 }
 

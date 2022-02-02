@@ -107,7 +107,7 @@ fn jump_to_node() -> sg_node {
             local_id: SG_JUMP_TO_NODE_ID,
         },
         symbol: SG_NULL_HANDLE,
-        is_clickable: false,
+        is_endpoint: false,
         scope: sg_node_id::default(),
     }
 }
@@ -120,7 +120,7 @@ fn root_node() -> sg_node {
             local_id: SG_ROOT_NODE_ID,
         },
         symbol: SG_NULL_HANDLE,
-        is_clickable: false,
+        is_endpoint: false,
         scope: sg_node_id::default(),
     }
 }
@@ -175,7 +175,7 @@ fn drop_scopes(file: sg_file_handle, local_id: u32) -> sg_node {
         kind: sg_node_kind::SG_NODE_KIND_DROP_SCOPES,
         id: sg_node_id { file, local_id },
         symbol: SG_NULL_HANDLE,
-        is_clickable: false,
+        is_endpoint: false,
         scope: sg_node_id::default(),
     }
 }
@@ -237,10 +237,10 @@ fn drop_scopes_cannot_have_scope() {
 
 fn exported_scope(file: sg_file_handle, local_id: u32) -> sg_node {
     sg_node {
-        kind: sg_node_kind::SG_NODE_KIND_EXPORTED_SCOPE,
+        kind: sg_node_kind::SG_NODE_KIND_SCOPE,
         id: sg_node_id { file, local_id },
         symbol: SG_NULL_HANDLE,
-        is_clickable: false,
+        is_endpoint: true,
         scope: sg_node_id::default(),
     }
 }
@@ -255,7 +255,8 @@ fn can_add_exported_scope_node() {
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
-    assert!(matches!(node, Node::ExportedScope(_)));
+    assert!(matches!(node, Node::Scope(_)));
+    assert!(node.is_exported());
     assert!(node.id() == node_id(file, 42));
     // Make sure that we get the same handle if we add the node again.
     let mut new_handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
@@ -302,10 +303,10 @@ fn exported_scope_cannot_have_scope() {
 
 fn internal_scope(file: sg_file_handle, local_id: u32) -> sg_node {
     sg_node {
-        kind: sg_node_kind::SG_NODE_KIND_INTERNAL_SCOPE,
+        kind: sg_node_kind::SG_NODE_KIND_SCOPE,
         id: sg_node_id { file, local_id },
         symbol: SG_NULL_HANDLE,
-        is_clickable: false,
+        is_endpoint: false,
         scope: sg_node_id::default(),
     }
 }
@@ -320,7 +321,8 @@ fn can_add_internal_scope_node() {
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     let node_arena = sg_stack_graph_nodes(graph);
     let node = get_node(&node_arena, handles[0]);
-    assert!(matches!(node, Node::InternalScope(_)));
+    assert!(matches!(node, Node::Scope(_)));
+    assert!(!node.is_exported());
     assert!(node.id() == node_id(file, 42));
     // Make sure that we get the same handle if we add the node again.
     let mut new_handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
@@ -370,7 +372,7 @@ fn pop_scoped_symbol(file: sg_file_handle, local_id: u32, symbol: sg_symbol_hand
         kind: sg_node_kind::SG_NODE_KIND_POP_SCOPED_SYMBOL,
         id: sg_node_id { file, local_id },
         symbol,
-        is_clickable: true,
+        is_endpoint: true,
         scope: sg_node_id::default(),
     }
 }
@@ -437,7 +439,7 @@ fn pop_symbol(file: sg_file_handle, local_id: u32, symbol: sg_symbol_handle) -> 
         kind: sg_node_kind::SG_NODE_KIND_POP_SYMBOL,
         id: sg_node_id { file, local_id },
         symbol,
-        is_clickable: true,
+        is_endpoint: true,
         scope: sg_node_id::default(),
     }
 }
@@ -514,7 +516,7 @@ fn push_scoped_symbol(
         kind: sg_node_kind::SG_NODE_KIND_PUSH_SCOPED_SYMBOL,
         id: sg_node_id { file, local_id },
         symbol,
-        is_clickable: true,
+        is_endpoint: true,
         scope,
     }
 }
@@ -590,7 +592,7 @@ fn push_symbol(file: sg_file_handle, local_id: u32, symbol: sg_symbol_handle) ->
         kind: sg_node_kind::SG_NODE_KIND_PUSH_SYMBOL,
         id: sg_node_id { file, local_id },
         symbol,
-        is_clickable: true,
+        is_endpoint: true,
         scope: sg_node_id::default(),
     }
 }

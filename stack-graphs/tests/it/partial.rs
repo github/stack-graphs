@@ -337,7 +337,7 @@ fn create_scope_stack(
         let node_id = NodeID::new_in_file(file, *scope);
         let node = match graph.node_for_id(node_id) {
             Some(node) => node,
-            None => graph.add_exported_scope_node(node_id).unwrap(),
+            None => graph.add_scope_node(node_id, true).unwrap(),
         };
         stack.push_back(partials, node);
     }
