@@ -72,7 +72,7 @@ impl CreateStackGraph for TestGraph {
             kind: sg_node_kind::SG_NODE_KIND_POP_SYMBOL,
             id: sg_node_id { file, local_id },
             symbol,
-            is_clickable: true,
+            is_endpoint: true,
             scope: sg_node_id::default(),
         })
     }
@@ -82,7 +82,7 @@ impl CreateStackGraph for TestGraph {
             kind: sg_node_kind::SG_NODE_KIND_DROP_SCOPES,
             id: sg_node_id { file, local_id },
             symbol: SG_NULL_HANDLE,
-            is_clickable: false,
+            is_endpoint: false,
             scope: sg_node_id::default(),
         })
     }
@@ -99,10 +99,10 @@ impl CreateStackGraph for TestGraph {
 
     fn exported_scope(&mut self, file: sg_file_handle, local_id: u32) -> sg_node_handle {
         self.add_node(sg_node {
-            kind: sg_node_kind::SG_NODE_KIND_EXPORTED_SCOPE,
+            kind: sg_node_kind::SG_NODE_KIND_SCOPE,
             id: sg_node_id { file, local_id },
             symbol: SG_NULL_HANDLE,
-            is_clickable: false,
+            is_endpoint: true,
             scope: sg_node_id::default(),
         })
     }
@@ -122,10 +122,10 @@ impl CreateStackGraph for TestGraph {
 
     fn internal_scope(&mut self, file: sg_file_handle, local_id: u32) -> sg_node_handle {
         self.add_node(sg_node {
-            kind: sg_node_kind::SG_NODE_KIND_INTERNAL_SCOPE,
+            kind: sg_node_kind::SG_NODE_KIND_SCOPE,
             id: sg_node_id { file, local_id },
             symbol: SG_NULL_HANDLE,
-            is_clickable: false,
+            is_endpoint: false,
             scope: sg_node_id::default(),
         })
     }
@@ -144,7 +144,7 @@ impl CreateStackGraph for TestGraph {
             kind: sg_node_kind::SG_NODE_KIND_POP_SCOPED_SYMBOL,
             id: sg_node_id { file, local_id },
             symbol,
-            is_clickable: false,
+            is_endpoint: false,
             scope: sg_node_id::default(),
         })
     }
@@ -159,7 +159,7 @@ impl CreateStackGraph for TestGraph {
             kind: sg_node_kind::SG_NODE_KIND_POP_SYMBOL,
             id: sg_node_id { file, local_id },
             symbol,
-            is_clickable: false,
+            is_endpoint: false,
             scope: sg_node_id::default(),
         })
     }
@@ -180,7 +180,7 @@ impl CreateStackGraph for TestGraph {
             kind: sg_node_kind::SG_NODE_KIND_PUSH_SCOPED_SYMBOL,
             id: sg_node_id { file, local_id },
             symbol,
-            is_clickable: false,
+            is_endpoint: false,
             scope,
         })
     }
@@ -195,7 +195,7 @@ impl CreateStackGraph for TestGraph {
             kind: sg_node_kind::SG_NODE_KIND_PUSH_SYMBOL,
             id: sg_node_id { file, local_id },
             symbol,
-            is_clickable: false,
+            is_endpoint: false,
             scope: sg_node_id::default(),
         })
     }
@@ -210,7 +210,7 @@ impl CreateStackGraph for TestGraph {
             kind: sg_node_kind::SG_NODE_KIND_PUSH_SYMBOL,
             id: sg_node_id { file, local_id },
             symbol,
-            is_clickable: true,
+            is_endpoint: true,
             scope: sg_node_id::default(),
         })
     }

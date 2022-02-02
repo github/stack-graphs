@@ -77,10 +77,10 @@ fn add_exported_scope(
     local_id: u32,
 ) -> sg_node_handle {
     let node = sg_node {
-        kind: sg_node_kind::SG_NODE_KIND_EXPORTED_SCOPE,
+        kind: sg_node_kind::SG_NODE_KIND_SCOPE,
         id: sg_node_id { file, local_id },
         symbol: SG_NULL_HANDLE,
-        is_clickable: false,
+        is_endpoint: true,
         scope: sg_node_id::default(),
     };
     let nodes = [node];

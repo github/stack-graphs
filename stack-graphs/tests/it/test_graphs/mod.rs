@@ -87,7 +87,7 @@ impl CreateStackGraph for StackGraph {
     }
 
     fn exported_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
-        self.add_exported_scope_node(NodeID::new_in_file(file, local_id))
+        self.add_scope_node(NodeID::new_in_file(file, local_id), true)
             .expect("Duplicate node ID")
     }
 
@@ -96,7 +96,7 @@ impl CreateStackGraph for StackGraph {
     }
 
     fn internal_scope(&mut self, file: Handle<File>, local_id: u32) -> Handle<Node> {
-        self.add_internal_scope_node(NodeID::new_in_file(file, local_id))
+        self.add_scope_node(NodeID::new_in_file(file, local_id), false)
             .expect("Duplicate node ID")
     }
 
