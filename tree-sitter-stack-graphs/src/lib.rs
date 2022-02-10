@@ -59,86 +59,89 @@
 //!
 //! [stanzas]: https://docs.rs/tree-sitter-graph/*/tree_sitter_graph/reference/index.html#high-level-structure
 //!
-//! By default, this new node will be an _internal scope node_.  If you need to create a different
-//! kind of stack graph node, set the `type` attribute on the new node:
+//! By default, this new node will be a _scope node_.  If you need to create a different kind of stack
+//! graph node, set the `type` attribute on the new node:
 //!
 //! ``` skip
 //! (identifier) {
 //!   node new_node
-//!   attr (new_node) type = "drop"
+//!   attr (new_node) type = "push_symbol"
 //! }
 //! ```
 //!
 //! The valid `type` values are:
 //!
-//! - `definition`: a _definition_ node
-//! - `drop`: a _drop scopes_ node
-//! - `exported` or `endpoint`: an _exported scope_ node
-//! - `internal`: an _internal scope node_ (note that this is the default if you don't provide a
-//!   `type` attribute)
-//! - `pop`: a _pop symbol_ or _pop scoped symbol_ node
-//! - `push`: a _push symbol_ or _push scoped symbol_ node
-//! - `reference`: a _reference_ node
+//! - `drop_scopes`: a _drop scopes_ node
+//! - `pop_symbol`: a _pop symbol_ node
+//! - `pop_scoped_symbol`: a _pop scoped symbol_ node
+//! - `push_symbol`: a _push symbol_ node
+//! - `push_scoped_symbol`: a _push scoped symbol_ node
+//! - `scope`: a _scope_ node
 //!
-//! Certain node types — `definition`, `pop`, `push`, and `reference` — also require you to provide
-//! a `symbol` attribute.  Its value must be a string, but will typically come from the content of
-//! a parsed syntax node using the [`source-text`][] function and a syntax capture:
+//! A node without an explicit `type` attribute is assumed to be of type `scope`.
+//!
+//! Certain node types — `pop_symbol`, `pop_scoped_symbol`, `push_symbol` and `push_scoped_symbol` —
+//! also require you to provide a `symbol` attribute.  Its value must be a string, but will typically
+//! come from the content of a parsed syntax node using the [`source-text`][] function and a syntax
+//! capture:
 //!
 //! [`source-text`]: https://docs.rs/tree-sitter-graph/*/tree_sitter_graph/reference/functions/index.html#source-text
 //!
 //! ``` skip
 //! (identifier) @id {
 //!   node new_node
-//!   attr (new_node) type = "reference", symbol = (source-text @id)
+//!   attr (new_node) type = "push_symbol", symbol = (source-text @id)
 //! }
 //! ```
 //!
-//! To make a _push scoped symbol_ node, you must provide a `scope` attribute.  Its value must be a
-//! reference to an `exported` node that you've already created. (This is the exported scope node
-//! that will be pushed onto the scope stack.)  For instance:
+//! Node types `pop_symbol` and `pop_scoped_symbol` allow an optional `is_definition` attribute, which
+//! marks that node as a proper definition.  Node types `push_symbol` and `push_scoped_symbol` allow
+//! an optional `is_reference` attribute, which marks the node as a proper reference.  When `is_definition`
+//! or `is_reference` are set, the `source_node` attribute is required.
+//!
+//! ``` skip
+//! (identifier) @id {
+//!   node new_node
+//!   attr (new_node) type = "push_symbol", symbol = (source-text @id), is_reference, source_node = @id
+//! }
+//! ```
+//!
+//! A _push scoped symbol_ node requires a `scope` attribute.  Its value must be a reference to an `exported`
+//! node that you've already created. (This is the exported scope node that will be pushed onto the scope
+//! stack.)  For instance:
 //!
 //! ``` skip
 //! (identifier) @id {
 //!   node new_exported_scope_node
-//!   attr (new_exported_scope_node) type = "exported"
+//!   attr (new_exported_scope_node) is_exported
 //!   node new_push_scoped_symbol_node
 //!   attr (new_push_scoped_symbol_node)
-//!     type = "push",
+//!     type = "push_scoped_symbol",
 //!     symbol = (source-text @id),
 //!     scope = new_exported_scope_node
 //! }
 //! ```
 //!
-//! To make a _pop scoped symbol_ node, you must provide a `scoped` attribute, whose value must be
-//! `#true`.  (You don't know in advance which particular scope stack will be popped off.) For
-//! instance:
+//! Nodes of type `scope` allow an optional `is_exported` attribute, that is required to use the scope
+//! in a `push_scoped_symbol` node.
 //!
-//! ``` skip
-//! (identifier) @id {
-//!   node new_pop_scoped_symbol_node
-//!   attr (new_pop_scoped_symbol_node)
-//!     type = "pop",
-//!     symbol = (source-text @id),
-//!     scoped = #true
-//! }
-//! ```
 //!
 //! ### Annotating nodes with location information
 //!
 //! You can annotate any stack graph node that you create with location information, identifying
-//! the portion of the source file that the node “belongs to”.  This is _required_ for `definition`
-//! and `reference` nodes, since the location information determines which parts of the source file
-//! the user can “click on”, and the “destination” of any code navigation queries the user makes.
+//! the portion of the source file that the node "belongs to".  This is _required_ for definition
+//! and reference nodes, since the location information determines which parts of the source file
+//! the user can _click on_, and the _destination_ of any code navigation queries the user makes.
 //! To do this, add a `source_node` attribute, whose value is a syntax node capture:
 //!
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = "pop_symbol", symbol = (source-text @id), source_node = @func, is_definition
 //! }
 //! ```
 //!
-//! Note how in this example, we use a different syntax node for the “target” of the definition
+//! Note how in this example, we use a different syntax node for the _target_ of the definition
 //! (the entirety of the function definition) and for the _name_ of the definition (the content of
 //! the function's `name`).
 //!
@@ -149,20 +152,19 @@
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = "pop_symbol", symbol = (source-text @id), source_node = @func, is_definition
 //!   node body
 //!   edge def -> body
 //! }
 //! ```
 //!
-//! To implement shadowing (where later definitions of the same name in the same scope “replace” or
-//! “shadow” earlier ones), you can add a `precedence` attribute to each edge to indicate which
-//! paths are prioritized:
+//! To implement shadowing (which determines which definitions are selected when multiple are available),
+//! you can add a `precedence` attribute to each edge to indicate which paths are prioritized:
 //!
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = "pop_symbol", symbol = (source-text @id), source_node = @func, is_definition
 //!   node body
 //!   edge def -> body
 //!   attr (def -> body) precedence = 1
@@ -179,7 +181,7 @@
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = "pop_symbol", symbol = (source-text @id), source_node = @func, is_definition
 //!   edge (ROOT_NODE -> def)
 //! }
 //! ```
@@ -248,6 +250,31 @@ use tree_sitter_graph::graph::GraphNodeRef;
 use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::ExecutionConfig;
 use tree_sitter_graph::Variables;
+
+// Node type values
+static DROP_SCOPES_TYPE: &'static str = "drop_scopes";
+static POP_SCOPED_SYMBOL_TYPE: &'static str = "pop_scoped_symbol";
+static POP_SYMBOL_TYPE: &'static str = "pop_symbol";
+static PUSH_SCOPED_SYMBOL_TYPE: &'static str = "push_scoped_symbol";
+static PUSH_SYMBOL_TYPE: &'static str = "push_symbol";
+static SCOPE_TYPE: &'static str = "scope";
+
+// Node attribute names
+static IS_DEFINITION_ATTR: &'static str = "is_definition";
+static IS_EXPORTED_ATTR: &'static str = "is_exported";
+static IS_ENDPOINT_ATTR: &'static str = "is_endpoint";
+static IS_REFERENCE_ATTR: &'static str = "is_reference";
+static SCOPE_ATTR: &'static str = "scope";
+static SOURCE_NODE_ATTR: &'static str = "source_node";
+static SYMBOL_ATTR: &'static str = "symbol";
+static TYPE_ATTR: &'static str = "type";
+
+// Edge attribute names
+static PRECEDENCE_ATTR: &'static str = "precedence";
+
+// Global variables
+static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
+static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 
 /// Holds information about how to construct stack graphs for a particular language
 pub struct StackGraphLanguage {
@@ -320,10 +347,10 @@ impl StackGraphLanguage {
 
         let mut graph = Graph::new();
         globals
-            .add("ROOT_NODE".into(), graph.add_graph_node().into())
+            .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
             .unwrap();
         globals
-            .add("JUMP_TO_SCOPE_NODE".into(), graph.add_graph_node().into())
+            .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
             .unwrap();
         let mut config = ExecutionConfig::new(&mut self.functions, &globals).lazy(true);
         self.tsg
@@ -341,6 +368,10 @@ pub enum LoadError {
     MissingNodeType(GraphNodeRef),
     #[error("Missing ‘symbol’ attribute on graph node")]
     MissingSymbol(GraphNodeRef),
+    #[error("Missing ‘scope’ attribute on graph node")]
+    MissingScope(GraphNodeRef),
+    #[error("Unknown ‘{0}’ flag type {1}")]
+    UnknownFlagType(String, String),
     #[error("Unknown node type {0}")]
     UnknownNodeType(String),
     #[error("Unknown symbol type {0}")]
@@ -387,13 +418,12 @@ impl<'a> StackGraphLoader<'a> {
         for node_ref in self.graph.iter_nodes().skip(2) {
             let node = &self.graph[node_ref];
             let handle = match get_node_type(node)? {
-                NodeType::Definition => self.load_definition(node, node_ref)?,
                 NodeType::DropScopes => self.load_drop_scopes(node_ref),
-                NodeType::ExportedScope => self.load_exported_scope(node_ref),
-                NodeType::InternalScope => self.load_internal_scope(node_ref),
+                NodeType::PopScopedSymbol => self.load_pop_scoped_symbol(node, node_ref)?,
                 NodeType::PopSymbol => self.load_pop_symbol(node, node_ref)?,
+                NodeType::PushScopedSymbol => self.load_push_scoped_symbol(node, node_ref)?,
                 NodeType::PushSymbol => self.load_push_symbol(node, node_ref)?,
-                NodeType::Reference => self.load_reference(node, node_ref)?,
+                NodeType::Scope => self.load_scope(node, node_ref)?,
             };
             self.load_span(node, handle)?;
         }
@@ -407,7 +437,7 @@ impl<'a> StackGraphLoader<'a> {
             let source_node_id = self.node_id_for_graph_node(source_ref);
             let source_handle = self.stack_graph.node_for_id(source_node_id).unwrap();
             for (sink_ref, edge) in source.iter_edges() {
-                let precedence = match edge.attributes.get("precedence") {
+                let precedence = match edge.attributes.get(PRECEDENCE_ATTR) {
                     Some(precedence) => precedence.as_integer()? as i32,
                     None => 0,
                 };
@@ -423,36 +453,33 @@ impl<'a> StackGraphLoader<'a> {
 }
 
 enum NodeType {
-    Definition,
     DropScopes,
-    ExportedScope,
-    InternalScope,
     PopSymbol,
+    PopScopedSymbol,
     PushSymbol,
-    Reference,
+    PushScopedSymbol,
+    Scope,
 }
 
 fn get_node_type(node: &GraphNode) -> Result<NodeType, LoadError> {
-    let node_type = match node.attributes.get("type") {
+    let node_type = match node.attributes.get(TYPE_ATTR) {
         Some(node_type) => node_type.as_str()?,
-        None => return Ok(NodeType::InternalScope),
+        None => return Ok(NodeType::Scope),
     };
-    if node_type == "definition" {
-        return Ok(NodeType::Definition);
-    } else if node_type == "drop" {
+    if node_type == DROP_SCOPES_TYPE {
         return Ok(NodeType::DropScopes);
-    } else if node_type == "exported" || node_type == "endpoint" {
-        return Ok(NodeType::ExportedScope);
-    } else if node_type == "internal" {
-        return Ok(NodeType::InternalScope);
-    } else if node_type == "pop" {
+    } else if node_type == POP_SCOPED_SYMBOL_TYPE {
+        return Ok(NodeType::PopScopedSymbol);
+    } else if node_type == POP_SYMBOL_TYPE {
         return Ok(NodeType::PopSymbol);
-    } else if node_type == "push" {
+    } else if node_type == PUSH_SCOPED_SYMBOL_TYPE {
+        return Ok(NodeType::PushScopedSymbol);
+    } else if node_type == PUSH_SYMBOL_TYPE {
         return Ok(NodeType::PushSymbol);
-    } else if node_type == "reference" {
-        return Ok(NodeType::Reference);
+    } else if node_type == SCOPE_TYPE {
+        return Ok(NodeType::Scope);
     } else {
-        return Err(LoadError::UnknownNodeType(format!("{:?}", node_type)));
+        return Err(LoadError::UnknownNodeType(format!("{}", node_type)));
     }
 }
 
@@ -468,36 +495,27 @@ impl<'a> StackGraphLoader<'a> {
         }
     }
 
-    fn load_definition(
-        &mut self,
-        node: &GraphNode,
-        node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
-        };
-        let symbol = self.stack_graph.add_symbol(&symbol);
-        let id = self.node_id_for_graph_node(node_ref);
-        Ok(self
-            .stack_graph
-            .add_pop_symbol_node(id, symbol, true)
-            .unwrap())
-    }
-
     fn load_drop_scopes(&mut self, node_ref: GraphNodeRef) -> Handle<Node> {
         let id = self.node_id_for_graph_node(node_ref);
         self.stack_graph.add_drop_scopes_node(id).unwrap()
     }
 
-    fn load_exported_scope(&mut self, node_ref: GraphNodeRef) -> Handle<Node> {
+    fn load_pop_scoped_symbol(
+        &mut self,
+        node: &GraphNode,
+        node_ref: GraphNodeRef,
+    ) -> Result<Handle<Node>, LoadError> {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
+            Some(symbol) => self.load_symbol(symbol)?,
+            None => return Err(LoadError::MissingSymbol(node_ref)),
+        };
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        self.stack_graph.add_scope_node(id, true).unwrap()
-    }
-
-    fn load_internal_scope(&mut self, node_ref: GraphNodeRef) -> Handle<Node> {
-        let id = self.node_id_for_graph_node(node_ref);
-        self.stack_graph.add_scope_node(id, false).unwrap()
+        let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
+        Ok(self
+            .stack_graph
+            .add_pop_scoped_symbol_node(id, symbol, is_definition)
+            .unwrap())
     }
 
     fn load_pop_symbol(
@@ -505,23 +523,38 @@ impl<'a> StackGraphLoader<'a> {
         node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        if let Some(scoped) = node.attributes.get("scoped") {
-            if scoped.as_boolean()? {
-                return Ok(self
-                    .stack_graph
-                    .add_pop_scoped_symbol_node(id, symbol, false)
-                    .unwrap());
-            }
-        }
+        let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         Ok(self
             .stack_graph
-            .add_pop_symbol_node(id, symbol, false)
+            .add_pop_symbol_node(id, symbol, is_definition)
+            .unwrap())
+    }
+
+    fn load_push_scoped_symbol(
+        &mut self,
+        node: &GraphNode,
+        node_ref: GraphNodeRef,
+    ) -> Result<Handle<Node>, LoadError> {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
+            Some(symbol) => self.load_symbol(symbol)?,
+            None => return Err(LoadError::MissingSymbol(node_ref)),
+        };
+        let symbol = self.stack_graph.add_symbol(&symbol);
+        let id = self.node_id_for_graph_node(node_ref);
+        let scope = match node.attributes.get(SCOPE_ATTR) {
+            Some(scope) => self.node_id_for_graph_node(scope.as_graph_node_ref()?),
+            None => return Err(LoadError::MissingScope(node_ref)),
+        };
+        let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
+        Ok(self
+            .stack_graph
+            .add_push_scoped_symbol_node(id, symbol, scope, is_reference)
             .unwrap())
     }
 
@@ -530,41 +563,28 @@ impl<'a> StackGraphLoader<'a> {
         node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        if let Some(scope) = node.attributes.get("scope") {
-            let scope = scope.as_graph_node_ref()?;
-            let scope = self.node_id_for_graph_node(scope);
-            return Ok(self
-                .stack_graph
-                .add_push_scoped_symbol_node(id, symbol, scope, false)
-                .unwrap());
-        }
+        let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
         Ok(self
             .stack_graph
-            .add_push_symbol_node(id, symbol, false)
+            .add_push_symbol_node(id, symbol, is_reference)
             .unwrap())
     }
 
-    fn load_reference(
+    fn load_scope(
         &mut self,
         node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
-        };
-        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        Ok(self
-            .stack_graph
-            .add_push_symbol_node(id, symbol, true)
-            .unwrap())
+        let is_exported =
+            self.load_flag(node, IS_EXPORTED_ATTR)? || self.load_flag(node, IS_ENDPOINT_ATTR)?;
+        Ok(self.stack_graph.add_scope_node(id, is_exported).unwrap())
     }
 
     fn load_symbol(&self, value: &Value) -> Result<String, LoadError> {
@@ -575,8 +595,17 @@ impl<'a> StackGraphLoader<'a> {
         }
     }
 
+    fn load_flag(&mut self, node: &GraphNode, attribute: &str) -> Result<bool, LoadError> {
+        match node.attributes.get(attribute) {
+            Some(value) => value.as_boolean().map_err(|_| {
+                LoadError::UnknownFlagType(format!("{}", attribute), format!("{}", value))
+            }),
+            None => Ok(false),
+        }
+    }
+
     fn load_span(&mut self, node: &GraphNode, node_handle: Handle<Node>) -> Result<(), LoadError> {
-        let source_node = match node.attributes.get("source_node") {
+        let source_node = match node.attributes.get(SOURCE_NODE_ATTR) {
             Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };
