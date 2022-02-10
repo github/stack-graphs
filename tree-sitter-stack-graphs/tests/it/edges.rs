@@ -51,9 +51,9 @@ fn can_create_edges() {
     let tsg = r#"
       (identifier) @id {
          node source
-         attr (source) type = "definition", symbol = (source-text @id)
+         attr (source) type = "pop_symbol", symbol = (source-text @id), is_definition
          node sink
-         attr (sink) type = "reference", symbol = (source-text @id)
+         attr (sink) type = "push_symbol", symbol = (source-text @id), is_reference
          edge source -> sink
       }
     "#;
@@ -72,9 +72,9 @@ fn can_create_edges_with_precedence() {
     let tsg = r#"
       (identifier) @id {
          node source
-         attr (source) type = "definition", symbol = (source-text @id)
+         attr (source) type = "pop_symbol", symbol = (source-text @id), is_definition
          node sink
-         attr (sink) type = "reference", symbol = (source-text @id)
+         attr (sink) type = "push_symbol", symbol = (source-text @id), is_reference
          edge source -> sink
          attr (source -> sink) precedence = 17
       }
@@ -94,7 +94,7 @@ fn can_create_edges_to_singleton_nodes() {
     let tsg = r#"
       (identifier) @id {
          node source
-         attr (source) type = "reference", symbol = (source-text @id)
+         attr (source) type = "push_symbol", symbol = (source-text @id), is_reference
          edge source -> ROOT_NODE
          attr (source -> ROOT_NODE) precedence = 6
          edge source -> JUMP_TO_SCOPE_NODE
@@ -103,7 +103,7 @@ fn can_create_edges_to_singleton_nodes() {
 
       (identifier) @id {
          node sink
-         attr (sink) type = "definition", symbol = (source-text @id)
+         attr (sink) type = "pop_symbol", symbol = (source-text @id), is_definition
          edge ROOT_NODE -> sink
          attr (ROOT_NODE -> sink) precedence = 12
          edge JUMP_TO_SCOPE_NODE -> sink
