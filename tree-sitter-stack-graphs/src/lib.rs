@@ -65,31 +65,44 @@
 //! ``` skip
 //! (identifier) {
 //!   node new_node
-//!   attr (new_node) type = "drop"
+//!   attr (new_node) type = DROP_SCOPES_TYPE
 //! }
 //! ```
 //!
 //! The valid `type` values are:
 //!
-//! - `definition`: a _definition_ node
-//! - `drop`: a _drop scopes_ node
-//! - `exported` or `endpoint`: an _exported scope_ node
-//! - `internal`: an _internal scope node_ (note that this is the default if you don't provide a
-//!   `type` attribute)
-//! - `pop`: a _pop symbol_ or _pop scoped symbol_ node
-//! - `push`: a _push symbol_ or _push scoped symbol_ node
-//! - `reference`: a _reference_ node
+//! - `drop_scopes`: a _drop scopes_ node
+//! - `pop_symbol`: a _pop symbol_ node
+//! - `pop_scoped_symbol`: a _pop scoped symbol_ node
+//! - `push_symbol`: a _push symbol_ node
+//! - `push_scoped_symbol`: a _push scoped symbol_ node
+//! - `scope`: a _scope_ node
 //!
-//! Certain node types — `definition`, `pop`, `push`, and `reference` — also require you to provide
-//! a `symbol` attribute.  Its value must be a string, but will typically come from the content of
-//! a parsed syntax node using the [`source-text`][] function and a syntax capture:
+//! A node without an explicit `type` attribute is assumed to be of type `scope`.
+//!
+//! Certain node types — `pop_symbol`, `pop_scoped_symbol`, `push_symbol` and `push_scoped_symbol` —
+//! also require you to provide a `symbol` attribute.  Its value must be a string, but will typically
+//! come from the content of a parsed syntax node using the [`source-text`][] function and a syntax
+//! capture:
 //!
 //! [`source-text`]: https://docs.rs/tree-sitter-graph/*/tree_sitter_graph/reference/functions/index.html#source-text
 //!
 //! ``` skip
 //! (identifier) @id {
 //!   node new_node
-//!   attr (new_node) type = "reference", symbol = (source-text @id)
+//!   attr (new_node) type = PUSH_SYMBOL_TYPE, symbol = (source-text @id)
+//! }
+//! ```
+//!
+//! Node types `pop_symbol` and `pop_scoped_symbol` allow an optional `is_definition` attribute, which
+//! marks that node as a proper definition.  Node types `push_symbol` and `push_scoped_symbol` allow
+//! an optiona `is_reference` attribute, which marks the node as a proper reference.  When `is_definition`
+//! or `is_reference` are set, the `source_node` attribute is required.
+//!
+//! ``` skip
+//! (identifier) @id {
+//!   node new_node
+//!   attr (new_node) type = PUSH_SYMBOL_TYPE, symbol = (source-text @id), is_reference, source_node = @id
 //! }
 //! ```
 //!
@@ -100,28 +113,18 @@
 //! ``` skip
 //! (identifier) @id {
 //!   node new_exported_scope_node
-//!   attr (new_exported_scope_node) type = "exported"
+//!   attr (new_exported_scope_node) is_exported
 //!   node new_push_scoped_symbol_node
 //!   attr (new_push_scoped_symbol_node)
-//!     type = "push",
+//!     type = PUSH_SCOPED_SYMBOL_TYPE,
 //!     symbol = (source-text @id),
 //!     scope = new_exported_scope_node
 //! }
 //! ```
 //!
-//! To make a _pop scoped symbol_ node, you must provide a `scoped` attribute, whose value must be
-//! `#true`.  (You don't know in advance which particular scope stack will be popped off.) For
-//! instance:
+//! Nodes of type `scope` allow an optional `is_exported` attribute, that is required to use the scope
+//! in a `push_scoped_symbol` node.
 //!
-//! ``` skip
-//! (identifier) @id {
-//!   node new_pop_scoped_symbol_node
-//!   attr (new_pop_scoped_symbol_node)
-//!     type = "pop",
-//!     symbol = (source-text @id),
-//!     scoped = #true
-//! }
-//! ```
 //!
 //! ### Annotating nodes with location information
 //!
@@ -134,7 +137,7 @@
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = POP_SYMBOL_TYPE, symbol = (source-text @id), source_node = @func, is_definition
 //! }
 //! ```
 //!
@@ -149,7 +152,7 @@
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = POP_SYMBOL_TYPE, symbol = (source-text @id), source_node = @func, is_definition
 //!   node body
 //!   edge def -> body
 //! }
@@ -162,7 +165,7 @@
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = POP_SYMBOL_TYPE, symbol = (source-text @id), source_node = @func, is_definition
 //!   node body
 //!   edge def -> body
 //!   attr (def -> body) precedence = 1
@@ -179,7 +182,7 @@
 //! ``` skip
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
-//!   attr (def) type = "definition", symbol = (source-text @id), source_node = @func
+//!   attr (def) type = POP_SYMBOL_TYPE, symbol = (source-text @id), source_node = @func, is_definition
 //!   edge (ROOT_NODE -> def)
 //! }
 //! ```
@@ -247,6 +250,41 @@ use tree_sitter_graph::graph::GraphNode;
 use tree_sitter_graph::graph::GraphNodeRef;
 use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::Variables;
+
+// Node type values
+static DROP_SCOPES_TYPE: &'static str = "drop_scopes";
+static POP_SCOPED_SYMBOL_TYPE: &'static str = "pop_scoped_symbol";
+static POP_SYMBOL_TYPE: &'static str = "pop_symbol";
+static PUSH_SCOPED_SYMBOL_TYPE: &'static str = "push_scoped_symbol";
+static PUSH_SYMBOL_TYPE: &'static str = "push_symbol";
+static SCOPE_TYPE: &'static str = "scope";
+
+// Node attribute names
+static IS_DEFINITION_ATTR: &'static str = "is_definition";
+static IS_EXPORTED_ATTR: &'static str = "is_exported";
+static IS_ENDPOINT_ATTR: &'static str = "is_endpoint";
+static IS_REFERENCE_ATTR: &'static str = "is_reference";
+static SCOPE_ATTR: &'static str = "scope";
+static SOURCE_NODE_ATTR: &'static str = "source_node";
+static SYMBOL_ATTR: &'static str = "symbol";
+static TYPE_ATTR: &'static str = "type";
+
+// Edge attribute names
+static PRECEDENCE_ATTR: &'static str = "precedence";
+
+// Node attribute shorthands
+static NODE_DEFINITION_SHORTHAND: &'static str = "node_definition";
+static SCOPED_NODE_DEFINITION_SHORTHAND: &'static str = "scoped_node_definition";
+static NODE_REFERENCE_SHORTHAND: &'static str = "node_reference";
+static SCOPED_NODE_REFERENCE_SHORTHAND: &'static str = "scoped_node_reference";
+static POP_NODE_SHORTHAND: &'static str = "pop_node";
+static POP_SCOPED_NODE_SHORTHAND: &'static str = "pop_scoped_node";
+static POP_SYMBOL_SHORTHAND: &'static str = "pop_symbol";
+static POP_SCOPED_SYMBOL_SHORTHAND: &'static str = "pop_scoped_symbol";
+static PUSH_NODE_SHORTHAND: &'static str = "push_node";
+static PUSH_SCOPED_NODE_SHORTHAND: &'static str = "push_scoped_node";
+static PUSH_SYMBOL_SHORTHAND: &'static str = "push_symbol";
+static PUSH_SCOPED_SYMBOL_SHORTHAND: &'static str = "push_scoped_symbol";
 
 /// Holds information about how to construct stack graphs for a particular language
 pub struct StackGraphLanguage {
@@ -357,57 +395,97 @@ impl GraphConverter {
     ) -> Result<(), (&'static str, Value)> {
         let node = &graph[node_ref];
         let mut new_attributes: Vec<(&'static str, Value)> = Vec::new();
-        if let Some(value) = node.attributes.get("push") {
-            new_attributes.push(("type", "push".into()));
-            let symbol = Self::convert_symbol(value).map_err(|_| ("push".into(), value.clone()))?;
-            new_attributes.push(("symbol", symbol.clone().into()));
-        } else if let Some(value) = node.attributes.get("push_node") {
-            new_attributes.push(("type", "push".into()));
+
+        if let Some(value) = node.attributes.get(NODE_DEFINITION_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, POP_SYMBOL_TYPE.into()));
             let node = value
                 .as_syntax_node_ref()
-                .map_err(|_| ("push_node".into(), value.clone()))?;
+                .map_err(|_| (NODE_DEFINITION_SHORTHAND.into(), value.clone()))?;
             let symbol = source[graph[node].byte_range()].to_string();
-            new_attributes.push(("symbol", symbol.into()));
-        } else if let Some(value) = node.attributes.get("pop") {
-            new_attributes.push(("type", "pop".into()));
-            let symbol = Self::convert_symbol(value).map_err(|_| ("pop".into(), value.clone()))?;
-            new_attributes.push(("symbol", symbol.clone().into()));
-        } else if let Some(value) = node.attributes.get("pop_node") {
-            new_attributes.push(("type", "pop".into()));
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+            new_attributes.push((IS_DEFINITION_ATTR, true.into()));
+        } else if let Some(value) = node.attributes.get(SCOPED_NODE_DEFINITION_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, POP_SCOPED_SYMBOL_TYPE.into()));
             let node = value
                 .as_syntax_node_ref()
-                .map_err(|_| ("pop_node", value.clone()))?;
+                .map_err(|_| (SCOPED_NODE_DEFINITION_SHORTHAND.into(), value.clone()))?;
             let symbol = source[graph[node].byte_range()].to_string();
-            new_attributes.push(("symbol", symbol.into()));
-        } else if let Some(value) = node.attributes.get("reference") {
-            new_attributes.push(("type", "reference".into()));
-            // source_node must be defined already
-            let symbol =
-                Self::convert_symbol(value).map_err(|_| ("reference".into(), value.clone()))?;
-            new_attributes.push(("symbol", symbol.clone().into()));
-        } else if let Some(value) = node.attributes.get("reference_node") {
-            new_attributes.push(("type", "reference".into()));
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+            new_attributes.push((IS_DEFINITION_ATTR, true.into()));
+        } else if let Some(value) = node.attributes.get(POP_NODE_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, POP_SYMBOL_TYPE.into()));
             let node = value
                 .as_syntax_node_ref()
-                .map_err(|_| ("reference_node".into(), value.clone()))?;
-            new_attributes.push(("source_node", node.clone().into()));
+                .map_err(|_| (POP_NODE_SHORTHAND, value.clone()))?;
             let symbol = source[graph[node].byte_range()].to_string();
-            new_attributes.push(("symbol", symbol.into()));
-        } else if let Some(value) = node.attributes.get("definition") {
-            new_attributes.push(("type", "definition".into()));
-            // source_node must be defined already
-            let symbol =
-                Self::convert_symbol(value).map_err(|_| ("definition".into(), value.clone()))?;
-            new_attributes.push(("symbol", symbol.clone().into()));
-        } else if let Some(value) = node.attributes.get("definition_node") {
-            new_attributes.push(("type", "definition".into()));
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+        } else if let Some(value) = node.attributes.get(POP_SCOPED_NODE_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, POP_SCOPED_SYMBOL_TYPE.into()));
             let node = value
                 .as_syntax_node_ref()
-                .map_err(|_| ("definition_node".into(), value.clone()))?;
-            new_attributes.push(("source_node", node.clone().into()));
+                .map_err(|_| (POP_SCOPED_NODE_SHORTHAND, value.clone()))?;
             let symbol = source[graph[node].byte_range()].to_string();
-            new_attributes.push(("symbol", symbol.into()));
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+        } else if let Some(value) = node.attributes.get(POP_SYMBOL_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, POP_SYMBOL_TYPE.into()));
+            let symbol = Self::convert_symbol(value)
+                .map_err(|_| (POP_SYMBOL_SHORTHAND.into(), value.clone()))?;
+            new_attributes.push((SYMBOL_ATTR, symbol.clone().into()));
+        } else if let Some(value) = node.attributes.get(POP_SCOPED_SYMBOL_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, POP_SCOPED_SYMBOL_TYPE.into()));
+            let symbol = Self::convert_symbol(value)
+                .map_err(|_| (POP_SCOPED_SYMBOL_SHORTHAND.into(), value.clone()))?;
+            new_attributes.push((SYMBOL_ATTR, symbol.clone().into()));
+        } else if let Some(value) = node.attributes.get(NODE_REFERENCE_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, PUSH_SYMBOL_TYPE.into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| (NODE_REFERENCE_SHORTHAND.into(), value.clone()))?;
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+            new_attributes.push((IS_REFERENCE_ATTR, true.into()));
+        } else if let Some(value) = node.attributes.get(SCOPED_NODE_REFERENCE_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, PUSH_SCOPED_SYMBOL_TYPE.into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| (SCOPED_NODE_REFERENCE_SHORTHAND.into(), value.clone()))?;
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+            new_attributes.push((IS_REFERENCE_ATTR, true.into()));
+        } else if let Some(value) = node.attributes.get(PUSH_NODE_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, PUSH_SYMBOL_TYPE.into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| (PUSH_NODE_SHORTHAND.into(), value.clone()))?;
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+        } else if let Some(value) = node.attributes.get(PUSH_SCOPED_NODE_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, PUSH_SCOPED_SYMBOL_TYPE.into()));
+            let node = value
+                .as_syntax_node_ref()
+                .map_err(|_| (PUSH_SCOPED_NODE_SHORTHAND.into(), value.clone()))?;
+            let symbol = source[graph[node].byte_range()].to_string();
+            new_attributes.push((SYMBOL_ATTR, symbol.into()));
+            new_attributes.push((SOURCE_NODE_ATTR, node.clone().into()));
+        } else if let Some(value) = node.attributes.get(PUSH_SYMBOL_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, PUSH_SYMBOL_TYPE.into()));
+            let symbol = Self::convert_symbol(value)
+                .map_err(|_| (PUSH_SYMBOL_TYPE.into(), value.clone()))?;
+            new_attributes.push((SYMBOL_ATTR, symbol.clone().into()));
+        } else if let Some(value) = node.attributes.get(PUSH_SCOPED_SYMBOL_SHORTHAND) {
+            new_attributes.push((TYPE_ATTR, PUSH_SCOPED_SYMBOL_TYPE.into()));
+            let symbol = Self::convert_symbol(value)
+                .map_err(|_| (PUSH_SCOPED_SYMBOL_TYPE.into(), value.clone()))?;
+            new_attributes.push((SYMBOL_ATTR, symbol.clone().into()));
         }
+
         if !new_attributes.is_empty() {
             for (name, value) in new_attributes {
                 graph[node_ref]
@@ -434,6 +512,10 @@ pub enum LoadError {
     MissingNodeType(GraphNodeRef),
     #[error("Missing ‘symbol’ attribute on graph node")]
     MissingSymbol(GraphNodeRef),
+    #[error("Missing ‘scope’ attribute on graph node")]
+    MissingScope(GraphNodeRef),
+    #[error("Unknown ‘{0}’ flag type {1}")]
+    UnknownFlagType(String, String),
     #[error("Unknown node type {0}")]
     UnknownNodeType(String),
     #[error("Unknown symbol type {0}")]
@@ -480,13 +562,12 @@ impl<'a> StackGraphLoader<'a> {
         for node_ref in self.graph.iter_nodes().skip(2) {
             let node = &self.graph[node_ref];
             let handle = match get_node_type(node)? {
-                NodeType::Definition => self.load_definition(node, node_ref)?,
                 NodeType::DropScopes => self.load_drop_scopes(node_ref),
-                NodeType::ExportedScope => self.load_exported_scope(node_ref),
-                NodeType::InternalScope => self.load_internal_scope(node_ref),
+                NodeType::PopScopedSymbol => self.load_pop_scoped_symbol(node, node_ref)?,
                 NodeType::PopSymbol => self.load_pop_symbol(node, node_ref)?,
+                NodeType::PushScopedSymbol => self.load_push_scoped_symbol(node, node_ref)?,
                 NodeType::PushSymbol => self.load_push_symbol(node, node_ref)?,
-                NodeType::Reference => self.load_reference(node, node_ref)?,
+                NodeType::Scope => self.load_scope(node, node_ref)?,
             };
             self.load_span(node, handle)?;
         }
@@ -500,7 +581,7 @@ impl<'a> StackGraphLoader<'a> {
             let source_node_id = self.node_id_for_graph_node(source_ref);
             let source_handle = self.stack_graph.node_for_id(source_node_id).unwrap();
             for (sink_ref, edge) in source.iter_edges() {
-                let precedence = match edge.attributes.get("precedence") {
+                let precedence = match edge.attributes.get(PRECEDENCE_ATTR) {
                     Some(precedence) => precedence.as_integer()? as i32,
                     None => 0,
                 };
@@ -516,36 +597,33 @@ impl<'a> StackGraphLoader<'a> {
 }
 
 enum NodeType {
-    Definition,
     DropScopes,
-    ExportedScope,
-    InternalScope,
     PopSymbol,
+    PopScopedSymbol,
     PushSymbol,
-    Reference,
+    PushScopedSymbol,
+    Scope,
 }
 
 fn get_node_type(node: &GraphNode) -> Result<NodeType, LoadError> {
-    let node_type = match node.attributes.get("type") {
+    let node_type = match node.attributes.get(TYPE_ATTR) {
         Some(node_type) => node_type.as_str()?,
-        None => return Ok(NodeType::InternalScope),
+        None => return Ok(NodeType::Scope),
     };
-    if node_type == "definition" {
-        return Ok(NodeType::Definition);
-    } else if node_type == "drop" {
+    if node_type == DROP_SCOPES_TYPE {
         return Ok(NodeType::DropScopes);
-    } else if node_type == "exported" || node_type == "endpoint" {
-        return Ok(NodeType::ExportedScope);
-    } else if node_type == "internal" {
-        return Ok(NodeType::InternalScope);
-    } else if node_type == "pop" {
+    } else if node_type == POP_SCOPED_SYMBOL_TYPE {
+        return Ok(NodeType::PopScopedSymbol);
+    } else if node_type == POP_SYMBOL_TYPE {
         return Ok(NodeType::PopSymbol);
-    } else if node_type == "push" {
+    } else if node_type == PUSH_SCOPED_SYMBOL_TYPE {
+        return Ok(NodeType::PushScopedSymbol);
+    } else if node_type == PUSH_SYMBOL_TYPE {
         return Ok(NodeType::PushSymbol);
-    } else if node_type == "reference" {
-        return Ok(NodeType::Reference);
+    } else if node_type == SCOPE_TYPE {
+        return Ok(NodeType::Scope);
     } else {
-        return Err(LoadError::UnknownNodeType(format!("{:?}", node_type)));
+        return Err(LoadError::UnknownNodeType(format!("{}", node_type)));
     }
 }
 
@@ -561,36 +639,27 @@ impl<'a> StackGraphLoader<'a> {
         }
     }
 
-    fn load_definition(
-        &mut self,
-        node: &GraphNode,
-        node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
-        };
-        let symbol = self.stack_graph.add_symbol(&symbol);
-        let id = self.node_id_for_graph_node(node_ref);
-        Ok(self
-            .stack_graph
-            .add_pop_symbol_node(id, symbol, true)
-            .unwrap())
-    }
-
     fn load_drop_scopes(&mut self, node_ref: GraphNodeRef) -> Handle<Node> {
         let id = self.node_id_for_graph_node(node_ref);
         self.stack_graph.add_drop_scopes_node(id).unwrap()
     }
 
-    fn load_exported_scope(&mut self, node_ref: GraphNodeRef) -> Handle<Node> {
+    fn load_pop_scoped_symbol(
+        &mut self,
+        node: &GraphNode,
+        node_ref: GraphNodeRef,
+    ) -> Result<Handle<Node>, LoadError> {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
+            Some(symbol) => self.load_symbol(symbol)?,
+            None => return Err(LoadError::MissingSymbol(node_ref)),
+        };
+        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        self.stack_graph.add_scope_node(id, true).unwrap()
-    }
-
-    fn load_internal_scope(&mut self, node_ref: GraphNodeRef) -> Handle<Node> {
-        let id = self.node_id_for_graph_node(node_ref);
-        self.stack_graph.add_scope_node(id, false).unwrap()
+        let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
+        Ok(self
+            .stack_graph
+            .add_pop_scoped_symbol_node(id, symbol, is_definition)
+            .unwrap())
     }
 
     fn load_pop_symbol(
@@ -598,23 +667,38 @@ impl<'a> StackGraphLoader<'a> {
         node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        if let Some(scoped) = node.attributes.get("scoped") {
-            if scoped.as_boolean()? {
-                return Ok(self
-                    .stack_graph
-                    .add_pop_scoped_symbol_node(id, symbol, false)
-                    .unwrap());
-            }
-        }
+        let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         Ok(self
             .stack_graph
-            .add_pop_symbol_node(id, symbol, false)
+            .add_pop_symbol_node(id, symbol, is_definition)
+            .unwrap())
+    }
+
+    fn load_push_scoped_symbol(
+        &mut self,
+        node: &GraphNode,
+        node_ref: GraphNodeRef,
+    ) -> Result<Handle<Node>, LoadError> {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
+            Some(symbol) => self.load_symbol(symbol)?,
+            None => return Err(LoadError::MissingSymbol(node_ref)),
+        };
+        let symbol = self.stack_graph.add_symbol(&symbol);
+        let id = self.node_id_for_graph_node(node_ref);
+        let scope = match node.attributes.get(SCOPE_ATTR) {
+            Some(scope) => self.node_id_for_graph_node(scope.as_graph_node_ref()?),
+            None => return Err(LoadError::MissingScope(node_ref)),
+        };
+        let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
+        Ok(self
+            .stack_graph
+            .add_push_scoped_symbol_node(id, symbol, scope, is_reference)
             .unwrap())
     }
 
@@ -623,41 +707,28 @@ impl<'a> StackGraphLoader<'a> {
         node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
+        let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        if let Some(scope) = node.attributes.get("scope") {
-            let scope = scope.as_graph_node_ref()?;
-            let scope = self.node_id_for_graph_node(scope);
-            return Ok(self
-                .stack_graph
-                .add_push_scoped_symbol_node(id, symbol, scope, false)
-                .unwrap());
-        }
+        let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
         Ok(self
             .stack_graph
-            .add_push_symbol_node(id, symbol, false)
+            .add_push_symbol_node(id, symbol, is_reference)
             .unwrap())
     }
 
-    fn load_reference(
+    fn load_scope(
         &mut self,
         node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
-        let symbol = match node.attributes.get("symbol") {
-            Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
-        };
-        let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
-        Ok(self
-            .stack_graph
-            .add_push_symbol_node(id, symbol, true)
-            .unwrap())
+        let is_exported =
+            self.load_flag(node, IS_EXPORTED_ATTR)? || self.load_flag(node, IS_ENDPOINT_ATTR)?;
+        Ok(self.stack_graph.add_scope_node(id, is_exported).unwrap())
     }
 
     fn load_symbol(&self, value: &Value) -> Result<String, LoadError> {
@@ -668,8 +739,17 @@ impl<'a> StackGraphLoader<'a> {
         }
     }
 
+    fn load_flag(&mut self, node: &GraphNode, attribute: &str) -> Result<bool, LoadError> {
+        match node.attributes.get(attribute) {
+            Some(value) => value.as_boolean().map_err(|_| {
+                LoadError::UnknownFlagType(format!("{}", attribute), format!("{}", value))
+            }),
+            None => Ok(false),
+        }
+    }
+
     fn load_span(&mut self, node: &GraphNode, node_handle: Handle<Node>) -> Result<(), LoadError> {
-        let source_node = match node.attributes.get("source_node") {
+        let source_node = match node.attributes.get(SOURCE_NODE_ATTR) {
             Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };

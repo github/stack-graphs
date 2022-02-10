@@ -39,7 +39,7 @@ fn can_create_definition_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "definition", symbol = (source-text @id)
+         attr (result) type = "pop_symbol", symbol = (source-text @id), is_definition
       }
     "#;
     let python = "a";
@@ -51,7 +51,7 @@ fn cannot_create_definition_node_without_symbol() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "definition"
+         attr (result) type = "pop_symbol", is_definition
       }
     "#;
     let python = "a";
@@ -64,7 +64,7 @@ fn can_create_drop_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "drop"
+         attr (result) type = "drop_scopes"
       }
     "#;
     let python = "a";
@@ -76,7 +76,7 @@ fn can_create_exported_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "exported"
+         attr (result) is_exported
       }
     "#;
     let python = "a";
@@ -88,7 +88,7 @@ fn can_create_endpoint_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "endpoint"
+         attr (result) is_endpoint
       }
     "#;
     let python = "a";
@@ -111,7 +111,7 @@ fn can_create_explicit_internal_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "internal"
+         attr (result) type = "scope"
       }
     "#;
     let python = "a";
@@ -123,7 +123,7 @@ fn can_create_pop_symbol_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "pop", symbol = (source-text @id)
+         attr (result) type = "pop_symbol", symbol = (source-text @id)
       }
     "#;
     let python = "a";
@@ -135,7 +135,7 @@ fn cannot_create_pop_symbol_node_without_symbol() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "pop"
+         attr (result) type = "pop_symbol"
       }
     "#;
     let python = "a";
@@ -148,7 +148,7 @@ fn can_create_pop_scoped_symbol_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "pop", symbol = (source-text @id), scoped = #true
+         attr (result) type = "pop_scoped_symbol", symbol = (source-text @id)
       }
     "#;
     let python = "a";
@@ -160,7 +160,7 @@ fn cannot_create_pop_scoped_symbol_node_without_symbol() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "pop", scoped = #true
+         attr (result) type = "pop_scoped_symbol"
       }
     "#;
     let python = "a";
@@ -173,7 +173,7 @@ fn can_create_push_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "push", symbol = (source-text @id)
+         attr (result) type = "push_symbol", symbol = (source-text @id)
       }
     "#;
     let python = "a";
@@ -185,7 +185,7 @@ fn cannot_create_push_symbol_node_without_symbol() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "push"
+         attr (result) type = "push_symbol"
       }
     "#;
     let python = "a";
@@ -198,9 +198,9 @@ fn can_create_push_scoped_node() {
     let tsg = r#"
       (identifier) @id {
          node scope
-         attr (scope) type = "exported"
+         attr (scope) is_exported
          node result
-         attr (result) type = "push", symbol = (source-text @id), scope = scope
+         attr (result) type = "push_scoped_symbol", symbol = (source-text @id), scope = scope
       }
     "#;
     let python = "a";
@@ -219,9 +219,9 @@ fn cannot_create_push_scoped_symbol_node_without_symbol() {
     let tsg = r#"
       (identifier) @id {
          node scope
-         attr (scope) type = "exported"
+         attr (scope) is_exported
          node result
-         attr (result) type = "push", scope = scope
+         attr (result) type = "push_scoped_symbol", scope = scope
       }
     "#;
     let python = "a";
@@ -234,7 +234,7 @@ fn can_create_reference_node() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "reference", symbol = (source-text @id)
+         attr (result) type = "push_symbol", symbol = (source-text @id), is_reference
       }
     "#;
     let python = "a";
@@ -246,7 +246,7 @@ fn cannot_create_reference_node_without_symbol() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "reference"
+         attr (result) type = "push_symbol", is_reference
       }
     "#;
     let python = "a";
@@ -259,7 +259,7 @@ fn can_calculate_spans() {
     let tsg = r#"
       (identifier) @id {
          node result
-         attr (result) type = "definition", symbol = "test", source_node = @id
+         attr (result) type = "pop_symbol", symbol = "test", source_node = @id, is_definition
       }
     "#;
     let python = "  a  ";
