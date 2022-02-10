@@ -67,3 +67,5 @@ pub mod partial;
 pub mod paths;
 pub mod stitching;
 pub(crate) mod utils;
+#[cfg(feature = "json")]
+pub mod visualization;
