@@ -13,7 +13,6 @@ use stack_graphs::paths::Paths;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
-use tree_sitter_graph::ExecutionError;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::assert::Assertions;
 use tree_sitter_stack_graphs::assert::Result;
@@ -65,14 +64,14 @@ impl Command {
                         Err(TestError::AssertionsFailed(failure_count)) => {
                             total_failure_count += failure_count;
                         }
-                        r => {
-                            r?;
-                        }
+                        r => r.with_context(|| {
+                            format!("Error reading test file {}", source_path.display())
+                        })?,
                     },
                     Err(e) => {
                         println!("{} {}", "⦵".dimmed(), source_path.display(),);
                         if !self.hide_failure_errors {
-                            println!("  {}", e);
+                            Self::print_err(e);
                         }
                     }
                 }
@@ -90,10 +89,8 @@ impl Command {
         sgl: &mut StackGraphLanguage,
         source_path: &Path,
     ) -> std::result::Result<(), TestError> {
-        let source = std::fs::read(source_path)
-            .with_context(|| format!("Error reading source file {}", source_path.display()))?;
-        let source = String::from_utf8(source)
-            .with_context(|| format!("Error reading source file {}", source_path.display()))?;
+        let source = std::fs::read(source_path).map_err(TestError::other)?;
+        let source = String::from_utf8(source).map_err(TestError::other)?;
 
         let mut globals = Variables::new();
         globals
@@ -101,23 +98,15 @@ impl Command {
                 "FILE_PATH".into(),
                 source_path.as_os_str().to_str().unwrap().into(),
             )
-            .map_err(|_| {
-                TestError::Other(ExecutionError::DuplicateVariable("FILE_PATH".into()).into())
-            })?;
+            .expect("Failed to set FILE_PATH");
 
         let mut stack_graph = StackGraph::new();
         let file = stack_graph.get_or_create_file(source_path.to_str().unwrap());
 
         sgl.build_stack_graph_into(&mut stack_graph, file, &source, &mut globals)
-            .with_context(|| {
-                anyhow!(
-                    "Could not execute stack graph rules on {}",
-                    source_path.display()
-                )
-            })?;
+            .map_err(TestError::other)?;
 
-        let assertions =
-            Assertions::from_source(file, &source).map_err(|e| TestError::Other(e.into()))?;
+        let assertions = Assertions::from_source(file, &source).map_err(TestError::other)?;
         let mut paths = Paths::new();
         let result = assertions.run(&stack_graph, &mut paths);
         if result.failure_count() == 0 {
@@ -146,18 +135,37 @@ impl Command {
             }
             let graph_path = source_path.with_extension("graph.json");
             let paths_path = source_path.with_extension("paths.json");
-            let visualization_path = source_path.with_extension("html");
             if self.save_graph_on_failure {
-                let json = stack_graph.to_json_string_pretty()?;
+                let json = stack_graph
+                    .to_json_string_pretty()
+                    .map_err(TestError::other)?;
                 std::fs::write(&graph_path, json).expect("Unable to write graph");
                 println!("  Graph: {}", graph_path.display());
             }
             if self.save_paths_on_failure {
-                let json = paths.to_json_string_pretty(&stack_graph)?;
+                let json = paths
+                    .to_json_string_pretty(&stack_graph)
+                    .map_err(TestError::other)?;
                 std::fs::write(&paths_path, json).expect("Unable to write paths");
                 println!("  Paths: {}", paths_path.display());
             }
             Err(TestError::AssertionsFailed(result.failure_count()))
+        }
+    }
+
+    fn print_err<E>(err: E)
+    where
+        E: Into<anyhow::Error>,
+    {
+        let err = err.into();
+        println!("  {}", err);
+        let mut first = true;
+        for err in err.chain().skip(1) {
+            if first {
+                println!("  Caused by:");
+                first = false;
+            }
+            println!("      {}", err);
         }
     }
 }
@@ -167,7 +175,14 @@ pub enum TestError {
     #[error("{0} assertions failed")]
     AssertionsFailed(usize),
     #[error(transparent)]
-    Json(#[from] stack_graphs::json::JsonError),
-    #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+impl TestError {
+    fn other<E>(error: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Other(error.into())
+    }
 }
