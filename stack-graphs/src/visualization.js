@@ -11,11 +11,8 @@ function sg_visualize(container, graph, paths) {
     let nodes = sg.selectAll('.node')
         .data(graph.nodes, sg_node_to_id_str)
         .join('g')
-        .attr('class', 'node');
-
-    nodes
-        .append('text')
-        .text(sg_render_node);
+        .attr('class', 'node')
+        .each(sg_render_node);
 
     graph.edges.forEach((e) => { e.target = e.sink; });
     let edges = sg.selectAll('.edge')
@@ -44,25 +41,48 @@ function sg_visualize(container, graph, paths) {
     }
 }
 
-function sg_render_node(node) {
+function sg_render_node(node, idx, gs) {
+    let g = d3.select(this);
+
+    g.attr('class', `node ${node.type}`);
+
     switch (node.type) {
         case "drop_scopes":
-            return "DROP";
+            sg_text_box(g, "DROP");
+            break;
         case "jump_to_scope":
-            return "JUMP";
+            sg_text_box(g, "JUMP");
+            break;
         case "pop_symbol":
-            return node.symbol;
+            sg_text_box(g, node.symbol);
+            break;
         case "pop_scoped_symbol":
-            return node.symbol;
+            sg_text_box(g, node.symbol);
+            break;
         case "push_symbol":
-            return node.symbol;
+            sg_text_box(g, node.symbol);
+            break;
         case "push_scoped_symbol":
-            return node.symbol;
+            sg_text_box(g, node.symbol);
+            break;
         case "root":
-            return "ROOT";
+            sg_text_box(g, node.symbol);
+            break;
         case "scope":
-            return "";
+            g.append('circ');
+            break;
     }
+}
+
+function sg_text_box(g, text) {
+    text = g.append('text').text(text);
+    console.log(text);
+    bbox = text.node().getBBox();
+    return g.insert('rect').lower()
+        .attr('x', bbox.x)
+        .attr('y', bbox.y)
+        .attr('width', bbox.width)
+        .attr('height', bbox.height);
 }
 
 function sg_node_to_id_str(node) {

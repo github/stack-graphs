@@ -11,10 +11,41 @@
     height: 512px;
 }
 
-.sg.node {
+.sg .node.drop_nodes rect {
+    fill: gray;
 }
 
-.sg.edge {
+.sg .node.jump_to_scope rect {
+    fill: gray;
+}
+
+.sg .node.pop_symbol rect {
+    fill: gray;
+}
+
+.sg .node.pop_scoped_symbol rect {
+    fill: gray;
+}
+
+.sg .node.push_symbol rect {
+    fill: gray;
+}
+
+.sg .node.push_scoped_symbol rect {
+    fill: gray;
+}
+
+.sg .node.root rect {
+    fill: gray;
+}
+
+.sg .node.scope circ {
+    fill: gray;
+    width: 20px;
+    height: 20px;
+}
+
+.sg .edge {
     stroke: black;
     stroke-width: 2px;
 }
