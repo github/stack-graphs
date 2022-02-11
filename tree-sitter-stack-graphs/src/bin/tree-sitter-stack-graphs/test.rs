@@ -77,13 +77,10 @@ impl Command {
         source_path: &Path,
         loader: &mut Loader,
     ) -> std::result::Result<(), TestError> {
-        let source = std::fs::read(source_path)
-            .with_context(|| format!("Error reading source file {}", source_path.display()))?;
-        let source = String::from_utf8(source)
-            .with_context(|| format!("Error reading source file {}", source_path.display()))?;
+        let source = std::fs::read(source_path).map_err(TestError::other)?;
+        let source = String::from_utf8(source).map_err(TestError::other)?;
         let source_path_str = source_path.to_string_lossy();
-        let mut test = Test::from_source(&source_path_str, &source)
-            .with_context(|| format!("Error parsing test file {}", source_path.display()))?;
+        let mut test = Test::from_source(&source_path_str, &source).map_err(TestError::other)?;
 
         // construct stack graph
         for test_file in &test.files {
@@ -93,7 +90,7 @@ impl Command {
                 Err(e) => {
                     println!("{} {}", "⦵".dimmed(), source_path_str);
                     if !self.hide_failure_errors {
-                        eprintln!("  {}", e);
+                        Self::print_err(e);
                     }
                     continue;
                 }
@@ -107,13 +104,7 @@ impl Command {
                 test_file.file,
                 &test_file.source,
                 &mut globals,
-            )
-            .with_context(|| {
-                anyhow!(
-                    "Could not execute stack graph rules on {}",
-                    source_path.display()
-                )
-            })?;
+            ).map_err(TestError::other)?;
         }
 
         // run tests
@@ -143,7 +134,11 @@ impl Command {
             let graph_path = source_path.with_extension("graph.json");
             let paths_path = source_path.with_extension("paths.json");
             if self.save_graph_on_failure {
-                let json = test.graph.to_json().to_string_pretty()?;
+                let json = test
+                    .graph
+                    .to_json()
+                    .to_string_pretty()
+                    .map_err(TestError::other)?;
                 std::fs::write(&graph_path, json).expect("Unable to write graph");
                 println!("  Graph: {}", graph_path.display());
             }
@@ -151,11 +146,28 @@ impl Command {
                 let json = test
                     .paths
                     .to_json(&test.graph, |_, _, _| true)
-                    .to_string_pretty()?;
+                    .to_string_pretty()
+                    .map_err(TestError::other)?;
                 std::fs::write(&paths_path, json).expect("Unable to write paths");
                 println!("  Paths: {}", paths_path.display());
             }
             Err(TestError::AssertionsFailed(result.failure_count()))
+        }
+    }
+
+    fn print_err<E>(err: E)
+    where
+        E: Into<anyhow::Error>,
+    {
+        let err = err.into();
+        println!("  {}", err);
+        let mut first = true;
+        for err in err.chain().skip(1) {
+            if first {
+                println!("  Caused by:");
+                first = false;
+            }
+            println!("      {}", err);
         }
     }
 }
@@ -165,7 +177,14 @@ pub enum TestError {
     #[error("{0} assertions failed")]
     AssertionsFailed(usize),
     #[error(transparent)]
-    Json(#[from] stack_graphs::json::JsonError),
-    #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+impl TestError {
+    fn other<E>(error: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Other(error.into())
+    }
 }
