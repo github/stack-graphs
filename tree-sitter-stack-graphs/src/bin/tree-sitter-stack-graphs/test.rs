@@ -44,6 +44,11 @@ pub struct Command {
     #[clap(long)]
     #[clap(short = 'P')]
     save_paths_on_failure: bool,
+
+    /// Save visualization for failed tests.  Implies saving paths and graph.
+    #[clap(long)]
+    #[clap(short = 'W')]
+    save_visualization_on_failure: bool,
 }
 
 impl Command {
@@ -135,6 +140,7 @@ impl Command {
             }
             let graph_path = source_path.with_extension("graph.json");
             let paths_path = source_path.with_extension("paths.json");
+            let visualization_path = source_path.with_extension("html");
             if self.save_graph_on_failure {
                 let json = stack_graph
                     .to_json_string_pretty()
@@ -148,6 +154,13 @@ impl Command {
                     .map_err(TestError::other)?;
                 std::fs::write(&paths_path, json).expect("Unable to write paths");
                 println!("  Paths: {}", paths_path.display());
+            }
+            if self.save_visualization_on_failure {
+                let html = stack_graph
+                    .to_html_string(&mut paths, &format!("{}", source_path.display()))
+                    .map_err(TestError::other)?;
+                std::fs::write(&visualization_path, html).expect("Unable to write visualization");
+                println!("  Visualization: {}", visualization_path.display());
             }
             Err(TestError::AssertionsFailed(result.failure_count()))
         }
