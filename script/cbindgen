@@ -7,13 +7,9 @@
 # distribution for license details.
 # ------------------------------------------------------------------------------
 
-set -e
-cd "$(dirname "$0")/../stack-graphs"
+set -eu
+cd "$(dirname "$0")/.."
 
-if ! which cbindgen >/dev/null 2>/dev/null; then
-    echo "Cannot find cbindgen!  Try `cargo install cbindgen`." >&2
-    exit 1
-fi
+cargo install --quiet --root . --version "^0.23" cbindgen
 
-mkdir -p include
-cbindgen > include/stack-graphs.h
+bin/cbindgen -o stack-graphs/include/stack-graphs.h stack-graphs
