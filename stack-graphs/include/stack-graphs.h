@@ -591,6 +591,9 @@ struct sg_forward_path_stitcher {
     // The number of new candidate paths that were discovered in the most recent phase.  If this
     // is 0, then the path stitching algorithm is complete.
     size_t previous_phase_paths_length;
+    // Whether the stitching algorithm is complete.  You should keep calling
+    // `sg_forward_path_stitcher_process_next_phase` until this field is true.
+    bool is_complete;
 };
 
 // Implements a phased forward partial path stitching algorithm.
@@ -615,6 +618,9 @@ struct sg_forward_partial_path_stitcher {
     // The number of new candidate partial paths that were discovered in the most recent phase.
     // If this is 0, then the partial path stitching algorithm is complete.
     size_t previous_phase_partial_paths_length;
+    // Whether the stitching algorithm is complete.  You should keep calling
+    // `sg_forward_partial_path_stitcher_process_next_phase` until this field is true.
+    bool is_complete;
 };
 
 // The handle of the singleton root node.
@@ -998,6 +1004,14 @@ struct sg_forward_path_stitcher *sg_forward_path_stitcher_new(const struct sg_st
                                                               size_t count,
                                                               const sg_node_handle *starting_nodes);
 
+// Sets the maximum amount of work that can be performed during each phase of the algorithm. By
+// bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
+// to starve any worker threads or processes that you might be using.  If you don't call this
+// method, then we allow ourselves to process all of the extensions of all of the paths found in
+// the previous phase, with no additional bound.
+void sg_forward_path_stitcher_set_max_work_per_phase(struct sg_forward_path_stitcher *stitcher,
+                                                     size_t max_work);
+
 // Runs the next phase of the path-stitching algorithm.  We will have built up a set of
 // incomplete paths during the _previous_ phase.  Before calling this function, you must
 // ensure that `db` contains all of the possible partial paths that we might want to extend
@@ -1030,6 +1044,14 @@ struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_new(co
                                                                               struct sg_partial_path_database *db,
                                                                               size_t count,
                                                                               const sg_node_handle *starting_nodes);
+
+// Sets the maximum amount of work that can be performed during each phase of the algorithm. By
+// bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
+// to starve any worker threads or processes that you might be using.  If you don't call this
+// method, then we allow ourselves to process all of the extensions of all of the paths found in
+// the previous phase, with no additional bound.
+void sg_forward_partial_path_stitcher_set_max_work_per_phase(struct sg_forward_partial_path_stitcher *stitcher,
+                                                             size_t max_work);
 
 // Runs the next phase of the algorithm.  We will have built up a set of incomplete partial paths
 // during the _previous_ phase.  Before calling this function, you must ensure that `db` contains

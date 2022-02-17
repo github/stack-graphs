@@ -11,6 +11,7 @@ use pretty_assertions::assert_eq;
 use stack_graphs::c::sg_forward_path_stitcher_free;
 use stack_graphs::c::sg_forward_path_stitcher_new;
 use stack_graphs::c::sg_forward_path_stitcher_process_next_phase;
+use stack_graphs::c::sg_forward_path_stitcher_set_max_work_per_phase;
 use stack_graphs::c::sg_partial_path;
 use stack_graphs::c::sg_partial_path_arena;
 use stack_graphs::c::sg_partial_path_arena_find_partial_paths_in_file;
@@ -140,11 +141,12 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_paths: &[&st
         references.len(),
         references.as_ptr() as *const _,
     );
+    sg_forward_path_stitcher_set_max_work_per_phase(stitcher, 1);
     let rust_stitcher = unsafe { &mut *stitcher };
 
     // Keep processing phases until the stitching algorithm is done.
     let mut results = BTreeSet::new();
-    while rust_stitcher.previous_phase_paths_length > 0 {
+    while !rust_stitcher.is_complete {
         let paths_slice = unsafe {
             std::slice::from_raw_parts(
                 rust_stitcher.previous_phase_paths as *const Path,

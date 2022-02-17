@@ -1704,6 +1704,9 @@ pub struct sg_forward_path_stitcher {
     /// The number of new candidate paths that were discovered in the most recent phase.  If this
     /// is 0, then the path stitching algorithm is complete.
     pub previous_phase_paths_length: usize,
+    /// Whether the stitching algorithm is complete.  You should keep calling
+    /// `sg_forward_path_stitcher_process_next_phase` until this field is true.
+    pub is_complete: bool,
 }
 
 // This is the Rust equivalent of a common C trick, where you have two versions of a struct — a
@@ -1720,6 +1723,7 @@ pub struct sg_forward_path_stitcher {
 struct ForwardPathStitcher {
     previous_phase_paths: *const Path,
     previous_phase_paths_length: usize,
+    is_complete: bool,
     stitcher: PathStitcher,
 }
 
@@ -1728,6 +1732,7 @@ impl ForwardPathStitcher {
         let mut this = ForwardPathStitcher {
             previous_phase_paths: std::ptr::null(),
             previous_phase_paths_length: 0,
+            is_complete: false,
             stitcher,
         };
         this.update_previous_phase_paths(paths);
@@ -1743,6 +1748,7 @@ impl ForwardPathStitcher {
         let slice = self.stitcher.previous_phase_paths_slice();
         self.previous_phase_paths = slice.as_ptr();
         self.previous_phase_paths_length = slice.len();
+        self.is_complete = self.stitcher.is_complete();
     }
 }
 
@@ -1777,6 +1783,20 @@ pub extern "C" fn sg_forward_path_stitcher_new(
         starting_nodes.iter().copied().map(sg_node_handle::into),
     );
     Box::into_raw(Box::new(ForwardPathStitcher::new(stitcher, paths))) as *mut _
+}
+
+/// Sets the maximum amount of work that can be performed during each phase of the algorithm. By
+/// bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
+/// to starve any worker threads or processes that you might be using.  If you don't call this
+/// method, then we allow ourselves to process all of the extensions of all of the paths found in
+/// the previous phase, with no additional bound.
+#[no_mangle]
+pub extern "C" fn sg_forward_path_stitcher_set_max_work_per_phase(
+    stitcher: *mut sg_forward_path_stitcher,
+    max_work: usize,
+) {
+    let stitcher = unsafe { &mut *(stitcher as *mut ForwardPathStitcher) };
+    stitcher.stitcher.set_max_work_per_phase(max_work);
 }
 
 /// Runs the next phase of the path-stitching algorithm.  We will have built up a set of
@@ -1838,6 +1858,9 @@ pub struct sg_forward_partial_path_stitcher {
     /// The number of new candidate partial paths that were discovered in the most recent phase.
     /// If this is 0, then the partial path stitching algorithm is complete.
     pub previous_phase_partial_paths_length: usize,
+    /// Whether the stitching algorithm is complete.  You should keep calling
+    /// `sg_forward_partial_path_stitcher_process_next_phase` until this field is true.
+    pub is_complete: bool,
 }
 
 // This is the Rust equivalent of a common C trick, where you have two versions of a struct — a
@@ -1854,6 +1877,7 @@ pub struct sg_forward_partial_path_stitcher {
 struct InternalForwardPartialPathStitcher {
     previous_phase_partial_paths: *const PartialPath,
     previous_phase_partial_paths_length: usize,
+    is_complete: bool,
     stitcher: ForwardPartialPathStitcher,
 }
 
@@ -1865,6 +1889,7 @@ impl InternalForwardPartialPathStitcher {
         let mut this = InternalForwardPartialPathStitcher {
             previous_phase_partial_paths: std::ptr::null(),
             previous_phase_partial_paths_length: 0,
+            is_complete: false,
             stitcher,
         };
         this.update_previous_phase_partial_paths(partials);
@@ -1878,6 +1903,7 @@ impl InternalForwardPartialPathStitcher {
         let slice = self.stitcher.previous_phase_partial_paths_slice();
         self.previous_phase_partial_paths = slice.as_ptr();
         self.previous_phase_partial_paths_length = slice.len();
+        self.is_complete = self.stitcher.is_complete();
     }
 }
 
@@ -1912,6 +1938,20 @@ pub extern "C" fn sg_forward_partial_path_stitcher_new(
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,
     ))) as *mut _
+}
+
+/// Sets the maximum amount of work that can be performed during each phase of the algorithm. By
+/// bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
+/// to starve any worker threads or processes that you might be using.  If you don't call this
+/// method, then we allow ourselves to process all of the extensions of all of the paths found in
+/// the previous phase, with no additional bound.
+#[no_mangle]
+pub extern "C" fn sg_forward_partial_path_stitcher_set_max_work_per_phase(
+    stitcher: *mut sg_forward_partial_path_stitcher,
+    max_work: usize,
+) {
+    let stitcher = unsafe { &mut *(stitcher as *mut InternalForwardPartialPathStitcher) };
+    stitcher.stitcher.set_max_work_per_phase(max_work);
 }
 
 /// Runs the next phase of the algorithm.  We will have built up a set of incomplete partial paths
