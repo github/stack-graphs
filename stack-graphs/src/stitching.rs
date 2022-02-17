@@ -438,6 +438,7 @@ pub struct PathStitcher {
     queue: VecDeque<Path>,
     next_iteration: VecDeque<Path>,
     cycle_detector: CycleDetector<Path>,
+    max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
 }
@@ -482,6 +483,8 @@ impl PathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             cycle_detector: CycleDetector::new(),
+            // By default, there's no artificial bound on the amount of work done per phase
+            max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
         }
@@ -507,6 +510,15 @@ impl PathStitcher {
         self.next_iteration.as_mut_slices().0
     }
 
+    /// Sets the maximum amount of work that can be performed during each phase of the algorithm.
+    /// By bounding our work this way, you can ensure that it's not possible for our CPU-bound
+    /// algorithm to starve any worker threads or processes that you might be using.  If you don't
+    /// call this method, then we allow ourselves to process all of the extensions of all of the
+    /// paths found in the previous phase, with no additional bound.
+    pub fn set_max_work_per_phase(&mut self, max_work_per_phase: usize) {
+        self.max_work_per_phase = max_work_per_phase;
+    }
+
     /// Attempts to extend one path as part of the path-stitching algorithm.  When calling this
     /// function, you are responsible for ensuring that `db` already contains all of the possible
     /// partial paths that we might want to extend `path` with.
@@ -517,7 +529,7 @@ impl PathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         path: &Path,
-    ) {
+    ) -> usize {
         copious_debugging!("--> Candidate path {}", path.display(graph, paths));
         self.candidate_paths.clear();
         if graph[path.end_node].is_root() {
@@ -537,7 +549,8 @@ impl PathStitcher {
             );
         }
 
-        self.next_iteration.reserve(self.candidate_paths.len());
+        let extension_count = self.candidate_paths.len();
+        self.next_iteration.reserve(extension_count);
         for extension in &self.candidate_paths {
             let extension = &db[*extension];
             copious_debugging!("    Extend {}", path.display(graph, paths),);
@@ -558,11 +571,13 @@ impl PathStitcher {
             copious_debugging!("        is {}", new_path.display(graph, paths));
             self.next_iteration.push_back(new_path);
         }
+
+        extension_count
     }
 
     /// Returns whether the path-stitching algorithm has completed.
     pub fn is_complete(&self) -> bool {
-        self.next_iteration.is_empty()
+        self.queue.is_empty() && self.next_iteration.is_empty()
     }
 
     /// Runs the next phase of the path-stitching algorithm.  We will have built up a set of
@@ -582,7 +597,8 @@ impl PathStitcher {
         db: &mut Database,
     ) {
         copious_debugging!("==> Start phase {}", self.phase_number);
-        std::mem::swap(&mut self.queue, &mut self.next_iteration);
+        self.queue.extend(self.next_iteration.drain(..));
+        let mut work_performed = 0;
         while let Some(path) = self.queue.pop_front() {
             if !self
                 .cycle_detector
@@ -590,7 +606,10 @@ impl PathStitcher {
             {
                 continue;
             }
-            self.stitch_path(graph, paths, partials, db, &path);
+            work_performed += self.stitch_path(graph, paths, partials, db, &path);
+            if work_performed >= self.max_work_per_phase {
+                break;
+            }
         }
 
         #[cfg(feature = "copious-debugging")]
@@ -667,6 +686,7 @@ pub struct ForwardPartialPathStitcher {
     queue: VecDeque<PartialPath>,
     next_iteration: VecDeque<PartialPath>,
     cycle_detector: CycleDetector<PartialPath>,
+    max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
 }
@@ -716,6 +736,8 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             cycle_detector: CycleDetector::new(),
+            // By default, there's no artificial bound on the amount of work done per phase
+            max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
         }
@@ -741,6 +763,15 @@ impl ForwardPartialPathStitcher {
         self.next_iteration.as_mut_slices().0
     }
 
+    /// Sets the maximum amount of work that can be performed during each phase of the algorithm.
+    /// By bounding our work this way, you can ensure that it's not possible for our CPU-bound
+    /// algorithm to starve any worker threads or processes that you might be using.  If you don't
+    /// call this method, then we allow ourselves to process all of the extensions of all of the
+    /// paths found in the previous phase, with no additional bound.
+    pub fn set_max_work_per_phase(&mut self, max_work_per_phase: usize) {
+        self.max_work_per_phase = max_work_per_phase;
+    }
+
     /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
     /// you are responsible for ensuring that `db` already contains all of the possible partial
     /// paths that we might want to extend `partial_path` with.
@@ -750,7 +781,7 @@ impl ForwardPartialPathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         partial_path: &PartialPath,
-    ) {
+    ) -> usize {
         self.candidate_partial_paths.clear();
         if graph[partial_path.end_node].is_root() {
             let key = SymbolStackKey::from_partial_symbol_stack(
@@ -773,8 +804,8 @@ impl ForwardPartialPathStitcher {
             );
         }
 
-        self.next_iteration
-            .reserve(self.candidate_partial_paths.len());
+        let extension_count = self.candidate_partial_paths.len();
+        self.next_iteration.reserve(extension_count);
         for extension in &self.candidate_partial_paths {
             let mut extension = db[*extension].clone();
             copious_debugging!("    Extend {}", partial_path.display(graph, partials));
@@ -807,11 +838,13 @@ impl ForwardPartialPathStitcher {
             copious_debugging!("        is {}", new_partial_path.display(graph, partials));
             self.next_iteration.push_back(new_partial_path);
         }
+
+        extension_count
     }
 
     /// Returns whether the algorithm has completed.
     pub fn is_complete(&self) -> bool {
-        self.next_iteration.is_empty()
+        self.queue.is_empty() && self.next_iteration.is_empty()
     }
 
     /// Runs the next phase of the algorithm.  We will have built up a set of incomplete partial
@@ -830,7 +863,8 @@ impl ForwardPartialPathStitcher {
         db: &mut Database,
     ) {
         copious_debugging!("==> Start phase {}", self.phase_number);
-        std::mem::swap(&mut self.queue, &mut self.next_iteration);
+        self.queue.extend(self.next_iteration.drain(..));
+        let mut work_performed = 0;
         while let Some(partial_path) = self.queue.pop_front() {
             copious_debugging!(
                 "--> Candidate partial path {}",
@@ -845,7 +879,10 @@ impl ForwardPartialPathStitcher {
                 copious_debugging!("    Cycle detected");
                 continue;
             }
-            self.stitch_partial_path(graph, partials, db, &partial_path);
+            work_performed += self.stitch_partial_path(graph, partials, db, &partial_path);
+            if work_performed >= self.max_work_per_phase {
+                break;
+            }
         }
 
         #[cfg(feature = "copious-debugging")]
