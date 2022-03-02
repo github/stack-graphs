@@ -1039,11 +1039,24 @@ void sg_forward_path_stitcher_free(struct sg_forward_path_stitcher *stitcher);
 // must ensure that `db` contains all possible extensions of any of those initial partial paths.
 // You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
 // `previous_phase_partial_paths_length` fields.
-struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_new(const struct sg_stack_graph *graph,
-                                                                              struct sg_partial_path_arena *partials,
-                                                                              struct sg_partial_path_database *db,
-                                                                              size_t count,
-                                                                              const sg_node_handle *starting_nodes);
+struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_nodes(const struct sg_stack_graph *graph,
+                                                                                     struct sg_partial_path_arena *partials,
+                                                                                     struct sg_partial_path_database *db,
+                                                                                     size_t count,
+                                                                                     const sg_node_handle *starting_nodes);
+
+// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
+// paths.
+//
+// Before calling `sg_forward_partial_path_stitcher_process_next_phase` for the first time, you
+// must ensure that `db` contains all possible extensions of any of those initial partial paths.
+// You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
+// `previous_phase_partial_paths_length` fields.
+struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *_graph,
+                                                                                             struct sg_partial_path_arena *partials,
+                                                                                             struct sg_partial_path_database *_db,
+                                                                                             size_t count,
+                                                                                             const struct sg_partial_path *initial_partial_paths);
 
 // Sets the maximum amount of work that can be performed during each phase of the algorithm. By
 // bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
