@@ -704,7 +704,7 @@ impl ForwardPartialPathStitcher {
     ///
     /// [`previous_phase_partial paths`]: #method.previous_phase_partial paths
     /// [`process_next_phase`]: #method.process_next_phase
-    pub fn new<I>(
+    pub fn from_nodes<I>(
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
@@ -733,6 +733,31 @@ impl ForwardPartialPathStitcher {
         copious_debugging!("==> End phase 0");
         ForwardPartialPathStitcher {
             candidate_partial_paths,
+            queue: VecDeque::new(),
+            next_iteration,
+            cycle_detector: CycleDetector::new(),
+            // By default, there's no artificial bound on the amount of work done per phase
+            max_work_per_phase: usize::MAX,
+            #[cfg(feature = "copious-debugging")]
+            phase_number: 1,
+        }
+    }
+
+    /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
+    /// paths.
+    ///
+    /// Before calling [`process_next_phase`][] for the first time, you must ensure that `db`
+    /// contains all possible extensions of any of those initial partial paths.  You can retrieve a
+    /// list of those extensions via [`previous_phase_partial paths`][].
+    ///
+    /// [`previous_phase_partial paths`]: #method.previous_phase_partial paths
+    /// [`process_next_phase`]: #method.process_next_phase
+    pub fn from_partial_paths(
+        initial_partial_paths: Vec<PartialPath>,
+    ) -> ForwardPartialPathStitcher {
+        let next_iteration = initial_partial_paths.into();
+        ForwardPartialPathStitcher {
+            candidate_partial_paths: Vec::new(),
             queue: VecDeque::new(),
             next_iteration,
             cycle_detector: CycleDetector::new(),
@@ -822,8 +847,8 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                if !new_partial_path.starts_at_reference(graph) {
-                    copious_debugging!("        is invalid: slips off of reference");
+                if new_partial_path.start_node != partial_path.start_node {
+                    copious_debugging!("        is invalid: slips off of starting node");
                     continue;
                 }
                 if let Err(err) = new_partial_path.resolve(graph, partials) {
@@ -912,7 +937,8 @@ impl ForwardPartialPathStitcher {
         I: IntoIterator<Item = Handle<Node>>,
     {
         let mut result = Vec::new();
-        let mut stitcher = ForwardPartialPathStitcher::new(graph, partials, db, starting_nodes);
+        let mut stitcher =
+            ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
         while !stitcher.is_complete() {
             let complete_partial_paths = stitcher
                 .previous_phase_partial_paths()

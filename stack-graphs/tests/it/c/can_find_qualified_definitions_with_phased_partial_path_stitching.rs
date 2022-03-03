@@ -1,15 +1,16 @@
 // -*- coding: utf-8 -*-
 // ------------------------------------------------------------------------------------------------
-// Copyright © 2021, stack-graphs authors.
+// Copyright © 2022, stack-graphs authors.
 // Licensed under either of Apache License, Version 2.0, or MIT license, at your option.
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
 use std::collections::BTreeSet;
 
+use controlled_option::ControlledOption;
 use pretty_assertions::assert_eq;
 use stack_graphs::c::sg_forward_partial_path_stitcher_free;
-use stack_graphs::c::sg_forward_partial_path_stitcher_from_nodes;
+use stack_graphs::c::sg_forward_partial_path_stitcher_from_partial_paths;
 use stack_graphs::c::sg_forward_partial_path_stitcher_process_next_phase;
 use stack_graphs::c::sg_forward_partial_path_stitcher_set_max_work_per_phase;
 use stack_graphs::c::sg_partial_path;
@@ -28,8 +29,13 @@ use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_stack_graph;
 use stack_graphs::copious_debugging;
+use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
+use stack_graphs::partial::PartialPathEdgeList;
+use stack_graphs::partial::PartialScopeStack;
 use stack_graphs::partial::PartialScopeStackBindings;
+use stack_graphs::partial::PartialScopedSymbol;
+use stack_graphs::partial::PartialSymbolStack;
 use stack_graphs::partial::PartialSymbolStackBindings;
 
 use crate::c::test_graph::TestGraph;
@@ -101,9 +107,12 @@ impl StorageLayer {
     }
 }
 
-fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_paths: &[&str]) {
-    let rust_graph = unsafe { &(*graph.graph).inner };
-    let file = rust_graph.get_file_unchecked(file);
+fn check_find_qualified_definitions(
+    graph: &TestGraph,
+    stack_symbols: &[&str],
+    expected_partial_paths: &[&str],
+) {
+    let rust_graph = unsafe { &mut (*graph.graph).inner };
     let partials = sg_partial_path_arena_new();
     let rust_partials = unsafe { &mut (*partials).inner };
     let db = sg_partial_path_database_new();
@@ -111,29 +120,57 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
     // Create a new external storage layer holding _all_ of the partial paths in the stack graph.
     let mut storage_layer = StorageLayer::new(graph.graph, partials);
 
-    // Find every reference in the requested file.  These will be the starting nodes for the
-    // stitching algorithm.
-    let references = rust_graph
-        .iter_nodes()
-        .filter(|handle| {
-            let node = &rust_graph[*handle];
-            node.is_in_file(file) && node.is_reference()
-        })
-        .collect::<Vec<_>>();
+    // Create the requested partial symbol stack.
+    let mut partial_symbol_stack = PartialSymbolStack::empty();
+    for stack_symbol in stack_symbols {
+        let symbol = rust_graph.add_symbol(stack_symbol);
+        partial_symbol_stack.push_back(
+            rust_partials,
+            PartialScopedSymbol {
+                symbol,
+                scopes: ControlledOption::none(),
+            },
+        );
+    }
 
     // Seed the database with the partial paths that start at any of the starting nodes.
-    copious_debugging!("==> Add initial partial paths");
+    copious_debugging!(
+        "==> Add initial partial paths for <{}>",
+        partial_symbol_stack.display(rust_graph, rust_partials),
+    );
     storage_layer.add_to_database(graph.graph, partials, db, |partial_path| {
-        references.contains(&partial_path.start_node)
+        if partial_path.start_node != StackGraph::root_node() {
+            return false;
+        }
+
+        let mut symbol_bindings = PartialSymbolStackBindings::new();
+        let mut scope_bindings = PartialScopeStackBindings::new();
+        partial_symbol_stack
+            .unify(
+                rust_partials,
+                partial_path.symbol_stack_precondition,
+                &mut symbol_bindings,
+                &mut scope_bindings,
+            )
+            .is_ok()
     });
 
     // Create the forward partial path stitcher.
-    let stitcher = sg_forward_partial_path_stitcher_from_nodes(
+    let initial_partial_path = PartialPath {
+        start_node: StackGraph::root_node(),
+        end_node: StackGraph::root_node(),
+        symbol_stack_precondition: partial_symbol_stack,
+        symbol_stack_postcondition: partial_symbol_stack,
+        scope_stack_precondition: PartialScopeStack::empty(),
+        scope_stack_postcondition: PartialScopeStack::empty(),
+        edges: PartialPathEdgeList::empty(),
+    };
+    let stitcher = sg_forward_partial_path_stitcher_from_partial_paths(
         graph.graph,
         partials,
         db,
-        references.len(),
-        references.as_ptr() as *const _,
+        1,
+        &initial_partial_path as *const PartialPath as *const _,
     );
     sg_forward_partial_path_stitcher_set_max_work_per_phase(stitcher, 1);
     let rust_stitcher = unsafe { &mut *stitcher };
@@ -176,9 +213,9 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
                 .all(|stack| stack.have_reversal(rust_partials)));
 
             // If we found a complete partial path, add it to the result set.
-            if partial_path.is_complete(rust_graph) {
+            if partial_path.ends_at_definition(rust_graph) {
                 copious_debugging!(
-                    "    COMPLETE PARTIAL PATH {}",
+                    "    FOUND DEFINITION {}",
                     partial_path.display(rust_graph, rust_partials)
                 );
                 results.insert(partial_path.display(rust_graph, rust_partials).to_string());
@@ -236,118 +273,88 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
 #[test]
 fn class_field_through_function_parameter() {
     let graph = test_graphs::class_field_through_function_parameter::new();
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "main.py",
-        &[
-            // reference to `a` in import statement
-            "<%1> () [main.py(17) reference a] -> [a.py(0) definition a] <%1> ()",
-            // reference to `b` in import statement
-            "<%1> () [main.py(15) reference b] -> [b.py(0) definition b] <%1> ()",
-            // reference to `foo` in function call resolves to function definition
-            "<%1> () [main.py(13) reference foo] -> [a.py(5) definition foo] <%1> ()",
-            // reference to `A` as function parameter resolves to class definition
-            "<%1> () [main.py(9) reference A] -> [b.py(5) definition A] <%1> ()",
-            // reference to `bar` on result flows through body of `foo` to find `A.bar`
-            "<%1> () [main.py(10) reference bar] -> [b.py(8) definition bar] <%1> ()",
-        ],
+        &["a"],
+        &["<a> () [root] -> [a.py(0) definition a] <> ()"],
     );
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "a.py",
-        &[
-            // reference to `x` in function body resolves to formal parameter
-            "<%1> () [a.py(8) reference x] -> [a.py(14) definition x] <%1> ()",
-        ],
+        &["a", ".", "foo"],
+        &["<a.foo> () [root] -> [a.py(5) definition foo] <> ()"],
     );
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "b.py",
-        &[
-            // no references in b.py, so no paths
-        ],
+        &["b"],
+        &["<b> () [root] -> [b.py(0) definition b] <> ()"],
+    );
+    check_find_qualified_definitions(
+        &graph,
+        &["b", ".", "A"],
+        &["<b.A> () [root] -> [b.py(5) definition A] <> ()"],
+    );
+    check_find_qualified_definitions(
+        &graph,
+        &["b", ".", "A", ".", "bar"],
+        &["<b.A.bar> () [root] -> [b.py(8) definition bar] <> ()"],
     );
 }
 
 #[test]
 fn cyclic_imports_python() {
     let graph = test_graphs::cyclic_imports_python::new();
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "main.py",
-        &[
-            // reference to `a` in import statement
-            "<%1> () [main.py(8) reference a] -> [a.py(0) definition a] <%1> ()",
-            // reference to `foo` resolves through intermediate file to find `b.foo`
-            "<%1> () [main.py(6) reference foo] -> [b.py(6) definition foo] <%1> ()",
-        ],
+        &["a"],
+        &["<a> () [root] -> [a.py(0) definition a] <> ()"],
     );
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "a.py",
-        &[
-            // reference to `b` in import statement
-            "<%1> () [a.py(6) reference b] -> [b.py(0) definition b] <%1> ()",
-        ],
+        &["a", ".", "foo"],
+        &["<a.foo> () [root] -> [b.py(6) definition foo] <> ()"],
     );
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "b.py",
-        &[
-            // reference to `a` in import statement
-            "<%1> () [b.py(8) reference a] -> [a.py(0) definition a] <%1> ()",
-        ],
+        &["b"],
+        &["<b> () [root] -> [b.py(0) definition b] <> ()"],
+    );
+    check_find_qualified_definitions(
+        &graph,
+        &["b", ".", "foo"],
+        &["<b.foo> () [root] -> [b.py(6) definition foo] <> ()"],
     );
 }
 
 #[test]
 fn cyclic_imports_rust() {
+    // NOTE: Because everything in this example is local to one file, there aren't any partial
+    // paths involving the root node.
     let graph = test_graphs::cyclic_imports_rust::new();
-    check_jump_to_definition(
-        &graph,
-        "test.rs",
-        &[
-            // reference to `a` in `a::FOO` resolves to module definition
-            "<%1> () [test.rs(103) reference a] -> [test.rs(201) definition a] <%1> ()",
-            // reference to `a::FOO` in `main` can resolve either to `a::BAR` or `b::FOO`
-            "<%1> () [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <%1> ()",
-            "<%1> () [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <%1> ()",
-            // reference to `b` in use statement resolves to module definition
-            "<%1> () [test.rs(206) reference b] -> [test.rs(301) definition b] <%1> ()",
-            // reference to `a` in use statement resolves to module definition
-            "<%1> () [test.rs(307) reference a] -> [test.rs(201) definition a] <%1> ()",
-            // reference to `BAR` in module `b` can _only_ resolve to `a::BAR`
-            "<%1> () [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <%1> ()",
-        ],
-    );
+    check_find_qualified_definitions(&graph, &["a"], &[]);
+    check_find_qualified_definitions(&graph, &["a", "::", "BAR"], &[]);
 }
 
 #[test]
 fn sequenced_import_star() {
     let graph = test_graphs::sequenced_import_star::new();
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "main.py",
-        &[
-            // reference to `a` in import statement
-            "<%1> () [main.py(8) reference a] -> [a.py(0) definition a] <%1> ()",
-            // reference to `foo` resolves through intermediate file to find `b.foo`
-            "<%1> () [main.py(6) reference foo] -> [b.py(5) definition foo] <%1> ()",
-        ],
+        &["a"],
+        &["<a> () [root] -> [a.py(0) definition a] <> ()"],
     );
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "a.py",
-        &[
-            // reference to `b` in import statement
-            "<%1> () [a.py(6) reference b] -> [b.py(0) definition b] <%1> ()",
-        ],
+        &["a", ".", "foo"],
+        &["<a.foo> () [root] -> [b.py(5) definition foo] <> ()"],
     );
-    check_jump_to_definition(
+    check_find_qualified_definitions(
         &graph,
-        "b.py",
-        &[
-            // no references in b.py, so no paths
-        ],
+        &["b"],
+        &["<b> () [root] -> [b.py(0) definition b] <> ()"],
+    );
+    check_find_qualified_definitions(
+        &graph,
+        &["b", ".", "foo"],
+        &["<b.foo> () [root] -> [b.py(5) definition foo] <> ()"],
     );
 }
