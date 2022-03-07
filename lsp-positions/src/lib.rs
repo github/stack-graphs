@@ -235,9 +235,9 @@ impl<'a> PositionedSubstring<'a> {
     /// Constructs a new positioned substring for a newline-terminated line within a file.  You
     /// provide the byte offset of the start of the line, and we automatically find the end of the
     /// line.
-    pub fn from_line(file: &'a str, line_utf8_offset: usize) -> PositionedSubstring<'a> {
+    pub fn from_line(string: &'a str, line_utf8_offset: usize) -> PositionedSubstring<'a> {
         // The line's byte index lets us trim all preceding lines in the file.
-        let line_plus_others = &file[line_utf8_offset..];
+        let line_plus_others = &string[line_utf8_offset..];
 
         // The requested line stops at the first newline, or at the end of the file if there aren't
         // any newlines.
@@ -293,9 +293,9 @@ impl<'a> PositionedSubstring<'a> {
     }
 }
 
-/// Automates the construction of [`Span`][] instances for content within a source file.
+/// Automates the construction of [`Span`][] instances for content within a string.
 pub struct SpanCalculator<'a> {
-    source: &'a str,
+    string: &'a str,
     containing_line: Option<PositionedSubstring<'a>>,
     trimmed_line: Option<PositionedSubstring<'a>>,
     columns: Vec<Offset>,
@@ -309,18 +309,18 @@ pub struct SpanCalculator<'a> {
 // revisit a line!
 
 impl<'a> SpanCalculator<'a> {
-    /// Creates a new span calculator for locations within the given source file.
-    pub fn new(source: &'a str) -> SpanCalculator<'a> {
+    /// Creates a new span calculator for locations within the given string.
+    pub fn new(string: &'a str) -> SpanCalculator<'a> {
         SpanCalculator {
-            source,
+            string,
             containing_line: None,
             trimmed_line: None,
             columns: Vec::new(),
         }
     }
 
-    /// Constructs a [`Position`][] instance for a particular line and column in the source file.
-    /// You must provide the 0-indexed line number, the byte offset of the line within the file,
+    /// Constructs a [`Position`][] instance for a particular line and column in the string.
+    /// You must provide the 0-indexed line number, the byte offset of the line within the string,
     /// and the UTF-8 byte offset of the character within the line.
     pub fn for_line_and_column(
         &mut self,
@@ -358,8 +358,8 @@ impl<'a> SpanCalculator<'a> {
         self.for_line_and_column(position.row, line_utf8_offset, position.column)
     }
 
-    /// Constructs a [`Position`][] instance for a particular line and column in the source file.
-    /// You must provide the 0-indexed line number, the byte offset of the line within the file,
+    /// Constructs a [`Position`][] instance for a particular line and column in the string.
+    /// You must provide the 0-indexed line number, the byte offset of the line within the string,
     /// and the grapheme offset of the character within the line.
     pub fn for_line_and_grapheme(
         &mut self,
@@ -384,7 +384,7 @@ impl<'a> SpanCalculator<'a> {
                 return;
             }
         }
-        let line = PositionedSubstring::from_line(self.source, line_utf8_offset);
+        let line = PositionedSubstring::from_line(self.string, line_utf8_offset);
         self.columns.clear();
         self.columns.extend(Offset::all_chars(line.content));
         let mut trimmed = line.clone();
