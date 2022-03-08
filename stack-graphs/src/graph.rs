@@ -168,7 +168,7 @@ pub struct Symbol {
 }
 
 impl Symbol {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.content.as_str()
     }
 }
@@ -482,7 +482,6 @@ impl NodeID {
     /// singleton _root_ or _jump to scope_ nodes.
     #[inline(always)]
     pub fn local_id(self) -> u32 {
-        debug_assert!(self.file.is_some());
         self.local_id
     }
 

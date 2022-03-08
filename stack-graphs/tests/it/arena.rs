@@ -51,7 +51,7 @@ fn can_create_lists() {
 
     let mut arena = List::new_arena();
     let mut list = List::empty();
-    assert_eq!(collect(&list, &arena), vec![]);
+    assert_eq!(collect(&list, &arena), vec![] as Vec<u32>);
     list.push_front(&mut arena, 1);
     assert_eq!(collect(&list, &arena), vec![1]);
     list.push_front(&mut arena, 2);
@@ -95,7 +95,7 @@ fn can_create_reversible_lists() {
 
     let mut arena = ReversibleList::new_arena();
     let mut list = ReversibleList::empty();
-    assert_eq!(collect(&list, &arena), vec![]);
+    assert_eq!(collect(&list, &arena), vec![] as Vec<u32>);
     list.push_front(&mut arena, 1);
     assert_eq!(collect(&list, &arena), vec![1]);
     list.push_front(&mut arena, 2);
@@ -158,8 +158,8 @@ fn can_create_deques() {
 
     let mut arena = Deque::new_arena();
     let mut deque = Deque::empty();
-    assert_eq!(collect(&deque, &mut arena), vec![]);
-    assert_eq!(collect_rev(&deque, &mut arena), vec![]);
+    assert_eq!(collect(&deque, &mut arena), vec![] as Vec<u32>);
+    assert_eq!(collect_rev(&deque, &mut arena), vec![] as Vec<u32>);
     deque.push_front(&mut arena, 1);
     assert_eq!(collect(&deque, &mut arena), vec![1]);
     assert_eq!(collect_rev(&deque, &mut arena), vec![1]);
