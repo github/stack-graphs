@@ -31,12 +31,6 @@ enum sg_deque_direction {
 enum sg_node_kind {
     // Removes everything from the current scope stack.
     SG_NODE_KIND_DROP_SCOPES,
-    // A node that can be referred to on the scope stack, which allows "jump to" nodes in any
-    // other part of the graph can jump back here.
-    SG_NODE_KIND_EXPORTED_SCOPE,
-    // A node internal to a single file.  This node has no effect on the symbol or scope stacks;
-    // it's just used to add structure to the graph.
-    SG_NODE_KIND_INTERNAL_SCOPE,
     // The singleton "jump to" node, which allows a name binding path to jump back to another part
     // of the graph.
     SG_NODE_KIND_JUMP_TO,
@@ -53,6 +47,10 @@ enum sg_node_kind {
     SG_NODE_KIND_PUSH_SYMBOL,
     // The singleton root node, which allows a name binding path to cross between files.
     SG_NODE_KIND_ROOT,
+    // A node that adds structure to the graph. If the node is exported, it can be
+    // referred to on the scope stack, which allows "jump to" nodes in any other
+    // part of the graph can jump back here.
+    SG_NODE_KIND_SCOPE,
 };
 
 // Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
@@ -176,10 +174,11 @@ struct sg_node {
     // attached to the symbol before it's pushed onto the symbol stack.  For all other node types,
     // this will be null.
     struct sg_node_id scope;
-    // Whether this node is "clickable".  For push nodes, this indicates that the node represents
+    // Whether this node is an endpoint.  For push nodes, this indicates that the node represents
     // a reference in the source.  For pop nodes, this indicates that the node represents a
-    // definition in the source.  For all other node types, this field will be unused.
-    bool is_clickable;
+    // definition in the source.  For scopes, this indicates that the scope is exported. For all
+    // other node types, this field will be unused.
+    bool is_endpoint;
 };
 
 // An array of all of the nodes in a stack graph.  Node handles are indices into this array.
