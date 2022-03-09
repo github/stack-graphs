@@ -173,15 +173,15 @@ impl Serialize for InStackGraph<'_, (Handle<Node>, &Node)> {
             }
             Node::PushScopedSymbol(node) => {
                 let mut ser = serializer.serialize_struct("node", len + 4)?;
-                ser.serialize_field("type", "push_symbol")?;
+                ser.serialize_field("type", "push_scoped_symbol")?;
                 ser.serialize_field("symbol", &graph[node.symbol])?;
-                ser.serialize_field("scope", &graph[node.symbol])?;
+                ser.serialize_field("scope", &self.with(&node.scope))?;
                 ser.serialize_field("is_reference", &node.is_reference)?;
                 ser
             }
             Node::PushSymbol(node) => {
                 let mut ser = serializer.serialize_struct("node", len + 3)?;
-                ser.serialize_field("type", "push_scoped_symbol")?;
+                ser.serialize_field("type", "push_symbol")?;
                 ser.serialize_field("symbol", &graph[node.symbol])?;
                 ser.serialize_field("is_reference", &node.is_reference)?;
                 ser
@@ -394,13 +394,17 @@ impl Serialize for InPaths<'_, &Path> {
         S: Serializer,
     {
         let path = self.0;
+        let graph = self.2;
 
         let mut ser = serializer.serialize_struct("path", 5)?;
         ser.serialize_field(
             "start_node",
-            &self.in_stack_graph().with_idx(path.start_node),
+            &self.in_stack_graph().with(&graph[path.start_node].id()),
         )?;
-        ser.serialize_field("end_node", &self.in_stack_graph().with_idx(path.end_node))?;
+        ser.serialize_field(
+            "end_node",
+            &self.in_stack_graph().with(&graph[path.end_node].id()),
+        )?;
         ser.serialize_field("symbol_stack", &self.with(&path.symbol_stack))?;
         ser.serialize_field("scope_stack", &self.with(&path.scope_stack))?;
         ser.serialize_field("edges", &self.with(&path.edges))?;
@@ -439,8 +443,8 @@ impl Serialize for InPaths<'_, &ScopedSymbol> {
 
         let mut ser = serializer.serialize_struct("scoped_symbol", len)?;
         ser.serialize_field("symbol", &graph[scoped_symbol.symbol])?;
-        if let Some(scope_stack) = scoped_symbol.scopes.into_option() {
-            ser.serialize_field("scoped_stack", &self.with(&scope_stack))?;
+        if let Some(scopes) = scoped_symbol.scopes.into_option() {
+            ser.serialize_field("scopes", &self.with(&scopes))?;
         }
         ser.end()
     }
@@ -451,12 +455,13 @@ impl Serialize for InPaths<'_, &ScopeStack> {
     where
         S: Serializer,
     {
-        let scoped_stack = self.0;
+        let scope_stack = self.0;
         let paths = self.1;
+        let graph = self.2;
 
-        let mut ser = serializer.serialize_seq(scoped_stack.len().into())?;
-        for node in scoped_stack.iter(paths) {
-            ser.serialize_element(&self.in_stack_graph().with_idx(node))?;
+        let mut ser = serializer.serialize_seq(scope_stack.len().into())?;
+        for node in scope_stack.iter(paths) {
+            ser.serialize_element(&self.in_stack_graph().with(&graph[node].id()))?;
         }
         ser.end()
     }
