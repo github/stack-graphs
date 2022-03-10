@@ -112,13 +112,13 @@ pub struct Span {
 }
 
 impl Span {
-    pub fn contains(&self, position: Position) -> bool {
-        self.start <= position && self.end > position
+    pub fn contains(&self, position: &Position) -> bool {
+        &self.start <= position && &self.end > position
     }
 
     #[cfg(feature = "tree-sitter")]
-    pub fn contains_point(&self, point: tree_sitter::Point) -> bool {
-        self.start <= point && self.end > point
+    pub fn contains_point(&self, point: &tree_sitter::Point) -> bool {
+        &self.start <= point && &self.end > point
     }
 }
 
