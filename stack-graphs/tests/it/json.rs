@@ -14,7 +14,7 @@ use crate::test_graphs;
 #[test]
 fn can_serialize_graph() {
     let graph: StackGraph = test_graphs::simple::new();
-    let actual = graph.to_json_value().expect("Cannot serialize graph");
+    let actual = graph.to_json().to_value().expect("Cannot serialize graph");
     let expected = json!(
       {
          "edges" : [
@@ -285,7 +285,10 @@ fn can_serialize_graph() {
 fn can_serialize_paths() {
     let graph: StackGraph = test_graphs::simple::new();
     let mut paths = Paths::new();
-    let actual = paths.to_json_value(&graph).expect("Cannot serialize paths");
+    let actual = paths
+        .to_json(&graph, |_, _, _| true)
+        .to_value()
+        .expect("Cannot serialize paths");
     let expected = json!(
       [
          {
