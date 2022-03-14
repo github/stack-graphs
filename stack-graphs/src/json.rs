@@ -396,6 +396,8 @@ where
         self.0
             .find_all_paths(self.1, self.1.iter_nodes(), |g, ps, p| {
                 if f(g, ps, &p) {
+                    let mut p = p;
+                    p.edges.ensure_forwards(ps);
                     paths.push(p);
                 }
             });

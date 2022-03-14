@@ -50,7 +50,7 @@ pub fn new() -> StackGraph {
     let str_var = graph.add_string("variable");
     let line0 = graph.add_string("x = 42");
     let line1 = graph.add_string("print(x)");
-    *graph.source_info_mut(ref_x) = SourceInfo {
+    *graph.source_info_mut(def_x) = SourceInfo {
         span: Span {
             start: Position {
                 line: 0,

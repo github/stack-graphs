@@ -209,6 +209,26 @@ fn can_serialize_graph() {
                   "local_id" : 2
                },
                "is_reference" : false,
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  }
+               },
                "symbol" : ".",
                "type" : "push_symbol"
             },
@@ -218,6 +238,26 @@ fn can_serialize_graph() {
                   "local_id" : 3
                },
                "is_exported" : true,
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  }
+               },
                "type" : "scope"
             },
             {
@@ -230,6 +270,26 @@ fn can_serialize_graph() {
                   "file" : "test.py",
                   "local_id" : 3
                },
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  }
+               },
                "symbol" : "()",
                "type" : "push_scoped_symbol"
             },
@@ -239,6 +299,26 @@ fn can_serialize_graph() {
                   "local_id" : 5
                },
                "is_exported" : false,
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  }
+               },
                "type" : "scope"
             },
             {
@@ -247,6 +327,26 @@ fn can_serialize_graph() {
                   "local_id" : 6
                },
                "is_definition" : false,
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  }
+               },
                "symbol" : "()",
                "type" : "pop_scoped_symbol"
             },
@@ -254,6 +354,26 @@ fn can_serialize_graph() {
                "id" : {
                   "file" : "test.py",
                   "local_id" : 7
+               },
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  }
                },
                "type" : "drop_scopes"
             },
@@ -263,6 +383,26 @@ fn can_serialize_graph() {
                   "local_id" : 8
                },
                "is_definition" : false,
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  }
+               },
                "symbol" : ".",
                "type" : "pop_symbol"
             },
@@ -272,6 +412,27 @@ fn can_serialize_graph() {
                   "local_id" : 9
                },
                "is_definition" : true,
+               "source_info" : {
+                  "span" : {
+                     "end" : {
+                        "column" : {
+                           "grapheme_offset" : 1,
+                           "utf16_offset" : 1,
+                           "utf8_offset" : 1
+                        },
+                        "line" : 0
+                     },
+                     "start" : {
+                        "column" : {
+                           "grapheme_offset" : 0,
+                           "utf16_offset" : 0,
+                           "utf8_offset" : 0
+                        },
+                        "line" : 0
+                     }
+                  },
+                  "syntax_type" : "variable"
+               },
                "symbol" : "x",
                "type" : "pop_symbol"
             }
@@ -518,14 +679,14 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 2
+                     "local_id" : 1
                   }
                },
                {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 2
                   }
                }
             ],
@@ -562,14 +723,14 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 2
                   }
                },
                {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 2
+                     "local_id" : 4
                   }
                }
             ],
@@ -603,14 +764,14 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 5
+                     "local_id" : 4
                   }
                },
                {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 5
                   }
                }
             ],
@@ -636,7 +797,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 1
                   }
                },
                {
@@ -650,7 +811,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 4
                   }
                }
             ],
@@ -687,7 +848,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 5
+                     "local_id" : 2
                   }
                },
                {
@@ -701,7 +862,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 2
+                     "local_id" : 5
                   }
                }
             ],
@@ -730,7 +891,15 @@ fn can_serialize_paths() {
                {
                   "precedence" : 0,
                   "source" : {
-                     "local_id" : 2
+                     "file" : "test.py",
+                     "local_id" : 4
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 5
                   }
                },
                {
@@ -743,15 +912,7 @@ fn can_serialize_paths() {
                {
                   "precedence" : 0,
                   "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 2
                   }
                }
             ],
@@ -772,7 +933,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 6
+                     "local_id" : 4
                   }
                },
                {
@@ -786,7 +947,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 6
                   }
                }
             ],
@@ -807,14 +968,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 5
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 1
                   }
                },
                {
@@ -828,7 +982,14 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 4
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 5
                   }
                }
             ],
@@ -860,21 +1021,8 @@ fn can_serialize_paths() {
                {
                   "precedence" : 0,
                   "source" : {
+                     "file" : "test.py",
                      "local_id" : 2
-                  }
-               },
-               {
-                  "precedence" : 1,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
                   }
                },
                {
@@ -888,6 +1036,19 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 1,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
                      "local_id" : 2
                   }
                }
@@ -913,14 +1074,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
+                     "local_id" : 2
                   }
                },
                {
@@ -934,7 +1088,14 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 2
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
                   }
                }
             ],
@@ -958,21 +1119,15 @@ fn can_serialize_paths() {
                {
                   "precedence" : 0,
                   "source" : {
-                     "local_id" : 2
-                  }
-               },
-               {
-                  "precedence" : 1,
-                  "source" : {
                      "file" : "test.py",
-                     "local_id" : 6
+                     "local_id" : 1
                   }
                },
                {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 5
+                     "local_id" : 2
                   }
                },
                {
@@ -986,14 +1141,20 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 2
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 1,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
                   }
                },
                {
                   "precedence" : 0,
                   "source" : {
-                     "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 2
                   }
                }
             ],
@@ -1021,21 +1182,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 1
                   }
                },
                {
@@ -1049,7 +1196,21 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 4
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
                   }
                }
             ],
@@ -1077,27 +1238,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 3
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
                      "local_id" : 2
-                  }
-               },
-               {
-                  "precedence" : 1,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
                   }
                },
                {
@@ -1111,7 +1252,27 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 1,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
                      "local_id" : 2
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 3
                   }
                }
             ],
@@ -1128,40 +1289,40 @@ fn can_serialize_paths() {
          },
          {
             "edges" : [
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 2
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 4
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
+                  }
+               },
                {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
                      "local_id" : 7
                   }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 4
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 2
-                  }
                }
             ],
             "end_node" : {
@@ -1181,27 +1342,14 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 3
+                     "local_id" : 1
                   }
                },
                {
                   "precedence" : 0,
                   "source" : {
+                     "file" : "test.py",
                      "local_id" : 2
-                  }
-               },
-               {
-                  "precedence" : 1,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
                   }
                },
                {
@@ -1215,6 +1363,19 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 1,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
                      "local_id" : 2
                   }
                },
@@ -1222,7 +1383,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 3
                   }
                }
             ],
@@ -1247,28 +1408,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 7
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 1
                   }
                },
                {
@@ -1282,7 +1422,28 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 4
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 7
                   }
                }
             ],
@@ -1303,59 +1464,59 @@ fn can_serialize_paths() {
          },
          {
             "edges" : [
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 1
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 2
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 4
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 1,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "local_id" : 2
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 3
+                  }
+               },
                {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
                      "local_id" : 8
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 3
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "local_id" : 2
-                  }
-               },
-               {
-                  "precedence" : 1,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 4
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 2
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 1
                   }
                }
             ],
@@ -1376,35 +1537,7 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 8
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 7
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 6
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 5
-                  }
-               },
-               {
-                  "precedence" : 0,
-                  "source" : {
-                     "file" : "test.py",
-                     "local_id" : 4
+                     "local_id" : 1
                   }
                },
                {
@@ -1418,7 +1551,35 @@ fn can_serialize_paths() {
                   "precedence" : 0,
                   "source" : {
                      "file" : "test.py",
-                     "local_id" : 1
+                     "local_id" : 4
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 5
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 6
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 7
+                  }
+               },
+               {
+                  "precedence" : 0,
+                  "source" : {
+                     "file" : "test.py",
+                     "local_id" : 8
                   }
                }
             ],
