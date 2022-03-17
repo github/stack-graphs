@@ -265,7 +265,7 @@ use tree_sitter_graph::graph::Graph;
 use tree_sitter_graph::graph::GraphNode;
 use tree_sitter_graph::graph::GraphNodeRef;
 use tree_sitter_graph::graph::Value;
-use tree_sitter_graph::ExecutionOptions;
+use tree_sitter_graph::ExecutionConfig;
 use tree_sitter_graph::Variables;
 
 pub mod functions;
@@ -370,16 +370,11 @@ impl StackGraphLanguage {
         globals
             .add("JUMP_TO_SCOPE_NODE".into(), graph.add_graph_node().into())
             .unwrap();
-        let mut options = ExecutionOptions::new();
-        options.implicit_debug_attributes(true);
-        self.tsg.execute_lazy_into(
-            &mut graph,
-            &tree,
-            source,
-            &mut self.functions,
-            globals,
-            &options,
-        )?;
+        let mut config = ExecutionConfig::new(&mut self.functions, globals)
+            .lazy(true)
+            .debug_attributes("debug_tsg_location".into(), "debug_tsg_varname".into());
+        self.tsg
+            .execute_into(&mut graph, &tree, source, &mut config)?;
 
         let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
         loader.load()
