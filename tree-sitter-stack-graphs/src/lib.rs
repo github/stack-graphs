@@ -186,6 +186,22 @@
 //! }
 //! ```
 //!
+//! ### Attaching debug information to nodes
+//!
+//! It is possible to attach extra information to nodes for debugging purposes.  This is done by adding
+//! `debug_*` attributes to nodes.  Each attribute defines a debug entry, with the key derived from the
+//! attribute name, and the value the string representation of the attribute value.  For example, mark
+//! a scope node with a kind as follows:
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   ; ...
+//!   node param_scope
+//!   attr (param_scope) debug_kind = "param_scope"
+//!   ; ...
+//! }
+//! ```
+//!
 //! ## Using this crate from Rust
 //!
 //! If you need very fine-grained control over how to use the resulting stack graphs, you can
@@ -266,6 +282,7 @@ static PUSH_SYMBOL_TYPE: &'static str = "push_symbol";
 static SCOPE_TYPE: &'static str = "scope";
 
 // Node attribute names
+static DEBUG_ATTR_PREFIX: &'static str = "debug_";
 static IS_DEFINITION_ATTR: &'static str = "is_definition";
 static IS_EXPORTED_ATTR: &'static str = "is_exported";
 static IS_ENDPOINT_ATTR: &'static str = "is_endpoint";
@@ -364,7 +381,12 @@ impl StackGraphLanguage {
         globals
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
             .unwrap();
-        let mut config = ExecutionConfig::new(&mut self.functions, &globals).lazy(true);
+        let mut config = ExecutionConfig::new(&mut self.functions, &globals)
+            .lazy(true)
+            .debug_attributes(
+                [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
+                [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
+            );
         self.tsg
             .execute_into(&mut graph, &tree, source, &mut config)?;
 
@@ -440,6 +462,7 @@ impl<'a> StackGraphLoader<'a> {
                 NodeType::Scope => self.load_scope(node, node_ref)?,
             };
             self.load_span(node, handle)?;
+            self.load_debug_info(node, handle)?;
         }
 
         // Then add stack graph edges for each TSG edge.  Note that we _don't_ skip(2) here because
@@ -629,6 +652,28 @@ impl<'a> StackGraphLoader<'a> {
         let source_info = self.stack_graph.source_info_mut(node_handle);
         source_info.span = span;
         source_info.containing_line = ControlledOption::some(containing_line);
+        Ok(())
+    }
+
+    fn load_debug_info(
+        &mut self,
+        node: &GraphNode,
+        node_handle: Handle<Node>,
+    ) -> Result<(), LoadError> {
+        for (name, value) in node.attributes.iter() {
+            let name = name.to_string();
+            if name.starts_with(DEBUG_ATTR_PREFIX) {
+                let value = match value {
+                    Value::String(value) => value.clone(),
+                    value => value.to_string(),
+                };
+                let key = self
+                    .stack_graph
+                    .add_string(&name[DEBUG_ATTR_PREFIX.len()..]);
+                let value = self.stack_graph.add_string(&value);
+                self.stack_graph.debug_info_mut(node_handle).add(key, value);
+            }
+        }
         Ok(())
     }
 }
