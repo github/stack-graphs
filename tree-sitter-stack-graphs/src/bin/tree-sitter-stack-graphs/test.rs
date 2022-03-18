@@ -7,6 +7,7 @@
 
 use anyhow::anyhow;
 use anyhow::Context as _;
+use clap::ArgEnum;
 use colored::Colorize as _;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
@@ -22,6 +23,22 @@ use walkdir::WalkDir;
 
 use crate::loader::LoaderArgs;
 
+/// Flag to control output
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum OutputMode {
+    Always,
+    OnFailure,
+}
+
+impl OutputMode {
+    fn test(&self, failure: bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::OnFailure => failure,
+        }
+    }
+}
+
 /// Run tests
 #[derive(clap::Parser)]
 pub struct Command {
@@ -30,21 +47,28 @@ pub struct Command {
 
     /// Source paths to test.
     #[clap(name = "PATHS")]
+    #[clap(required = true)]
     sources: Vec<PathBuf>,
 
     /// Hide failure errors.
     #[clap(long)]
     hide_failure_errors: bool,
 
-    /// Save graph for failed tests.
-    #[clap(long)]
+    /// Save graph.
     #[clap(short = 'G')]
-    save_graph_on_failure: bool,
-
-    /// Save paths for failed tests.
     #[clap(long)]
+    save_graph: bool,
+
+    /// Save paths.
     #[clap(short = 'P')]
-    save_paths_on_failure: bool,
+    #[clap(long)]
+    save_paths: bool,
+
+    /// Controls when graphs, paths, or visualization are saved.
+    #[clap(long)]
+    #[clap(arg_enum)]
+    #[clap(default_value_t = OutputMode::OnFailure)]
+    output_mode: OutputMode,
 }
 
 impl Command {
@@ -111,7 +135,7 @@ impl Command {
         }
         let result = test.run();
         let success = self.handle_result(source_path, &result)?;
-        if !success {
+        if self.output_mode.test(!success) {
             self.save_output(source_path, &test.graph, &mut test.paths)?;
         }
         Ok(result.failure_count())
@@ -165,12 +189,12 @@ impl Command {
         graph: &StackGraph,
         paths: &mut Paths,
     ) -> anyhow::Result<()> {
-        if self.save_graph_on_failure {
+        if self.save_graph {
             let path = source_path.with_extension("graph.json");
             self.save_graph(&path, &graph)?;
             println!("  Graph: {}", path.display());
         }
-        if self.save_paths_on_failure {
+        if self.save_paths {
             let path = source_path.with_extension("paths.json");
             self.save_paths(&path, paths, graph)?;
             println!("  Paths: {}", path.display());
