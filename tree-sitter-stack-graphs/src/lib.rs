@@ -265,6 +265,8 @@ use tree_sitter_graph::graph::Graph;
 use tree_sitter_graph::graph::GraphNode;
 use tree_sitter_graph::graph::GraphNodeRef;
 use tree_sitter_graph::graph::Value;
+use tree_sitter_graph::parse_error::ParseError;
+use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
 use tree_sitter_graph::Variables;
 
@@ -363,6 +365,12 @@ impl StackGraphLanguage {
             .parse(source, None)
             .ok_or(LoadError::ParseError)?;
 
+        let parse_errors = ParseError::into_all(tree);
+        if parse_errors.errors().len() > 0 {
+            return Err(LoadError::ParseErrors(parse_errors));
+        }
+        let tree = parse_errors.into_tree();
+
         let mut graph = Graph::new();
         globals
             .add("ROOT_NODE".into(), graph.add_graph_node().into())
@@ -400,6 +408,8 @@ pub enum LoadError {
     ExecutionError(#[from] tree_sitter_graph::ExecutionError),
     #[error("Error parsing source")]
     ParseError,
+    #[error("Error parsing source")]
+    ParseErrors(TreeWithParseErrorVec),
     #[error("Error converting shorthand ‘{0}’ on {1} with value {2}")]
     ConversionError(String, String, String),
 }

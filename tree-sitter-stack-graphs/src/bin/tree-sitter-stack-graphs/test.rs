@@ -15,9 +15,11 @@ use thiserror::Error;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::test::Test;
+use tree_sitter_stack_graphs::LoadError;
 use walkdir::WalkDir;
 
 use crate::loader::LoaderArgs;
+use crate::MAX_PARSE_ERRORS;
 
 /// Flag to control output
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -120,6 +122,7 @@ impl Command {
         let mut test = Test::from_source(&source_path_str, &source).map_err(TestError::other)?;
 
         // construct stack graph
+        let mut ignored = 0;
         for test_file in &test.files {
             let test_path = Path::new(test.graph[test_file.file].name());
             let sgl = match loader.load_for_source_path(test_path) {
@@ -129,6 +132,7 @@ impl Command {
                     if !self.hide_failure_errors {
                         Self::print_err(e);
                     }
+                    ignored += 1;
                     continue;
                 }
             };
@@ -136,13 +140,38 @@ impl Command {
             globals
                 .add("FILE_PATH".into(), source_path_str.as_ref().into())
                 .expect("Failed to set FILE_PATH");
-            sgl.build_stack_graph_into(
+            let result = sgl.build_stack_graph_into(
                 &mut test.graph,
                 test_file.file,
                 &test_file.source,
                 &mut globals,
-            )
-            .map_err(TestError::other)?;
+            );
+            if let Err(LoadError::ParseErrors(parse_errors)) = &result {
+                println!("{} {}", "⦵".dimmed(), source_path_str);
+                let parse_errors = parse_errors.errors();
+                for parse_error in parse_errors.iter().take(MAX_PARSE_ERRORS) {
+                    let line = parse_error.node().start_position().row;
+                    let column = parse_error.node().start_position().column;
+                    println!(
+                        "  {}:{}:{}: {}",
+                        source_path_str,
+                        line + 1,
+                        column + 1,
+                        parse_error.display(&test_file.source, false)
+                    );
+                }
+                if parse_errors.len() > MAX_PARSE_ERRORS {
+                    let more_errors = parse_errors.len() - MAX_PARSE_ERRORS;
+                    println!(
+                        "  {} more parse error{} omitted",
+                        more_errors,
+                        if more_errors > 1 { "s" } else { "" },
+                    );
+                }
+                ignored += 1;
+                continue;
+            }
+            result.map_err(TestError::other)?;
         }
 
         // run tests
@@ -201,6 +230,9 @@ impl Command {
             println!("  Visualization: {}", visualization_path.display());
         }
 
+        if ignored > 0 {
+            println!("{} ignored files", ignored);
+        }
         if failure {
             Err(TestError::AssertionsFailed(result.failure_count()))
         } else {
