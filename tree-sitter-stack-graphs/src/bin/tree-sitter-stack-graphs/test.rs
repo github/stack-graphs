@@ -13,15 +13,18 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
 use std::path::Path;
 use std::path::PathBuf;
+use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::test::Test;
 use tree_sitter_stack_graphs::test::TestFile;
 use tree_sitter_stack_graphs::test::TestResult;
+use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 use walkdir::WalkDir;
 
 use crate::loader::LoaderArgs;
+use crate::MAX_PARSE_ERRORS;
 
 /// Flag to control output
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -162,8 +165,43 @@ impl Command {
                 format!("{}", source_path.display()).into(),
             )
             .expect("Failed to set FILE_PATH");
-        sgl.build_stack_graph_into(graph, test_file.file, &test_file.source, &mut globals)?;
-        Ok(())
+        match sgl.build_stack_graph_into(graph, test_file.file, &test_file.source, &mut globals) {
+            Err(LoadError::ParseErrors(parse_errors)) => {
+                Err(self.map_parse_errors(source_path, &parse_errors, &test_file.source))
+            }
+            Err(e) => Err(e.into()),
+            Ok(_) => Ok(()),
+        }
+    }
+
+    fn map_parse_errors(
+        &self,
+        source_path: &Path,
+        parse_errors: &TreeWithParseErrorVec,
+        source: &str,
+    ) -> anyhow::Error {
+        let mut error = String::new();
+        let parse_errors = parse_errors.errors();
+        for parse_error in parse_errors.iter().take(MAX_PARSE_ERRORS) {
+            let line = parse_error.node().start_position().row;
+            let column = parse_error.node().start_position().column;
+            error.push_str(&format!(
+                "  {}:{}:{}: {}\n",
+                source_path.display(),
+                line + 1,
+                column + 1,
+                parse_error.display(&source, false)
+            ));
+        }
+        if parse_errors.len() > MAX_PARSE_ERRORS {
+            let more_errors = parse_errors.len() - MAX_PARSE_ERRORS;
+            error.push_str(&format!(
+                "  {} more parse error{} omitted\n",
+                more_errors,
+                if more_errors > 1 { "s" } else { "" },
+            ));
+        }
+        anyhow!(error)
     }
 
     fn handle_result(&self, source_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
