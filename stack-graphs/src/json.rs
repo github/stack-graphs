@@ -359,7 +359,7 @@ impl<'a, T> InPaths<'a, T> {
 impl<'a> Paths {
     pub fn to_json<F>(&'a mut self, graph: &'a StackGraph, f: F) -> JsonPaths<'_, F>
     where
-        F: Fn(&StackGraph, &Paths, &Path) -> bool,
+        F: FnMut(&StackGraph, &Paths, &Path) -> bool,
     {
         JsonPaths(self, graph, f)
     }
@@ -367,11 +367,11 @@ impl<'a> Paths {
 
 pub struct JsonPaths<'a, F>(&'a mut Paths, &'a StackGraph, F)
 where
-    F: Fn(&StackGraph, &Paths, &Path) -> bool;
+    F: FnMut(&StackGraph, &Paths, &Path) -> bool;
 
 impl<'a, F> JsonPaths<'a, F>
 where
-    F: Fn(&StackGraph, &Paths, &Path) -> bool,
+    F: FnMut(&StackGraph, &Paths, &Path) -> bool,
 {
     pub fn to_value(&mut self) -> Result<Value, JsonError> {
         let paths = self.to_path_vec();
@@ -392,7 +392,7 @@ where
 
     fn to_path_vec(&mut self) -> Vec<Path> {
         let mut paths = Vec::new();
-        let f = &self.2;
+        let f = &mut self.2;
         self.0
             .find_all_paths(self.1, self.1.iter_nodes(), |g, ps, p| {
                 if f(g, ps, &p) {
