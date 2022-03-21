@@ -259,11 +259,16 @@ impl<'a> PositionedSubstring<'a> {
     }
 
     // Returns an iterator over the lines of the given string.
-    pub fn lines_iter(string: &'a str) -> Lines<'a> {
-        Lines {
-            string,
-            next_utf8_offset: 0,
-        }
+    pub fn lines_iter(string: &'a str) -> impl Iterator<Item = PositionedSubstring<'a>> + 'a {
+        let mut next_utf8_offset = 0;
+        std::iter::from_fn(move || {
+            if string.len() <= next_utf8_offset {
+                return None;
+            }
+            let next = PositionedSubstring::from_line(string, next_utf8_offset);
+            next_utf8_offset = next.utf8_bounds.end + 1;
+            Some(next)
+        })
     }
 
     /// Trims ASCII whitespace from both ends of a substring.
@@ -298,24 +303,6 @@ impl<'a> PositionedSubstring<'a> {
         self.utf16_length -= utf16_len(right_whitespace);
         self.grapheme_length -= grapheme_len(left_whitespace);
         self.grapheme_length -= grapheme_len(right_whitespace);
-    }
-}
-
-pub struct Lines<'a> {
-    string: &'a str,
-    next_utf8_offset: usize,
-}
-
-impl<'a> Iterator for Lines<'a> {
-    type Item = PositionedSubstring<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.string.len() <= self.next_utf8_offset {
-            return None;
-        }
-        let next = PositionedSubstring::from_line(self.string, self.next_utf8_offset);
-        self.next_utf8_offset = next.utf8_bounds.end + 1;
-        Some(next)
     }
 }
 
