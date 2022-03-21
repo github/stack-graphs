@@ -25,6 +25,7 @@ bitvec = "0.22"
 controlled-option = "0.4"
 either = "1.6"
 fxhash = "0.2"
+itertools = "0.10"
 libc = "0.2"
 lsp-positions = { version="0.2", path="../lsp-positions" }
 serde = { version="1.0", optional=true }
