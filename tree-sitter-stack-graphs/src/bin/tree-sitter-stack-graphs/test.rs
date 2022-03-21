@@ -45,6 +45,18 @@ pub struct Command {
 
 impl Command {
     pub fn run(&self) -> anyhow::Result<()> {
+        if self.sources.is_empty() {
+            return Err(anyhow!("No source path provided"));
+        }
+        for source_path in &self.sources {
+            if !source_path.exists() {
+                return Err(anyhow!(
+                    "Source path {} does not exist",
+                    source_path.display()
+                ));
+            }
+        }
+
         let mut loader = self.loader.new_loader()?;
         let mut total_failure_count = 0;
         for source_path in &self.sources {
