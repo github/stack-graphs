@@ -57,16 +57,24 @@ impl<'a, T> InStackGraph<'a, T> {
 // StackGraph
 
 impl StackGraph {
-    pub fn to_json_value(&self) -> Result<Value, JsonError> {
-        Ok(serde_json::to_value(self)?)
+    pub fn to_json(&self) -> JsonStackGraph {
+        JsonStackGraph(self)
+    }
+}
+
+pub struct JsonStackGraph<'a>(&'a StackGraph);
+
+impl<'a> JsonStackGraph<'a> {
+    pub fn to_value(&self) -> Result<Value, JsonError> {
+        Ok(serde_json::to_value(self.0)?)
     }
 
-    pub fn to_json_string(&self) -> Result<String, JsonError> {
-        Ok(serde_json::to_string(self)?)
+    pub fn to_string(&self) -> Result<String, JsonError> {
+        Ok(serde_json::to_string(self.0)?)
     }
 
-    pub fn to_json_string_pretty(&self) -> Result<String, JsonError> {
-        Ok(serde_json::to_string_pretty(self)?)
+    pub fn to_string_pretty(&self) -> Result<String, JsonError> {
+        Ok(serde_json::to_string_pretty(self.0)?)
     }
 }
 
@@ -348,27 +356,51 @@ impl<'a, T> InPaths<'a, T> {
 //-----------------------------------------------------------------------------
 // Paths
 
-impl Paths {
-    pub fn to_json_value(&mut self, graph: &StackGraph) -> Result<Value, JsonError> {
-        let paths = self.to_path_vec(graph);
-        Ok(serde_json::to_value(&InPaths(&paths, self, graph))?)
+impl<'a> Paths {
+    pub fn to_json<F>(&'a mut self, graph: &'a StackGraph, f: F) -> JsonPaths<'_, F>
+    where
+        F: FnMut(&StackGraph, &Paths, &Path) -> bool,
+    {
+        JsonPaths(self, graph, f)
+    }
+}
+
+pub struct JsonPaths<'a, F>(&'a mut Paths, &'a StackGraph, F)
+where
+    F: FnMut(&StackGraph, &Paths, &Path) -> bool;
+
+impl<'a, F> JsonPaths<'a, F>
+where
+    F: FnMut(&StackGraph, &Paths, &Path) -> bool,
+{
+    pub fn to_value(&mut self) -> Result<Value, JsonError> {
+        let paths = self.to_path_vec();
+        Ok(serde_json::to_value(&InPaths(&paths, self.0, self.1))?)
     }
 
-    pub fn to_json_string(&mut self, graph: &StackGraph) -> Result<String, JsonError> {
-        let paths = self.to_path_vec(graph);
-        Ok(serde_json::to_string(&InPaths(&paths, self, graph))?)
+    pub fn to_string(&mut self) -> Result<String, JsonError> {
+        let paths = self.to_path_vec();
+        Ok(serde_json::to_string(&InPaths(&paths, self.0, self.1))?)
     }
 
-    pub fn to_json_string_pretty(&mut self, graph: &StackGraph) -> Result<String, JsonError> {
-        let paths = self.to_path_vec(graph);
-        Ok(serde_json::to_string_pretty(&InPaths(&paths, self, graph))?)
+    pub fn to_string_pretty(&mut self) -> Result<String, JsonError> {
+        let paths = self.to_path_vec();
+        Ok(serde_json::to_string_pretty(&InPaths(
+            &paths, self.0, self.1,
+        ))?)
     }
 
-    fn to_path_vec(&mut self, graph: &StackGraph) -> Vec<Path> {
+    fn to_path_vec(&mut self) -> Vec<Path> {
         let mut paths = Vec::new();
-        self.find_all_paths(graph, graph.iter_nodes(), |_g, _ps, p| {
-            paths.push(p);
-        });
+        let f = &mut self.2;
+        self.0
+            .find_all_paths(self.1, self.1.iter_nodes(), |g, ps, p| {
+                if f(g, ps, &p) {
+                    let mut p = p;
+                    p.edges.ensure_forwards(ps);
+                    paths.push(p);
+                }
+            });
         paths
     }
 }

@@ -540,6 +540,13 @@ impl PathEdgeList {
     pub fn iter_unordered<'a>(&self, paths: &'a Paths) -> impl Iterator<Item = PathEdge> + 'a {
         self.edges.iter_unordered(&paths.path_edges).copied()
     }
+
+    /// Ensure the underlying representation is forwards, so that `iter_unordered`
+    /// can be used for forwards iteration.
+    #[cfg(feature = "json")]
+    pub(crate) fn ensure_forwards<'a>(&mut self, paths: &'a mut Paths) {
+        self.edges.ensure_forwards(&mut paths.path_edges);
+    }
 }
 
 impl DisplayWithPaths for PathEdgeList {
