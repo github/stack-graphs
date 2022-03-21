@@ -72,6 +72,8 @@ impl Loader {
                 .language_configuration_for_scope(scope)
                 .with_context(|| format!("Failed to load language for scope '{}'", scope))?
             {
+                // FIXME Because we try all files in a directory, we should not return a language here
+                //       if it does not match the given path.
                 Ok((lang, config.root_path.clone()))
             } else {
                 return Err(LoadError::UnknownLanguageScope(scope.to_string()));

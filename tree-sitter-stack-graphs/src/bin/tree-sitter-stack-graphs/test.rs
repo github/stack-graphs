@@ -8,12 +8,16 @@
 use anyhow::anyhow;
 use anyhow::Context as _;
 use colored::Colorize as _;
+use stack_graphs::graph::StackGraph;
+use stack_graphs::paths::Paths;
 use std::path::Path;
 use std::path::PathBuf;
-use thiserror::Error;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::test::Test;
+use tree_sitter_stack_graphs::test::TestFile;
+use tree_sitter_stack_graphs::test::TestResult;
+use tree_sitter_stack_graphs::StackGraphLanguage;
 use walkdir::WalkDir;
 
 use crate::loader::LoaderArgs;
@@ -45,17 +49,7 @@ pub struct Command {
 
 impl Command {
     pub fn run(&self) -> anyhow::Result<()> {
-        if self.sources.is_empty() {
-            return Err(anyhow!("No source path provided"));
-        }
-        for source_path in &self.sources {
-            if !source_path.exists() {
-                return Err(anyhow!(
-                    "Source path {} does not exist",
-                    source_path.display()
-                ));
-            }
-        }
+        self.validate_source_paths()?;
 
         let mut loader = self.loader.new_loader()?;
         let mut total_failure_count = 0;
@@ -67,105 +61,133 @@ impl Command {
                 .filter(|e| e.file_type().is_file())
             {
                 let source_path = source_entry.path();
-                match self.process(source_path, &mut loader) {
-                    Err(TestError::AssertionsFailed(failure_count)) => {
-                        total_failure_count += failure_count;
-                    }
-                    r => r.with_context(|| {
-                        format!("Error reading test file {}", source_path.display())
-                    })?,
-                }
+                total_failure_count += self
+                    .run_test(source_path, &mut loader)
+                    .with_context(|| format!("Error running test {}", source_path.display()))?;
             }
         }
-        if total_failure_count == 0 {
-            Ok(())
-        } else {
-            Err(anyhow!("{} assertions failed", total_failure_count))
+
+        if total_failure_count > 0 {
+            return Err(anyhow!(
+                "{} assertion{} failed",
+                total_failure_count,
+                if total_failure_count == 1 { "" } else { "s" }
+            ));
         }
+
+        Ok(())
     }
 
-    fn process(
-        &self,
-        source_path: &Path,
-        loader: &mut Loader,
-    ) -> std::result::Result<(), TestError> {
-        let source = std::fs::read(source_path).map_err(TestError::other)?;
-        let source = String::from_utf8(source).map_err(TestError::other)?;
-        let source_path_str = source_path.to_string_lossy();
-        let mut test = Test::from_source(&source_path_str, &source).map_err(TestError::other)?;
+    fn validate_source_paths(&self) -> anyhow::Result<()> {
+        if self.sources.is_empty() {
+            return Err(anyhow!("No source paths provided"));
+        }
+        for source_path in &self.sources {
+            if !source_path.exists() {
+                return Err(anyhow!(
+                    "Source path {} does not exist",
+                    source_path.display()
+                ));
+            }
+        }
+        Ok(())
+    }
 
-        // construct stack graph
+    fn run_test(&self, source_path: &Path, loader: &mut Loader) -> anyhow::Result<usize> {
+        let mut test = self.read_test(source_path)?;
         for test_file in &test.files {
             let test_path = Path::new(test.graph[test_file.file].name());
             let sgl = match loader.load_for_source_path(test_path) {
                 Ok(sgl) => sgl,
                 Err(e) => {
-                    println!("{} {}", "⦵".dimmed(), source_path_str);
+                    println!("{} {}", "⦵".dimmed(), source_path.display());
                     if !self.hide_failure_errors {
                         Self::print_err(e);
                     }
-                    continue;
+                    return Ok(0);
                 }
             };
-            let mut globals = Variables::new();
-            globals
-                .add("FILE_PATH".into(), source_path_str.as_ref().into())
-                .expect("Failed to set FILE_PATH");
-            sgl.build_stack_graph_into(
-                &mut test.graph,
-                test_file.file,
-                &test_file.source,
-                &mut globals,
-            )
-            .map_err(TestError::other)?;
+            self.build_file_stack_graph_into(source_path, sgl, test_file, &mut test.graph)?;
         }
-
-        // run tests
         let result = test.run();
-        if result.failure_count() == 0 {
-            println!(
-                "{} {}: {}/{} assertions",
-                "✓".green(),
-                source_path_str,
-                result.success_count(),
-                result.count()
-            );
-            Ok(())
-        } else {
-            println!(
-                "{} {}: {}/{} assertions",
-                "✗".red(),
-                source_path_str,
-                result.success_count(),
-                result.count()
-            );
-            if !self.hide_failure_errors {
-                for failure in result.failures_iter() {
-                    println!("  {}", failure);
-                }
-            }
-            let graph_path = source_path.with_extension("graph.json");
-            let paths_path = source_path.with_extension("paths.json");
-            if self.save_graph_on_failure {
-                let json = test
-                    .graph
-                    .to_json()
-                    .to_string_pretty()
-                    .map_err(TestError::other)?;
-                std::fs::write(&graph_path, json).expect("Unable to write graph");
-                println!("  Graph: {}", graph_path.display());
-            }
-            if self.save_paths_on_failure {
-                let json = test
-                    .paths
-                    .to_json(&test.graph, |_, _, _| true)
-                    .to_string_pretty()
-                    .map_err(TestError::other)?;
-                std::fs::write(&paths_path, json).expect("Unable to write paths");
-                println!("  Paths: {}", paths_path.display());
-            }
-            Err(TestError::AssertionsFailed(result.failure_count()))
+        let success = self.handle_result(source_path, &result)?;
+        if !success {
+            self.save_output(source_path, &test.graph, &mut test.paths)?;
         }
+        Ok(result.failure_count())
+    }
+
+    fn read_test(&self, source_path: &Path) -> anyhow::Result<Test> {
+        let source = std::fs::read(source_path)?;
+        let source = String::from_utf8(source)?;
+        let test = Test::from_source(&source_path.to_string_lossy(), &source)?;
+        Ok(test)
+    }
+
+    fn build_file_stack_graph_into(
+        &self,
+        source_path: &Path,
+        sgl: &mut StackGraphLanguage,
+        test_file: &TestFile,
+        graph: &mut StackGraph,
+    ) -> anyhow::Result<()> {
+        let mut globals = Variables::new();
+        globals
+            .add(
+                "FILE_PATH".into(),
+                format!("{}", source_path.display()).into(),
+            )
+            .expect("Failed to set FILE_PATH");
+        sgl.build_stack_graph_into(graph, test_file.file, &test_file.source, &mut globals)?;
+        Ok(())
+    }
+
+    fn handle_result(&self, source_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
+        let success = result.failure_count() == 0;
+        println!(
+            "{} {}: {}/{} assertions",
+            if success { "✓".green() } else { "✗".red() },
+            source_path.display(),
+            result.success_count(),
+            result.count()
+        );
+        if !success && !self.hide_failure_errors {
+            for failure in result.failures_iter() {
+                println!("  {}", failure);
+            }
+        }
+        Ok(success)
+    }
+
+    fn save_output(
+        &self,
+        source_path: &Path,
+        graph: &StackGraph,
+        paths: &mut Paths,
+    ) -> anyhow::Result<()> {
+        if self.save_graph_on_failure {
+            let path = source_path.with_extension("graph.json");
+            self.save_graph(&path, &graph)?;
+            println!("  Graph: {}", path.display());
+        }
+        if self.save_paths_on_failure {
+            let path = source_path.with_extension("paths.json");
+            self.save_paths(&path, paths, graph)?;
+            println!("  Paths: {}", path.display());
+        }
+        Ok(())
+    }
+
+    fn save_graph(&self, path: &Path, graph: &StackGraph) -> anyhow::Result<()> {
+        let json = graph.to_json().to_string_pretty()?;
+        std::fs::write(&path, json).expect("Unable to write graph");
+        Ok(())
+    }
+
+    fn save_paths(&self, path: &Path, paths: &mut Paths, graph: &StackGraph) -> anyhow::Result<()> {
+        let json = paths.to_json(graph, |_, _, _| true).to_string_pretty()?;
+        std::fs::write(&path, json).expect("Unable to write paths");
+        Ok(())
     }
 
     fn print_err<E>(err: E)
@@ -182,22 +204,5 @@ impl Command {
             }
             println!("      {}", err);
         }
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum TestError {
-    #[error("{0} assertions failed")]
-    AssertionsFailed(usize),
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-}
-
-impl TestError {
-    fn other<E>(error: E) -> Self
-    where
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        Self::Other(error.into())
     }
 }
