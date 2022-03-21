@@ -5,6 +5,11 @@ The `tree-sitter-stack-graphs` crate lets you create stack graphs using the
 
 [tree-sitter]: https://tree-sitter.github.io/
 
+- [API documentation](https://docs.rs/tree-sitter-stack-graphs/)
+- [Release notes](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/CHANGELOG.md)
+
+## Usage
+
 To use this library, add the following to your `Cargo.toml`:
 
 ``` toml
