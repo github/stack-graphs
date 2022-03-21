@@ -34,6 +34,21 @@ pub struct AssertionSource {
     pub position: Position,
 }
 
+impl AssertionSource {
+    fn reference_iter<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+    ) -> impl Iterator<Item = Handle<Node>> + 'a {
+        graph.nodes_for_file(self.file).filter(move |n| {
+            graph[*n].is_reference()
+                && graph
+                    .source_info(*n)
+                    .map(|s| s.span.contains(&self.position))
+                    .unwrap_or(false)
+        })
+    }
+}
+
 /// Target line of an assertion
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AssertionTarget {
@@ -70,67 +85,65 @@ impl Assertion {
     /// Run this assertion against the given graph, using the given paths object for path search.
     pub fn run(&self, graph: &StackGraph, paths: &mut Paths) -> Result<(), AssertionError> {
         match self {
-            Assertion::Defined {
-                source,
-                targets: expected_targets,
-            } => {
-                let references = graph
-                    .nodes_for_file(source.file)
-                    .filter(|n| {
-                        graph[*n].is_reference()
-                            && graph
-                                .source_info(*n)
-                                .map(|s| s.span.contains(&source.position))
-                                .unwrap_or(false)
-                    })
-                    .collect::<Vec<_>>();
-                if references.is_empty() {
-                    Err(AssertionError::NoReferences {
-                        source: source.clone(),
-                    })
-                } else {
-                    let mut actual_paths = Vec::new();
-                    paths.find_all_paths(graph, references.clone(), |g, _ps, p| {
-                        if p.is_complete(g) {
-                            actual_paths.push(p);
-                        }
-                    });
-                    let missing_targets = expected_targets
-                        .iter()
-                        .filter(|t| {
-                            !actual_paths
-                                .iter()
-                                .any(|p| t.matches_node(p.end_node, graph))
-                        })
-                        .cloned()
-                        .unique()
-                        .collect::<Vec<_>>();
-                    let unexpected_paths = actual_paths
-                        .iter()
-                        .filter(|p| {
-                            !expected_targets
-                                .iter()
-                                .any(|t| t.matches_node(p.end_node, graph))
-                        })
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    if missing_targets.is_empty() && unexpected_paths.is_empty() {
-                        Ok(())
-                    } else {
-                        let symbols = references
-                            .iter()
-                            .map(|r| graph[*r].symbol().unwrap())
-                            .unique()
-                            .collect::<Vec<_>>();
-                        Err(AssertionError::IncorrectDefinitions {
-                            source: source.clone(),
-                            symbols,
-                            missing_targets,
-                            unexpected_paths,
-                        })
-                    }
-                }
+            Assertion::Defined { source, targets } => {
+                self.run_defined(graph, paths, source, targets)
             }
         }
+    }
+
+    fn run_defined(
+        &self,
+        graph: &StackGraph,
+        paths: &mut Paths,
+        source: &AssertionSource,
+        expected_targets: &Vec<AssertionTarget>,
+    ) -> Result<(), AssertionError> {
+        let references = source.reference_iter(graph).collect::<Vec<_>>();
+        if references.is_empty() {
+            return Err(AssertionError::NoReferences {
+                source: source.clone(),
+            });
+        }
+
+        let mut actual_paths = Vec::new();
+        paths.find_all_paths(graph, references.clone(), |g, _ps, p| {
+            if p.is_complete(g) {
+                actual_paths.push(p);
+            }
+        });
+        let missing_targets = expected_targets
+            .iter()
+            .filter(|t| {
+                !actual_paths
+                    .iter()
+                    .any(|p| t.matches_node(p.end_node, graph))
+            })
+            .cloned()
+            .unique()
+            .collect::<Vec<_>>();
+        let unexpected_paths = actual_paths
+            .iter()
+            .filter(|p| {
+                !expected_targets
+                    .iter()
+                    .any(|t| t.matches_node(p.end_node, graph))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if !missing_targets.is_empty() || !unexpected_paths.is_empty() {
+            let symbols = references
+                .iter()
+                .map(|r| graph[*r].symbol().unwrap())
+                .unique()
+                .collect::<Vec<_>>();
+            return Err(AssertionError::IncorrectDefinitions {
+                source: source.clone(),
+                symbols,
+                missing_targets,
+                unexpected_paths,
+            });
+        }
+
+        Ok(())
     }
 }
