@@ -94,6 +94,8 @@ impl Command {
                 .filter(|e| e.file_type().is_file())
             {
                 let source_path = source_entry.path();
+		            println!("aaa {:?}", source_path);
+
                 match self.process(source_path, &mut loader) {
                     Err(TestError::AssertionsFailed(failure_count)) => {
                         total_failure_count += failure_count;
@@ -120,6 +122,7 @@ impl Command {
         let source = String::from_utf8(source).map_err(TestError::other)?;
         let source_path_str = source_path.to_string_lossy();
         let mut test = Test::from_source(&source_path_str, &source).map_err(TestError::other)?;
+	
 
         // construct stack graph
         let mut ignored = 0;
