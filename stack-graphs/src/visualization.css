@@ -259,4 +259,40 @@
 
 .sg-tooltip-label {
     font-variant: small-caps;
+    vertical-align: text-top;
+}
+
+.sg-tooltip-value {
+    vertical-align: text-top;
+}
+
+.sg-tooltip-list {
+    list-style-type: none;
+    padding: 0px;
+    margin: 0px;
+}
+
+.sg-tooltip-list-element {
+    background: #777777;
+    padding: 3px;
+    margin: 1px 0px;
+}
+
+.sg-tooltip-subvalue {
+    vertical-align: top;
+}
+
+.sg-tooltip-sublist {
+    display:inline-block;
+    list-style-type: none;
+    padding: 0px;
+    margin-left: 10px;
+    font-size: smaller;
+}
+
+.sg-tooltip-sublist-element {
+    background: #999999;
+    padding: 3px;
+    display: inline-block;
+    margin: 0px 1px;
 }

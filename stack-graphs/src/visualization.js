@@ -26,26 +26,36 @@ class StackGraph {
     compute_data() {
         this.ID = {};
         this.N = [];
+        this.compute_node_data();
+        this.compute_path_data();
+    }
+
+    compute_node_data() {
         for (let i in graph.nodes) {
             const node = graph.nodes[i];
             node.paths = []
             this.ID[this.node_to_id_str(node)] = i;
             this.N.push(node);
         }
+    }
+
+    compute_path_data() {
         const jumps = {};
         for (let path of this.paths) {
-            const nodes = path.edges.map((e) => e.source);
-            nodes.push(path.end_node);
-            const node_ids = [this.node_id_to_str(nodes[0])];
-            const edge_ids = [];
-            for (let i = 1; i < nodes.length; i++) {
-                const source = nodes[i - 1];
-                const sink = nodes[i];
-                const edge = this.edge_to_id_str({ source, sink });
-                edge_ids.push(edge);
-                node_ids.push(this.node_id_to_str(sink));
-                if (this.N[this.ID[this.node_id_to_str(source)]].type === 'jump_to_scope' && jumps[edge] !== true) {
-                    jumps[edge] = true;
+            const node_ids = path.edges.map((e) => e.source);
+            node_ids.push(path.end_node);
+            const nodes = {};
+            const edges = {};
+            nodes[this.node_id_to_str(node_ids[0])] = {};
+            for (let i = 1; i < node_ids.length; i++) {
+                const source = node_ids[i - 1];
+                const sink = node_ids[i];
+                const edge_id = this.edge_to_id_str({ source, sink });
+                edges[edge_id] = {};
+                nodes[this.node_id_to_str(sink)] = {};
+                // create jump edges, which are not part of the graph
+                if (this.N[this.ID[this.node_id_to_str(source)]].type === 'jump_to_scope' && jumps[edge_id] !== true) {
+                    jumps[edge_id] = true;
                     this.graph.edges.push({
                         precedence: 0,
                         source,
@@ -54,12 +64,52 @@ class StackGraph {
                     });
                 }
             }
-            const symbol_stack = path.symbol_stack.map((s) => s.symbol /* FIXME scopes */);
-            const scope_stack = path.scope_stack.map((n) => this.node_id_to_str(n));
-            this.N[this.ID[this.node_id_to_str(path.start_node)]].paths.push({
-                node_ids, edge_ids, symbol_stack, scope_stack
-            });
+            path.derived = { nodes, edges };
+            this.compute_path_stacks(path);
+            this.N[this.ID[this.node_id_to_str(path.start_node)]].paths.push(path);
         }
+    }
+
+    compute_path_stacks(path) {
+        let symbol_stack = null;
+        let scope_stack = null;
+        for (let edge of path.edges) {
+            let node_id = this.node_id_to_str(edge.source);
+            let node = this.N[this.ID[node_id]];
+            switch (node.type) {
+                case "drop_scopes":
+                    scope_stack = null;
+                    break;
+                case "jump_to_scope":
+                    scope_stack = scope_stack?.tail;
+                    break;
+                case "push_scoped_symbol":
+                    const scopes = { scope: node.scope, tail: scope_stack };
+                    symbol_stack = { symbol: node.symbol, scopes, tail: symbol_stack };
+                    break;
+                case "push_symbol":
+                    symbol_stack = { symbol: node.symbol, tail: symbol_stack };
+                    break;
+                case "pop_scoped_symbol":
+                    scope_stack = symbol_stack?.scopes;
+                    symbol_stack = symbol_stack?.tail;
+                    break;
+                case "pop_symbol":
+                    symbol_stack = symbol_stack?.tail;
+                    break;
+                case "root":
+                case "scope":
+                    break;
+                default:
+                    console.log("Unknown node type ", node.type);
+                    break;
+            }
+            path.derived.nodes[node_id].symbol_stack = symbol_stack;
+            path.derived.nodes[node_id].scope_stack = scope_stack;
+        }
+        const node_id = this.node_id_to_str(path.end_node);
+        path.derived.nodes[node_id].symbol_stack = symbol_stack;
+        path.derived.nodes[node_id].scope_stack = scope_stack;
     }
 
     render() {
@@ -95,7 +145,6 @@ class StackGraph {
         // restore reversed edges
         for (let link of dag.links()) {
             if (link.reversed) {
-                console.log(link);
                 delete link.reversed;
                 link.points.reverse();
             }
@@ -381,30 +430,30 @@ class StackGraph {
         const nodes = {};
         const edges = {};
         for (let path of paths) {
-            for (let node_id of path.node_ids) {
+            for (let node_id in path.derived.nodes) {
                 if (!nodes.hasOwnProperty(node_id)) {
                     nodes[node_id] = false;
                 }
             }
-            if (path.node_ids.length > 0) {
-                nodes[path.node_ids[0]] = true;
-                nodes[path.node_ids[path.node_ids.length - 1]] = true;
+            if (path.edges.length > 0) {
+                nodes[this.node_id_to_str(path.start_node)] = true;
+                nodes[this.node_id_to_str(path.end_node)] = true;
             }
-            for (let edge_id of path.edge_ids) {
+            for (let edge_id in path.derived.edges) {
                 if (!edges.hasOwnProperty(edge_id)) {
                     edges[edge_id] = 0;
                 }
                 edges[edge_id] += 1;
             }
-            for (let node in nodes) {
-                const g = d3.select(this.id_selector(node));
+            for (let node_id in nodes) {
+                const g = d3.select(this.id_selector(node_id));
                 g.classed("path-node", true);
-                if (nodes[node]) {
+                if (nodes[node_id]) {
                     g.classed("path-endpoint", true);
                 }
             }
-            for (let edge in edges) {
-                const g = d3.select(this.id_selector(edge));
+            for (let edge_id in edges) {
+                const g = d3.select(this.id_selector(edge_id));
                 g.classed("path-edge", true);
             }
         }
@@ -413,12 +462,12 @@ class StackGraph {
     paths_nolight(node, path) {
         const paths = (path !== undefined) ? [node.paths[path]] : node.paths;
         for (let path of paths) {
-            for (let node_id of path.node_ids) {
+            for (let node_id in path.derived.nodes) {
                 const g = d3.select(this.id_selector(node_id));
                 g.classed("path-node", false);
                 g.classed("path-endpoint", false);
             }
-            for (let edge_id of path.edge_ids) {
+            for (let edge_id in path.derived.edges) {
                 const g = d3.select(this.id_selector(edge_id));
                 g.classed("path-edge", false);
             }
@@ -445,8 +494,15 @@ class StackGraph {
 
     tooltip_update() {
         const tooltip = d3.select('#sg-tooltip');
+
+        if (this.current_node === null && this.current_edge === null) {
+            tooltip.style('visibility', 'hidden');
+            return;
+        }
+
         // clear
         tooltip.selectAll("*").remove();
+
         // create table
         const tbody = tooltip.append("table")
             .attr("class", "sg-tooltip-table")
@@ -461,7 +517,26 @@ class StackGraph {
         function add_row(label, value) {
             const tr = tbody.append("tr");
             tr.append("td").attr("class", "sg-tooltip-label").text(label);
-            tr.append("td").attr("class", "sg-tooltip-value").text(value);
+            const td = tr.append("td").attr("class", "sg-tooltip-value")
+            if (Array.isArray(value)) {
+                const ul = td.append("ul").attr("class", "sg-tooltip-list");
+                for (let element of value) {
+                    const li = ul.append("li").attr("class", "sg-tooltip-list-element");
+                    if (Array.isArray(element)) {
+                        const subvalue = element[0];
+                        const sublist = element[1];
+                        li.append("span").text(subvalue);
+                        let sub_ul = li.append("ul").attr("class", "sg-tooltip-sublist");
+                        for (let sub_element of sublist) {
+                            sub_ul.append("li").attr("class", "sg-tooltip-sublist-element").text(sub_element);
+                        }
+                    } else {
+                        li.text(element);
+                    }
+                }
+            } else {
+                td.text(value);
+            }
         }
         let tooltip_methods = {
             add_header,
@@ -480,8 +555,6 @@ class StackGraph {
                 this.tooltip_path_update(tooltip_methods, this.paths_lock);
             }
             tooltip.style('visibility', 'visible');
-        } else {
-            tooltip.style('visibility', 'hidden');
         }
     }
 
@@ -521,7 +594,11 @@ class StackGraph {
             tooltip.add_row("location", this.source_info_to_str(node.source_info));
         }
         if (node.paths.length > 0) {
-            tooltip.add_row("outgoing paths", node.paths.length);
+            if (this.paths_lock === null) {
+                tooltip.add_row("outgoing paths", `${node.paths.length} (click to cycle)`);
+            } else {
+                tooltip.add_row("outgoing paths", `${node.paths.length}`);
+            }
         }
 
         if (node.hasOwnProperty("debug_info") && node.debug_info.length > 0) {
@@ -533,18 +610,32 @@ class StackGraph {
     }
 
     tooltip_path_update(tooltip, paths_lock) {
-        tooltip.add_header("path info (next: N, exit: Esc)");
-        if (paths_lock.node === this.current_node) {
-            tooltip.add_row("current", `path ${paths_lock.path + 1} of ${this.current_node.paths.length} (click to cycle)`);
-        } else {
-            tooltip.add_row("current", `path ${paths_lock.path + 1} of ${paths_lock.node.paths.length} of ${this.node_to_id_str(paths_lock.node)}`);
+        if (!this.tooltip_on_current_path(paths_lock)) {
+            return;
         }
         let path = paths_lock.node.paths[paths_lock.path];
-        tooltip.add_row("final symbol stack", path.symbol_stack.join(""));
-        tooltip.add_row("final scope stack", path.scope_stack.join(" "));
+        tooltip.add_header("path info (next: N, exit: Esc)");
+        let path_count;
+        if (paths_lock.node === this.current_node) {
+            path_count = `(path ${paths_lock.path + 1} of ${this.current_node.paths.length}; click to cycle)`;
+        } else {
+            path_count = `(path ${paths_lock.path + 1} of ${paths_lock.node.paths.length})`;
+        }
+        tooltip.add_row("start node", `${this.node_id_to_str(path.start_node)} ${path_count}`);
+        tooltip.add_row("end node", `${this.node_id_to_str(path.end_node)}`);
+
+        const node_id = (this.current_node && this.node_to_id_str(this.current_node))
+                            || (this.current_edge && this.node_id_to_str(this.current_edge.source) );
+        const node_data = path.derived.nodes[node_id];
+        tooltip.add_row("symbol stack", this.symbol_stack_to_array(node_data.symbol_stack));
+        tooltip.add_row("scope stack", this.scope_stack_to_array(node_data.scope_stack));
     }
 
-
+    tooltip_on_current_path(paths_lock) {
+        let path = paths_lock.node.paths[paths_lock.path];
+        return (this.current_node !== null && path.derived.nodes.hasOwnProperty(this.node_to_id_str(this.current_node)))
+            || (this.current_edge !== null && path.derived.edges.hasOwnProperty(this.edge_to_id_str(this.current_edge)));
+    }
 
     // ------------------------------------------------------------------------------------------------
     // Node & Edge IDs
@@ -591,6 +682,33 @@ class StackGraph {
             && source_info.span.start.column.utf8_offset === 0
             && source_info.span.end.line === 0
             && source_info.span.end.column.utf8_offset === 0;
+    }
+
+    // ------------------------------------------------------------------------------------------------
+    // Stacks
+    //
+
+    symbol_stack_to_array(symbol_stack) {
+        let result = [];
+        while (symbol_stack !== null) {
+            let symbol = symbol_stack.symbol;
+            if (symbol_stack.scopes) {
+                const scopes = this.scope_stack_to_array(symbol_stack.scopes);
+                symbol = [symbol, scopes];
+            }
+            result.push(symbol);
+            symbol_stack = symbol_stack.tail;
+        }
+        return result;
+    }
+
+    scope_stack_to_array(scope_stack) {
+        let result = [];
+        while (scope_stack !== null) {
+            result.push(this.node_id_to_str(scope_stack.scope));
+            scope_stack = scope_stack.tail;
+        }
+        return result;
     }
 
 }
