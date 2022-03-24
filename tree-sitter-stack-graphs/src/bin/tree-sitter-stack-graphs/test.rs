@@ -57,6 +57,10 @@ pub struct Command {
     #[clap(long)]
     hide_failure_errors: bool,
 
+    /// Show ignored files in output.
+    #[clap(long)]
+    show_ignored: bool,
+
     /// Save graph.
     #[clap(short = 'G')]
     #[clap(long)]
@@ -124,12 +128,11 @@ impl Command {
         let mut test = self.read_test(source_path)?;
         for test_file in &test.files {
             let test_path = Path::new(test.graph[test_file.file].name());
-            let sgl = match loader.load_for_source_path(test_path) {
-                Ok(sgl) => sgl,
-                Err(e) => {
-                    println!("{} {}", "⦵".dimmed(), source_path.display());
-                    if !self.hide_failure_errors {
-                        Self::print_err(e);
+            let sgl = match loader.load_for_file(test_path, Some(&test_file.source))? {
+                Some(sgl) => sgl,
+                None => {
+                    if self.show_ignored {
+                        println!("{} {}", "⦵".dimmed(), source_path.display());
                     }
                     return Ok(0);
                 }
@@ -250,21 +253,5 @@ impl Command {
         let json = paths.to_json(graph, |_, _, _| true).to_string_pretty()?;
         std::fs::write(&path, json).expect("Unable to write paths");
         Ok(())
-    }
-
-    fn print_err<E>(err: E)
-    where
-        E: Into<anyhow::Error>,
-    {
-        let err = err.into();
-        println!("  {}", err);
-        let mut first = true;
-        for err in err.chain().skip(1) {
-            if first {
-                println!("  Caused by:");
-                first = false;
-            }
-            println!("      {}", err);
-        }
     }
 }
