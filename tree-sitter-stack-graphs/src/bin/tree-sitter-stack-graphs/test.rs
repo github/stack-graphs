@@ -125,18 +125,26 @@ impl Command {
     }
 
     fn run_test(&self, source_path: &Path, loader: &mut Loader) -> anyhow::Result<usize> {
-        let mut test = self.read_test(source_path)?;
+        let source = String::from_utf8(std::fs::read(source_path)?)?;
+        let sgl = match loader.load_for_file(source_path, Some(&source))? {
+            Some(sgl) => sgl,
+            None => {
+                if self.show_ignored {
+                    println!("{} {}", "⦵".dimmed(), source_path.display());
+                }
+                return Ok(0);
+            }
+        };
+        let mut test = Test::from_source(&source_path.to_string_lossy(), &source)?;
         for test_file in &test.files {
             let test_path = Path::new(test.graph[test_file.file].name());
-            let sgl = match loader.load_for_file(test_path, Some(&test_file.source))? {
-                Some(sgl) => sgl,
-                None => {
-                    if self.show_ignored {
-                        println!("{} {}", "⦵".dimmed(), source_path.display());
-                    }
-                    return Ok(0);
-                }
-            };
+            if source_path.extension() != test_path.extension() {
+                return Err(anyhow!(
+                    "Test file {} has different file extension than containing file {}.",
+                    test_path.display(),
+                    source_path.display()
+                ));
+            }
             self.build_file_stack_graph_into(source_path, sgl, test_file, &mut test.graph)?;
         }
         let result = test.run();
@@ -145,13 +153,6 @@ impl Command {
             self.save_output(source_path, &test.graph, &mut test.paths)?;
         }
         Ok(result.failure_count())
-    }
-
-    fn read_test(&self, source_path: &Path) -> anyhow::Result<Test> {
-        let source = std::fs::read(source_path)?;
-        let source = String::from_utf8(source)?;
-        let test = Test::from_source(&source_path.to_string_lossy(), &source)?;
-        Ok(test)
     }
 
     fn build_file_stack_graph_into(
