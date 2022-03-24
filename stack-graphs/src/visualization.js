@@ -17,8 +17,10 @@ class StackGraph {
         this.graph = graph;
         this.paths = paths;
         this.compute_data();
+
         this.current_node = null;
         this.current_edge = null;
+        this.current_orient = { y: "south", x: "east" };
         this.paths_lock = null;
         this.render();
     }
@@ -201,7 +203,8 @@ class StackGraph {
 
         // tooltip
         d3.select('body').append('div')
-            .attr('id', 'sg-tooltip');
+            .attr('id', 'sg-tooltip')
+            .classed(this.tooltip_orient_class(), true);
 
         // mouse events
         nodes
@@ -247,6 +250,7 @@ class StackGraph {
         // key events
         d3.select(window).on("keyup", (e) => {
             this.paths_keypress(e);
+            this.tooltip_keypress(e);
         })
     }
 
@@ -478,10 +482,36 @@ class StackGraph {
     // Tooltip
     //
 
+    tooltip_keypress(e) {
+        const old_class = this.tooltip_orient_class();
+        switch(e.keyCode) {
+            case 87: // w
+                this.current_orient.y = "north";
+                break;
+            case 65: // a
+                this.current_orient.x = "west";
+                break;
+            case 83: // s
+                this.current_orient.y = "south";
+                break;
+            case 68: // d
+                this.current_orient.x = "east";
+                break;
+        }
+        const new_class = this.tooltip_orient_class();
+        d3.select('#sg-tooltip')
+            .classed(old_class, false)
+            .classed(new_class, true);
+    }
+
+    tooltip_orient_class() {
+        return `${this.current_orient.y}-${this.current_orient.x}`;
+    }
+
     tooltip_mousemove(e, node) {
         d3.select('#sg-tooltip')
-            .style('left', e.pageX + 4 + 'px')
-            .style('top', e.pageY + 4 + 'px');
+            .style('left', `${e.pageX}px`)
+            .style('top', `${e.pageY}px`);
     }
 
     tooltip_mouseover(e) {
@@ -556,6 +586,10 @@ class StackGraph {
             }
             tooltip.style('visibility', 'visible');
         }
+
+        tooltip.append("div")
+            .attr("class", "sg-tooltip-nav")
+            .text("move tooltip with WASD");
     }
 
     tooltip_edge_update(tooltip, edge) {
