@@ -17,7 +17,7 @@ use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::test::Test;
-use tree_sitter_stack_graphs::test::TestFile;
+use tree_sitter_stack_graphs::test::TestFragment;
 use tree_sitter_stack_graphs::test::TestResult;
 use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
@@ -135,17 +135,17 @@ impl Command {
                 return Ok(0);
             }
         };
-        let mut test = Test::from_source(&source_path.to_string_lossy(), &source)?;
-        for test_file in &test.files {
-            let test_path = Path::new(test.graph[test_file.file].name());
+        let mut test = Test::from_source(&source_path, &source)?;
+        for test_fragment in &test.fragments {
+            let test_path = Path::new(test.graph[test_fragment.file].name());
             if source_path.extension() != test_path.extension() {
                 return Err(anyhow!(
-                    "Test file {} has different file extension than containing file {}.",
+                    "Test fragment {} has different file extension than test file {}",
                     test_path.display(),
                     source_path.display()
                 ));
             }
-            self.build_file_stack_graph_into(source_path, sgl, test_file, &mut test.graph)?;
+            self.build_fragment_stack_graph_into(source_path, sgl, test_fragment, &mut test.graph)?;
         }
         let result = test.run();
         let success = self.handle_result(source_path, &result)?;
@@ -155,11 +155,11 @@ impl Command {
         Ok(result.failure_count())
     }
 
-    fn build_file_stack_graph_into(
+    fn build_fragment_stack_graph_into(
         &self,
         source_path: &Path,
         sgl: &mut StackGraphLanguage,
-        test_file: &TestFile,
+        test_fragment: &TestFragment,
         graph: &mut StackGraph,
     ) -> anyhow::Result<()> {
         let mut globals = Variables::new();
@@ -169,9 +169,14 @@ impl Command {
                 format!("{}", source_path.display()).into(),
             )
             .expect("Failed to set FILE_PATH");
-        match sgl.build_stack_graph_into(graph, test_file.file, &test_file.source, &mut globals) {
+        match sgl.build_stack_graph_into(
+            graph,
+            test_fragment.file,
+            &test_fragment.source,
+            &mut globals,
+        ) {
             Err(LoadError::ParseErrors(parse_errors)) => {
-                Err(self.map_parse_errors(source_path, &parse_errors, &test_file.source))
+                Err(self.map_parse_errors(source_path, &parse_errors, &test_fragment.source))
             }
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),

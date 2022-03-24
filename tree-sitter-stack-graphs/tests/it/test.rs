@@ -10,6 +10,8 @@ use pretty_assertions::assert_eq;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
+use std::path::Path;
+use std::path::PathBuf;
 use tree_sitter_graph::functions::Functions;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::test::Test;
@@ -17,6 +19,7 @@ use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
 lazy_static! {
+    static ref PATH: PathBuf = PathBuf::from("test.py");
     static ref TSG: &'static str = r#"
       (module) @mod {
           node @mod.lexical_in
@@ -65,13 +68,14 @@ fn build_stack_graph_into(
 }
 
 fn check_test(
+    python_path: &Path,
     python_source: &str,
     tsg_source: &str,
     expected_successes: usize,
     expected_failures: usize,
 ) {
-    let mut test = Test::from_source("test.py", python_source).expect("Could not parse test");
-    let assertion_count: usize = test.files.iter().map(|f| f.assertions.len()).sum();
+    let mut test = Test::from_source(python_path, python_source).expect("Could not parse test");
+    let assertion_count: usize = test.fragments.iter().map(|f| f.assertions.len()).sum();
     assert_eq!(
         expected_successes + expected_failures,
         assertion_count,
@@ -79,11 +83,11 @@ fn check_test(
         expected_successes + expected_failures,
         assertion_count,
     );
-    for test_file in &test.files {
+    for fragments in &test.fragments {
         build_stack_graph_into(
             &mut test.graph,
-            test_file.file,
-            &test_file.source,
+            fragments.file,
+            &fragments.source,
             tsg_source,
         )
         .expect("Could not load stack graph");
@@ -127,7 +131,7 @@ fn aligns_correctly_with_unicode() {
       m["g̈"] = x;
       #      # ^ defined: 2
     "#;
-    check_test(python, &TSG, 4, 0);
+    check_test(&PATH, python, &TSG, 4, 0);
 }
 
 #[test]
@@ -140,5 +144,55 @@ fn test_can_be_multi_file() {
         x;
       # ^ defined: 3
     "#;
-    check_test(python, &TSG, 1, 0);
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn test_assert_multiple_lines() {
+    let python = r#"
+      # --- path: a.py ---
+      x = 1;
+
+      # --- path: b.py ---
+      x = 1;
+
+      # --- path: c.py ---
+        x;
+      # ^ defined: 3, 6
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn test_fragment_can_have_same_name_as_test() {
+    let python = r#"
+      # --- path: test.py ---
+      x = 1;
+        x;
+      # ^ defined: 3
+    "#;
+    check_test(&PathBuf::from("test.py"), python, &TSG, 1, 0);
+}
+
+#[test]
+fn test_cannot_assert_on_first_line() {
+    let python = r#"
+      # ^ defined: 3
+    "#;
+    if let Ok(_) = Test::from_source(&PATH, python) {
+        panic!("Parsing test unexpectedly succeeded.");
+    }
+}
+
+#[test]
+fn test_cannot_assert_before_first_fragment() {
+    let python = r#"
+      # this is ignored
+      # --- path: a.py ---
+        x;
+      # ^ defined: 1
+    "#;
+    if let Ok(_) = Test::from_source(&PATH, python) {
+        panic!("Parsing test unexpectedly succeeded.");
+    }
 }
