@@ -5,7 +5,47 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-//! Defines
+//! Defines a test file format for stack graph resolution.
+//!
+//! ## Assertions
+//!
+//! Test files are source files in the language under test with assertions added in comments.
+//! Assertions indicate a the position of a reference in the source with a carrot `^`, and
+//! specify the line numbers, separated by commas, of the definitions where the reference is
+//! expected to resolve.
+//!
+//! An example test for Python might be defined in `test.py` and look as follows:
+//!
+//! ``` skip
+//! x = 42
+//! y = -1
+//! print(x, y)
+//! #     ^ defined: 1
+//! #        ^ defined: 2
+//! ```
+//!
+//! Consecutive lines with assertions all apply to the last source line without an assertion.
+//! In the example, both assertions refer to positions on line 3.
+//!
+//! ## Fragments for multi-file testing
+//!
+//! Test files may also consist of multiple fragments, which are treated as separate files in the
+//! stack graph. An example test that simulates two different Python files:
+//!
+//! ``` skip
+//! # --- path: one.py ---
+//! x = 42
+//! y = -1
+//! # --- path: one.py ---
+//! print(x, y)
+//! #     ^ defined: 2
+//! #        ^ defined: 3
+//! ```
+//!
+//! Note that the line numbers still refer to lines in the complete test file, and are not relative
+//! to a fragment.
+//!
+//! Any content before the first fragment header of the file is ignored, and will not be part of the test.
 
 use itertools::Itertools;
 use lazy_static::lazy_static;
