@@ -19,7 +19,7 @@ use crate::test_graphs::CreateStackGraph;
 #[allow(non_snake_case)]
 pub fn new() -> StackGraph {
     let mut graph = StackGraph::default();
-    let _root = graph.root_node();
+    let root = graph.root_node();
     let jump_to = graph.jump_to_node();
 
     let sym_x = graph.symbol("x");
@@ -42,14 +42,15 @@ pub fn new() -> StackGraph {
     graph.edge(scope_x, pop_dot);
     graph.edge(push_call, scope);
     graph.edge(scope, pop_call);
+    graph.edge(scope, root);
     graph.add_edge(pop_call, jump_to, 1);
     graph.add_edge(pop_call, drop, 0);
     graph.edge(drop, pop_dot);
     graph.edge(pop_dot, def_x);
 
     let str_var = graph.add_string("variable");
-    let line0 = graph.add_string("x = 42");
-    let line1 = graph.add_string("print(x)");
+    let str_line0 = graph.add_string("x = 42");
+    let str_line1 = graph.add_string("print(x)");
     *graph.source_info_mut(def_x) = SourceInfo {
         span: Span {
             start: Position {
@@ -74,7 +75,7 @@ pub fn new() -> StackGraph {
             },
         },
         syntax_type: str_var.into(),
-        containing_line: line0.into(),
+        containing_line: str_line0.into(),
     };
     *graph.source_info_mut(ref_x) = SourceInfo {
         span: Span {
@@ -100,8 +101,27 @@ pub fn new() -> StackGraph {
             },
         },
         syntax_type: str_var.into(),
-        containing_line: line1.into(),
+        containing_line: str_line1.into(),
     };
+
+    let str_dsl_var = graph.add_string("dsl_var");
+    let str_dsl_position = graph.add_string("dsl_position");
+    let str_arg_scope = graph.add_string("arg_scope");
+    let str_lexical_scope = graph.add_string("lexical_scope");
+    let str_pos_one = graph.add_string("line 31 column 20");
+    let str_pos_two = graph.add_string("line 8 column 11");
+    graph
+        .debug_info_mut(scope_x)
+        .add(str_dsl_var, str_arg_scope);
+    graph
+        .debug_info_mut(scope_x)
+        .add(str_dsl_position, str_pos_one);
+    graph
+        .debug_info_mut(scope)
+        .add(str_dsl_var, str_lexical_scope);
+    graph
+        .debug_info_mut(scope)
+        .add(str_dsl_position, str_pos_two);
 
     graph
 }

@@ -1,0 +1,4 @@
+#!/bin/bash -x
+echo "Entering directory '/Users/adonovan/gh/stack-graphs'" >&2
+cd /Users/adonovan/gh/stack-graphs >&2
+exec 'cargo' 'run' '--features=cli' '-v' '--' 'test' '--tsg' '../tree-sitter-graph-go/go.tsg' './test.go' 

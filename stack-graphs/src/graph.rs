@@ -1348,6 +1348,43 @@ impl StackGraph {
 }
 
 //-------------------------------------------------------------------------------------------------
+// Debug info
+
+/// Contains debug info about a stack graph node as key-value pairs of strings.
+#[derive(Default)]
+pub struct DebugInfo {
+    entries: Vec<DebugEntry>,
+}
+
+impl DebugInfo {
+    pub fn add(&mut self, key: Handle<InternedString>, value: Handle<InternedString>) {
+        self.entries.push(DebugEntry { key, value });
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<DebugEntry> {
+        self.entries.iter()
+    }
+}
+
+/// A debug entry consisting of a string key-value air of strings.
+pub struct DebugEntry {
+    pub key: Handle<InternedString>,
+    pub value: Handle<InternedString>,
+}
+
+impl StackGraph {
+    /// Returns debug information about the stack graph node.
+    pub fn debug_info(&self, node: Handle<Node>) -> Option<&DebugInfo> {
+        self.debug_info.get(node)
+    }
+
+    /// Returns a mutable reference to the debug info about the stack graph node.
+    pub fn debug_info_mut(&mut self, node: Handle<Node>) -> &mut DebugInfo {
+        &mut self.debug_info[node]
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Stack graphs
 
 /// Contains all of the nodes and edges that make up a stack graph.
@@ -1363,6 +1400,7 @@ pub struct StackGraph {
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
+    pub(crate) debug_info: SupplementalArena<Node, DebugInfo>,
 }
 
 impl StackGraph {
@@ -1390,6 +1428,7 @@ impl Default for StackGraph {
             source_info: SupplementalArena::new(),
             node_id_handles: NodeIDHandles::new(),
             outgoing_edges: SupplementalArena::new(),
+            debug_info: SupplementalArena::new(),
         }
     }
 }
