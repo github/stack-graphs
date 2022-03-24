@@ -234,6 +234,26 @@
     opacity: 85%;
 }
 
+/* clock-wise */
+#sg-tooltip.south-east {
+    transform: translate(5%, 5%);
+}
+#sg-tooltip.south-west {
+    transform: translate(-105%, 5%);
+}
+#sg-tooltip.north-west {
+    transform: translate(-105%, -105%);
+}
+#sg-tooltip.north-east {
+    transform: translate(5%, -105%);
+}
+
+.sg-tooltip-nav {
+    font-style: italic;
+    margin-top: 5px;
+    text-align: center;
+}
+
 .sg-tooltip-table {
     border-collapse: collapse;
 }
