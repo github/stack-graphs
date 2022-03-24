@@ -21,6 +21,8 @@ use stack_graphs::assert::AssertionTarget;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
+use std::path::Path;
+use std::path::PathBuf;
 use thiserror::Error;
 
 lazy_static! {
@@ -33,7 +35,7 @@ lazy_static! {
 /// An error that can occur while parsing tests
 #[derive(Debug, Error)]
 pub enum TestError {
-    AssertionOnFirstLine,
+    AssertionRefersToNonSourceLine,
     DuplicatePath(String),
     InvalidColumn(usize, usize, usize),
 }
@@ -41,7 +43,9 @@ pub enum TestError {
 impl std::fmt::Display for TestError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AssertionOnFirstLine => write!(f, "Assertion cannot appear on first line"),
+            Self::AssertionRefersToNonSourceLine => {
+                write!(f, "Assertion refers to non-source line")
+            }
             Self::DuplicatePath(path) => write!(f, "Duplicate path {}", path),
             Self::InvalidColumn(assertion_line, column, regular_line) => write!(
                 f,
@@ -56,15 +60,15 @@ impl std::fmt::Display for TestError {
 
 /// A stack graph test
 pub struct Test {
-    pub path: String,
-    pub files: Vec<TestFile>,
+    pub path: PathBuf,
+    pub fragments: Vec<TestFragment>,
     pub graph: StackGraph,
     pub paths: Paths,
 }
 
-/// A file from a stack graph test
+/// A fragment from a stack graph test
 #[derive(Debug, Clone)]
-pub struct TestFile {
+pub struct TestFragment {
     pub file: Handle<File>,
     pub source: String,
     pub assertions: Vec<Assertion>,
@@ -72,54 +76,69 @@ pub struct TestFile {
 
 impl Test {
     /// Creates a test from source.
-    pub fn from_source(path: &str, source: &str) -> Result<Self, TestError> {
+    pub fn from_source(path: &Path, source: &str) -> Result<Self, TestError> {
         let mut graph = StackGraph::new();
-        let mut test_files = Vec::new();
-        let mut current_file = graph.add_file(path).unwrap();
+        let mut fragments = Vec::new();
+        let mut have_fragments = false;
+        let mut current_path = path.to_path_buf();
         let mut current_source = String::new();
         let mut prev_source = String::new();
         let mut line_files = Vec::new();
+        let mut line_count = 0;
         for (current_line_number, current_line) in
             PositionedSubstring::lines_iter(source).enumerate()
         {
+            line_count += 1;
             if let Some(m) = PATH_REGEX.captures_iter(current_line.content).next() {
-                // if the test starts with a file header, we do not create an empty entry for the
-                // test file itself
-                if current_line_number != 0 {
-                    test_files.push(TestFile {
-                        file: current_file,
+                // in a test with fragments, any content before the first fragment is
+                // ignored, so that the file name of the test does not interfere with
+                // the file names of the fragments
+                if have_fragments {
+                    let file = graph
+                        .add_file(&current_path.to_string_lossy())
+                        .map_err(|_| {
+                            TestError::DuplicatePath(format!("{}", current_path.display()))
+                        })?;
+                    (line_files.len()..current_line_number)
+                        .for_each(|_| line_files.push(Some(file)));
+                    fragments.push(TestFragment {
+                        file,
                         source: current_source,
                         assertions: Vec::new(),
                     });
+                } else {
+                    have_fragments = true;
+                    (line_files.len()..current_line_number).for_each(|_| line_files.push(None));
                 }
-                let path = m.get(1).unwrap().as_str();
-                current_file = graph
-                    .add_file(path)
-                    .map_err(|_| TestError::DuplicatePath(path.to_string()))?;
+                current_path = m.get(1).unwrap().as_str().into();
                 current_source = prev_source.clone();
             }
 
             current_source.push_str(current_line.content);
             current_source.push_str("\n");
 
-            line_files.push(current_file);
-
             Self::push_whitespace_for(&current_line, &mut prev_source);
             prev_source.push_str("\n");
         }
-        test_files.push(TestFile {
-            file: current_file,
-            source: current_source,
-            assertions: Vec::new(),
-        });
+        {
+            let file = graph
+                .add_file(&current_path.to_string_lossy())
+                .map_err(|_| TestError::DuplicatePath(format!("{}", current_path.display())))?;
+            (line_files.len()..line_count).for_each(|_| line_files.push(Some(file)));
+            fragments.push(TestFragment {
+                file,
+                source: current_source,
+                assertions: Vec::new(),
+            });
+        }
 
-        for test_file in &mut test_files {
-            test_file.parse_assertions(|l| line_files[l])?;
+        for fragment in &mut fragments {
+            fragment.parse_assertions(|line| line_files[line])?;
         }
 
         Ok(Self {
-            path: path.to_string(),
-            files: test_files,
+            path: path.to_path_buf(),
+            fragments,
             graph,
             paths: Paths::new(),
         })
@@ -144,11 +163,11 @@ impl Test {
     }
 }
 
-impl TestFile {
+impl TestFragment {
     /// Parse assertions in the source.
     fn parse_assertions<F>(&mut self, line_file: F) -> Result<(), TestError>
     where
-        F: Fn(usize) -> Handle<File>,
+        F: Fn(usize) -> Option<Handle<File>>,
     {
         self.assertions.clear();
 
@@ -163,7 +182,7 @@ impl TestFile {
                 // assertion line
                 let last_regular_line = last_regular_line
                     .as_ref()
-                    .ok_or_else(|| TestError::AssertionOnFirstLine)?;
+                    .ok_or_else(|| TestError::AssertionRefersToNonSourceLine)?;
                 let last_regular_line_number = last_regular_line_number.unwrap();
 
                 let carret_match = m.get(1).unwrap();
@@ -195,14 +214,14 @@ impl TestFile {
                     position,
                 };
 
-                let targets = LINE_NUMBER_REGEX
+                let mut targets = Vec::new();
+                for line in LINE_NUMBER_REGEX
                     .find_iter(line_numbers_match.map(|m| m.as_str()).unwrap_or(""))
-                    .map(|l| l.as_str().parse::<usize>().unwrap() - 1)
-                    .map(|l| AssertionTarget {
-                        file: line_file(l),
-                        line: l,
-                    })
-                    .collect::<Vec<_>>();
+                {
+                    let line = line.as_str().parse::<usize>().unwrap() - 1;
+                    let file = line_file(line).ok_or(TestError::AssertionRefersToNonSourceLine)?;
+                    targets.push(AssertionTarget { file, line });
+                }
 
                 self.assertions.push(Assertion::Defined { source, targets });
             } else {
@@ -272,11 +291,11 @@ impl TestResult {
 #[derive(Debug, Clone)]
 pub enum TestFailure {
     NoReferences {
-        path: String,
+        path: PathBuf,
         position: Position,
     },
     IncorrectDefinitions {
-        path: String,
+        path: PathBuf,
         position: Position,
         symbols: Vec<String>,
         missing_lines: Vec<usize>,
@@ -291,7 +310,7 @@ impl std::fmt::Display for TestFailure {
                 write!(
                     f,
                     "{}:{}:{}: no references found",
-                    path,
+                    path.display(),
                     position.line + 1,
                     position.column.grapheme_offset + 1
                 )
@@ -306,7 +325,7 @@ impl std::fmt::Display for TestFailure {
                 write!(
                     f,
                     "{}:{}:{}: ",
-                    path,
+                    path.display(),
                     position.line + 1,
                     position.column.grapheme_offset + 1
                 )?;
@@ -336,12 +355,12 @@ impl std::fmt::Display for TestFailure {
 
 impl Test {
     /// Run the test. It is the responsibility of the caller to ensure that
-    /// the stack graph has been constructed for the test files before running
+    /// the stack graph has been constructed for the test fragments before running
     /// the test.
     pub fn run(&mut self) -> TestResult {
         let mut result = TestResult::new();
-        for file in &self.files {
-            for assertion in &file.assertions {
+        for fragment in &self.fragments {
+            for assertion in &fragment.assertions {
                 match assertion.run(&self.graph, &mut self.paths) {
                     Ok(_) => result.add_success(),
                     Err(e) => result.add_failure(self.from_error(e)),
