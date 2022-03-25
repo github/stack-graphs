@@ -16,6 +16,9 @@ static D3: &'static str = include_str!("d3.v7.min.js");
 static D3_DAG: &'static str = include_str!("d3-dag.v0.10.0.min.js");
 static JS: &'static str = include_str!("visualization.js");
 
+static PKG: &'static str = env!("CARGO_PKG_NAME");
+static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 //-----------------------------------------------------------------------------
 // StackGraph
 
@@ -29,33 +32,48 @@ impl StackGraph {
             r#"
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="utf-8">
-<title>{}</title>
+<title>{title}</title>
+
+<!-- <link href="visualization.css" type="text/css" rel="stylesheet"></link> -->
 <style>
-{}
+{CSS}
 </style>
+
+<!-- <script type="text/javascript" src="d3.v7.min.js"></script> -->
+<script type="text/javascript">
+{D3}
+</script>
+
+<!-- <script type="text/javascript" src="d3-dag.v0.10.0.min.js"></script> -->
+<script type="text/javascript">
+{D3_DAG}
+</script>
+
+<!-- <script type="text/javascript" src="visualization.js"></script> -->
+<script charset="utf-8">
+{JS}
+</script>
+
+<script type="text/javascript">
+  let graph = {graph};
+  let paths = {paths};
+</script>
+
 <style>
   html, body, #container {{
     width: 100%;
     height: 100%;
     margin: 0;
+    overflow: hidden;
   }}
 </style>
-<script type="text/javascript">
-{}
-</script>
-<script type="text/javascript">
-{}
-</script>
-<script charset="utf-8">
-{}
-</script>
-<script type="text/javascript">
-  let graph = {};
-  let paths = {};
-</script>
+
 </head>
+
 <body>
   <div id="controls">
     <input type="checkbox" id="show_all_node_labels" />
@@ -65,15 +83,14 @@ impl StackGraph {
   </div>
   <script type="text/javascript">
     let container = d3.select("\#container");
-    let sg = new StackGraph(container, graph, paths);
+    let sg = new StackGraph(container, graph, paths, {{ version: "{PKG} {VERSION}" }});
     document.getElementById("show_all_node_labels").addEventListener("click", function (ev) {{
         sg.set_show_all_node_labels(ev.target.checked)
     }});
   </script>
 </body>
 </html>
-        "#,
-            title, CSS, D3, D3_DAG, JS, graph, paths
+"#
         );
         Ok(html)
     }

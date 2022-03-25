@@ -1,18 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class=""sg-container">
 
 <head>
     <meta charset="utf-8">
     <title>Stack Graph Visualization</title>
-    <style>
-        html,
-        body,
-        #container {
-            width: 100%;
-            height: 100%;
-            margin: 0;
-        }
-    </style>
     <link href="visualization.css" type="text/css" rel="stylesheet"></link>
     <script src="https://d3js.org/d3.v7.js"></script>
     <script src="https://unpkg.com/d3-dag@0.10.0"></script>
@@ -1021,14 +1012,29 @@
             ]
         ;
     </script>
+    <style>
+        html, body, #container {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        }
+    </style>
 </head>
 
 <body>
+    <div id="controls">
+        <input type="checkbox" id="show_all_node_labels" />
+        <label for="show_all_node_labels">show all node labels</label>
+    </div>
     <div id="container">
     </div>
     <script type="text/javascript">
         let container = d3.select("\#container");
-        new StackGraph(container, graph, paths);
+        const sg = new StackGraph(container, graph, paths, { version: "tree-sitter-stack-graph dev" });
+        document.getElementById("show_all_node_labels").addEventListener("click", function (ev) {{
+            sg.set_show_all_node_labels(ev.target.checked)
+        }});
     </script>
 </body>
 

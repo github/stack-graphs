@@ -230,6 +230,8 @@
 
 #sg-tooltip {
     position: absolute;
+    top: 0px;
+    left: 0px;
     visibility: hidden;
     pointer-events: none;
     border: 0px;
@@ -321,4 +323,80 @@
     padding: 3px;
     display: inline-block;
     margin: 0px 1px;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Help
+ */
+
+#sg-help-toggle {
+    visibility: hidden;
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 3;
+}
+
+.sg-help-label {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    background-color: #bbbbbb;
+    padding: 0px;
+    border-radius: 6px;
+    z-index: 2;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+    margin: 0px;
+    font-size: 18px;
+}
+
+.sg-help-content {
+    visibility: hidden;
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    background-color: #bbbbbb;
+    padding: 6px;
+    border-radius: 6px;
+    z-index: 1;
+    min-height: 18px;
+    min-width: 18px;
+    max-width: 300px;
+    margin: 0px;
+}
+
+#sg-help-toggle:checked ~ .sg-help-content {
+    visibility: visible;
+}
+
+.sg-help-content h1 {
+    font-size: inherit;
+}
+
+.sg-help-content kbd {
+    font-family: monospace;
+    display: inline-block;
+    border-radius: 3px;
+    padding: 0px 4px;
+    box-shadow: 1px 1px 1px #777;
+    margin: 2px;
+    font-size: small;
+    vertical-align: text-bottom;
+    background: #eee;
+    font-variant: small-caps;
+}
+
+.sg-help-meta {
+    font-style: italic;
+}
+
+.sg-help-byline {
+    line-height: 20px;
+    font-style: italic;
+    width: 100%;
+    margin-left: 24px;
+    text-align: left;
 }

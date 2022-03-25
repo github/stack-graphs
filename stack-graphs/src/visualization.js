@@ -13,7 +13,9 @@ class StackGraph {
     static distx = 15;
     static disty = 15;
 
-    constructor(container, graph, paths) {
+    constructor(container, graph, paths, metadata) {
+        this.metadata = metadata;
+
         this.graph = graph;
         this.paths = paths;
         this.compute_data();
@@ -116,8 +118,8 @@ class StackGraph {
     }
 
     set_show_all_node_labels(yn) {
-      this.show_all_node_labels = yn;
-      this.render();
+        this.show_all_node_labels = yn;
+        this.render();
     }
 
     render() {
@@ -215,6 +217,9 @@ class StackGraph {
             .attr('id', 'sg-tooltip')
             .classed(this.tooltip_orient_class(), true);
 
+        // help
+        this.render_help();
+
         // mouse events
         nodes
             .on("mouseover", (e, d) => {
@@ -260,6 +265,7 @@ class StackGraph {
         d3.select(window).on("keyup", (e) => {
             this.paths_keypress(e);
             this.tooltip_keypress(e);
+            this.help_keypress(e);
         })
     }
 
@@ -309,16 +315,15 @@ class StackGraph {
                 break;
             case "scope":
                 if (this.show_all_node_labels) {
-                    console.log(node);
                     let v = '';
                     let l = '';
                     for (let i = 0; i < node.debug_info.length; i++) {
-                      let info = node.debug_info[i];
-                      if (info.key == "tsg_variable") {
-                        v = info.value;
-                      } else if (info.key == "tsg_location") {
-                        l = info.value
-                      }
+                        let info = node.debug_info[i];
+                        if (info.key == "tsg_variable") {
+                            v = info.value;
+                        } else if (info.key == "tsg_location") {
+                            l = info.value
+                        }
                     }
                     this.render_symbol_node(g, v + " " + l);
                     g.classed('plain_labeled_node', true);
@@ -509,7 +514,7 @@ class StackGraph {
 
     tooltip_keypress(e) {
         const old_class = this.tooltip_orient_class();
-        switch(e.keyCode) {
+        switch (e.keyCode) {
             case 87: // w
                 this.current_orient.y = "north";
                 break;
@@ -684,7 +689,7 @@ class StackGraph {
         tooltip.add_row("end node", `${this.node_id_to_str(path.end_node)}`);
 
         const node_id = (this.current_node && this.node_to_id_str(this.current_node))
-                            || (this.current_edge && this.node_id_to_str(this.current_edge.source) );
+            || (this.current_edge && this.node_id_to_str(this.current_edge.source));
         const node_data = path.derived.nodes[node_id];
         tooltip.add_row("symbol stack", this.symbol_stack_to_array(node_data.symbol_stack));
         tooltip.add_row("scope stack", this.scope_stack_to_array(node_data.scope_stack));
@@ -694,6 +699,59 @@ class StackGraph {
         let path = paths_lock.node.paths[paths_lock.path];
         return (this.current_node !== null && path.derived.nodes.hasOwnProperty(this.node_to_id_str(this.current_node)))
             || (this.current_edge !== null && path.derived.edges.hasOwnProperty(this.edge_to_id_str(this.current_edge)));
+    }
+
+    // ------------------------------------------------------------------------------------------------
+    // Help
+    //
+
+    render_help() {
+        const help = d3.select('body').append('div');
+        help.append('label')
+            .attr('for', 'sg-help-toggle')
+            .attr('class', 'sg-help-label')
+            .text("ⓘ");
+        this.help_toggle = help.append('input')
+            .attr('id', 'sg-help-toggle')
+            .attr('type', 'checkbox');
+        const help_content = help.append('div')
+            .attr('class', 'sg-help-content');
+
+        help_content.append("h1").text("Pan & Zoom");
+        help_content.append("p").html(`
+            Pan by dragging the background with the mouse.
+            Zoom using the scroll wheel.
+        `);
+
+        help_content.append("h1").text("Tooltip");
+        help_content.append("p").html(`
+            Hover over nodes and edges to get a tooltip with detailed information.
+            Change the tooltip orientation using the keys <kbd>w</kbd> for above, <kbd>a</kbd> for left of, <kbd>s</kbd> for below, or <kbd>d</kbd> for right of the pointer.
+        `);
+
+        help_content.append("h1").text("Path Selection");
+        help_content.append("p").html(`
+            Cycle through individual paths by clicking on a node with outgoing paths.
+            While a path is selected, clicks to other nodes than the source node have no effect.
+            Cycle through selected paths using the key <kbd>n</kbd>.
+            Path selection ends after cycling through all paths by clicking the node, or by pressing the <kbd>esc</kbd> key.
+        `);
+
+        help_content.append("p").attr("class", "sg-help-meta").html(`
+            Toggle visibility of this help anytime by pressing <kbd>h</kbd>.
+        `);
+
+        const byline = help_content.append('div')
+            .attr("class", "sg-help-byline");
+        if (this.metadata?.version) {
+            byline.text(this.metadata.version);
+        }
+    }
+
+    help_keypress(e) {
+        if (e.keyCode === 72) {
+            this.help_toggle.property("checked", !this.help_toggle.property("checked"));
+        }
     }
 
     // ------------------------------------------------------------------------------------------------
