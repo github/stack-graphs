@@ -20,7 +20,6 @@ class StackGraph {
         this.paths = paths;
         this.compute_data();
 
-        this.show_all_node_labels = false;
         this.current_node = null;
         this.current_edge = null;
         this.current_orient = { y: "south", x: "east" };
@@ -117,38 +116,51 @@ class StackGraph {
         path.derived.nodes[node_id].scope_stack = scope_stack;
     }
 
-    set_show_all_node_labels(yn) {
-        this.show_all_node_labels = yn;
-        this.render();
-    }
-
     render() {
-        let that = this;
-
-        // clear out the container
-        container.selectAll("*").remove();
-
         // define svg
         const svg = container.append('svg')
             .attr('width', '100%')
             .attr('height', '100%');
+        const background = svg.append("rect")
+            .attr("class", "sg-background");
+        this.sg = svg.append('g').attr('class', 'sg');
+
+        // render UI
+        this.render_help();
+        this.render_tooltip();
+        this.render_graph()
 
         // pan & zoom
         let zoom = d3.zoom()
             .on('start', (e) => {
                 background.classed("engaged", true);
             }).on('zoom', (e) => {
-                sg.attr('transform', e.transform);
+                this.sg.attr('transform', e.transform);
             }).on('end', (e) => {
                 background.classed("engaged", false);
             });
-        const background = svg.append("rect")
-            .attr("class", "sg-background");
         background.call(zoom);
 
-        const sg = svg.append('g').attr('class', 'sg');
-        const edge_group = sg.append("g");
-        const node_group = sg.append("g");
+        // global key events
+        d3.select(window).on("keyup", (e) => {
+            this.paths_keypress(e);
+            this.tooltip_keypress(e);
+            this.help_keypress(e);
+        })
+    }
+
+    // ------------------------------------------------------------------------------------------------
+    // Node Rendering
+    //
+
+    render_graph() {
+        let that = this;
+
+        // clear out the graph
+        this.sg.selectAll('*').remove();
+
+        const edge_group = this.sg.append("g");
+        const node_group = this.sg.append("g");
 
         const connect = d3.dagConnect()
             .sourceId((edge) => this.ID[this.node_id_to_str(edge.source)])
@@ -185,7 +197,7 @@ class StackGraph {
         const { width, height } = layout(dag);
 
         // set viewport
-        sg.attr("viewBox", [0, 0, width, height].join(" "));
+        this.sg.attr("viewBox", [0, 0, width, height].join(" "));
 
         // plot edges
         const line = d3.line()
@@ -212,15 +224,7 @@ class StackGraph {
         nodes
             .attr("transform", ({ x, y, width, height }) => `translate(${x + StackGraph.margin - width / 2}, ${y - StackGraph.margin + height / 2})`);
 
-        // tooltip
-        d3.select('body').append('div')
-            .attr('id', 'sg-tooltip')
-            .classed(this.tooltip_orient_class(), true);
-
-        // help
-        this.render_help();
-
-        // mouse events
+        // node mouse events
         nodes
             .on("mouseover", (e, d) => {
                 const node = this.N[d.data.id];
@@ -245,6 +249,7 @@ class StackGraph {
                 this.paths_click(e, node);
             });
 
+        // edge mouse events
         edge_labels
             .on("mouseover", (e, d) => {
                 let edge = d.data;
@@ -261,17 +266,7 @@ class StackGraph {
                 this.tooltip_mouseout(e);
             });
 
-        // key events
-        d3.select(window).on("keyup", (e) => {
-            this.paths_keypress(e);
-            this.tooltip_keypress(e);
-            this.help_keypress(e);
-        })
     }
-
-    // ------------------------------------------------------------------------------------------------
-    // Node Rendering
-    //
 
     render_node(node, g) {
         g.attr('id', this.node_to_id_str(node));
@@ -314,7 +309,7 @@ class StackGraph {
                 this.render_scope(g);
                 break;
             case "scope":
-                if (this.show_all_node_labels) {
+                if (this.show_all_node_labels()) {
                     let v = '';
                     let l = '';
                     for (let i = 0; i < node.debug_info.length; i++) {
@@ -329,9 +324,9 @@ class StackGraph {
                     g.classed('plain_labeled_node', true);
                 } else {
                     this.render_scope(g);
-                    if (node.is_exported) {
-                        g.classed('exported', true);
-                    }
+                }
+                if (node.is_exported) {
+                    g.classed('exported', true);
                 }
                 break;
         }
@@ -512,6 +507,12 @@ class StackGraph {
     // Tooltip
     //
 
+    render_tooltip() {
+        d3.select('body').append('div')
+            .attr('id', 'sg-tooltip')
+            .classed(this.tooltip_orient_class(), true);
+    }
+
     tooltip_keypress(e) {
         const old_class = this.tooltip_orient_class();
         switch (e.keyCode) {
@@ -555,7 +556,7 @@ class StackGraph {
     tooltip_update() {
         const tooltip = d3.select('#sg-tooltip');
 
-        if (this.current_node === null && this.current_edge === null) {
+        if (!this.tooltip_visible() || (this.current_node === null && this.current_edge === null)) {
             tooltip.style('visibility', 'hidden');
             return;
         }
@@ -717,19 +718,27 @@ class StackGraph {
         const help_content = help.append('div')
             .attr('class', 'sg-help-content');
 
-        help_content.append("h1").text("Pan & Zoom");
+        help_content.append("h1").text("Graph");
         help_content.append("p").html(`
             Pan by dragging the background with the mouse.
             Zoom using the scroll wheel.
         `);
+        this.show_all_node_labels_toggle = this.new_setting(help_content, "sg-scope-labels", "Show all node labels (<kbd>l</kbd>)", false);
+        this.show_all_node_labels_toggle.on("change", (e => {
+            this.render_graph();
+        }));
 
-        help_content.append("h1").text("Tooltip");
+        help_content.append("h1").text("Nodes & Edges");
         help_content.append("p").html(`
             Hover over nodes and edges to get a tooltip with detailed information.
             Change the tooltip orientation using the keys <kbd>w</kbd> for above, <kbd>a</kbd> for left of, <kbd>s</kbd> for below, or <kbd>d</kbd> for right of the pointer.
         `);
+        this.tooltip_toggle = this.new_setting(help_content, "sg-tooltip-visibility", "Show tooltip (<kbd>v</kbd>)", true);
+        this.tooltip_toggle.on("change", (e => {
+            this.tooltip_update();
+        }));
 
-        help_content.append("h1").text("Path Selection");
+        help_content.append("h1").text("Paths");
         help_content.append("p").html(`
             Cycle through individual paths by clicking on a node with outgoing paths.
             While a path is selected, clicks to other nodes than the source node have no effect.
@@ -749,9 +758,41 @@ class StackGraph {
     }
 
     help_keypress(e) {
-        if (e.keyCode === 72) {
-            this.help_toggle.property("checked", !this.help_toggle.property("checked"));
+        switch (e.keyCode) {
+            case 72: // h
+                this.help_toggle.property("checked", !this.help_toggle.property("checked"));
+                break;
+            case 76: // h
+                this.show_all_node_labels_toggle.property("checked", !this.show_all_node_labels_toggle.property("checked"));
+                this.render_graph();
+                break;
+            case 86: // v
+                this.tooltip_toggle.property("checked", !this.tooltip_visible());
+                this.tooltip_update();
+                break;
         }
+    }
+
+    tooltip_visible() {
+        return this.tooltip_toggle.property("checked");
+    }
+
+    show_all_node_labels() {
+        return this.show_all_node_labels_toggle.property("checked");
+    }
+
+    new_setting(element, id, html, initial) {
+        const toggle = element.append("div");
+        const toggle_input = toggle.append('input')
+            .attr('id', id)
+            .attr('type', 'checkbox')
+            .attr('class', 'sg-toggle-input')
+            .property('checked', initial);
+        toggle.append('label')
+            .attr('for', id)
+            .attr('class', 'sg-toggle-label')
+            .html(html);
+        return toggle_input;
     }
 
     // ------------------------------------------------------------------------------------------------

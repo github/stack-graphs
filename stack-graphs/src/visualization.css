@@ -47,12 +47,6 @@
     font-size: 20px;
 }
 
-/* --- plain labeled node --- */
-
-.sg .node.plain_labeled_node rect.background {
-    fill: #dddddd;
-}
-
 /* --- drop scopes --- */
 
 .sg .node.drop_scopes circle.background {
@@ -148,6 +142,16 @@
 
 .sg .node.scope.ref-focus circle.focus-point {
     fill: black;
+}
+
+/* --- plain labeled node --- */
+
+.sg .node.scope.plain_labeled_node rect.background {
+    fill: #dddddd;
+}
+
+.sg .node.scope.plain_labeled_node.exported rect.background {
+    stroke: black;
 }
 
 /* --- path highlight --- */
@@ -399,4 +403,16 @@
     width: 100%;
     margin-left: 24px;
     text-align: left;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Toggle button
+ */
+
+.sg-toggle-input {
+    margin: 0px;
+}
+
+.sg-toggle-label {
+    margin: 0px 6px;
 }
