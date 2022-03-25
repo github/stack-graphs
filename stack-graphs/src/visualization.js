@@ -78,42 +78,49 @@ class StackGraph {
         let symbol_stack = null;
         let scope_stack = null;
         for (let edge of path.edges) {
-            let node_id = this.node_id_to_str(edge.source);
-            let node = this.N[this.ID[node_id]];
-            switch (node.type) {
-                case "drop_scopes":
-                    scope_stack = null;
-                    break;
-                case "jump_to_scope":
-                    scope_stack = scope_stack?.tail;
-                    break;
-                case "push_scoped_symbol":
-                    const scopes = { scope: node.scope, tail: scope_stack };
-                    symbol_stack = { symbol: node.symbol, scopes, tail: symbol_stack };
-                    break;
-                case "push_symbol":
-                    symbol_stack = { symbol: node.symbol, tail: symbol_stack };
-                    break;
-                case "pop_scoped_symbol":
-                    scope_stack = symbol_stack?.scopes;
-                    symbol_stack = symbol_stack?.tail;
-                    break;
-                case "pop_symbol":
-                    symbol_stack = symbol_stack?.tail;
-                    break;
-                case "root":
-                case "scope":
-                    break;
-                default:
-                    console.log("Unknown node type ", node.type);
-                    break;
-            }
+            const node_id = this.node_id_to_str(edge.source);
+            const node = this.N[this.ID[node_id]];
+            [symbol_stack, scope_stack] = this.compute_stacks_after_node(node, symbol_stack, scope_stack);
             path.derived.nodes[node_id].symbol_stack = symbol_stack;
             path.derived.nodes[node_id].scope_stack = scope_stack;
         }
         const node_id = this.node_id_to_str(path.end_node);
+        const node = this.N[this.ID[node_id]];
+        [symbol_stack, scope_stack] = this.compute_stacks_after_node(node, symbol_stack, scope_stack);
         path.derived.nodes[node_id].symbol_stack = symbol_stack;
         path.derived.nodes[node_id].scope_stack = scope_stack;
+    }
+
+    compute_stacks_after_node(node, symbol_stack, scope_stack) {
+        switch (node.type) {
+            case "drop_scopes":
+                scope_stack = null;
+                break;
+            case "jump_to_scope":
+                scope_stack = scope_stack?.tail;
+                break;
+            case "push_scoped_symbol":
+                const scopes = { scope: node.scope, tail: scope_stack };
+                symbol_stack = { symbol: node.symbol, scopes, tail: symbol_stack };
+                break;
+            case "push_symbol":
+                symbol_stack = { symbol: node.symbol, tail: symbol_stack };
+                break;
+            case "pop_scoped_symbol":
+                scope_stack = symbol_stack?.scopes;
+                symbol_stack = symbol_stack?.tail;
+                break;
+            case "pop_symbol":
+                symbol_stack = symbol_stack?.tail;
+                break;
+            case "root":
+            case "scope":
+                break;
+            default:
+                console.log("Unknown node type ", node.type);
+                break;
+        }
+        return [symbol_stack, scope_stack];
     }
 
     render() {
