@@ -146,8 +146,14 @@
 
 /* --- plain labeled node --- */
 
+.sg .node.scope.plain_labeled_node rect.border {
+    fill: #0077bb;
+    rx: 6px;
+}
+
 .sg .node.scope.plain_labeled_node rect.background {
-    fill: #dddddd;
+    fill: #bbbbbb;
+    rx: 6px;
 }
 
 .sg .node.scope.plain_labeled_node.exported rect.background {
