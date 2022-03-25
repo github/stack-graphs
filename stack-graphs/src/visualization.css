@@ -260,12 +260,6 @@
     transform: translate(5%, -105%);
 }
 
-.sg-tooltip-nav {
-    font-style: italic;
-    margin-top: 5px;
-    text-align: center;
-}
-
 .sg-tooltip-table {
     border-collapse: collapse;
 }

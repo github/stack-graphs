@@ -617,10 +617,6 @@ class StackGraph {
             }
             tooltip.style('visibility', 'visible');
         }
-
-        tooltip.append("div")
-            .attr("class", "sg-tooltip-nav")
-            .text("move tooltip with WASD");
     }
 
     tooltip_edge_update(tooltip, edge) {
@@ -659,11 +655,7 @@ class StackGraph {
             tooltip.add_row("location", this.source_info_to_str(node.source_info));
         }
         if (node.paths.length > 0) {
-            if (this.paths_lock === null) {
-                tooltip.add_row("outgoing paths", `${node.paths.length} (click to cycle)`);
-            } else {
-                tooltip.add_row("outgoing paths", `${node.paths.length}`);
-            }
+            tooltip.add_row("outgoing paths", `${node.paths.length}`);
         }
 
         if (node.hasOwnProperty("debug_info") && node.debug_info.length > 0) {
@@ -679,13 +671,8 @@ class StackGraph {
             return;
         }
         let path = paths_lock.node.paths[paths_lock.path];
-        tooltip.add_header("path info (next: N, exit: Esc)");
-        let path_count;
-        if (paths_lock.node === this.current_node) {
-            path_count = `(path ${paths_lock.path + 1} of ${this.current_node.paths.length}; click to cycle)`;
-        } else {
-            path_count = `(path ${paths_lock.path + 1} of ${paths_lock.node.paths.length})`;
-        }
+        tooltip.add_header("path info");
+        const path_count = `(path ${paths_lock.path + 1} of ${paths_lock.node.paths.length})`;
         tooltip.add_row("start node", `${this.node_id_to_str(path.start_node)} ${path_count}`);
         tooltip.add_row("end node", `${this.node_id_to_str(path.end_node)}`);
 
