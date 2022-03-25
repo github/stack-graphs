@@ -179,6 +179,8 @@
 //! graphs.  You can refer to them using the `ROOT_NODE` and `JUMP_TO_SCOPE_NODE` global variables:
 //!
 //! ``` skip
+//! global ROOT_NODE
+//!
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
 //!   attr (def) type = "pop_symbol", symbol = (source-text @id), source_node = @func, is_definition
@@ -191,12 +193,12 @@
 //! If you need very fine-grained control over how to use the resulting stack graphs, you can
 //! construct and operate on [`StackGraph`][stack_graphs::graph::StackGraph] instances directly
 //! from Rust code.  You will need Rust bindings for the tree-sitter grammar for your source
-//! language — for instance, [`tree-sitter-python`][].  Grammar Rust bindings provide two global
-//! symbols that you will need: [`language`][] and [`STACK_GRAPH_RULES`][].
+//! language — for instance, [`tree-sitter-python`][].  Grammar Rust bindings provide a global
+//! symbol [`language`][] that you will need.  For this example we assume the source of the stack
+//! graph rules is defined in a constant `STACK_GRAPH_RULES`.
 //!
 //! [`tree-sitter-python`]: https://docs.rs/tree-sitter-python/*/
 //! [`language`]: https://docs.rs/tree-sitter-python/*/tree_sitter_python/fn.language.html
-//! [`STACK_GRAPH_RULES`]: https://docs.rs/tree-sitter-python/*/tree_sitter_python/constant.STACK_GRAPH_RULES.html
 //!
 //! Once you have those, and the contents of the source file you want to analyze, you can construct
 //! a stack graph as follows:
@@ -208,14 +210,10 @@
 //! # use tree_sitter_stack_graphs::StackGraphLanguage;
 //! # use tree_sitter_stack_graphs::LoadError;
 //! #
-//! # // This module is a hack to override the STACK_GRAPH_RULES from the actual tree-sitter-python
-//! # // crate.  This documentation test is not meant to test Python's actual stack graph
+//! # // This documentation test is not meant to test Python's actual stack graph
 //! # // construction rules.  An empty TSG file is perfectly valid (it just won't produce any stack
 //! # // graph content).  This minimizes the amount of work that we do when running `cargo test`.
-//! # mod tree_sitter_python {
-//! #   pub use ::tree_sitter_python::language;
-//! #   pub static STACK_GRAPH_RULES: &str = "";
-//! # }
+//! # static STACK_GRAPH_RULES: &str = "";
 //! #
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let python_source = r#"
@@ -223,7 +221,7 @@
 //!   print(sys.path)
 //! "#;
 //! let grammar = tree_sitter_python::language();
-//! let tsg_source = tree_sitter_python::STACK_GRAPH_RULES;
+//! let tsg_source = STACK_GRAPH_RULES;
 //! let functions = Functions::stdlib();
 //! let mut language = StackGraphLanguage::from_str(grammar, tsg_source, functions)?;
 //! let mut stack_graph = StackGraph::new();
