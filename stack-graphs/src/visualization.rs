@@ -57,11 +57,18 @@ impl StackGraph {
 </script>
 </head>
 <body>
+  <div id="controls">
+    <input type="checkbox" id="show_all_node_labels" />
+    <label for="show_all_node_labels">show all node labels</label>
+  </div>
   <div id="container">
   </div>
   <script type="text/javascript">
     let container = d3.select("\#container");
-    new StackGraph(container, graph, paths);
+    let sg = new StackGraph(container, graph, paths);
+    document.getElementById("show_all_node_labels").addEventListener("click", function (ev) {{
+        sg.set_show_all_node_labels(ev.target.checked)
+    }});
   </script>
 </body>
 </html>

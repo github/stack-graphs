@@ -18,6 +18,7 @@ class StackGraph {
         this.paths = paths;
         this.compute_data();
 
+        this.show_all_node_labels = false;
         this.current_node = null;
         this.current_edge = null;
         this.current_orient = { y: "south", x: "east" };
@@ -114,8 +115,16 @@ class StackGraph {
         path.derived.nodes[node_id].scope_stack = scope_stack;
     }
 
+    set_show_all_node_labels(yn) {
+      this.show_all_node_labels = yn;
+      this.render();
+    }
+
     render() {
         let that = this;
+
+        // clear out the container
+        container.selectAll("*").remove();
 
         // define svg
         const svg = container.append('svg')
@@ -299,9 +308,25 @@ class StackGraph {
                 this.render_scope(g);
                 break;
             case "scope":
-                this.render_scope(g);
-                if (node.is_exported) {
-                    g.classed('exported', true);
+                if (this.show_all_node_labels) {
+                    console.log(node);
+                    let v = '';
+                    let l = '';
+                    for (let i = 0; i < node.debug_info.length; i++) {
+                      let info = node.debug_info[i];
+                      if (info.key == "tsg_variable") {
+                        v = info.value;
+                      } else if (info.key == "tsg_location") {
+                        l = info.value
+                      }
+                    }
+                    this.render_symbol_node(g, v + " " + l);
+                    g.classed('plain_labeled_node', true);
+                } else {
+                    this.render_scope(g);
+                    if (node.is_exported) {
+                        g.classed('exported', true);
+                    }
                 }
                 break;
         }

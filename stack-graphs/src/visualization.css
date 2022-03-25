@@ -47,6 +47,12 @@
     font-size: 20px;
 }
 
+/* --- plain labeled node --- */
+
+.sg .node.plain_labeled_node rect.background {
+    fill: #dddddd;
+}
+
 /* --- drop scopes --- */
 
 .sg .node.drop_scopes circle.background {
