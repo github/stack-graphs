@@ -45,13 +45,13 @@ impl LoaderArgs {
             }
         };
 
-        let loader_config = TsConfig::load()?.get()?;
-        let loader = Loader::from_config(
-            &loader_config,
-            self.grammar.clone(),
-            self.scope.clone(),
-            tsg,
-        )?;
+        let loader = match &self.grammar {
+            Some(path) => Loader::from_paths(vec![path.clone()], self.scope.clone(), tsg),
+            None => {
+                let loader_config = TsConfig::load()?.get()?;
+                Loader::from_config(&loader_config, self.scope.clone(), tsg)
+            }
+        }?;
         Ok(loader)
     }
 

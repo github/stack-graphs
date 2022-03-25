@@ -5,6 +5,20 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+//! Defines loader for stack graph languages
+//!
+//! The loader is created from a tree-sitter configuration or list of search paths, an optional scope,
+//! and a function that may load the tree-sitter-graph file for a language.
+//!
+//! The loader is called with a file path and optional file content and tries to find the language for
+//! that file. The loader will search for tree-sitter languages in the given search paths, or in current
+//! directory and the paths defined in the tree-sitter configuration. If a scope is provided, it will be
+//! used to restrict the discovered languages to those with a matching scope. If no languages were found
+//! at all, an error is raised. Otherwise, a language matching the file path and content is returned, if
+//! it exists among the discovered languages.
+//!
+//! Previously loaded languages are cached in the loader, so subsequent loads are fast.
+
 use anyhow::Context;
 use regex::Regex;
 use std::collections::HashMap;
@@ -23,26 +37,64 @@ use crate::StackGraphLanguage;
 
 pub struct Loader {
     loader: SupplementedTsLoader,
-    path: Option<PathBuf>,
+    paths: Vec<PathBuf>,
     scope: Option<String>,
     tsg: Box<dyn Fn(Language) -> anyhow::Result<Option<TsgFile>>>,
     cache: Vec<(Language, StackGraphLanguage)>,
 }
 
 impl Loader {
-    pub fn from_config(
-        config: &TsConfig,
-        path: Option<PathBuf>,
+    pub fn from_paths(
+        paths: Vec<PathBuf>,
         scope: Option<String>,
         tsg: impl Fn(Language) -> anyhow::Result<Option<TsgFile>> + 'static,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, LoadError> {
         Ok(Self {
-            loader: SupplementedTsLoader::from_config(config)?,
-            path,
+            loader: SupplementedTsLoader::new()?,
+            paths,
             scope,
             tsg: Box::new(tsg),
             cache: Vec::new(),
         })
+    }
+
+    pub fn from_config(
+        config: &TsConfig,
+        scope: Option<String>,
+        tsg: impl Fn(Language) -> anyhow::Result<Option<TsgFile>> + 'static,
+    ) -> Result<Self, LoadError> {
+        Ok(Self {
+            loader: SupplementedTsLoader::new()?,
+            paths: Self::config_paths(config)?,
+            scope,
+            tsg: Box::new(tsg),
+            cache: Vec::new(),
+        })
+    }
+
+    // Adopted from tree_sitter_loader::Loader::load
+    fn config_paths(config: &TsConfig) -> anyhow::Result<Vec<PathBuf>> {
+        if config.parser_directories.is_empty() {
+            eprintln!("Warning: You have not configured any parser directories!");
+            eprintln!("Please run `tree-sitter init-config` and edit the resulting");
+            eprintln!("configuration file to indicate where we should look for");
+            eprintln!("language grammars.");
+            eprintln!("");
+        }
+        let mut paths = Vec::new();
+        for parser_container_dir in &config.parser_directories {
+            if let Ok(entries) = std::fs::read_dir(parser_container_dir) {
+                for entry in entries {
+                    let entry = entry?;
+                    if let Some(parser_dir_name) = entry.file_name().to_str() {
+                        if parser_dir_name.starts_with("tree-sitter-") {
+                            paths.push(parser_container_dir.join(parser_dir_name));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(paths)
     }
 
     pub fn load_for_file(
@@ -73,79 +125,35 @@ impl Loader {
         Ok(Some(sgl))
     }
 
-    // Select language for the given file, considering path and scope fields
+    // Select language for the given file, considering paths and scope fields
     fn select_language_for_file(
         &mut self,
         file_path: &Path,
         file_content: Option<&str>,
     ) -> Result<Option<&SupplementedLanguage>, LoadError> {
-        if let Some(path) = self.path.to_owned() {
-            self.select_language_for_file_from_path(&path, file_path, file_content)
-        } else {
-            self.select_language_for_file_auto(file_path, file_content)
-        }
-    }
-
-    // Select language from the current directory or the system for the given file, considering scope field
-    fn select_language_for_file_auto(
-        &mut self,
-        file_path: &Path,
-        file_content: Option<&str>,
-    ) -> Result<Option<&SupplementedLanguage>, LoadError> {
         // The borrow checker is not smart enough to realize that the early returns
-        // ensure any references from the self.select_* calls (which require a mutable
-        // borrow) do not outlive the match. Therefor, we use a raw self_ptr and unsafe
+        // ensure any references from the self.select_* call (which require a mutable
+        // borrow) do not outlive the match. Therefore, we use a raw self_ptr and unsafe
         // dereferencing to make those calls.
         let self_ptr = self as *mut Self;
-        let found_any_in_cwd = match unsafe { &mut *self_ptr }.select_language_for_file_from_path(
-            &std::env::current_dir()?,
-            file_path,
-            file_content,
-        ) {
-            Ok(Some(language)) => return Ok(Some(language)),
-            Ok(None) => true,
-            Err(LoadError::NoLanguagesFound(_)) => false,
-            Err(err) => return Err(err),
-        };
-        let found_any_in_system = match unsafe { &mut *self_ptr }
-            .select_language_for_file_from_system(file_path, file_content)
-        {
-            Ok(Some(language)) => return Ok(Some(language)),
-            Ok(None) => true,
-            Err(LoadError::NoLanguagesFound(_)) => false,
-            err => return err,
-        };
-        if !(found_any_in_cwd || found_any_in_system) {
-            return Err(LoadError::NoLanguagesFound(format!(
-                "in current directory or system{}",
-                self.scope
-                    .as_ref()
-                    .map_or(String::default(), |s| format!(" for scope {}", s)),
-            )));
+        for path in &self.paths {
+            match unsafe { &mut *self_ptr }.select_language_for_file_from_path(
+                &path,
+                file_path,
+                file_content,
+            ) {
+                Ok(Some(language)) => return Ok(Some(language)),
+                Ok(None) => true,
+                Err(LoadError::NoLanguagesFound(_)) => false,
+                Err(err) => return Err(err),
+            };
         }
-        Ok(None)
-    }
-
-    // Select language from the system for the given file, considering scope field
-    fn select_language_for_file_from_system(
-        &mut self,
-        file_path: &Path,
-        file_content: Option<&str>,
-    ) -> Result<Option<&SupplementedLanguage>, LoadError> {
-        let scope = self.scope.as_deref();
-        let languages = self.loader.all_languages(scope)?;
-        if languages.is_empty() {
-            return Err(LoadError::NoLanguagesFound(format!(
-                "on system{}",
-                scope.map_or(String::default(), |s| format!(" for scope {}", s)),
-            )));
-        }
-        if let Some(language) =
-            SupplementedLanguage::best_for_file(languages, file_path, file_content)
-        {
-            return Ok(Some(language));
-        };
-        Ok(None)
+        Err(LoadError::NoLanguagesFound(format!(
+            "in current directory or system{}",
+            self.scope
+                .as_ref()
+                .map_or(String::default(), |s| format!(" for scope {}", s)),
+        )))
     }
 
     // Select language from the given path for the given file, considering scope field
@@ -220,49 +228,12 @@ impl LoadError {
 // tree_sitter_loader supplements
 
 // Wraps a tree_sitter_loader::Loader
-struct SupplementedTsLoader(
-    TsLoader,
-    HashMap<PathBuf, Vec<SupplementedLanguage>>,
-    Vec<SupplementedLanguage>,
-);
+struct SupplementedTsLoader(TsLoader, HashMap<PathBuf, Vec<SupplementedLanguage>>);
 
 impl SupplementedTsLoader {
-    pub fn from_config(config: &TsConfig) -> anyhow::Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
         let loader = TsLoader::new()?;
-        let mut result = Self(loader, HashMap::new(), Vec::new());
-        result.load_system_languages(&config.parser_directories)?;
-        Ok(result)
-    }
-
-    // Adopted from tree_sitter_loader::Loader::load
-    fn load_system_languages(&mut self, parser_directories: &Vec<PathBuf>) -> anyhow::Result<()> {
-        if parser_directories.is_empty() {
-            eprintln!("Warning: You have not configured any parser directories!");
-            eprintln!("Please run `tree-sitter init-config` and edit the resulting");
-            eprintln!("configuration file to indicate where we should look for");
-            eprintln!("language grammars.");
-            eprintln!("");
-        }
-        let mut paths = Vec::new();
-        for parser_container_dir in parser_directories {
-            if let Ok(entries) = std::fs::read_dir(parser_container_dir) {
-                for entry in entries {
-                    let entry = entry?;
-                    if let Some(parser_dir_name) = entry.file_name().to_str() {
-                        if parser_dir_name.starts_with("tree-sitter-") {
-                            paths.push(parser_container_dir.join(parser_dir_name));
-                        }
-                    }
-                }
-            }
-        }
-        let languages = self
-            .languages_at_paths(&paths, None)?
-            .into_iter()
-            .cloned()
-            .collect::<Vec<_>>();
-        self.2.extend(languages.into_iter());
-        Ok(())
+        Ok(Self(loader, HashMap::new()))
     }
 
     pub fn languages_at_path(
@@ -270,47 +241,18 @@ impl SupplementedTsLoader {
         path: &Path,
         scope: Option<&str>,
     ) -> anyhow::Result<Vec<&SupplementedLanguage>> {
-        self.languages_at_paths(&vec![path.to_path_buf()], scope)
-    }
-
-    pub fn all_languages(
-        &mut self,
-        scope: Option<&str>,
-    ) -> anyhow::Result<Vec<&SupplementedLanguage>> {
-        Ok(self
-            .2
-            .iter()
-            .filter(|language| scope.map_or(true, |scope| language.matches_scope(scope)))
-            .collect())
-    }
-
-    fn languages_at_paths(
-        &mut self,
-        paths: &Vec<PathBuf>,
-        scope: Option<&str>,
-    ) -> anyhow::Result<Vec<&SupplementedLanguage>> {
-        for path in paths {
-            if !self.1.contains_key(path) {
-                let languages = self.0.languages_at_path(&path)?;
-                let configurations = self.0.find_language_configurations_at_path(&path)?;
-                let languages = languages
-                    .into_iter()
-                    .zip(configurations.into_iter())
-                    .map(SupplementedLanguage::from)
-                    .collect::<Vec<_>>();
-                self.1.insert(path.clone(), languages);
-            }
+        if !self.1.contains_key(path) {
+            let languages = self.0.languages_at_path(&path)?;
+            let configurations = self.0.find_language_configurations_at_path(&path)?;
+            let languages = languages
+                .into_iter()
+                .zip(configurations.into_iter())
+                .map(SupplementedLanguage::from)
+                .filter(|language| scope.map_or(true, |scope| language.matches_scope(scope)))
+                .collect::<Vec<_>>();
+            self.1.insert(path.to_path_buf(), languages);
         }
-        let mut result = Vec::new();
-        for path in paths {
-            let languages = &self.1[path];
-            result.extend(
-                languages
-                    .iter()
-                    .filter(|language| scope.map_or(true, |scope| language.matches_scope(scope))),
-            );
-        }
-        Ok(result)
+        Ok(self.1[path].iter().map(|l| l).collect())
     }
 }
 
