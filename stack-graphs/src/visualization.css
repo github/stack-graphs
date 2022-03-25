@@ -349,6 +349,7 @@
     text-align: center;
     margin: 0px;
     font-size: 18px;
+    cursor: pointer;
 }
 
 .sg-help-content {
@@ -409,4 +410,5 @@
 
 .sg-toggle-label {
     margin: 0px 6px;
+    cursor: pointer;
 }
