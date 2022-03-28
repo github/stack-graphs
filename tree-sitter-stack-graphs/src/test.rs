@@ -63,6 +63,7 @@ use stack_graphs::graph::Node;
 use stack_graphs::graph::SourceInfo;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -339,9 +340,9 @@ pub enum TestFailure {
     IncorrectDefinitions {
         path: PathBuf,
         position: Position,
-        symbols: Vec<String>,
+        references: Vec<String>,
         missing_lines: Vec<usize>,
-        unexpected_lines: Vec<Option<usize>>,
+        unexpected_lines: HashMap<String, Vec<Option<usize>>>,
     },
 }
 
@@ -360,7 +361,7 @@ impl std::fmt::Display for TestFailure {
             Self::IncorrectDefinitions {
                 path,
                 position,
-                symbols,
+                references,
                 missing_lines,
                 unexpected_lines,
             } => {
@@ -372,8 +373,8 @@ impl std::fmt::Display for TestFailure {
                     position.column.grapheme_offset + 1
                 )?;
                 write!(f, "definition(s) for reference(s)")?;
-                for symbol in symbols {
-                    write!(f, " ‘{}’", symbol)?;
+                for reference in references {
+                    write!(f, " ‘{}’", reference)?;
                 }
                 if !missing_lines.is_empty() {
                     write!(
@@ -383,14 +384,24 @@ impl std::fmt::Display for TestFailure {
                     )?;
                 }
                 if !unexpected_lines.is_empty() {
-                    write!(
-                        f,
-                        " found unexpected on line(s) {}",
-                        unexpected_lines
-                            .iter()
-                            .map(|l| l.map(|l| format!("{}", l + 1)).unwrap_or("?".into()))
-                            .format(", ")
-                    )?;
+                    write!(f, " found unexpected",)?;
+                    let mut first = true;
+                    for (definition, lines) in unexpected_lines.into_iter() {
+                        if first {
+                            first = false;
+                        } else {
+                            write!(f, ",")?;
+                        }
+                        write!(f, " ‘{}’ on lines(s) ", definition)?;
+                        write!(
+                            f,
+                            "{}",
+                            lines
+                                .into_iter()
+                                .map(|l| l.map(|l| format!("{}", l + 1)).unwrap_or("?".into()))
+                                .format(", ")
+                        )?;
+                    }
                 }
                 Ok(())
             }
@@ -424,33 +435,37 @@ impl Test {
             },
             AssertionError::IncorrectDefinitions {
                 source,
-                symbols,
+                references,
                 missing_targets,
                 unexpected_paths,
             } => TestFailure::IncorrectDefinitions {
                 path: self.path.clone(),
                 position: source.position,
-                symbols: symbols
-                    .iter()
-                    .map(|s| self.graph[*s].to_string())
+                references: references
+                    .into_iter()
+                    .map(|r| self.graph[self.graph[r].symbol().unwrap()].to_string())
+                    .unique()
                     .sorted()
-                    .dedup()
                     .collect(),
                 missing_lines: missing_targets
-                    .iter()
+                    .into_iter()
                     .map(|t| t.line)
+                    .unique()
                     .sorted()
-                    .dedup()
                     .collect(),
                 unexpected_lines: unexpected_paths
-                    .iter()
+                    .into_iter()
                     .map(|p| {
-                        self.get_source_info(p.end_node)
-                            .map(|si| si.span.start.line)
+                        let symbol =
+                            self.graph[self.graph[p.end_node].symbol().unwrap()].to_string();
+                        let line = self
+                            .get_source_info(p.end_node)
+                            .map(|si| si.span.start.line);
+                        (symbol, line)
                     })
+                    .unique()
                     .sorted()
-                    .dedup()
-                    .collect(),
+                    .into_group_map(),
             },
         }
     }
