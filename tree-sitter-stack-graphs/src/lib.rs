@@ -233,12 +233,14 @@
 //! ```
 
 use controlled_option::ControlledOption;
+use lazy_static::lazy_static;
 use lsp_positions::SpanCalculator;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
+use std::collections::HashSet;
 use thiserror::Error;
 use tree_sitter::Parser;
 use tree_sitter_graph::functions::Functions;
@@ -271,6 +273,21 @@ static SCOPE_ATTR: &'static str = "scope";
 static SOURCE_NODE_ATTR: &'static str = "source_node";
 static SYMBOL_ATTR: &'static str = "symbol";
 static TYPE_ATTR: &'static str = "type";
+
+// Expected attributes per node type
+lazy_static! {
+    static ref DROP_SCOPES_ATTRS: HashSet<&'static str> = HashSet::from([TYPE_ATTR]);
+    static ref POP_SCOPED_SYMBOL_ATTRS: HashSet<&'static str> =
+        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]);
+    static ref POP_SYMBOL_ATTRS: HashSet<&'static str> =
+        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]);
+    static ref PUSH_SCOPED_SYMBOL_ATTRS: HashSet<&'static str> =
+        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, SCOPE_ATTR, IS_REFERENCE_ATTR]);
+    static ref PUSH_SYMBOL_ATTRS: HashSet<&'static str> =
+        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_REFERENCE_ATTR]);
+    static ref SCOPE_ATTRS: HashSet<&'static str> =
+        HashSet::from([TYPE_ATTR, IS_EXPORTED_ATTR, IS_ENDPOINT_ATTR]);
+}
 
 // Edge attribute names
 static PRECEDENCE_ATTR: &'static str = "precedence";
@@ -523,6 +540,7 @@ impl<'a> StackGraphLoader<'a> {
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
+        self.verify_attributes(node, POP_SCOPED_SYMBOL_TYPE, &POP_SCOPED_SYMBOL_ATTRS);
         Ok(self
             .stack_graph
             .add_pop_scoped_symbol_node(id, symbol, is_definition)
@@ -541,6 +559,7 @@ impl<'a> StackGraphLoader<'a> {
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
+        self.verify_attributes(node, POP_SYMBOL_TYPE, &POP_SYMBOL_ATTRS);
         Ok(self
             .stack_graph
             .add_pop_symbol_node(id, symbol, is_definition)
@@ -563,6 +582,7 @@ impl<'a> StackGraphLoader<'a> {
             None => return Err(LoadError::MissingScope(node_ref)),
         };
         let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
+        self.verify_attributes(node, PUSH_SCOPED_SYMBOL_TYPE, &PUSH_SCOPED_SYMBOL_ATTRS);
         Ok(self
             .stack_graph
             .add_push_scoped_symbol_node(id, symbol, scope, is_reference)
@@ -581,6 +601,7 @@ impl<'a> StackGraphLoader<'a> {
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
+        self.verify_attributes(node, PUSH_SYMBOL_TYPE, &PUSH_SYMBOL_ATTRS);
         Ok(self
             .stack_graph
             .add_push_symbol_node(id, symbol, is_reference)
@@ -595,6 +616,7 @@ impl<'a> StackGraphLoader<'a> {
         let id = self.node_id_for_graph_node(node_ref);
         let is_exported =
             self.load_flag(node, IS_EXPORTED_ATTR)? || self.load_flag(node, IS_ENDPOINT_ATTR)?;
+        self.verify_attributes(node, SCOPE_TYPE, &SCOPE_ATTRS);
         Ok(self.stack_graph.add_scope_node(id, is_exported).unwrap())
     }
 
@@ -627,5 +649,19 @@ impl<'a> StackGraphLoader<'a> {
         source_info.span = span;
         source_info.containing_line = ControlledOption::some(containing_line);
         Ok(())
+    }
+
+    fn verify_attributes(
+        &self,
+        node: &GraphNode,
+        node_type: &str,
+        allowed_attributes: &HashSet<&'static str>,
+    ) {
+        for (id, _) in node.attributes.iter() {
+            let id = id.as_str();
+            if !allowed_attributes.contains(id) && id != SOURCE_NODE_ATTR {
+                eprintln!("Unexpected attribute {} on node of type {}", id, node_type);
+            }
+        }
     }
 }
