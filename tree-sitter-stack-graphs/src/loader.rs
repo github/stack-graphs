@@ -20,6 +20,7 @@
 //! Previously loaded languages are cached in the loader, so subsequent loads are fast.
 
 use anyhow::Context;
+use itertools::Itertools;
 use regex::Regex;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -151,7 +152,8 @@ impl Loader {
         }
         if !found_languages {
             return Err(LoadError::NoLanguagesFound(format!(
-                "in current directory or system{}",
+                "in {}{}",
+                self.paths.iter().map(|p| p.display()).format(":"),
                 self.scope
                     .as_ref()
                     .map_or(String::default(), |s| format!(" for scope {}", s)),
