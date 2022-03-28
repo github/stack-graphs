@@ -53,7 +53,11 @@ pub struct Command {
     #[clap(required = true)]
     sources: Vec<PathBuf>,
 
-    /// Hide failure errors.
+    /// Hide passing tests.
+    #[clap(long)]
+    hide_passing: bool,
+
+    /// Hide failure error details.
     #[clap(long)]
     hide_failure_errors: bool,
 
@@ -150,7 +154,7 @@ impl Command {
         let result = test.run();
         let success = self.handle_result(source_path, &result)?;
         if self.output_mode.test(!success) {
-            self.save_output(source_path, &test.graph, &mut test.paths)?;
+            self.save_output(source_path, &test.graph, &mut test.paths, success)?;
         }
         Ok(result.failure_count())
     }
@@ -215,13 +219,15 @@ impl Command {
 
     fn handle_result(&self, source_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
         let success = result.failure_count() == 0;
-        println!(
-            "{} {}: {}/{} assertions",
-            if success { "✓".green() } else { "✗".red() },
-            source_path.display(),
-            result.success_count(),
-            result.count()
-        );
+        if !success || !self.hide_passing {
+            println!(
+                "{} {}: {}/{} assertions",
+                if success { "✓".green() } else { "✗".red() },
+                source_path.display(),
+                result.success_count(),
+                result.count()
+            );
+        }
         if !success && !self.hide_failure_errors {
             for failure in result.failures_iter() {
                 println!("  {}", failure);
@@ -235,16 +241,21 @@ impl Command {
         source_path: &Path,
         graph: &StackGraph,
         paths: &mut Paths,
+        success: bool,
     ) -> anyhow::Result<()> {
         if self.save_graph {
             let path = source_path.with_extension("graph.json");
             self.save_graph(&path, &graph)?;
-            println!("  Graph: {}", path.display());
+            if !success || !self.hide_passing {
+                println!("  Graph: {}", path.display());
+            }
         }
         if self.save_paths {
             let path = source_path.with_extension("paths.json");
             self.save_paths(&path, paths, graph)?;
-            println!("  Paths: {}", path.display());
+            if !success || !self.hide_passing {
+                println!("  Paths: {}", path.display());
+            }
         }
         Ok(())
     }
