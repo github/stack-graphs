@@ -59,6 +59,8 @@ use stack_graphs::assert::AssertionError;
 use stack_graphs::assert::AssertionSource;
 use stack_graphs::assert::AssertionTarget;
 use stack_graphs::graph::File;
+use stack_graphs::graph::Node;
+use stack_graphs::graph::SourceInfo;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
 use std::path::Path;
@@ -339,7 +341,7 @@ pub enum TestFailure {
         position: Position,
         symbols: Vec<String>,
         missing_lines: Vec<usize>,
-        unexpected_lines: Vec<usize>,
+        unexpected_lines: Vec<Option<usize>>,
     },
 }
 
@@ -384,7 +386,10 @@ impl std::fmt::Display for TestFailure {
                     write!(
                         f,
                         " found unexpected on line(s) {}",
-                        unexpected_lines.iter().map(|l| l + 1).format(", ")
+                        unexpected_lines
+                            .iter()
+                            .map(|l| l.map(|l| format!("{}", l + 1)).unwrap_or("?".into()))
+                            .format(", ")
                     )?;
                 }
                 Ok(())
@@ -439,11 +444,24 @@ impl Test {
                     .collect(),
                 unexpected_lines: unexpected_paths
                     .iter()
-                    .map(|p| self.graph.source_info(p.end_node).unwrap().span.start.line)
+                    .map(|p| {
+                        self.get_source_info(p.end_node)
+                            .map(|si| si.span.start.line)
+                    })
                     .sorted()
                     .dedup()
                     .collect(),
             },
         }
+    }
+
+    /// Get source info for a node, using a heuristic to rule default null source info results.
+    fn get_source_info(&self, node: Handle<Node>) -> Option<&SourceInfo> {
+        self.graph.source_info(node).filter(|si| {
+            !(si.span.start.line == 0
+                && si.span.start.column.utf8_offset == 0
+                && si.span.end.line == 0
+                && si.span.end.column.utf8_offset == 0)
+        })
     }
 }
