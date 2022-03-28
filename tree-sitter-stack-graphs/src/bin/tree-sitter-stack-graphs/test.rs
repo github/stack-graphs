@@ -141,7 +141,7 @@ impl Command {
         };
         let mut test = Test::from_source(&source_path, &source)?;
         for test_fragment in &test.fragments {
-            let test_path = Path::new(test.graph[test_fragment.file].name());
+            let test_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
             if source_path.extension() != test_path.extension() {
                 return Err(anyhow!(
                     "Test fragment {} has different file extension than test file {}",
@@ -149,7 +149,7 @@ impl Command {
                     source_path.display()
                 ));
             }
-            self.build_fragment_stack_graph_into(source_path, sgl, test_fragment, &mut test.graph)?;
+            self.build_fragment_stack_graph_into(&test_path, sgl, test_fragment, &mut test.graph)?;
         }
         let result = test.run();
         let success = self.handle_result(source_path, &result)?;
