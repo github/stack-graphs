@@ -136,8 +136,9 @@ impl Loader {
         // borrow) do not outlive the match. Therefore, we use a raw self_ptr and unsafe
         // dereferencing to make those calls.
         let self_ptr = self as *mut Self;
+        let mut found_languages = false;
         for path in &self.paths {
-            match unsafe { &mut *self_ptr }.select_language_for_file_from_path(
+            found_languages |= match unsafe { &mut *self_ptr }.select_language_for_file_from_path(
                 &path,
                 file_path,
                 file_content,
@@ -148,12 +149,15 @@ impl Loader {
                 Err(err) => return Err(err),
             };
         }
-        Err(LoadError::NoLanguagesFound(format!(
-            "in current directory or system{}",
-            self.scope
-                .as_ref()
-                .map_or(String::default(), |s| format!(" for scope {}", s)),
-        )))
+        if !found_languages {
+            return Err(LoadError::NoLanguagesFound(format!(
+                "in current directory or system{}",
+                self.scope
+                    .as_ref()
+                    .map_or(String::default(), |s| format!(" for scope {}", s)),
+            )));
+        }
+        Ok(None)
     }
 
     // Select language from the given path for the given file, considering scope field
