@@ -110,6 +110,7 @@ impl Assertion {
                 actual_paths.push(p);
             }
         });
+        paths.remove_shadowed_paths(&mut actual_paths);
         let missing_targets = expected_targets
             .iter()
             .filter(|t| {
