@@ -23,9 +23,10 @@ pub struct LoaderArgs {
     tsg: Option<PathBuf>,
 
     /// The path to look for tree-sitter grammars.
+    /// Can be specified multiple times.
     #[clap(long)]
     #[clap(name = "GRAMMAR_PATH")]
-    grammar: Option<PathBuf>,
+    grammar: Vec<PathBuf>,
 
     /// The scope of the tree-sitter grammar.
     /// See https://tree-sitter.github.io/tree-sitter/syntax-highlighting#basics for details.
@@ -45,13 +46,12 @@ impl LoaderArgs {
             }
         };
 
-        let loader = match &self.grammar {
-            Some(path) => Loader::from_paths(vec![path.clone()], self.scope.clone(), tsg),
-            None => {
-                let loader_config = TsConfig::load()?.get()?;
-                Loader::from_config(&loader_config, self.scope.clone(), tsg)
-            }
-        }?;
+        let loader = if !self.grammar.is_empty() {
+            Loader::from_paths(self.grammar.clone(), self.scope.clone(), tsg)?
+        } else {
+            let loader_config = TsConfig::load()?.get()?;
+            Loader::from_config(&loader_config, self.scope.clone(), tsg)?
+        };
         Ok(loader)
     }
 
