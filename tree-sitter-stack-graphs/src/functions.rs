@@ -8,13 +8,15 @@
 use tree_sitter_graph::functions::Functions;
 
 pub fn add_path_functions(functions: &mut Functions) {
-    functions.add("normalize-path".into(), path::NormalizePath);
-    functions.add("resolve-path".into(), path::ResolvePath);
+    functions.add("path-dir".into(), path::PathDir);
+    functions.add("path-filename".into(), path::PathFileName);
+    functions.add("path-join".into(), path::PathJoin);
+    functions.add("path-normalize".into(), path::PathNormalize);
+    functions.add("path-split".into(), path::PathSplit);
 }
 
 pub mod path {
     use std::path::Component;
-    use std::path::Path;
     use std::path::PathBuf;
     use tree_sitter_graph::functions::Function;
     use tree_sitter_graph::functions::Parameters;
@@ -22,42 +24,93 @@ pub mod path {
     use tree_sitter_graph::graph::Value;
     use tree_sitter_graph::ExecutionError;
 
-    pub struct NormalizePath;
+    pub struct PathDir;
+    pub struct PathFileName;
+    pub struct PathJoin;
+    pub struct PathNormalize;
+    pub struct PathSplit;
 
-    impl Function for NormalizePath {
+    impl Function for PathDir {
         fn call(
             &mut self,
             _graph: &mut Graph,
             _source: &str,
             parameters: &mut dyn Parameters,
         ) -> Result<Value, ExecutionError> {
-            let path = parameters.param()?.into_string()?;
+            let path = PathBuf::from(parameters.param()?.into_string()?);
             parameters.finish()?;
 
-            let path = Path::new(&path);
-            let path = normalize_path(&path.to_path_buf());
+            let path = path.parent();
+            Ok(path
+                .map(|p| p.to_str().unwrap().into())
+                .unwrap_or(Value::Null))
+        }
+    }
+
+    impl Function for PathFileName {
+        fn call(
+            &mut self,
+            _graph: &mut Graph,
+            _source: &str,
+            parameters: &mut dyn Parameters,
+        ) -> Result<Value, ExecutionError> {
+            let path = PathBuf::from(parameters.param()?.into_string()?);
+            parameters.finish()?;
+
+            let path = path.file_name();
+            Ok(path
+                .map(|p| p.to_str().unwrap().into())
+                .unwrap_or(Value::Null))
+        }
+    }
+
+    impl Function for PathJoin {
+        fn call(
+            &mut self,
+            _graph: &mut Graph,
+            _source: &str,
+            parameters: &mut dyn Parameters,
+        ) -> Result<Value, ExecutionError> {
+            let mut path = PathBuf::new();
+            while let Ok(component) = parameters.param() {
+                path = path.join(component.into_string()?);
+            }
 
             Ok(path.to_str().unwrap().into())
         }
     }
 
-    pub struct ResolvePath;
-
-    impl Function for ResolvePath {
+    impl Function for PathNormalize {
         fn call(
             &mut self,
             _graph: &mut Graph,
             _source: &str,
             parameters: &mut dyn Parameters,
         ) -> Result<Value, ExecutionError> {
-            let base_path = parameters.param()?.into_string()?;
-            let path = parameters.param()?.into_string()?;
+            let path = PathBuf::from(parameters.param()?.into_string()?);
             parameters.finish()?;
 
-            // FIXME .parent() assumes this is a file path, this API needs some thought
-            let path = Path::new(&base_path).parent().unwrap().join(path);
+            let path = normalize_path(&path);
 
             Ok(path.to_str().unwrap().into())
+        }
+    }
+
+    impl Function for PathSplit {
+        fn call(
+            &mut self,
+            _graph: &mut Graph,
+            _source: &str,
+            parameters: &mut dyn Parameters,
+        ) -> Result<Value, ExecutionError> {
+            let path = PathBuf::from(parameters.param()?.into_string()?);
+            parameters.finish()?;
+
+            let components = path
+                .components()
+                .map(|c| c.as_os_str().to_str().unwrap().into())
+                .collect::<Vec<_>>();
+            Ok(components.into())
         }
     }
 
@@ -72,7 +125,7 @@ pub mod path {
     // Copied from Cargo
     // https://github.com/rust-lang/cargo/blob/e515c3277bf0681bfc79a9e763861bfe26bb05db/crates/cargo-util/src/paths.rs#L73-L106
     // Licensed under MIT license & Apache License (Version 2.0)
-    pub fn normalize_path(path: &PathBuf) -> PathBuf {
+    fn normalize_path(path: &PathBuf) -> PathBuf {
         let mut components = path.components().peekable();
         let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
             components.next();
