@@ -10,6 +10,8 @@ use anyhow::Context as _;
 use clap::ArgEnum;
 use clap::ValueHint;
 use colored::Colorize as _;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::json::Filter;
 use stack_graphs::paths::Paths;
@@ -21,7 +23,6 @@ use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::test::Test;
-use tree_sitter_stack_graphs::test::TestFragment;
 use tree_sitter_stack_graphs::test::TestResult;
 use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
@@ -69,6 +70,10 @@ impl OutputMode {
 pub struct Command {
     #[clap(flatten)]
     loader: LoaderArgs,
+
+    /// Files to include in each test.
+    #[clap(long = "include", short = 'I', value_name = "INCLUDE_PATH")]
+    includes: Vec<PathBuf>,
 
     /// Test file or directory paths.
     #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
@@ -208,6 +213,7 @@ impl Command {
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         self.load_builtins_into(sgl, &mut test.graph)
             .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
+        self.build_includes_stack_graph_into(sgl, &mut test.graph)?;
         for test_fragment in &test.fragments {
             let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
             if test_path.extension() != fragment_path.extension() {
@@ -217,10 +223,11 @@ impl Command {
                     test_path.display()
                 ));
             }
-            self.build_fragment_stack_graph_into(
+            self.build_stack_graph_into(
                 &fragment_path,
+                test_fragment.file,
+                &test_fragment.source,
                 sgl,
-                test_fragment,
                 &mut test.graph,
             )?;
         }
@@ -251,22 +258,33 @@ impl Command {
         Ok(())
     }
 
-    fn build_fragment_stack_graph_into(
+    fn build_includes_stack_graph_into(
         &self,
-        test_path: &Path,
         sgl: &mut StackGraphLanguage,
-        test_fragment: &TestFragment,
+        graph: &mut StackGraph,
+    ) -> anyhow::Result<()> {
+        for path in &self.includes {
+            let content = String::from_utf8(std::fs::read(path)?)?;
+            let file = graph
+                .add_file(&path.to_string_lossy())
+                .map_err(|_| anyhow!("File {} already exists in graph", path.display()))?;
+            self.build_stack_graph_into(path, file, &content, sgl, graph)?;
+        }
+        Ok(())
+    }
+
+    fn build_stack_graph_into(
+        &self,
+        path: &Path,
+        file: Handle<File>,
+        content: &str,
+        sgl: &mut StackGraphLanguage,
         graph: &mut StackGraph,
     ) -> anyhow::Result<()> {
         let mut globals = Variables::new();
-        match sgl.build_stack_graph_into(
-            graph,
-            test_fragment.file,
-            &test_fragment.source,
-            &mut globals,
-        ) {
+        match sgl.build_stack_graph_into(graph, file, content, &mut globals) {
             Err(LoadError::ParseErrors(parse_errors)) => {
-                Err(self.map_parse_errors(test_path, &parse_errors, &test_fragment.source))
+                Err(self.map_parse_errors(path, &parse_errors, content))
             }
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
