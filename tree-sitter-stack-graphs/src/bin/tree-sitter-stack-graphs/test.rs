@@ -205,6 +205,8 @@ impl Command {
         };
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
+        self.load_builtins_into(sgl, &mut test.graph)
+            .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
         for test_fragment in &test.fragments {
             let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
             if test_path.extension() != fragment_path.extension() {
@@ -227,6 +229,17 @@ impl Command {
             self.save_output(test_root, test_path, &test.graph, &mut test.paths, success)?;
         }
         Ok(result.failure_count())
+    }
+
+    fn load_builtins_into(
+        &self,
+        sgl: &mut StackGraphLanguage,
+        graph: &mut StackGraph,
+    ) -> anyhow::Result<()> {
+        if let Err(h) = graph.add_graph(sgl.builtins()) {
+            return Err(anyhow!("Duplicate builtin file {}", &graph[h]));
+        }
+        Ok(())
     }
 
     fn build_fragment_stack_graph_into(

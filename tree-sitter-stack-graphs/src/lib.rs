@@ -364,6 +364,7 @@ pub struct StackGraphLanguage {
     parser: Parser,
     tsg: tree_sitter_graph::ast::File,
     functions: Functions,
+    builtins: StackGraph,
 }
 
 impl StackGraphLanguage {
@@ -380,6 +381,7 @@ impl StackGraphLanguage {
             parser,
             tsg,
             functions: Self::default_functions(),
+            builtins: StackGraph::new(),
         })
     }
 
@@ -396,6 +398,7 @@ impl StackGraphLanguage {
             parser,
             tsg,
             functions: Self::default_functions(),
+            builtins: StackGraph::new(),
         })
     }
 
@@ -407,6 +410,14 @@ impl StackGraphLanguage {
 
     pub fn functions_mut(&mut self) -> &mut tree_sitter_graph::functions::Functions {
         &mut self.functions
+    }
+
+    pub fn builtins(&self) -> &StackGraph {
+        &self.builtins
+    }
+
+    pub fn builtins_mut(&mut self) -> &mut StackGraph {
+        &mut self.builtins
     }
 }
 

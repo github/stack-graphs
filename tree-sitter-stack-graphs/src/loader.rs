@@ -22,6 +22,7 @@
 use anyhow::Context;
 use itertools::Itertools;
 use regex::Regex;
+use stack_graphs::graph::StackGraph;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
@@ -29,6 +30,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 use tree_sitter::Language;
 use tree_sitter_graph::ast::File as TsgFile;
+use tree_sitter_graph::Variables;
 use tree_sitter_loader::Config as TsConfig;
 use tree_sitter_loader::LanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
@@ -113,8 +115,9 @@ impl Loader {
             Some(index) => index,
             None => {
                 let tsg = self.load_tsg_for_language(&language)?;
-                let sgl =
+                let mut sgl =
                     StackGraphLanguage::new(language.language, tsg).map_err(LoadError::other)?;
+                self.load_builtins(&language, &mut sgl)?;
                 self.cache.push((language.language, sgl));
 
                 self.cache.len() - 1
@@ -201,6 +204,28 @@ impl Loader {
         }
 
         return Err(LoadError::NoTsgFound);
+    }
+
+    fn load_builtins(
+        &self,
+        language: &SupplementedLanguage,
+        sgl: &mut StackGraphLanguage,
+    ) -> Result<(), LoadError> {
+        let mut graph = StackGraph::new();
+        for ext in &language.file_types {
+            let path = language.root_path.join(format!("queries/builtins.{}", ext));
+            if path.exists() {
+                let file = graph.add_file(&path.to_string_lossy()).unwrap();
+                let source = std::fs::read(path.clone())
+                    .with_context(|| format!("Failed to read {}", path.display()))?;
+                let source = String::from_utf8(source).map_err(LoadError::other)?;
+                let mut globals = Variables::new();
+                sgl.build_stack_graph_into(&mut graph, file, &source, &mut globals)
+                    .map_err(LoadError::other)?;
+            }
+        }
+        sgl.builtins_mut().add_graph(&graph).unwrap();
+        Ok(())
     }
 }
 
