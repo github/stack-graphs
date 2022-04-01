@@ -188,6 +188,51 @@
 //! }
 //! ```
 //!
+//! ### Working with paths
+//!
+//! Built-in path functions are available to compute symbols that depend on path information, such as
+//! module names or imports. The path of the file is provided in the global variable `FILE_PATH`.
+//!
+//! The following path functions are available:
+//! - `path-dir`: get the path consisting of all but the last component of the argument path, or `#null` if it ends in root
+//! - `path-fileext`: get the file extension, i.e. everything after the final `.` of the file name of the argument path, or `#null` if it has extension
+//! - `path-filename`: get the last component of the argument path, or `#null` if it has no final component
+//! - `path-filestem`: get the file stem of the argument path, i.e., everything before the extension, or `#null` if it has no file name
+//! - `path-join`: join all argument paths together
+//! - `path-normalize`: normalize the argument path by eliminating `.` and `..` components where possible
+//! - `path-split`: split the argument path into a list of its components
+//!
+//! The following example computes a module name from a file path:
+//!
+//! ``` skip
+//! global FILE_PATH
+//!
+//! (program)@prog {
+//!   ; ...
+//!   let dir = (path-dir FILE_PATH)
+//!   let stem = (path-filestem FILE_PATH)
+//!   let mod_name = (path-join dir stem)
+//!   node mod_def
+//!   attr mod_def type = "pop_symbol", symbol = mod_name, is_definition, source_node = @prog
+//!   ; ...
+//! }
+//! ```
+//!
+//! The following example resolves an import relative to the current file:
+//!
+//! ``` skip
+//! global FILE_PATH
+//!
+//! (import name:(_)@name)@import {
+//!   ; ...
+//!   let dir = (path-dir FILE_PATH)
+//!   let mod_name = (path-normalize (path-join dir (Source-text @name)))
+//!   node mod_def
+//!   attr mod_def type = "pop_symbol", symbol = mod_name, is_definition, source_node = @prog
+//!   ; ...
+//! }
+//! ```
+//!
 //! ## Using this crate from Rust
 //!
 //! If you need very fine-grained control over how to use the resulting stack graphs, you can
