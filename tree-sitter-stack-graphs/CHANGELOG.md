@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Added
+### Library
+
+#### Added
 
 - `StackGraphLanguage` data type that handles parsing sources, executing the tree-sitter-graph rules, and constructing the resulting stack graph.
+- `test` module that defines data types for parsing and running stack graph tests.
+- `loader` module that defines data types for loading stack graph languages for source files.
+
+### CLI
+
+#### Added
+
+- `test` command that allows running stack graph tests.

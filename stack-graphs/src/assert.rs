@@ -14,7 +14,6 @@ use crate::arena::Handle;
 use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
-use crate::graph::Symbol;
 use crate::paths::Path;
 use crate::paths::Paths;
 
@@ -75,7 +74,7 @@ pub enum AssertionError {
     },
     IncorrectDefinitions {
         source: AssertionSource,
-        symbols: Vec<Handle<Symbol>>,
+        references: Vec<Handle<Node>>,
         missing_targets: Vec<AssertionTarget>,
         unexpected_paths: Vec<Path>,
     },
@@ -111,6 +110,7 @@ impl Assertion {
                 actual_paths.push(p);
             }
         });
+        paths.remove_shadowed_paths(&mut actual_paths);
         let missing_targets = expected_targets
             .iter()
             .filter(|t| {
@@ -131,14 +131,9 @@ impl Assertion {
             .cloned()
             .collect::<Vec<_>>();
         if !missing_targets.is_empty() || !unexpected_paths.is_empty() {
-            let symbols = references
-                .iter()
-                .map(|r| graph[*r].symbol().unwrap())
-                .unique()
-                .collect::<Vec<_>>();
             return Err(AssertionError::IncorrectDefinitions {
                 source: source.clone(),
-                symbols,
+                references,
                 missing_targets,
                 unexpected_paths,
             });

@@ -5,6 +5,31 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-mod edges;
-mod nodes;
+use anyhow::Result;
+use clap::Parser;
+use clap::Subcommand;
+
+pub(crate) const MAX_PARSE_ERRORS: usize = 5;
+
+#[derive(Parser)]
+#[clap(about)]
+#[clap(version)]
+struct Cli {
+    #[clap(subcommand)]
+    command: Commands,
+}
+
+mod loader;
 mod test;
+
+#[derive(Subcommand)]
+enum Commands {
+    Test(test::Command),
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    match &cli.command {
+        Commands::Test(cmd) => cmd.run(),
+    }
+}
