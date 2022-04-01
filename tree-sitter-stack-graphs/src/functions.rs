@@ -5,11 +5,15 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+//! Define tree-sitter-graph functions
+
 use tree_sitter_graph::functions::Functions;
 
 pub fn add_path_functions(functions: &mut Functions) {
     functions.add("path-dir".into(), path::PathDir);
+    functions.add("path-fileext".into(), path::PathFileExt);
     functions.add("path-filename".into(), path::PathFileName);
+    functions.add("path-filestem".into(), path::PathFileStem);
     functions.add("path-join".into(), path::PathJoin);
     functions.add("path-normalize".into(), path::PathNormalize);
     functions.add("path-split".into(), path::PathSplit);
@@ -25,7 +29,9 @@ pub mod path {
     use tree_sitter_graph::ExecutionError;
 
     pub struct PathDir;
+    pub struct PathFileExt;
     pub struct PathFileName;
+    pub struct PathFileStem;
     pub struct PathJoin;
     pub struct PathNormalize;
     pub struct PathSplit;
@@ -47,6 +53,23 @@ pub mod path {
         }
     }
 
+    impl Function for PathFileExt {
+        fn call(
+            &mut self,
+            _graph: &mut Graph,
+            _source: &str,
+            parameters: &mut dyn Parameters,
+        ) -> Result<Value, ExecutionError> {
+            let path = PathBuf::from(parameters.param()?.into_string()?);
+            parameters.finish()?;
+
+            let path = path.extension();
+            Ok(path
+                .map(|p| p.to_str().unwrap().into())
+                .unwrap_or(Value::Null))
+        }
+    }
+
     impl Function for PathFileName {
         fn call(
             &mut self,
@@ -58,6 +81,23 @@ pub mod path {
             parameters.finish()?;
 
             let path = path.file_name();
+            Ok(path
+                .map(|p| p.to_str().unwrap().into())
+                .unwrap_or(Value::Null))
+        }
+    }
+
+    impl Function for PathFileStem {
+        fn call(
+            &mut self,
+            _graph: &mut Graph,
+            _source: &str,
+            parameters: &mut dyn Parameters,
+        ) -> Result<Value, ExecutionError> {
+            let path = PathBuf::from(parameters.param()?.into_string()?);
+            parameters.finish()?;
+
+            let path = path.file_stem();
             Ok(path
                 .map(|p| p.to_str().unwrap().into())
                 .unwrap_or(Value::Null))
