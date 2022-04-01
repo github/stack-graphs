@@ -29,7 +29,6 @@ use std::path::PathBuf;
 use thiserror::Error;
 use tree_sitter::Language;
 use tree_sitter_graph::ast::File as TsgFile;
-use tree_sitter_graph::functions::Functions;
 use tree_sitter_loader::Config as TsConfig;
 use tree_sitter_loader::LanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
@@ -113,11 +112,9 @@ impl Loader {
         let index = match index {
             Some(index) => index,
             None => {
-                let mut functions = Functions::stdlib();
-                crate::functions::add_path_functions(&mut functions);
                 let tsg = self.load_tsg_for_language(&language)?;
-                let sgl = StackGraphLanguage::new(language.language, tsg, functions)
-                    .map_err(LoadError::other)?;
+                let sgl =
+                    StackGraphLanguage::new(language.language, tsg).map_err(LoadError::other)?;
                 self.cache.push((language.language, sgl));
 
                 self.cache.len() - 1

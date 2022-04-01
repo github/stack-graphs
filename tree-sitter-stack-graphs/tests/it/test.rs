@@ -12,7 +12,6 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use std::path::Path;
 use std::path::PathBuf;
-use tree_sitter_graph::functions::Functions;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::test::Test;
 use tree_sitter_stack_graphs::LoadError;
@@ -58,10 +57,8 @@ fn build_stack_graph_into(
     python_source: &str,
     tsg_source: &str,
 ) -> Result<(), LoadError> {
-    let functions = Functions::stdlib();
     let mut language =
-        StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source, functions)
-            .unwrap();
+        StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
     let mut globals = Variables::new();
     language.build_stack_graph_into(graph, file, python_source, &mut globals)?;
     Ok(())

@@ -267,8 +267,7 @@
 //! "#;
 //! let grammar = tree_sitter_python::language();
 //! let tsg_source = STACK_GRAPH_RULES;
-//! let functions = Functions::stdlib();
-//! let mut language = StackGraphLanguage::from_str(grammar, tsg_source, functions)?;
+//! let mut language = StackGraphLanguage::from_str(grammar, tsg_source)?;
 //! let mut stack_graph = StackGraph::new();
 //! let file_handle = stack_graph.get_or_create_file("test.py");
 //! let mut globals = Variables::new();
@@ -356,7 +355,6 @@ impl StackGraphLanguage {
     pub fn new(
         language: tree_sitter::Language,
         tsg: tree_sitter_graph::ast::File,
-        functions: tree_sitter_graph::functions::Functions,
     ) -> Result<StackGraphLanguage, LanguageError> {
         debug_assert_eq!(language, tsg.language);
         let mut parser = Parser::new();
@@ -364,7 +362,7 @@ impl StackGraphLanguage {
         Ok(StackGraphLanguage {
             parser,
             tsg,
-            functions,
+            functions: Self::default_functions(),
         })
     }
 
@@ -373,7 +371,6 @@ impl StackGraphLanguage {
     pub fn from_str(
         language: tree_sitter::Language,
         tsg_source: &str,
-        functions: tree_sitter_graph::functions::Functions,
     ) -> Result<StackGraphLanguage, LanguageError> {
         let mut parser = Parser::new();
         parser.set_language(language)?;
@@ -381,8 +378,18 @@ impl StackGraphLanguage {
         Ok(StackGraphLanguage {
             parser,
             tsg,
-            functions,
+            functions: Self::default_functions(),
         })
+    }
+
+    fn default_functions() -> tree_sitter_graph::functions::Functions {
+        let mut functions = tree_sitter_graph::functions::Functions::stdlib();
+        crate::functions::add_path_functions(&mut functions);
+        functions
+    }
+
+    pub fn functions_mut(&mut self) -> &mut tree_sitter_graph::functions::Functions {
+        &mut self.functions
     }
 }
 
