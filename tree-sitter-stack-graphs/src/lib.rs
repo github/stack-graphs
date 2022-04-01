@@ -341,6 +341,7 @@ static PRECEDENCE_ATTR: &'static str = "precedence";
 // Global variables
 static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
 static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
+static FILE_PATH_VAR: &'static str = "FILE_PATH";
 
 /// Holds information about how to construct stack graphs for a particular language
 pub struct StackGraphLanguage {
@@ -420,10 +421,16 @@ impl StackGraphLanguage {
         let mut graph = Graph::new();
         globals
             .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
-            .unwrap();
+            .expect("Failed to set ROOT_NODE");
         globals
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
-            .unwrap();
+            .expect("Failed to set JUMP_TO_SCOPE_NODE");
+        globals
+            .add(
+                FILE_PATH_VAR.into(),
+                format!("{}", &stack_graph[file]).into(),
+            )
+            .expect("Failed to set FILE_PATH");
         let mut config = ExecutionConfig::new(&mut self.functions, &globals).lazy(true);
         self.tsg
             .execute_into(&mut graph, &tree, source, &mut config)?;
