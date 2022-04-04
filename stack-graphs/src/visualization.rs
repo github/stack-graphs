@@ -11,10 +11,10 @@ use crate::json::JsonError;
 use crate::paths::Path;
 use crate::paths::Paths;
 
-static CSS: &'static str = include_str!("visualization.css");
-static D3: &'static str = include_str!("d3.v7.min.js");
-static D3_DAG: &'static str = include_str!("d3-dag.v0.10.0.min.js");
-static JS: &'static str = include_str!("visualization.js");
+static CSS: &'static str = include_str!("visualization/visualization.css");
+static D3: &'static str = include_str!("visualization/d3.v7.min.js");
+static D3_DAG: &'static str = include_str!("visualization/d3-dag.v0.10.0.min.js");
+static JS: &'static str = include_str!("visualization/visualization.js");
 
 static PKG: &'static str = env!("CARGO_PKG_NAME");
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -82,6 +82,7 @@ impl StackGraph {
     new StackGraph(container, graph, paths, {{ version: "{PKG} {VERSION}" }});
   </script>
 </body>
+
 </html>
 "#
         );
