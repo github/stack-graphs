@@ -188,6 +188,51 @@
 //! }
 //! ```
 //!
+//! ### Working with paths
+//!
+//! Built-in path functions are available to compute symbols that depend on path information, such as
+//! module names or imports. The path of the file is provided in the global variable `FILE_PATH`.
+//!
+//! The following path functions are available:
+//! - `path-dir`: get the path consisting of all but the last component of the argument path, or `#null` if it ends in root
+//! - `path-fileext`: get the file extension, i.e. everything after the final `.` of the file name of the argument path, or `#null` if it has extension
+//! - `path-filename`: get the last component of the argument path, or `#null` if it has no final component
+//! - `path-filestem`: get the file stem of the argument path, i.e., everything before the extension, or `#null` if it has no file name
+//! - `path-join`: join all argument paths together
+//! - `path-normalize`: normalize the argument path by eliminating `.` and `..` components where possible
+//! - `path-split`: split the argument path into a list of its components
+//!
+//! The following example computes a module name from a file path:
+//!
+//! ``` skip
+//! global FILE_PATH
+//!
+//! (program)@prog {
+//!   ; ...
+//!   let dir = (path-dir FILE_PATH)
+//!   let stem = (path-filestem FILE_PATH)
+//!   let mod_name = (path-join dir stem)
+//!   node mod_def
+//!   attr mod_def type = "pop_symbol", symbol = mod_name, is_definition, source_node = @prog
+//!   ; ...
+//! }
+//! ```
+//!
+//! The following example resolves an import relative to the current file:
+//!
+//! ``` skip
+//! global FILE_PATH
+//!
+//! (import name:(_)@name)@import {
+//!   ; ...
+//!   let dir = (path-dir FILE_PATH)
+//!   let mod_name = (path-normalize (path-join dir (Source-text @name)))
+//!   node mod_def
+//!   attr mod_def type = "pop_symbol", symbol = mod_name, is_definition, source_node = @prog
+//!   ; ...
+//! }
+//! ```
+//!
 //! ## Using this crate from Rust
 //!
 //! If you need very fine-grained control over how to use the resulting stack graphs, you can
@@ -222,8 +267,7 @@
 //! "#;
 //! let grammar = tree_sitter_python::language();
 //! let tsg_source = STACK_GRAPH_RULES;
-//! let functions = Functions::stdlib();
-//! let mut language = StackGraphLanguage::from_str(grammar, tsg_source, functions)?;
+//! let mut language = StackGraphLanguage::from_str(grammar, tsg_source)?;
 //! let mut stack_graph = StackGraph::new();
 //! let file_handle = stack_graph.get_or_create_file("test.py");
 //! let mut globals = Variables::new();
@@ -253,6 +297,7 @@ use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
 use tree_sitter_graph::Variables;
 
+pub mod functions;
 pub mod loader;
 pub mod test;
 
@@ -295,6 +340,7 @@ static PRECEDENCE_ATTR: &'static str = "precedence";
 // Global variables
 static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
 static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
+static FILE_PATH_VAR: &'static str = "FILE_PATH";
 
 /// Holds information about how to construct stack graphs for a particular language
 pub struct StackGraphLanguage {
@@ -309,7 +355,6 @@ impl StackGraphLanguage {
     pub fn new(
         language: tree_sitter::Language,
         tsg: tree_sitter_graph::ast::File,
-        functions: tree_sitter_graph::functions::Functions,
     ) -> Result<StackGraphLanguage, LanguageError> {
         debug_assert_eq!(language, tsg.language);
         let mut parser = Parser::new();
@@ -317,7 +362,7 @@ impl StackGraphLanguage {
         Ok(StackGraphLanguage {
             parser,
             tsg,
-            functions,
+            functions: Self::default_functions(),
         })
     }
 
@@ -326,7 +371,6 @@ impl StackGraphLanguage {
     pub fn from_str(
         language: tree_sitter::Language,
         tsg_source: &str,
-        functions: tree_sitter_graph::functions::Functions,
     ) -> Result<StackGraphLanguage, LanguageError> {
         let mut parser = Parser::new();
         parser.set_language(language)?;
@@ -334,8 +378,18 @@ impl StackGraphLanguage {
         Ok(StackGraphLanguage {
             parser,
             tsg,
-            functions,
+            functions: Self::default_functions(),
         })
+    }
+
+    fn default_functions() -> tree_sitter_graph::functions::Functions {
+        let mut functions = tree_sitter_graph::functions::Functions::stdlib();
+        crate::functions::add_path_functions(&mut functions);
+        functions
+    }
+
+    pub fn functions_mut(&mut self) -> &mut tree_sitter_graph::functions::Functions {
+        &mut self.functions
     }
 }
 
@@ -374,10 +428,16 @@ impl StackGraphLanguage {
         let mut graph = Graph::new();
         globals
             .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
-            .unwrap();
+            .expect("Failed to set ROOT_NODE");
         globals
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
-            .unwrap();
+            .expect("Failed to set JUMP_TO_SCOPE_NODE");
+        globals
+            .add(
+                FILE_PATH_VAR.into(),
+                format!("{}", &stack_graph[file]).into(),
+            )
+            .expect("Failed to set FILE_PATH");
         let mut config = ExecutionConfig::new(&mut self.functions, &globals).lazy(true);
         self.tsg
             .execute_into(&mut graph, &tree, source, &mut config)?;

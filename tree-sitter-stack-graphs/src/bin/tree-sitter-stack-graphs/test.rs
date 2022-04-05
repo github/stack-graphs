@@ -167,12 +167,6 @@ impl Command {
         graph: &mut StackGraph,
     ) -> anyhow::Result<()> {
         let mut globals = Variables::new();
-        globals
-            .add(
-                "FILE_PATH".into(),
-                format!("{}", source_path.display()).into(),
-            )
-            .expect("Failed to set FILE_PATH");
         match sgl.build_stack_graph_into(
             graph,
             test_fragment.file,
