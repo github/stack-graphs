@@ -7,36 +7,59 @@
 
 //! Define tree-sitter-graph functions
 
-use tree_sitter_graph::functions::Functions;
-
-pub fn add_path_functions(functions: &mut Functions) {
-    functions.add("path-dir".into(), path::PathDir);
-    functions.add("path-fileext".into(), path::PathFileExt);
-    functions.add("path-filename".into(), path::PathFileName);
-    functions.add("path-filestem".into(), path::PathFileStem);
-    functions.add("path-join".into(), path::PathJoin);
-    functions.add("path-normalize".into(), path::PathNormalize);
-    functions.add("path-split".into(), path::PathSplit);
-}
+pub use path::add_path_functions;
 
 pub mod path {
     use std::path::Component;
+    use std::path::Path;
     use std::path::PathBuf;
     use tree_sitter_graph::functions::Function;
+    use tree_sitter_graph::functions::Functions;
     use tree_sitter_graph::functions::Parameters;
     use tree_sitter_graph::graph::Graph;
     use tree_sitter_graph::graph::Value;
     use tree_sitter_graph::ExecutionError;
 
-    pub struct PathDir;
-    pub struct PathFileExt;
-    pub struct PathFileName;
-    pub struct PathFileStem;
-    pub struct PathJoin;
-    pub struct PathNormalize;
-    pub struct PathSplit;
+    pub fn add_path_functions(functions: &mut Functions) {
+        functions.add(
+            "path-dir".into(),
+            path_fn(|p| p.parent().map(|s| s.as_os_str().to_os_string())),
+        );
+        functions.add(
+            "path-fileext".into(),
+            path_fn(|p| p.extension().map(|s| s.to_os_string())),
+        );
+        functions.add(
+            "path-filename".into(),
+            path_fn(|p| p.file_name().map(|s| s.to_os_string())),
+        );
+        functions.add(
+            "path-filestem".into(),
+            path_fn(|p| p.file_stem().map(|s| s.to_os_string())),
+        );
+        functions.add("path-join".into(), PathJoin);
+        functions.add(
+            "path-normalize".into(),
+            path_fn(|p| Some(normalize_path(p).as_os_str().to_os_string())),
+        );
+        functions.add("path-split".into(), PathSplit);
+    }
 
-    impl Function for PathDir {
+    pub fn path_fn<F>(f: F) -> impl Function
+    where
+        F: FnMut(&Path) -> Option<std::ffi::OsString>,
+    {
+        PathFn(f)
+    }
+
+    struct PathFn<F>(F)
+    where
+        F: FnMut(&Path) -> Option<std::ffi::OsString>;
+
+    impl<F> Function for PathFn<F>
+    where
+        F: FnMut(&Path) -> Option<std::ffi::OsString>,
+    {
         fn call(
             &mut self,
             _graph: &mut Graph,
@@ -46,63 +69,18 @@ pub mod path {
             let path = PathBuf::from(parameters.param()?.into_string()?);
             parameters.finish()?;
 
-            let path = path.parent();
+            let path = self.0(&path);
             Ok(path
-                .map(|p| p.to_str().unwrap().into())
+                .map(|s| {
+                    s.into_string()
+                        .unwrap_or_else(|s| s.to_string_lossy().to_string())
+                        .into()
+                })
                 .unwrap_or(Value::Null))
         }
     }
 
-    impl Function for PathFileExt {
-        fn call(
-            &mut self,
-            _graph: &mut Graph,
-            _source: &str,
-            parameters: &mut dyn Parameters,
-        ) -> Result<Value, ExecutionError> {
-            let path = PathBuf::from(parameters.param()?.into_string()?);
-            parameters.finish()?;
-
-            let path = path.extension();
-            Ok(path
-                .map(|p| p.to_str().unwrap().into())
-                .unwrap_or(Value::Null))
-        }
-    }
-
-    impl Function for PathFileName {
-        fn call(
-            &mut self,
-            _graph: &mut Graph,
-            _source: &str,
-            parameters: &mut dyn Parameters,
-        ) -> Result<Value, ExecutionError> {
-            let path = PathBuf::from(parameters.param()?.into_string()?);
-            parameters.finish()?;
-
-            let path = path.file_name();
-            Ok(path
-                .map(|p| p.to_str().unwrap().into())
-                .unwrap_or(Value::Null))
-        }
-    }
-
-    impl Function for PathFileStem {
-        fn call(
-            &mut self,
-            _graph: &mut Graph,
-            _source: &str,
-            parameters: &mut dyn Parameters,
-        ) -> Result<Value, ExecutionError> {
-            let path = PathBuf::from(parameters.param()?.into_string()?);
-            parameters.finish()?;
-
-            let path = path.file_stem();
-            Ok(path
-                .map(|p| p.to_str().unwrap().into())
-                .unwrap_or(Value::Null))
-        }
-    }
+    struct PathJoin;
 
     impl Function for PathJoin {
         fn call(
@@ -120,21 +98,7 @@ pub mod path {
         }
     }
 
-    impl Function for PathNormalize {
-        fn call(
-            &mut self,
-            _graph: &mut Graph,
-            _source: &str,
-            parameters: &mut dyn Parameters,
-        ) -> Result<Value, ExecutionError> {
-            let path = PathBuf::from(parameters.param()?.into_string()?);
-            parameters.finish()?;
-
-            let path = normalize_path(&path);
-
-            Ok(path.to_str().unwrap().into())
-        }
-    }
+    struct PathSplit;
 
     impl Function for PathSplit {
         fn call(
@@ -165,7 +129,7 @@ pub mod path {
     // Copied from Cargo
     // https://github.com/rust-lang/cargo/blob/e515c3277bf0681bfc79a9e763861bfe26bb05db/crates/cargo-util/src/paths.rs#L73-L106
     // Licensed under MIT license & Apache License (Version 2.0)
-    fn normalize_path(path: &PathBuf) -> PathBuf {
+    fn normalize_path(path: &Path) -> PathBuf {
         let mut components = path.components().peekable();
         let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
             components.next();
