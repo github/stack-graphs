@@ -11,6 +11,8 @@ use clap::ArgEnum;
 use colored::Colorize as _;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
@@ -44,12 +46,25 @@ impl OutputMode {
 
 /// Run tests
 #[derive(clap::Parser)]
+#[clap(after_help = r#"PATH SPECIFICATIONS:
+    Output filenames can be specified using placeholders based on the input file. The
+    following placeholders are supported:
+         %r   the root path, which is the directory argument which contains the file,
+              or the directory of the file argument
+         %d   the path directories relative to the root
+         %n   the name of the file
+         %e   the file extension (including the preceding dot)
+         %%   a literal percentage sign
+    Empty directory placeholders (%r and %d) are replaced by "." so that the shape of
+    the path is not accidently changed. For example, "test -V %d/%n.html mytest.py"
+    results in "./mytest.html" instead of the unintented "/mytest.html".
+"#)]
 pub struct Command {
     #[clap(flatten)]
     loader: LoaderArgs,
 
-    /// Source paths to test.
-    #[clap(value_name = "PATHS", required = true)]
+    /// Test file or directory paths.
+    #[clap(value_name = "PATH", required = true)]
     sources: Vec<PathBuf>,
 
     /// Hide passing tests.
@@ -65,16 +80,34 @@ pub struct Command {
     show_ignored: bool,
 
     /// Save graph.
-    #[clap(long, short = 'G', min_values = 0, max_values = 1)]
-    save_graph: Option<Vec<String>>,
+    #[clap(
+        long,
+        short = 'G',
+        value_name = "PATH_SPEC",
+        min_values = 0,
+        max_values = 1
+    )]
+    save_graph: Option<Vec<PathSpec>>,
 
     /// Save paths.
-    #[clap(long, short = 'P', min_values = 0, max_values = 1)]
-    save_paths: Option<Vec<String>>,
+    #[clap(
+        long,
+        short = 'P',
+        value_name = "PATH_SPEC",
+        min_values = 0,
+        max_values = 1
+    )]
+    save_paths: Option<Vec<PathSpec>>,
 
     /// Save visualization.
-    #[clap(long, short = 'V', min_values = 0, max_values = 1)]
-    save_visualization: Option<Vec<String>>,
+    #[clap(
+        long,
+        short = 'V',
+        value_name = "PATH_SPEC",
+        min_values = 0,
+        max_values = 1
+    )]
+    save_visualization: Option<Vec<PathSpec>>,
 
     /// Controls when graphs, paths, or visualization are saved.
     #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
@@ -88,15 +121,23 @@ impl Command {
         let mut loader = self.loader.new_loader()?;
         let mut total_failure_count = 0;
         for source_path in &self.sources {
-            for source_entry in WalkDir::new(source_path)
-                .follow_links(true)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-            {
-                let source_path = source_entry.path();
+            if source_path.is_dir() {
+                let source_root = source_path;
+                for source_entry in WalkDir::new(source_path)
+                    .follow_links(true)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    let source_path = source_entry.path();
+                    total_failure_count += self
+                        .run_test(source_root, source_path, &mut loader)
+                        .with_context(|| format!("Error running test {}", source_path.display()))?;
+                }
+            } else {
+                let source_root = source_path.parent().unwrap();
                 total_failure_count += self
-                    .run_test(source_path, &mut loader)
+                    .run_test(source_root, source_path, &mut loader)
                     .with_context(|| format!("Error running test {}", source_path.display()))?;
             }
         }
@@ -127,7 +168,12 @@ impl Command {
         Ok(())
     }
 
-    fn run_test(&self, source_path: &Path, loader: &mut Loader) -> anyhow::Result<usize> {
+    fn run_test(
+        &self,
+        source_root: &Path,
+        source_path: &Path,
+        loader: &mut Loader,
+    ) -> anyhow::Result<usize> {
         let source = String::from_utf8(std::fs::read(source_path)?)?;
         let sgl = match loader.load_for_file(source_path, Some(&source))? {
             Some(sgl) => sgl,
@@ -153,7 +199,13 @@ impl Command {
         let result = test.run();
         let success = self.handle_result(source_path, &result)?;
         if self.output_mode.test(!success) {
-            self.save_output(source_path, &test.graph, &mut test.paths, success)?;
+            self.save_output(
+                source_root,
+                source_path,
+                &test.graph,
+                &mut test.paths,
+                success,
+            )?;
         }
         Ok(result.failure_count())
     }
@@ -231,29 +283,17 @@ impl Command {
 
     fn save_output(
         &self,
+        source_root: &Path,
         source_path: &Path,
         graph: &StackGraph,
         paths: &mut Paths,
         success: bool,
     ) -> anyhow::Result<()> {
-        let root = source_path
-            .parent()
-            .map(|p| p.to_string_lossy().into_owned());
-        let dirs = Some(PathBuf::default().to_string_lossy().into_owned());
-        let name = source_path
-            .file_stem()
-            .map(|p| p.to_string_lossy().into_owned());
-        let ext = source_path
-            .extension()
-            .map(|p| format!(".{}", p.to_string_lossy().into_owned()));
-
         if let Some(path) = Self::output_path(
             self.save_graph.as_ref(),
-            "%n.graph.json",
-            root.as_deref(),
-            dirs.as_deref(),
-            name.as_deref(),
-            ext.as_deref(),
+            &"%n.graph.json".into(),
+            source_root,
+            source_path,
         ) {
             self.save_graph(&path, &graph)?;
             if !success || !self.hide_passing {
@@ -262,11 +302,9 @@ impl Command {
         }
         if let Some(path) = Self::output_path(
             self.save_paths.as_ref(),
-            "%n.paths.json",
-            root.as_deref(),
-            dirs.as_deref(),
-            name.as_deref(),
-            ext.as_deref(),
+            &"%n.paths.json".into(),
+            source_root,
+            source_path,
         ) {
             self.save_paths(&path, paths, graph)?;
             if !success || !self.hide_passing {
@@ -275,11 +313,9 @@ impl Command {
         }
         if let Some(path) = Self::output_path(
             self.save_visualization.as_ref(),
-            "%n.html",
-            root.as_deref(),
-            dirs.as_deref(),
-            name.as_deref(),
-            ext.as_deref(),
+            &"%n.html".into(),
+            source_root,
+            source_path,
         ) {
             self.save_visualization(&path, paths, graph, &source_path)?;
             if !success || !self.hide_passing {
@@ -290,70 +326,17 @@ impl Command {
     }
 
     fn output_path(
-        flag: Option<&Vec<String>>,
-        default: &str,
-        root: Option<&str>,
-        dirs: Option<&str>,
-        name: Option<&str>,
-        ext: Option<&str>,
+        arg: Option<&Vec<PathSpec>>,
+        default: &PathSpec,
+        root: &Path,
+        relative_path: &Path,
     ) -> Option<PathBuf> {
-        flag.map(|ps| {
-            Self::format_path(
-                ps.iter().next().map_or(default, |p| &p),
-                root,
-                dirs,
-                name,
-                ext,
-            )
+        arg.map(|ps| {
+            ps.iter()
+                .next()
+                .map_or(default, |p| p)
+                .format(root, relative_path)
         })
-    }
-
-    fn format_path(
-        format: &str,
-        root: Option<&str>,
-        dirs: Option<&str>,
-        name: Option<&str>,
-        ext: Option<&str>,
-    ) -> PathBuf {
-        let mut path = String::new();
-        let mut in_placeholder = false;
-        for c in format.chars() {
-            if in_placeholder {
-                in_placeholder = false;
-                match c {
-                    'r' => {
-                        if let Some(root) = root {
-                            path.push_str(root)
-                        }
-                    }
-                    'n' => {
-                        if let Some(name) = name {
-                            path.push_str(name)
-                        }
-                    }
-                    'd' => {
-                        if let Some(dirs) = dirs {
-                            path.push_str(dirs)
-                        }
-                    }
-                    'e' => {
-                        if let Some(ext) = ext {
-                            path.push_str(ext)
-                        }
-                    }
-                    '%' => path.push('%'),
-                    c => panic!("Unsupported placeholder '%{}'", c),
-                }
-            } else if c == '%' {
-                in_placeholder = true;
-            } else {
-                path.push(c);
-            }
-        }
-        if in_placeholder {
-            panic!("Unsupported '%' at end");
-        }
-        path.into()
     }
 
     fn save_graph(&self, path: &Path, graph: &StackGraph) -> anyhow::Result<()> {
@@ -361,7 +344,8 @@ impl Command {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(&path, json).expect("Unable to write graph");
+        std::fs::write(&path, json)
+            .with_context(|| format!("Unable to write graph {}", path.display()))?;
         Ok(())
     }
 
@@ -370,7 +354,8 @@ impl Command {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(&path, json).expect("Unable to write paths");
+        std::fs::write(&path, json)
+            .with_context(|| format!("Unable to write graph {}", path.display()))?;
         Ok(())
     }
 
@@ -385,7 +370,105 @@ impl Command {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(&path, html).expect("Unable to write visualization");
+        std::fs::write(&path, html)
+            .with_context(|| format!("Unable to write graph {}", path.display()))?;
         Ok(())
+    }
+}
+
+/// A path specification that can be formatted into a path based on a root and path
+/// contained in that root.
+struct PathSpec {
+    spec: String,
+}
+
+impl PathSpec {
+    pub fn format(&self, root: &Path, full_path: &Path) -> PathBuf {
+        if !full_path.starts_with(root) {
+            panic!(
+                "Path {} not contained in root {}",
+                full_path.display(),
+                root.display()
+            );
+        }
+        let relative_path = full_path.strip_prefix(root).unwrap();
+        if relative_path.is_absolute() {
+            panic!(
+                "Path {} not relative to root {}",
+                full_path.display(),
+                root.display()
+            );
+        }
+        self.format_path(
+            &self.dir_os_str(Some(root)),
+            &self.dir_os_str(relative_path.parent()),
+            relative_path.file_stem(),
+            relative_path.extension(),
+        )
+    }
+
+    /// Convert an optional directory path to an OsString representation. If the
+    /// path is missing or empty, we return `.`.
+    fn dir_os_str(&self, path: Option<&Path>) -> OsString {
+        let s = path.map_or("".into(), |p| p.as_os_str().to_os_string());
+        let s = if s.is_empty() { ".".into() } else { s };
+        s
+    }
+
+    fn format_path(
+        &self,
+        root: &OsStr,
+        dirs: &OsStr,
+        name: Option<&OsStr>,
+        ext: Option<&OsStr>,
+    ) -> PathBuf {
+        let mut path = OsString::new();
+        let mut in_placeholder = false;
+        for c in self.spec.chars() {
+            if in_placeholder {
+                in_placeholder = false;
+                match c {
+                    '%' => path.push("%"),
+                    'd' => {
+                        path.push(dirs);
+                    }
+                    'e' => {
+                        if let Some(ext) = ext {
+                            path.push(".");
+                            path.push(ext);
+                        }
+                    }
+                    'n' => {
+                        if let Some(name) = name {
+                            path.push(name);
+                        }
+                    }
+                    'r' => path.push(root),
+                    c => panic!("Unsupported placeholder '%{}'", c),
+                }
+            } else if c == '%' {
+                in_placeholder = true;
+            } else {
+                path.push(c.to_string());
+            }
+        }
+        if in_placeholder {
+            panic!("Unsupported '%' at end");
+        }
+        let path = Path::new(&path);
+        tree_sitter_stack_graphs::functions::path::normalize(&path)
+    }
+}
+
+impl std::str::FromStr for PathSpec {
+    type Err = clap::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self { spec: s.into() })
+    }
+}
+
+impl From<&str> for PathSpec {
+    fn from(s: &str) -> Self {
+        Self { spec: s.into() }
     }
 }
