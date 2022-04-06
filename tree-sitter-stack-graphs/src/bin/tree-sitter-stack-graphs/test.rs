@@ -79,7 +79,9 @@ pub struct Command {
     #[clap(long)]
     show_ignored: bool,
 
-    /// Save graph.
+    /// Save graph for tests matching output mode.
+    /// Takes an optional path specification argument for the output file. [default: %n.graph.json]
+    /// Note: if used as the last flag without a path specification, add "--" before the test paths.
     #[clap(
         long,
         short = 'G',
@@ -89,7 +91,9 @@ pub struct Command {
     )]
     save_graph: Option<Vec<PathSpec>>,
 
-    /// Save paths.
+    /// Save paths for tests matching output mode.
+    /// Takes an optional path specification argument for the output file [default: %n.paths.json].
+    /// Note: if used as the last flag without a path specification, add "--" before the test paths.
     #[clap(
         long,
         short = 'P',
@@ -99,7 +103,9 @@ pub struct Command {
     )]
     save_paths: Option<Vec<PathSpec>>,
 
-    /// Save visualization.
+    /// Save visualization for tests matching output mode.
+    /// Takes an optional path specification argument for the output file [default: %n.html].
+    /// Note: if used as the last flag without a path specification, add "--" before the test paths.
     #[clap(
         long,
         short = 'V',
