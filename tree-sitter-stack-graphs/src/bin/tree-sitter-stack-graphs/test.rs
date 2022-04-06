@@ -65,16 +65,16 @@ pub struct Command {
     show_ignored: bool,
 
     /// Save graph.
-    #[clap(long, short = 'G')]
-    save_graph: bool,
+    #[clap(long, short = 'G', min_values = 0, max_values = 1)]
+    save_graph: Option<Vec<String>>,
 
     /// Save paths.
-    #[clap(long, short = 'P')]
-    save_paths: bool,
+    #[clap(long, short = 'P', min_values = 0, max_values = 1)]
+    save_paths: Option<Vec<String>>,
 
     /// Save visualization.
-    #[clap(long, short = 'V')]
-    save_visualization: bool,
+    #[clap(long, short = 'V', min_values = 0, max_values = 1)]
+    save_visualization: Option<Vec<String>>,
 
     /// Controls when graphs, paths, or visualization are saved.
     #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
@@ -236,22 +236,51 @@ impl Command {
         paths: &mut Paths,
         success: bool,
     ) -> anyhow::Result<()> {
-        if self.save_graph {
-            let path = source_path.with_extension("graph.json");
+        let root = source_path
+            .parent()
+            .map(|p| p.to_string_lossy().into_owned());
+        let dirs = Some(PathBuf::default().to_string_lossy().into_owned());
+        let name = source_path
+            .file_stem()
+            .map(|p| p.to_string_lossy().into_owned());
+        let ext = source_path
+            .extension()
+            .map(|p| format!(".{}", p.to_string_lossy().into_owned()));
+
+        if let Some(path) = Self::output_path(
+            self.save_graph.as_ref(),
+            "%n.graph.json",
+            root.as_deref(),
+            dirs.as_deref(),
+            name.as_deref(),
+            ext.as_deref(),
+        ) {
             self.save_graph(&path, &graph)?;
             if !success || !self.hide_passing {
                 println!("  Graph: {}", path.display());
             }
         }
-        if self.save_paths {
-            let path = source_path.with_extension("paths.json");
+        if let Some(path) = Self::output_path(
+            self.save_paths.as_ref(),
+            "%n.paths.json",
+            root.as_deref(),
+            dirs.as_deref(),
+            name.as_deref(),
+            ext.as_deref(),
+        ) {
             self.save_paths(&path, paths, graph)?;
             if !success || !self.hide_passing {
                 println!("  Paths: {}", path.display());
             }
         }
-        if self.save_visualization {
-            let path = source_path.with_extension("html");
+        if let Some(path) = Self::output_path(
+            self.save_visualization.as_ref(),
+            "%n.html",
+            root.as_deref(),
+            dirs.as_deref(),
+            name.as_deref(),
+            ext.as_deref(),
+        ) {
             self.save_visualization(&path, paths, graph, &source_path)?;
             if !success || !self.hide_passing {
                 println!("  Visualization: {}", path.display());
@@ -260,14 +289,87 @@ impl Command {
         Ok(())
     }
 
+    fn output_path(
+        flag: Option<&Vec<String>>,
+        default: &str,
+        root: Option<&str>,
+        dirs: Option<&str>,
+        name: Option<&str>,
+        ext: Option<&str>,
+    ) -> Option<PathBuf> {
+        flag.map(|ps| {
+            Self::format_path(
+                ps.iter().next().map_or(default, |p| &p),
+                root,
+                dirs,
+                name,
+                ext,
+            )
+        })
+    }
+
+    fn format_path(
+        format: &str,
+        root: Option<&str>,
+        dirs: Option<&str>,
+        name: Option<&str>,
+        ext: Option<&str>,
+    ) -> PathBuf {
+        let mut path = String::new();
+        let mut in_placeholder = false;
+        for c in format.chars() {
+            if in_placeholder {
+                in_placeholder = false;
+                match c {
+                    'r' => {
+                        if let Some(root) = root {
+                            path.push_str(root)
+                        }
+                    }
+                    'n' => {
+                        if let Some(name) = name {
+                            path.push_str(name)
+                        }
+                    }
+                    'd' => {
+                        if let Some(dirs) = dirs {
+                            path.push_str(dirs)
+                        }
+                    }
+                    'e' => {
+                        if let Some(ext) = ext {
+                            path.push_str(ext)
+                        }
+                    }
+                    '%' => path.push('%'),
+                    c => panic!("Unsupported placeholder '%{}'", c),
+                }
+            } else if c == '%' {
+                in_placeholder = true;
+            } else {
+                path.push(c);
+            }
+        }
+        if in_placeholder {
+            panic!("Unsupported '%' at end");
+        }
+        path.into()
+    }
+
     fn save_graph(&self, path: &Path, graph: &StackGraph) -> anyhow::Result<()> {
         let json = graph.to_json().to_string_pretty()?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
         std::fs::write(&path, json).expect("Unable to write graph");
         Ok(())
     }
 
     fn save_paths(&self, path: &Path, paths: &mut Paths, graph: &StackGraph) -> anyhow::Result<()> {
         let json = paths.to_json(graph, |_, _, _| true).to_string_pretty()?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
         std::fs::write(&path, json).expect("Unable to write paths");
         Ok(())
     }
@@ -280,6 +382,9 @@ impl Command {
         source_path: &Path,
     ) -> anyhow::Result<()> {
         let html = graph.to_html_string(paths, &format!("{}", source_path.display()))?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
         std::fs::write(&path, html).expect("Unable to write visualization");
         Ok(())
     }
