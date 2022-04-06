@@ -88,9 +88,11 @@ pub struct Command {
         short = 'G',
         value_name = "PATH_SPEC",
         min_values = 0,
-        max_values = 1
+        max_values = 1,
+        require_equals = true,
+        default_missing_value = "%n.graph.json"
     )]
-    save_graph: Option<Vec<PathSpec>>,
+    save_graph: Option<PathSpec>,
 
     /// Save paths for tests matching output mode.
     /// Takes an optional path specification argument for the output file [default: %n.paths.json].
@@ -100,9 +102,11 @@ pub struct Command {
         short = 'P',
         value_name = "PATH_SPEC",
         min_values = 0,
-        max_values = 1
+        max_values = 1,
+        require_equals = true,
+        default_missing_value = "%n.paths.json"
     )]
-    save_paths: Option<Vec<PathSpec>>,
+    save_paths: Option<PathSpec>,
 
     /// Save visualization for tests matching output mode.
     /// Takes an optional path specification argument for the output file [default: %n.html].
@@ -112,12 +116,14 @@ pub struct Command {
         short = 'V',
         value_name = "PATH_SPEC",
         min_values = 0,
-        max_values = 1
+        max_values = 1,
+        require_equals = true,
+        default_missing_value = "%n.html"
     )]
-    save_visualization: Option<Vec<PathSpec>>,
+    save_visualization: Option<PathSpec>,
 
     /// Controls when graphs, paths, or visualization are saved.
-    #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
+    #[clap(long, arg_enum, require_equals = true, default_value_t = OutputMode::OnFailure)]
     output_mode: OutputMode,
 }
 
@@ -286,54 +292,37 @@ impl Command {
         paths: &mut Paths,
         success: bool,
     ) -> anyhow::Result<()> {
-        if let Some(path) = Self::output_path(
-            self.save_graph.as_ref(),
-            &"%n.graph.json".into(),
-            test_root,
-            test_path,
-        ) {
+        if let Some(path) = self
+            .save_graph
+            .as_ref()
+            .map(|spec| spec.format(test_root, test_path))
+        {
             self.save_graph(&path, &graph)?;
             if !success || !self.hide_passing {
                 println!("  Graph: {}", path.display());
             }
         }
-        if let Some(path) = Self::output_path(
-            self.save_paths.as_ref(),
-            &"%n.paths.json".into(),
-            test_root,
-            test_path,
-        ) {
+        if let Some(path) = self
+            .save_paths
+            .as_ref()
+            .map(|spec| spec.format(test_root, test_path))
+        {
             self.save_paths(&path, paths, graph)?;
             if !success || !self.hide_passing {
                 println!("  Paths: {}", path.display());
             }
         }
-        if let Some(path) = Self::output_path(
-            self.save_visualization.as_ref(),
-            &"%n.html".into(),
-            test_root,
-            test_path,
-        ) {
+        if let Some(path) = self
+            .save_visualization
+            .as_ref()
+            .map(|spec| spec.format(test_root, test_path))
+        {
             self.save_visualization(&path, paths, graph, &test_path)?;
             if !success || !self.hide_passing {
                 println!("  Visualization: {}", path.display());
             }
         }
         Ok(())
-    }
-
-    fn output_path(
-        arg: Option<&Vec<PathSpec>>,
-        default: &PathSpec,
-        root: &Path,
-        relative_path: &Path,
-    ) -> Option<PathBuf> {
-        arg.map(|ps| {
-            ps.iter()
-                .next()
-                .map_or(default, |p| p)
-                .format(root, relative_path)
-        })
     }
 
     fn save_graph(&self, path: &Path, graph: &StackGraph) -> anyhow::Result<()> {
