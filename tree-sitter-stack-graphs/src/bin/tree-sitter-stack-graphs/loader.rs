@@ -17,21 +17,18 @@ use tree_sitter_stack_graphs::loader::Loader;
 
 #[derive(Args)]
 pub struct LoaderArgs {
-    /// The TSG file to use for stack graph construction
-    #[clap(long)]
-    #[clap(name = "TSG_PATH")]
+    /// The TSG file to use for stack graph construction.
+    #[clap(long, value_name = "TSG_PATH")]
     tsg: Option<PathBuf>,
 
     /// The path to look for tree-sitter grammars.
     /// Can be specified multiple times.
-    #[clap(long)]
-    #[clap(name = "GRAMMAR_PATH")]
+    #[clap(long, value_name = "GRAMMAR_PATH")]
     grammar: Vec<PathBuf>,
 
     /// The scope of the tree-sitter grammar.
     /// See https://tree-sitter.github.io/tree-sitter/syntax-highlighting#basics for details.
-    #[clap(long)]
-    #[clap(name = "SCOPE")]
+    #[clap(long, value_name = "SCOPE")]
     scope: Option<String>,
 }
 

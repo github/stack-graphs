@@ -12,8 +12,7 @@ use clap::Subcommand;
 pub(crate) const MAX_PARSE_ERRORS: usize = 5;
 
 #[derive(Parser)]
-#[clap(about)]
-#[clap(version)]
+#[clap(about, version)]
 struct Cli {
     #[clap(subcommand)]
     command: Commands,

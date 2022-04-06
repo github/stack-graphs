@@ -123,7 +123,7 @@ pub struct Command {
     save_visualization: Option<PathSpec>,
 
     /// Controls when graphs, paths, or visualization are saved.
-    #[clap(long, arg_enum, require_equals = true, default_value_t = OutputMode::OnFailure)]
+    #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
     output_mode: OutputMode,
 }
 
