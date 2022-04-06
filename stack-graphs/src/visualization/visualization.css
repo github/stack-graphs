@@ -1,0 +1,420 @@
+/* -*- coding: utf-8 -*-
+ * ------------------------------------------------------------------------------------------------
+ * Copyright © 2022, stack-graphs authors.
+ * Licensed under either of Apache License, Version 2.0, or MIT license, at your option.
+ * Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
+ * ------------------------------------------------------------------------------------------------
+*/
+
+/* Paul Tol's Colorblind Friendly Color Scheme (vibrant)
+ * Source: https://personal.sron.nl/~pault/
+ *
+ * blue    #0077bb
+ * cyan    #33bbee
+ * teal    #009988
+ * orange  #ee7733
+ * red     #cc3311
+ * magenta #ee3377
+ * grey    #bbbbbb
+ */
+
+.sg {
+    width: 100%;
+    height: 100%;
+}
+
+.sg-background {
+    width: 100%;
+    height: 100%;
+    fill: white;
+    cursor: grab;
+}
+
+.sg-background.engaged {
+    cursor: grabbing;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Nodes
+ */
+
+.sg .node {
+    cursor: default;
+}
+
+.sg .node text {
+    font-family: monospace;
+    font-size: 20px;
+}
+
+/* --- drop scopes --- */
+
+.sg .node.drop_scopes circle.background {
+    fill: #cc3311;
+    r: 6px;
+}
+
+/* --- jump to scope --- */
+
+.sg .node.jump_to_scope circle.background {
+    fill: #ee7733;
+    r: 6px;
+    stroke: black;
+}
+
+/* --- pop symbol --- */
+
+.sg .node.pop_symbol rect.background {
+    fill: #009988;
+}
+
+.sg .node.pop_scoped_symbol rect.background {
+    fill: #009988;
+}
+
+.sg .node.pop_scoped_symbol circle.pop_scope {
+    fill: #ee7733;
+    r: 6px;
+    stroke: black;
+}
+
+.sg .node.definition rect.background {
+    stroke: black;
+}
+
+/* --- push symbol --- */
+
+.sg .node.push_symbol rect.background {
+    fill: #33bbee;
+}
+
+.sg .node.push_scoped_symbol rect.background {
+    fill: #33bbee;
+}
+
+.sg .node.push_scoped_symbol circle.push_scope {
+    fill: #bbbbbb;
+    r: 6px;
+    stroke: black;
+}
+
+.sg .node.push_scoped_symbol circle.push_scope-focus-point {
+    fill: none;
+    r: 3px;
+}
+
+.sg .node.push_scoped_symbol.focus circle.push_scope-focus-point {
+    fill: black;
+}
+
+.sg .node.reference rect.background {
+    stroke: black;
+}
+
+/* --- root --- */
+
+.sg .node.root circle.background {
+    fill: #0077bb;
+    r: 6px;
+    stroke: black;
+}
+
+/* --- scope --- */
+
+.sg .node.scope circle.border {
+    fill: #0077bb;
+    r: 6px;
+}
+
+.sg .node.scope circle.background {
+    fill: #bbbbbb;
+    r: 6px;
+}
+
+.sg .node.scope.exported circle.background {
+    stroke: black;
+}
+
+.sg .node.scope circle.focus-point {
+    r: 3px;
+    fill: none;
+}
+
+.sg .node.scope.ref-focus circle.focus-point {
+    fill: black;
+}
+
+/* --- plain labeled node --- */
+
+.sg .node.scope.plain_labeled_node rect.border {
+    fill: #0077bb;
+    rx: 6px;
+}
+
+.sg .node.scope.plain_labeled_node rect.background {
+    fill: #bbbbbb;
+    rx: 6px;
+}
+
+.sg .node.scope.plain_labeled_node.exported rect.background {
+    stroke: black;
+}
+
+/* --- path highlight --- */
+
+.sg .node.path-node .border {
+    stroke: #ee3377;
+    stroke-width: 4px;
+    stroke-dasharray: 5, 5;
+}
+
+.sg .node.path-node.path-endpoint .border {
+    stroke-dasharray: none;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Edges
+ */
+
+.sg .edge {
+    cursor: default;
+}
+
+.sg .edge path {
+    stroke: black;
+    stroke-width: 1px;
+    fill: none;
+}
+
+.sg .edge text {
+    font-size: 11pt;
+    stroke: black;
+    stroke-width: 1px;
+    dominant-baseline: central;
+}
+
+.sg .edge.path-edge path
+{
+    stroke: #ee3377;
+    stroke-width: 3px;
+}
+
+.sg .edge.path-edge text
+{
+    stroke: #ee3377;
+    fill: #ee3377;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Jumps
+ */
+
+.sg .jump path {
+    stroke: none;
+    stroke-width: 1px;
+    fill: none;
+}
+
+.sg .jump text {
+    font-size: 11pt;
+    stroke: none;
+    stroke-width: 1px;
+    fill: none;
+    dominant-baseline: central;
+}
+
+.sg .jump.path-edge path {
+    stroke: #ee3377;
+    stroke-width: 3px;
+    stroke-dasharray: 2, 2;
+}
+
+.sg .jump.path-edge text {
+    stroke: #ee3377;
+    fill: #ee3377;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Tooltip
+ */
+
+#sg-tooltip {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    visibility: hidden;
+    pointer-events: none;
+    border: 0px;
+    border-radius: 8px;
+    padding: 4px;
+    background: #bbbbbb;
+    font-size: 14px;
+    opacity: 85%;
+}
+
+/* clock-wise */
+#sg-tooltip.south-east {
+    transform: translate(5%, 5%);
+}
+#sg-tooltip.south-west {
+    transform: translate(-105%, 5%);
+}
+#sg-tooltip.north-west {
+    transform: translate(-105%, -105%);
+}
+#sg-tooltip.north-east {
+    transform: translate(5%, -105%);
+}
+
+.sg-tooltip-table {
+    border-collapse: collapse;
+}
+
+.sg-tooltip-table td {
+    padding: 2px 14px;
+}
+
+.sg-tooltip-header {
+    font-variant: small-caps;
+    font-weight: bold;
+    border-bottom: solid 1px #777777;
+}
+
+.sg-tooltip-header td {
+    column-span: all;
+}
+
+.sg-tooltip-header:not(:first-child) td {
+    padding-top: 8px;
+}
+
+
+.sg-tooltip-label {
+    font-variant: small-caps;
+    vertical-align: text-top;
+}
+
+.sg-tooltip-value {
+    vertical-align: text-top;
+}
+
+.sg-tooltip-list {
+    list-style-type: none;
+    padding: 0px;
+    margin: 0px;
+}
+
+.sg-tooltip-list-element {
+    background: #777777;
+    padding: 3px;
+    margin: 1px 0px;
+}
+
+.sg-tooltip-subvalue {
+    vertical-align: top;
+}
+
+.sg-tooltip-sublist {
+    display:inline-block;
+    list-style-type: none;
+    padding: 0px;
+    margin-left: 10px;
+    font-size: smaller;
+}
+
+.sg-tooltip-sublist-element {
+    background: #999999;
+    padding: 3px;
+    display: inline-block;
+    margin: 0px 1px;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Help
+ */
+
+#sg-help-toggle {
+    visibility: hidden;
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    z-index: 3;
+}
+
+.sg-help-label {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    background-color: #bbbbbb;
+    padding: 0px;
+    border-radius: 6px;
+    z-index: 2;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+    margin: 0px;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.sg-help-content {
+    visibility: hidden;
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    background-color: #bbbbbb;
+    padding: 6px;
+    border-radius: 6px;
+    z-index: 1;
+    min-height: 18px;
+    min-width: 18px;
+    max-width: 300px;
+    margin: 0px;
+}
+
+#sg-help-toggle:checked ~ .sg-help-content {
+    visibility: visible;
+}
+
+.sg-help-content h1 {
+    font-size: inherit;
+}
+
+.sg-help-content kbd {
+    font-family: monospace;
+    display: inline-block;
+    border-radius: 3px;
+    padding: 0px 4px;
+    box-shadow: 1px 1px 1px #777;
+    margin: 2px;
+    font-size: small;
+    vertical-align: text-bottom;
+    background: #eee;
+    font-variant: small-caps;
+}
+
+.sg-help-meta {
+    font-style: italic;
+}
+
+.sg-help-byline {
+    line-height: 20px;
+    font-style: italic;
+    width: 100%;
+    margin-left: 24px;
+    text-align: left;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Toggle button
+ */
+
+.sg-toggle-input {
+    margin: 0px;
+}
+
+.sg-toggle-label {
+    margin: 0px 6px;
+    cursor: pointer;
+}

@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en" class=""sg-container">
+
+<head>
+    <meta charset="utf-8">
+    <title>Stack Graph Visualization</title>
+    <link href="visualization.css" type="text/css" rel="stylesheet"></link>
+    <script type="text/javascript" src="d3.v7.min.js"></script>
+    <script type="text/javascript" src="d3-dag.v0.10.0.min.js"></script>
+    <script type="text/javascript" src="visualization.js"></script>
+    <script type="text/javascript">
+        let graph =
+            {
+                "edges" : [
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 2
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 1
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 4
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 2
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 3
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 5
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 4
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "local_id" : 1
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 5
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 6
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 5
+                        }
+                    },
+                    {
+                        "precedence" : 1,
+                        "sink" : {
+                            "local_id" : 2
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 6
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 7
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 6
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 7
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "sink" : {
+                            "file" : "test.py",
+                            "local_id" : 9
+                        },
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        }
+                    }
+                ],
+                "files" : [
+                    "test.py"
+                ],
+                "nodes" : [
+                    {
+                        "debug_info" : [],
+                        "id" : {
+                            "local_id" : 1
+                        },
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "type" : "root"
+                    },
+                    {
+                        "debug_info" : [],
+                        "id" : {
+                            "local_id" : 2
+                        },
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "type" : "jump_to_scope"
+                    },
+                    {
+                        "debug_info" : [],
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 1
+                        },
+                        "is_reference" : true,
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 14,
+                                        "utf16_offset" : 14,
+                                        "utf8_offset" : 14
+                                    },
+                                    "line" : 1
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 13,
+                                        "utf16_offset" : 13,
+                                        "utf8_offset" : 13
+                                    },
+                                    "line" : 1
+                                }
+                            },
+                            "syntax_type" : "variable"
+                        },
+                        "symbol" : "x",
+                        "type" : "push_symbol"
+                    },
+                    {
+                        "debug_info" : [],
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 2
+                        },
+                        "is_reference" : false,
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "symbol" : ".",
+                        "type" : "push_symbol"
+                    },
+                    {
+                        "debug_info" : [
+                            {
+                                "key" : "tsg_variable",
+                                "value" : "arg_scope"
+                            },
+                            {
+                                "key" : "tsg_location",
+                                "value" : "line 31 column 20"
+                            }
+                        ],
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 3
+                        },
+                        "is_exported" : true,
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "type" : "scope"
+                    },
+                    {
+                        "debug_info" : [],
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 4
+                        },
+                        "is_reference" : false,
+                        "scope" : {
+                            "file" : "test.py",
+                            "local_id" : 3
+                        },
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "symbol" : "()",
+                        "type" : "push_scoped_symbol"
+                    },
+                    {
+                        "debug_info" : [
+                            {
+                                "key" : "tsg_variable",
+                                "value" : "lexical_scope"
+                            },
+                            {
+                                "key" : "tsg_location",
+                                "value" : "line 8 column 11"
+                            }
+                        ],
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 5
+                        },
+                        "is_exported" : false,
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "type" : "scope"
+                    },
+                    {
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 6
+                        },
+                        "is_definition" : false,
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "symbol" : "()",
+                        "type" : "pop_scoped_symbol"
+                    },
+                    {
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 7
+                        },
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "type" : "drop_scopes"
+                    },
+                    {
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        },
+                        "is_definition" : false,
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            }
+                        },
+                        "symbol" : ".",
+                        "type" : "pop_symbol"
+                    },
+                    {
+                        "id" : {
+                            "file" : "test.py",
+                            "local_id" : 9
+                        },
+                        "is_definition" : true,
+                        "source_info" : {
+                            "span" : {
+                                "end" : {
+                                    "column" : {
+                                        "grapheme_offset" : 1,
+                                        "utf16_offset" : 1,
+                                        "utf8_offset" : 1
+                                    },
+                                    "line" : 0
+                                },
+                                "start" : {
+                                    "column" : {
+                                        "grapheme_offset" : 0,
+                                        "utf16_offset" : 0,
+                                        "utf8_offset" : 0
+                                    },
+                                    "line" : 0
+                                }
+                            },
+                            "syntax_type" : "variable"
+                        },
+                        "symbol" : "x",
+                        "type" : "pop_symbol"
+                    }
+                ]
+            }
+        ;
+        let paths =
+            [
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "local_id" : 1
+                    },
+                    "scope_stack" : [
+                        {
+                            "file" : "test.py",
+                            "local_id" : 3
+                        }
+                    ],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 4
+                    },
+                    "symbol_stack" : [
+                        {
+                            "scopes" : [
+                                {
+                                    "file" : "test.py",
+                                    "local_id" : 3
+                                }
+                            ],
+                            "symbol" : "()"
+                        }
+                    ]
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "local_id" : 1
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 2
+                    },
+                    "symbol_stack" : [
+                        {
+                            "scopes" : [
+                                {
+                                    "file" : "test.py",
+                                    "local_id" : 3
+                                }
+                            ],
+                            "symbol" : "()"
+                        },
+                        {
+                            "symbol" : "."
+                        }
+                    ]
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        },
+                        {
+                            "precedence" : 1,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 6
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "local_id" : 2
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "file" : "test.py",
+                        "local_id" : 3
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 4
+                    },
+                    "symbol_stack" : []
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 1
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "local_id" : 1
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 1
+                    },
+                    "symbol_stack" : [
+                        {
+                            "scopes" : [
+                                {
+                                    "file" : "test.py",
+                                    "local_id" : 3
+                                }
+                            ],
+                            "symbol" : "()"
+                        },
+                        {
+                            "symbol" : "."
+                        },
+                        {
+                            "symbol" : "x"
+                        }
+                    ]
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        },
+                        {
+                            "precedence" : 1,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 6
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "local_id" : 2
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "file" : "test.py",
+                        "local_id" : 3
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 2
+                    },
+                    "symbol_stack" : [
+                        {
+                            "symbol" : "."
+                        }
+                    ]
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 1
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        },
+                        {
+                            "precedence" : 1,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 6
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "local_id" : 2
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "file" : "test.py",
+                        "local_id" : 3
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 1
+                    },
+                    "symbol_stack" : [
+                        {
+                            "symbol" : "."
+                        },
+                        {
+                            "symbol" : "x"
+                        }
+                    ]
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        },
+                        {
+                            "precedence" : 1,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 6
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 3
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "file" : "test.py",
+                        "local_id" : 8
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 2
+                    },
+                    "symbol_stack" : []
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 6
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 7
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "file" : "test.py",
+                        "local_id" : 8
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 2
+                    },
+                    "symbol_stack" : []
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 1
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        },
+                        {
+                            "precedence" : 1,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 6
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 3
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 8
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "file" : "test.py",
+                        "local_id" : 9
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 1
+                    },
+                    "symbol_stack" : []
+                },
+                {
+                    "edges" : [
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 1
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 2
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 4
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 5
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 6
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 7
+                            }
+                        },
+                        {
+                            "precedence" : 0,
+                            "source" : {
+                                "file" : "test.py",
+                                "local_id" : 8
+                            }
+                        }
+                    ],
+                    "end_node" : {
+                        "file" : "test.py",
+                        "local_id" : 9
+                    },
+                    "scope_stack" : [],
+                    "start_node" : {
+                        "file" : "test.py",
+                        "local_id" : 1
+                    },
+                    "symbol_stack" : []
+                }
+            ]
+        ;
+    </script>
+    <style>
+        html, body, #container {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+    </div>
+    <script type="text/javascript">
+        const container = d3.select("\#container");
+        new StackGraph(container, graph, paths, { version: "tree-sitter-stack-graph dev" });
+    </script>
+</body>
+
+</html>

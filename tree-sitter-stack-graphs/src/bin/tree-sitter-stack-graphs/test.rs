@@ -75,6 +75,11 @@ pub struct Command {
     #[clap(long)]
     save_paths: bool,
 
+    /// Save visualization.
+    #[clap(short = 'V')]
+    #[clap(long)]
+    save_visualization: bool,
+
     /// Controls when graphs, paths, or visualization are saved.
     #[clap(long)]
     #[clap(arg_enum)]
@@ -251,6 +256,13 @@ impl Command {
                 println!("  Paths: {}", path.display());
             }
         }
+        if self.save_visualization {
+            let path = source_path.with_extension("html");
+            self.save_visualization(&path, paths, graph, &source_path)?;
+            if !success || !self.hide_passing {
+                println!("  Visualization: {}", path.display());
+            }
+        }
         Ok(())
     }
 
@@ -263,6 +275,18 @@ impl Command {
     fn save_paths(&self, path: &Path, paths: &mut Paths, graph: &StackGraph) -> anyhow::Result<()> {
         let json = paths.to_json(graph, |_, _, _| true).to_string_pretty()?;
         std::fs::write(&path, json).expect("Unable to write paths");
+        Ok(())
+    }
+
+    fn save_visualization(
+        &self,
+        path: &Path,
+        paths: &mut Paths,
+        graph: &StackGraph,
+        source_path: &Path,
+    ) -> anyhow::Result<()> {
+        let html = graph.to_html_string(paths, &format!("{}", source_path.display()))?;
+        std::fs::write(&path, html).expect("Unable to write visualization");
         Ok(())
     }
 }

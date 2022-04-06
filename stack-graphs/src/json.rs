@@ -17,6 +17,8 @@ use std::ops::Index;
 use thiserror::Error;
 
 use crate::arena::Handle;
+use crate::graph::DebugEntry;
+use crate::graph::DebugInfo;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -148,9 +150,13 @@ impl Serialize for InStackGraph<'_, (Handle<Node>, &Node)> {
         let handle = self.0 .0;
         let node = self.0 .1;
         let source_info = graph.source_info(handle);
+        let debug_info = graph.debug_info(handle);
 
         let mut len = 2;
         if source_info.is_some() {
+            len += 1;
+        }
+        if debug_info.is_some() {
             len += 1;
         }
 
@@ -211,6 +217,9 @@ impl Serialize for InStackGraph<'_, (Handle<Node>, &Node)> {
         if let Some(source_info) = source_info {
             ser.serialize_field("source_info", &self.with(source_info))?;
         }
+        if let Some(debug_info) = debug_info {
+            ser.serialize_field("debug_info", &self.with(debug_info))?;
+        }
 
         ser.end()
     }
@@ -251,6 +260,36 @@ impl Serialize for InStackGraph<'_, &SourceInfo> {
         if let Some(syntax_type) = source_info.syntax_type {
             ser.serialize_field("syntax_type", &graph[syntax_type])?;
         }
+        ser.end()
+    }
+}
+
+impl Serialize for InStackGraph<'_, &DebugInfo> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let debug_info = self.0;
+
+        let mut ser = serializer.serialize_seq(None)?;
+        for entry in debug_info.iter() {
+            ser.serialize_element(&self.with(entry))?;
+        }
+        ser.end()
+    }
+}
+
+impl Serialize for InStackGraph<'_, &DebugEntry> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let graph = self.1;
+        let debug_entry = self.0;
+
+        let mut ser = serializer.serialize_struct("debug_entry", 2)?;
+        ser.serialize_field("key", &graph[debug_entry.key])?;
+        ser.serialize_field("value", &graph[debug_entry.value])?;
         ser.end()
     }
 }
