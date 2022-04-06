@@ -8,6 +8,7 @@
 use anyhow::anyhow;
 use anyhow::Context as _;
 use clap::ArgEnum;
+use clap::ValueHint;
 use colored::Colorize as _;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
@@ -64,8 +65,8 @@ pub struct Command {
     loader: LoaderArgs,
 
     /// Test file or directory paths.
-    #[clap(value_name = "PATH", required = true)]
-    sources: Vec<PathBuf>,
+    #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, validator = validate_path)]
+    tests: Vec<PathBuf>,
 
     /// Hide passing tests.
     #[clap(long)]
@@ -120,31 +121,37 @@ pub struct Command {
     output_mode: OutputMode,
 }
 
+fn validate_path(path: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(path);
+    if !path.exists() {
+        return Err(format!("path does not exist"));
+    }
+    Ok(path)
+}
+
 impl Command {
     pub fn run(&self) -> anyhow::Result<()> {
-        self.validate_source_paths()?;
-
         let mut loader = self.loader.new_loader()?;
         let mut total_failure_count = 0;
-        for source_path in &self.sources {
-            if source_path.is_dir() {
-                let source_root = source_path;
-                for source_entry in WalkDir::new(source_path)
+        for test_path in &self.tests {
+            if test_path.is_dir() {
+                let test_root = test_path;
+                for test_entry in WalkDir::new(test_path)
                     .follow_links(true)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
                 {
-                    let source_path = source_entry.path();
+                    let test_path = test_entry.path();
                     total_failure_count += self
-                        .run_test(source_root, source_path, &mut loader)
-                        .with_context(|| format!("Error running test {}", source_path.display()))?;
+                        .run_test(test_root, test_path, &mut loader)
+                        .with_context(|| format!("Error running test {}", test_path.display()))?;
                 }
             } else {
-                let source_root = source_path.parent().unwrap();
+                let test_root = test_path.parent().unwrap();
                 total_failure_count += self
-                    .run_test(source_root, source_path, &mut loader)
-                    .with_context(|| format!("Error running test {}", source_path.display()))?;
+                    .run_test(test_root, test_path, &mut loader)
+                    .with_context(|| format!("Error running test {}", test_path.display()))?;
             }
         }
 
@@ -159,66 +166,50 @@ impl Command {
         Ok(())
     }
 
-    fn validate_source_paths(&self) -> anyhow::Result<()> {
-        if self.sources.is_empty() {
-            return Err(anyhow!("No source paths provided"));
-        }
-        for source_path in &self.sources {
-            if !source_path.exists() {
-                return Err(anyhow!(
-                    "Source path {} does not exist",
-                    source_path.display()
-                ));
-            }
-        }
-        Ok(())
-    }
-
     fn run_test(
         &self,
-        source_root: &Path,
-        source_path: &Path,
+        test_root: &Path,
+        test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<usize> {
-        let source = String::from_utf8(std::fs::read(source_path)?)?;
-        let sgl = match loader.load_for_file(source_path, Some(&source))? {
+        let source = String::from_utf8(std::fs::read(test_path)?)?;
+        let sgl = match loader.load_for_file(test_path, Some(&source))? {
             Some(sgl) => sgl,
             None => {
                 if self.show_ignored {
-                    println!("{} {}", "⦵".dimmed(), source_path.display());
+                    println!("{} {}", "⦵".dimmed(), test_path.display());
                 }
                 return Ok(0);
             }
         };
-        let mut test = Test::from_source(&source_path, &source)?;
+        let mut test = Test::from_source(&test_path, &source)?;
         for test_fragment in &test.fragments {
-            let test_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
-            if source_path.extension() != test_path.extension() {
+            let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
+            if test_path.extension() != fragment_path.extension() {
                 return Err(anyhow!(
                     "Test fragment {} has different file extension than test file {}",
-                    test_path.display(),
-                    source_path.display()
+                    fragment_path.display(),
+                    test_path.display()
                 ));
             }
-            self.build_fragment_stack_graph_into(&test_path, sgl, test_fragment, &mut test.graph)?;
+            self.build_fragment_stack_graph_into(
+                &fragment_path,
+                sgl,
+                test_fragment,
+                &mut test.graph,
+            )?;
         }
         let result = test.run();
-        let success = self.handle_result(source_path, &result)?;
+        let success = self.handle_result(test_path, &result)?;
         if self.output_mode.test(!success) {
-            self.save_output(
-                source_root,
-                source_path,
-                &test.graph,
-                &mut test.paths,
-                success,
-            )?;
+            self.save_output(test_root, test_path, &test.graph, &mut test.paths, success)?;
         }
         Ok(result.failure_count())
     }
 
     fn build_fragment_stack_graph_into(
         &self,
-        source_path: &Path,
+        test_path: &Path,
         sgl: &mut StackGraphLanguage,
         test_fragment: &TestFragment,
         graph: &mut StackGraph,
@@ -231,7 +222,7 @@ impl Command {
             &mut globals,
         ) {
             Err(LoadError::ParseErrors(parse_errors)) => {
-                Err(self.map_parse_errors(source_path, &parse_errors, &test_fragment.source))
+                Err(self.map_parse_errors(test_path, &parse_errors, &test_fragment.source))
             }
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
@@ -240,7 +231,7 @@ impl Command {
 
     fn map_parse_errors(
         &self,
-        source_path: &Path,
+        test_path: &Path,
         parse_errors: &TreeWithParseErrorVec,
         source: &str,
     ) -> anyhow::Error {
@@ -251,7 +242,7 @@ impl Command {
             let column = parse_error.node().start_position().column;
             error.push_str(&format!(
                 "  {}:{}:{}: {}\n",
-                source_path.display(),
+                test_path.display(),
                 line + 1,
                 column + 1,
                 parse_error.display(&source, false)
@@ -268,13 +259,13 @@ impl Command {
         anyhow!(error)
     }
 
-    fn handle_result(&self, source_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
+    fn handle_result(&self, test_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
         let success = result.failure_count() == 0;
         if !success || !self.hide_passing {
             println!(
                 "{} {}: {}/{} assertions",
                 if success { "✓".green() } else { "✗".red() },
-                source_path.display(),
+                test_path.display(),
                 result.success_count(),
                 result.count()
             );
@@ -289,8 +280,8 @@ impl Command {
 
     fn save_output(
         &self,
-        source_root: &Path,
-        source_path: &Path,
+        test_root: &Path,
+        test_path: &Path,
         graph: &StackGraph,
         paths: &mut Paths,
         success: bool,
@@ -298,8 +289,8 @@ impl Command {
         if let Some(path) = Self::output_path(
             self.save_graph.as_ref(),
             &"%n.graph.json".into(),
-            source_root,
-            source_path,
+            test_root,
+            test_path,
         ) {
             self.save_graph(&path, &graph)?;
             if !success || !self.hide_passing {
@@ -309,8 +300,8 @@ impl Command {
         if let Some(path) = Self::output_path(
             self.save_paths.as_ref(),
             &"%n.paths.json".into(),
-            source_root,
-            source_path,
+            test_root,
+            test_path,
         ) {
             self.save_paths(&path, paths, graph)?;
             if !success || !self.hide_passing {
@@ -320,10 +311,10 @@ impl Command {
         if let Some(path) = Self::output_path(
             self.save_visualization.as_ref(),
             &"%n.html".into(),
-            source_root,
-            source_path,
+            test_root,
+            test_path,
         ) {
-            self.save_visualization(&path, paths, graph, &source_path)?;
+            self.save_visualization(&path, paths, graph, &test_path)?;
             if !success || !self.hide_passing {
                 println!("  Visualization: {}", path.display());
             }
@@ -370,9 +361,9 @@ impl Command {
         path: &Path,
         paths: &mut Paths,
         graph: &StackGraph,
-        source_path: &Path,
+        test_path: &Path,
     ) -> anyhow::Result<()> {
-        let html = graph.to_html_string(paths, &format!("{}", source_path.display()))?;
+        let html = graph.to_html_string(paths, &format!("{}", test_path.display()))?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
