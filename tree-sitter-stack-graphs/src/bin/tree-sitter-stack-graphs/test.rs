@@ -49,8 +49,7 @@ pub struct Command {
     loader: LoaderArgs,
 
     /// Source paths to test.
-    #[clap(name = "PATHS")]
-    #[clap(required = true)]
+    #[clap(value_name = "PATHS", required = true)]
     sources: Vec<PathBuf>,
 
     /// Hide passing tests.
@@ -66,24 +65,19 @@ pub struct Command {
     show_ignored: bool,
 
     /// Save graph.
-    #[clap(short = 'G')]
-    #[clap(long)]
+    #[clap(long, short = 'G')]
     save_graph: bool,
 
     /// Save paths.
-    #[clap(short = 'P')]
-    #[clap(long)]
+    #[clap(long, short = 'P')]
     save_paths: bool,
 
     /// Save visualization.
-    #[clap(short = 'V')]
-    #[clap(long)]
+    #[clap(long, short = 'V')]
     save_visualization: bool,
 
     /// Controls when graphs, paths, or visualization are saved.
-    #[clap(long)]
-    #[clap(arg_enum)]
-    #[clap(default_value_t = OutputMode::OnFailure)]
+    #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
     output_mode: OutputMode,
 }
 
