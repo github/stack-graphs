@@ -118,12 +118,17 @@ pub struct TestFragment {
 }
 
 impl Test {
-    /// Creates a test from source.
-    pub fn from_source(path: &Path, source: &str) -> Result<Self, TestError> {
+    /// Creates a test from source. If the test contains no `path` sections,
+    /// the default fragment path is used for the test's single test fragment.
+    pub fn from_source(
+        path: &Path,
+        source: &str,
+        default_fragment_path: &Path,
+    ) -> Result<Self, TestError> {
         let mut graph = StackGraph::new();
         let mut fragments = Vec::new();
         let mut have_fragments = false;
-        let mut current_path = path.to_path_buf();
+        let mut current_path = default_fragment_path.to_path_buf();
         let mut current_source = String::new();
         let mut prev_source = String::new();
         let mut line_files = Vec::new();
