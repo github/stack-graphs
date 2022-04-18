@@ -629,6 +629,8 @@ pub struct sg_source_info {
     pub syntax_type: sg_string_handle,
     /// The full content of the line containing this node in its source file.
     pub containing_line: sg_string_handle,
+    /// The location in its containing file of the source code that this node's definiens represents.
+    pub definiens_span: sg_span,
 }
 
 /// All of the position information that we have about a range of content in a source file

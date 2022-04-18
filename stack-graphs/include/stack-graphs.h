@@ -254,6 +254,8 @@ struct sg_source_info {
     sg_string_handle syntax_type;
     // The full content of the line containing this node in its source file.
     sg_string_handle containing_line;
+    // The location in its containing file of the source code that this node's definiens represents.
+    struct sg_span definiens_span;
 };
 
 // An array of all of the source information in a stack graph.  Source information is associated

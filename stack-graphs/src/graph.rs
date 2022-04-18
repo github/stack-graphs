@@ -1333,6 +1333,8 @@ pub struct SourceInfo {
     pub syntax_type: Option<Handle<InternedString>>,
     /// The full content of the line containing this node in its source file.
     pub containing_line: ControlledOption<Handle<InternedString>>,
+    /// The location in its containing file of the source code that this node's definiens represents.
+    pub definiens_span: lsp_positions::Span,
 }
 
 impl StackGraph {
