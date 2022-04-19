@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## stack-graphs 0.7.0 - 2022-04-19
+
+### Added
+
+- The module `stack_graphs::assert` defines assertions that can be run against a
+  stack graph to test resolution behavior.
+
+- The module `stack_graphs::json` defines JSON rendering of stack graphs and paths.
+  This module requires the `json` feature.
+
+- The module `stack_graphs::visualization` defines rendering an interactive HTML
+  visualization of stack graphs.  This module requires the `json` feature.
+
+- Stack graph nodes can have associated `DebugInfo`, consisting of key-value pairs
+  of strings.
+
+### Changed
+
+- Internal and exported scopes as separate node types are removed and replaced by
+  a single scope node type. Whether a scope is exported is indicated by a boolean
+  attribute.
+
+  The `Node::{Exported,Internal}Scope` are replaced by a single `Node::Scope`, and
+  their implementation types `{Exported,Internal}ScopeNode` are replaced by the type
+  `ScopeNode`. The `ScopeNode::is_exported` field indicates whether a scope is
+  exported or internal. The `StackGraph::add_{internal,exported}_scope_node` methods
+  are replaced by `StackGraph::add_scope_node`.
+
+  In the C API, the enum values `sg_node_kind::SG_NODE_KIND_EXPORTED_SCOPE` and
+  `sg_node_kind:SG_NODE_KIND_INTERNAL_SCOPE` are replaced by a single value
+  `sg_node_kind::SG_NODE_KIND_SCOPE`.  The field `sg_node::is_clickable` is renamed
+  to `sg_node::is_endpoint`.
+
+### Removed
+
+### Deprecated
+
 ## stack-graphs 0.6.0 - 2022-03-03
 
 ### Added
