@@ -33,7 +33,7 @@ env_logger = { version = "0.9", optional = true }
 itertools = "0.10"
 lazy_static = "1.4"
 log = "0.4"
-lsp-positions = { version="0.2", path="../lsp-positions" }
+lsp-positions = { version="0.3", path="../lsp-positions" }
 regex = "1"
 stack-graphs = { version="0.7", path="../stack-graphs" }
 thiserror = "1.0"

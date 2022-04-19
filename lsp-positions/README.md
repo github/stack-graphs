@@ -29,11 +29,13 @@ To use this library, add the following to your `Cargo.toml`:
 
 ``` toml
 [dependencies]
-lsp-positions = "0.2"
+lsp-positions = "0.3"
 ```
 
 Check out our [documentation](https://docs.rs/lsp-positions/) for more details
 on how to use this library.
+
+Notable changes for each version are documented in the [release notes](https://github.com/github/stack-graphs/blob/main/lsp-positions/CHANGELOG.md).
 
 ## License
 
