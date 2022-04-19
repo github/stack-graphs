@@ -9,11 +9,13 @@ To use this library, add the following to your `Cargo.toml`:
 
 ``` toml
 [dependencies]
-stack-graphs = "0.6"
+stack-graphs = "0.7"
 ```
 
 Check out our [documentation](https://docs.rs/stack-graphs/) for more details on
 how to use this library.
+
+Notable changes for each version are documented in the [release notes](https://github.com/github/stack-graphs/blob/main/stack-graphs/CHANGELOG.md).
 
 ## Credits
 
