@@ -154,15 +154,13 @@ impl Command {
                     .filter(|e| e.file_type().is_file())
                 {
                     let test_path = test_entry.path();
-                    total_failure_count += self
-                        .run_test(test_root, test_path, &mut loader)
-                        .with_context(|| format!("Error running test {}", test_path.display()))?;
+                    total_failure_count +=
+                        self.run_test_with_context(test_root, test_path, &mut loader)?;
                 }
             } else {
                 let test_root = test_path.parent().unwrap();
-                total_failure_count += self
-                    .run_test(test_root, test_path, &mut loader)
-                    .with_context(|| format!("Error running test {}", test_path.display()))?;
+                total_failure_count +=
+                    self.run_test_with_context(test_root, test_path, &mut loader)?;
             }
         }
 
@@ -177,6 +175,18 @@ impl Command {
         Ok(())
     }
 
+    /// Run test file and add error context to any failures that are returned.
+    fn run_test_with_context(
+        &self,
+        test_root: &Path,
+        test_path: &Path,
+        loader: &mut Loader,
+    ) -> anyhow::Result<usize> {
+        self.run_test(test_root, test_path, loader)
+            .with_context(|| format!("Error running test {}", test_path.display()))
+    }
+
+    /// Run test file.
     fn run_test(
         &self,
         test_root: &Path,
