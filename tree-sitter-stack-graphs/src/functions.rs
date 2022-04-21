@@ -40,7 +40,7 @@ pub mod path {
         functions.add("path-join".into(), PathJoin);
         functions.add(
             "path-normalize".into(),
-            path_fn(|p| Some(normalize_path(p).as_os_str().to_os_string())),
+            path_fn(|p| Some(normalize(p).as_os_str().to_os_string())),
         );
         functions.add("path-split".into(), PathSplit);
     }
@@ -129,7 +129,7 @@ pub mod path {
     // Copied from Cargo
     // https://github.com/rust-lang/cargo/blob/e515c3277bf0681bfc79a9e763861bfe26bb05db/crates/cargo-util/src/paths.rs#L73-L106
     // Licensed under MIT license & Apache License (Version 2.0)
-    fn normalize_path(path: &Path) -> PathBuf {
+    pub fn normalize(path: &Path) -> PathBuf {
         let mut components = path.components().peekable();
         let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
             components.next();
