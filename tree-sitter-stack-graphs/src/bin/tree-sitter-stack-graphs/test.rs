@@ -48,24 +48,29 @@ impl OutputMode {
 /// Run tests
 #[derive(clap::Parser)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
-    Output filenames can be specified using placeholders based on the input file. The
-    following placeholders are supported:
+    Output filenames can be specified using placeholders based on the input file.
+    The following placeholders are supported:
          %r   the root path, which is the directory argument which contains the file,
               or the directory of the file argument
          %d   the path directories relative to the root
          %n   the name of the file
          %e   the file extension (including the preceding dot)
          %%   a literal percentage sign
-    Empty directory placeholders (%r and %d) are replaced by "." so that the shape of
-    the path is not accidently changed. For example, "test -V %d/%n.html mytest.py"
+
+    Empty directory placeholders (%r and %d) are replaced by "." so that the shape
+    of the path is not accidently changed. For example, "test -V %d/%n.html mytest.py"
     results in "./mytest.html" instead of the unintented "/mytest.html".
+
+    Note that on Windows the path specification must be valid Unicode, but all valid
+    paths (including ones that are not valid Unicode) are accepted as arguments, and
+    placeholders are correctly subtituted for all paths.
 "#)]
 pub struct Command {
     #[clap(flatten)]
     loader: LoaderArgs,
 
     /// Test file or directory paths.
-    #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, validator = validate_path)]
+    #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
     tests: Vec<PathBuf>,
 
     /// Hide passing tests.
@@ -127,10 +132,10 @@ pub struct Command {
     output_mode: OutputMode,
 }
 
-fn validate_path(path: &str) -> Result<PathBuf, String> {
+fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
     let path = PathBuf::from(path);
     if !path.exists() {
-        return Err(format!("path does not exist"));
+        return Err(anyhow!("path does not exist"));
     }
     Ok(path)
 }
