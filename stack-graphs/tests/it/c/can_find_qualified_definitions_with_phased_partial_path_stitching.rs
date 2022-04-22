@@ -133,28 +133,6 @@ fn check_find_qualified_definitions(
         );
     }
 
-    // Seed the database with the partial paths that start at any of the starting nodes.
-    copious_debugging!(
-        "==> Add initial partial paths for <{}>",
-        partial_symbol_stack.display(rust_graph, rust_partials),
-    );
-    storage_layer.add_to_database(graph.graph, partials, db, |partial_path| {
-        if partial_path.start_node != StackGraph::root_node() {
-            return false;
-        }
-
-        let mut symbol_bindings = PartialSymbolStackBindings::new();
-        let mut scope_bindings = PartialScopeStackBindings::new();
-        partial_symbol_stack
-            .unify(
-                rust_partials,
-                partial_path.symbol_stack_precondition,
-                &mut symbol_bindings,
-                &mut scope_bindings,
-            )
-            .is_ok()
-    });
-
     // Create the forward partial path stitcher.
     let initial_partial_path = PartialPath {
         start_node: StackGraph::root_node(),
