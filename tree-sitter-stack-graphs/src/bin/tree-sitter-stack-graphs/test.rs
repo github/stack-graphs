@@ -203,7 +203,8 @@ impl Command {
                 return Ok(0);
             }
         };
-        let mut test = Test::from_source(&test_path, &source)?;
+        let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
+        let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         for test_fragment in &test.fragments {
             let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
             if test_path.extension() != fragment_path.extension() {

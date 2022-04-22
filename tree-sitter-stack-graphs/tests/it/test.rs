@@ -71,7 +71,8 @@ fn check_test(
     expected_successes: usize,
     expected_failures: usize,
 ) {
-    let mut test = Test::from_source(python_path, python_source).expect("Could not parse test");
+    let mut test =
+        Test::from_source(python_path, python_source, python_path).expect("Could not parse test");
     let assertion_count: usize = test.fragments.iter().map(|f| f.assertions.len()).sum();
     assert_eq!(
         expected_successes + expected_failures,
@@ -176,7 +177,7 @@ fn test_cannot_assert_on_first_line() {
     let python = r#"
       # ^ defined: 3
     "#;
-    if let Ok(_) = Test::from_source(&PATH, python) {
+    if let Ok(_) = Test::from_source(&PATH, python, &PATH) {
         panic!("Parsing test unexpectedly succeeded.");
     }
 }
@@ -189,7 +190,7 @@ fn test_cannot_assert_before_first_fragment() {
         x;
       # ^ defined: 1
     "#;
-    if let Ok(_) = Test::from_source(&PATH, python) {
+    if let Ok(_) = Test::from_source(&PATH, python, &PATH) {
         panic!("Parsing test unexpectedly succeeded.");
     }
 }
