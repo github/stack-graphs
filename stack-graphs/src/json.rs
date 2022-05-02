@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use itertools::Itertools;
 use lsp_positions::Offset;
 use lsp_positions::Position;
 use lsp_positions::Span;
@@ -38,57 +39,146 @@ use crate::paths::SymbolStack;
 pub struct JsonError(#[from] serde_json::error::Error);
 
 //-----------------------------------------------------------------------------
+// Filter
+
+pub trait Filter {
+    /// Return whether elements for the given file must be included.
+    fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool;
+
+    /// Return whether the given node must be included.
+    /// Nodes of excluded files are always excluded.
+    fn include_node(&self, graph: &StackGraph, node: &Handle<Node>) -> bool;
+
+    /// Return whether the given edge must be included.
+    /// Edges via excluded nodes are always excluded.
+    fn include_edge(&self, graph: &StackGraph, source: &Handle<Node>, sink: &Handle<Node>) -> bool;
+
+    /// Return whether the given path must be included.
+    /// Paths via excluded nodes or edges are always excluded.
+    fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool;
+}
+
+impl<F> Filter for F
+where
+    F: Fn(&StackGraph, &Handle<File>) -> bool,
+{
+    fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool {
+        self(graph, file)
+    }
+
+    fn include_node(&self, _graph: &StackGraph, _node: &Handle<Node>) -> bool {
+        true
+    }
+
+    fn include_edge(
+        &self,
+        _graph: &StackGraph,
+        _source: &Handle<Node>,
+        _sink: &Handle<Node>,
+    ) -> bool {
+        true
+    }
+
+    fn include_path(&self, _graph: &StackGraph, _paths: &Paths, _path: &Path) -> bool {
+        true
+    }
+}
+
+/// Struct that ensures the implications of exclusions.
+/// For example, that nodes frome excluded files are not included, etc.
+struct ImplicationFilter<'a>(&'a dyn Filter);
+
+impl Filter for ImplicationFilter<'_> {
+    fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool {
+        self.0.include_file(graph, file)
+    }
+
+    fn include_node(&self, graph: &StackGraph, node: &Handle<Node>) -> bool {
+        graph[*node]
+            .id()
+            .file()
+            .map_or(true, |f| self.include_file(graph, &f))
+            && self.0.include_node(graph, node)
+    }
+
+    fn include_edge(&self, graph: &StackGraph, source: &Handle<Node>, sink: &Handle<Node>) -> bool {
+        self.include_node(graph, source)
+            && self.include_node(graph, sink)
+            && self.0.include_edge(graph, source, sink)
+    }
+
+    fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool {
+        path.edges
+            .iter_unordered(paths)
+            .map(|e| graph.node_for_id(e.source_node_id).unwrap())
+            .chain(std::iter::once(path.end_node))
+            .tuple_windows()
+            .all(|(source, sink)| self.include_edge(graph, &source, &sink))
+            && self.0.include_path(graph, paths, path)
+    }
+}
+
+//-----------------------------------------------------------------------------
 // InStackGraph
 
-struct InStackGraph<'a, T>(T, &'a StackGraph);
+struct InStackGraph<'a, T>(T, &'a StackGraph, &'a dyn Filter);
 
 impl<'a, T> InStackGraph<'a, T> {
     fn with<U>(&'a self, u: U) -> InStackGraph<'a, U> {
-        InStackGraph(u, self.1)
+        InStackGraph(u, self.1, self.2)
     }
 
     fn with_idx<Idx: Copy, U: ?Sized>(&'a self, idx: Idx) -> InStackGraph<'a, (Idx, &U)>
     where
         StackGraph: Index<Idx, Output = U>,
     {
-        InStackGraph((idx, &self.1[idx]), self.1)
+        InStackGraph((idx, &self.1[idx]), self.1, self.2)
     }
 }
 
 //-----------------------------------------------------------------------------
 // StackGraph
 
-impl StackGraph {
-    pub fn to_json(&self) -> JsonStackGraph {
-        JsonStackGraph(self)
+impl<'a> StackGraph {
+    pub fn to_json(&'a self, f: &'a dyn Filter) -> JsonStackGraph {
+        JsonStackGraph(self, f)
     }
 }
 
-pub struct JsonStackGraph<'a>(&'a StackGraph);
+pub struct JsonStackGraph<'a>(&'a StackGraph, &'a dyn Filter);
 
 impl<'a> JsonStackGraph<'a> {
     pub fn to_value(&self) -> Result<Value, JsonError> {
-        Ok(serde_json::to_value(self.0)?)
+        Ok(serde_json::to_value(self)?)
     }
 
     pub fn to_string(&self) -> Result<String, JsonError> {
-        Ok(serde_json::to_string(self.0)?)
+        Ok(serde_json::to_string(self)?)
     }
 
     pub fn to_string_pretty(&self) -> Result<String, JsonError> {
-        Ok(serde_json::to_string_pretty(self.0)?)
+        Ok(serde_json::to_string_pretty(self)?)
     }
 }
 
-impl Serialize for StackGraph {
+impl Serialize for JsonStackGraph<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut ser = serializer.serialize_struct("stack_graph", 2)?;
-        ser.serialize_field("files", &InStackGraph(&Files, self))?;
-        ser.serialize_field("nodes", &InStackGraph(&Nodes, self))?;
-        ser.serialize_field("edges", &InStackGraph(&Edges, self))?;
+        ser.serialize_field(
+            "files",
+            &InStackGraph(&Files, self.0, &ImplicationFilter(self.1)),
+        )?;
+        ser.serialize_field(
+            "nodes",
+            &InStackGraph(&Nodes, self.0, &ImplicationFilter(self.1)),
+        )?;
+        ser.serialize_field(
+            "edges",
+            &InStackGraph(&Edges, self.0, &ImplicationFilter(self.1)),
+        )?;
         ser.end()
     }
 }
@@ -98,15 +188,16 @@ impl Serialize for StackGraph {
 
 struct Files;
 
-impl Serialize for InStackGraph<'_, &Files> {
+impl<'a> Serialize for InStackGraph<'a, &Files> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let graph = self.1;
+        let filter = self.2;
 
         let mut ser = serializer.serialize_seq(None)?;
-        for file in graph.iter_files() {
+        for file in graph.iter_files().filter(|f| filter.include_file(graph, f)) {
             ser.serialize_element(&self.with_idx(file))?;
         }
         ser.end()
@@ -133,8 +224,15 @@ impl Serialize for InStackGraph<'_, &Nodes> {
     where
         S: Serializer,
     {
+        let graph = self.1;
+        let filter = self.2;
+
         let mut nodes = serializer.serialize_seq(None)?;
-        for node in self.1.iter_nodes() {
+        for node in self
+            .1
+            .iter_nodes()
+            .filter(|n| filter.include_node(graph, &n))
+        {
             nodes.serialize_element(&self.with_idx(node))?;
         }
         nodes.end()
@@ -304,9 +402,16 @@ impl Serialize for InStackGraph<'_, &Edges> {
     where
         S: Serializer,
     {
+        let graph = self.1;
+        let filter = self.2;
+
         let mut ser = serializer.serialize_seq(None)?;
         for source in self.1.iter_nodes() {
-            for edge in self.1.outgoing_edges(source) {
+            for edge in self
+                .1
+                .outgoing_edges(source)
+                .filter(|e| filter.include_edge(graph, &e.source, &e.sink))
+            {
                 ser.serialize_element(&self.with(&edge))?;
             }
         }
@@ -377,18 +482,18 @@ impl Serialize for InStackGraph<'_, &Offset> {
 //-----------------------------------------------------------------------------
 // InPaths
 
-struct InPaths<'a, T>(T, &'a Paths, &'a StackGraph);
+struct InPaths<'a, T>(T, &'a Paths, &'a StackGraph, &'a dyn Filter);
 
 impl<'a, T> InPaths<'a, T> {
     fn with<U>(&'a self, u: U) -> InPaths<'a, U> {
-        InPaths(u, self.1, self.2)
+        InPaths(u, self.1, self.2, self.3)
     }
 
     fn in_stack_graph(&'a self) -> InStackGraph<'a, T>
     where
         T: Copy,
     {
-        InStackGraph(self.0, self.2)
+        InStackGraph(self.0, self.2, self.3)
     }
 }
 
@@ -396,51 +501,48 @@ impl<'a, T> InPaths<'a, T> {
 // Paths
 
 impl<'a> Paths {
-    pub fn to_json<F>(&'a mut self, graph: &'a StackGraph, f: F) -> JsonPaths<'_, F>
-    where
-        F: FnMut(&StackGraph, &Paths, &Path) -> bool,
-    {
+    pub fn to_json(&'a mut self, graph: &'a StackGraph, f: &'a dyn Filter) -> JsonPaths<'_> {
         JsonPaths(self, graph, f)
     }
 }
 
-pub struct JsonPaths<'a, F>(&'a mut Paths, &'a StackGraph, F)
-where
-    F: FnMut(&StackGraph, &Paths, &Path) -> bool;
+pub struct JsonPaths<'a>(&'a mut Paths, &'a StackGraph, &'a dyn Filter);
 
-impl<'a, F> JsonPaths<'a, F>
-where
-    F: FnMut(&StackGraph, &Paths, &Path) -> bool,
-{
+impl<'a> JsonPaths<'a> {
     pub fn to_value(&mut self) -> Result<Value, JsonError> {
-        let paths = self.to_path_vec();
-        Ok(serde_json::to_value(&InPaths(&paths, self.0, self.1))?)
-    }
-
-    pub fn to_string(&mut self) -> Result<String, JsonError> {
-        let paths = self.to_path_vec();
-        Ok(serde_json::to_string(&InPaths(&paths, self.0, self.1))?)
-    }
-
-    pub fn to_string_pretty(&mut self) -> Result<String, JsonError> {
-        let paths = self.to_path_vec();
-        Ok(serde_json::to_string_pretty(&InPaths(
-            &paths, self.0, self.1,
+        let filter = ImplicationFilter(self.2);
+        let paths = Self::to_path_vec(self.1, self.0, &filter);
+        Ok(serde_json::to_value(&InPaths(
+            &paths, self.0, self.1, &filter,
         ))?)
     }
 
-    fn to_path_vec(&mut self) -> Vec<Path> {
-        let mut paths = Vec::new();
-        let f = &mut self.2;
-        self.0
-            .find_all_paths(self.1, self.1.iter_nodes(), |g, ps, p| {
-                if f(g, ps, &p) {
-                    let mut p = p;
-                    p.edges.ensure_forwards(ps);
-                    paths.push(p);
-                }
-            });
-        paths
+    pub fn to_string(&mut self) -> Result<String, JsonError> {
+        let filter = ImplicationFilter(self.2);
+        let paths = Self::to_path_vec(self.1, self.0, &filter);
+        Ok(serde_json::to_string(&InPaths(
+            &paths, self.0, self.1, &filter,
+        ))?)
+    }
+
+    pub fn to_string_pretty(&mut self) -> Result<String, JsonError> {
+        let filter = ImplicationFilter(self.2);
+        let paths = Self::to_path_vec(self.1, self.0, &filter);
+        Ok(serde_json::to_string_pretty(&InPaths(
+            &paths, self.0, self.1, &filter,
+        ))?)
+    }
+
+    fn to_path_vec(graph: &StackGraph, paths: &mut Paths, filter: &dyn Filter) -> Vec<Path> {
+        let mut path_vec = Vec::new();
+        paths.find_all_paths(graph, graph.iter_nodes(), |g, ps, p| {
+            if filter.include_path(g, ps, &p) {
+                let mut p = p;
+                p.edges.ensure_forwards(ps);
+                path_vec.push(p);
+            }
+        });
+        path_vec
     }
 }
 

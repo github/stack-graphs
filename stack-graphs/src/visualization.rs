@@ -5,8 +5,11 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use crate::arena::Handle;
+use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
+use crate::json::Filter;
 use crate::json::JsonError;
 use crate::paths::Path;
 use crate::paths::Paths;
@@ -23,11 +26,15 @@ static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 // StackGraph
 
 impl StackGraph {
-    pub fn to_html_string(&self, paths: &mut Paths, title: &str) -> Result<String, JsonError> {
-        let graph = self.to_json().to_string()?;
-        let paths = paths
-            .to_json(self, include_path_in_visualization)
-            .to_string()?;
+    pub fn to_html_string(
+        &self,
+        title: &str,
+        paths: &mut Paths,
+        filter: &dyn Filter,
+    ) -> Result<String, JsonError> {
+        let filter = VisualizationFilter(filter);
+        let graph = self.to_json(&filter).to_string()?;
+        let paths = paths.to_json(self, &filter).to_string()?;
         let html = format!(
             r#"
 <!DOCTYPE html>
@@ -90,27 +97,46 @@ impl StackGraph {
     }
 }
 
-fn include_path_in_visualization(graph: &StackGraph, _paths: &Paths, path: &Path) -> bool {
-    if path.start_node == path.end_node {
-        return false;
+struct VisualizationFilter<'a>(&'a dyn Filter);
+
+impl Filter for VisualizationFilter<'_> {
+    fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool {
+        self.0.include_file(graph, file)
     }
-    if !match &graph[path.start_node] {
-        Node::PushScopedSymbol(_) | Node::PushSymbol(_) => true,
-        Node::Root(_) => true,
-        Node::Scope(node) => node.is_exported,
-        _ => false,
-    } {
-        return false;
+
+    fn include_node(&self, graph: &StackGraph, node: &Handle<Node>) -> bool {
+        self.0.include_node(graph, node)
     }
-    if !match &graph[path.end_node] {
-        Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
-            path.symbol_stack.is_empty() && path.scope_stack.is_empty()
+
+    fn include_edge(&self, graph: &StackGraph, source: &Handle<Node>, sink: &Handle<Node>) -> bool {
+        self.0.include_edge(graph, source, sink)
+    }
+
+    fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool {
+        if !self.0.include_path(graph, paths, path) {
+            return false;
         }
-        Node::Root(_) => true,
-        Node::Scope(node) => node.is_exported,
-        _ => false,
-    } {
-        return false;
+        if path.start_node == path.end_node {
+            return false;
+        }
+        if !match &graph[path.start_node] {
+            Node::PushScopedSymbol(_) | Node::PushSymbol(_) => true,
+            Node::Root(_) => true,
+            Node::Scope(node) => node.is_exported,
+            _ => false,
+        } {
+            return false;
+        }
+        if !match &graph[path.end_node] {
+            Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
+                path.symbol_stack.is_empty() && path.scope_stack.is_empty()
+            }
+            Node::Root(_) => true,
+            Node::Scope(node) => node.is_exported,
+            _ => false,
+        } {
+            return false;
+        }
+        return true;
     }
-    return true;
 }

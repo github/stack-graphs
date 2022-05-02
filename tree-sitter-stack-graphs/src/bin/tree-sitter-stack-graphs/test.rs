@@ -10,7 +10,10 @@ use anyhow::Context as _;
 use clap::ArgEnum;
 use clap::ValueHint;
 use colored::Colorize as _;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::json::Filter;
 use stack_graphs::paths::Paths;
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -226,7 +229,15 @@ impl Command {
         let result = test.run();
         let success = self.handle_result(test_path, &result)?;
         if self.output_mode.test(!success) {
-            self.save_output(test_root, test_path, &test.graph, &mut test.paths, success)?;
+            let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
+            self.save_output(
+                test_root,
+                test_path,
+                &test.graph,
+                &mut test.paths,
+                &|_: &StackGraph, h: &Handle<File>| files.contains(h),
+                success,
+            )?;
         }
         Ok(result.failure_count())
     }
@@ -319,6 +330,7 @@ impl Command {
         test_path: &Path,
         graph: &StackGraph,
         paths: &mut Paths,
+        filter: &dyn Filter,
         success: bool,
     ) -> anyhow::Result<()> {
         if let Some(path) = self
@@ -326,7 +338,7 @@ impl Command {
             .as_ref()
             .map(|spec| spec.format(test_root, test_path))
         {
-            self.save_graph(&path, &graph)?;
+            self.save_graph(&path, &graph, filter)?;
             if !success || !self.hide_passing {
                 println!("  Graph: {}", path.display());
             }
@@ -336,7 +348,7 @@ impl Command {
             .as_ref()
             .map(|spec| spec.format(test_root, test_path))
         {
-            self.save_paths(&path, paths, graph)?;
+            self.save_paths(&path, paths, graph, filter)?;
             if !success || !self.hide_passing {
                 println!("  Paths: {}", path.display());
             }
@@ -346,7 +358,7 @@ impl Command {
             .as_ref()
             .map(|spec| spec.format(test_root, test_path))
         {
-            self.save_visualization(&path, paths, graph, &test_path)?;
+            self.save_visualization(&path, paths, graph, filter, &test_path)?;
             if !success || !self.hide_passing {
                 println!("  Visualization: {}", path.display());
             }
@@ -354,8 +366,13 @@ impl Command {
         Ok(())
     }
 
-    fn save_graph(&self, path: &Path, graph: &StackGraph) -> anyhow::Result<()> {
-        let json = graph.to_json().to_string_pretty()?;
+    fn save_graph(
+        &self,
+        path: &Path,
+        graph: &StackGraph,
+        filter: &dyn Filter,
+    ) -> anyhow::Result<()> {
+        let json = graph.to_json(filter).to_string_pretty()?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -364,8 +381,14 @@ impl Command {
         Ok(())
     }
 
-    fn save_paths(&self, path: &Path, paths: &mut Paths, graph: &StackGraph) -> anyhow::Result<()> {
-        let json = paths.to_json(graph, |_, _, _| true).to_string_pretty()?;
+    fn save_paths(
+        &self,
+        path: &Path,
+        paths: &mut Paths,
+        graph: &StackGraph,
+        filter: &dyn Filter,
+    ) -> anyhow::Result<()> {
+        let json = paths.to_json(graph, filter).to_string_pretty()?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -379,9 +402,10 @@ impl Command {
         path: &Path,
         paths: &mut Paths,
         graph: &StackGraph,
+        filter: &dyn Filter,
         test_path: &Path,
     ) -> anyhow::Result<()> {
-        let html = graph.to_html_string(paths, &format!("{}", test_path.display()))?;
+        let html = graph.to_html_string(&format!("{}", test_path.display()), paths, filter)?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
