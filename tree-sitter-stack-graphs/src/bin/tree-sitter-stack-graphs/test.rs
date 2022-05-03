@@ -149,8 +149,6 @@ fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
 impl Command {
     pub fn run(&self) -> anyhow::Result<()> {
         let mut loader = self.loader.new_loader()?;
-        let includes = self.load_includes(&mut loader)?;
-
         let mut total_failure_count = 0;
         for test_path in &self.tests {
             if test_path.is_dir() {
@@ -163,12 +161,12 @@ impl Command {
                 {
                     let test_path = test_entry.path();
                     total_failure_count +=
-                        self.run_test_with_context(test_root, test_path, &includes, &mut loader)?;
+                        self.run_test_with_context(test_root, test_path, &mut loader)?;
                 }
             } else {
                 let test_root = test_path.parent().unwrap();
                 total_failure_count +=
-                    self.run_test_with_context(test_root, test_path, &includes, &mut loader)?;
+                    self.run_test_with_context(test_root, test_path, &mut loader)?;
             }
         }
 
@@ -183,34 +181,14 @@ impl Command {
         Ok(())
     }
 
-    /// Run test file.
-    fn load_includes(&self, loader: &mut Loader) -> anyhow::Result<StackGraph> {
-        let mut graph = StackGraph::new();
-        for path in &self.includes {
-            let content = String::from_utf8(std::fs::read(path)?)?;
-            let sgl = loader.load_for_file(path, Some(&content))?.ok_or_else(|| {
-                anyhow!(
-                    "Cannot determine stack graph language for include {}",
-                    path.display()
-                )
-            })?;
-            let file = graph
-                .add_file(&path.to_string_lossy())
-                .map_err(|_| anyhow!("File {} already exists in graph", path.display()))?;
-            self.build_stack_graph_into(path, file, &content, sgl, &mut graph)?;
-        }
-        Ok(graph)
-    }
-
     /// Run test file and add error context to any failures that are returned.
     fn run_test_with_context(
         &self,
         test_root: &Path,
         test_path: &Path,
-        includes: &StackGraph,
         loader: &mut Loader,
     ) -> anyhow::Result<usize> {
-        self.run_test(test_root, test_path, includes, loader)
+        self.run_test(test_root, test_path, loader)
             .with_context(|| format!("Error running test {}", test_path.display()))
     }
 
@@ -218,7 +196,6 @@ impl Command {
         &self,
         test_root: &Path,
         test_path: &Path,
-        includes: &StackGraph,
         loader: &mut Loader,
     ) -> anyhow::Result<usize> {
         let source = String::from_utf8(std::fs::read(test_path)?)?;
@@ -235,9 +212,8 @@ impl Command {
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         self.load_builtins_into(sgl, &mut test.graph)
             .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
-        test.graph
-            .add_graph(includes)
-            .map_err(|_| anyhow!("Loading includes into test {} failed", test_path.display()))?;
+        self.load_includes_into(sgl, &mut test.graph)
+            .with_context(|| format!("Loading includes into {}", test_path.display()))?;
         for test_fragment in &test.fragments {
             let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
             if test_path.extension() != fragment_path.extension() {
@@ -278,6 +254,21 @@ impl Command {
     ) -> anyhow::Result<()> {
         if let Err(h) = graph.add_graph(sgl.builtins()) {
             return Err(anyhow!("Duplicate builtin file {}", &graph[h]));
+        }
+        Ok(())
+    }
+
+    fn load_includes_into(
+        &self,
+        sgl: &mut StackGraphLanguage,
+        graph: &mut StackGraph,
+    ) -> anyhow::Result<()> {
+        for path in &self.includes {
+            let content = String::from_utf8(std::fs::read(path)?)?;
+            let include_graph = sgl.get_or_load(path, &content)?;
+            if let Err(h) = graph.add_graph(include_graph) {
+                return Err(anyhow!("Duplicate include file {}", &graph[h]));
+            }
         }
         Ok(())
     }
