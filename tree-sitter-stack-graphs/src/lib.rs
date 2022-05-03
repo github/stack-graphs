@@ -300,7 +300,10 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::Path;
+use std::path::PathBuf;
 use thiserror::Error;
 use tree_sitter::Parser;
 use tree_sitter_graph::functions::Functions;
@@ -365,6 +368,7 @@ pub struct StackGraphLanguage {
     tsg: tree_sitter_graph::ast::File,
     functions: Functions,
     builtins: StackGraph,
+    file_cache: HashMap<PathBuf, StackGraph>,
 }
 
 impl StackGraphLanguage {
@@ -382,6 +386,7 @@ impl StackGraphLanguage {
             tsg,
             functions: Self::default_functions(),
             builtins: StackGraph::new(),
+            file_cache: HashMap::new(),
         })
     }
 
@@ -399,6 +404,7 @@ impl StackGraphLanguage {
             tsg,
             functions: Self::default_functions(),
             builtins: StackGraph::new(),
+            file_cache: HashMap::new(),
         })
     }
 
@@ -477,6 +483,18 @@ impl StackGraphLanguage {
 
         let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
         loader.load()
+    }
+
+    /// Get a stack graph for the given path and source. The stack graph is cached for the
+    /// given path, so it does not have to be regenerated next time.
+    pub fn get_or_load(&mut self, path: &Path, source: &str) -> Result<&StackGraph, LoadError> {
+        if !self.file_cache.contains_key(path) {
+            let mut graph = StackGraph::new();
+            let file = graph.add_file(&path.to_string_lossy()).unwrap();
+            self.build_stack_graph_into(&mut graph, file, source, &mut Variables::new())?;
+            self.file_cache.insert(path.to_path_buf(), graph);
+        }
+        Ok(&self.file_cache[path])
     }
 }
 
