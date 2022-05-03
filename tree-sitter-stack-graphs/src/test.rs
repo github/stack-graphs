@@ -422,9 +422,12 @@ impl Test {
         let mut result = TestResult::new();
         for fragment in &self.fragments {
             for assertion in &fragment.assertions {
-                match assertion.run(&self.graph, &mut self.paths) {
+                match assertion
+                    .run(&self.graph, &mut self.paths)
+                    .map_or_else(|e| self.from_error(e), |v| Ok(v))
+                {
                     Ok(_) => result.add_success(),
-                    Err(e) => result.add_failure(self.from_error(e)),
+                    Err(f) => result.add_failure(f),
                 }
             }
         }
@@ -432,34 +435,38 @@ impl Test {
     }
 
     /// Construct a TestFailure from an AssertionError.
-    fn from_error(&self, err: AssertionError) -> TestFailure {
+    fn from_error(&self, err: AssertionError) -> Result<(), TestFailure> {
         match err {
-            AssertionError::NoReferences { source } => TestFailure::NoReferences {
+            AssertionError::NoReferences { source } => Err(TestFailure::NoReferences {
                 path: self.path.clone(),
                 position: source.position,
-            },
+            }),
             AssertionError::IncorrectDefinitions {
                 source,
                 references,
                 missing_targets,
                 unexpected_paths,
-            } => TestFailure::IncorrectDefinitions {
-                path: self.path.clone(),
-                position: source.position,
-                references: references
+            } => {
+                let references = references
                     .into_iter()
                     .map(|r| self.graph[self.graph[r].symbol().unwrap()].to_string())
                     .unique()
                     .sorted()
-                    .collect(),
-                missing_lines: missing_targets
+                    .collect();
+                let missing_lines = missing_targets
                     .into_iter()
                     .map(|t| t.line)
                     .unique()
                     .sorted()
-                    .collect(),
-                unexpected_lines: unexpected_paths
+                    .collect::<Vec<_>>();
+                let unexpected_lines = unexpected_paths
                     .into_iter()
+                    .filter(|p| {
+                        // ignore results outside of this test, which may be include files or builtins
+                        self.fragments
+                            .iter()
+                            .any(|f| f.file == self.graph[p.end_node].id().file().unwrap())
+                    })
                     .map(|p| {
                         let symbol =
                             self.graph[self.graph[p.end_node].symbol().unwrap()].to_string();
@@ -470,8 +477,18 @@ impl Test {
                     })
                     .unique()
                     .sorted()
-                    .into_group_map(),
-            },
+                    .into_group_map();
+                if missing_lines.is_empty() && unexpected_lines.is_empty() {
+                    return Ok(());
+                }
+                Err(TestFailure::IncorrectDefinitions {
+                    path: self.path.clone(),
+                    position: source.position,
+                    references,
+                    missing_lines,
+                    unexpected_lines,
+                })
+            }
         }
     }
 

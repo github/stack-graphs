@@ -49,6 +49,7 @@
 //! [`Edge`]: struct.Edge.html
 //! [`File`]: struct.File.html
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::num::NonZeroU32;
 use std::ops::Index;
@@ -1407,6 +1408,155 @@ impl StackGraph {
     /// Creates a new, initially empty stack graph.
     pub fn new() -> StackGraph {
         StackGraph::default()
+    }
+
+    /// Copies the given stack graph into this stack graph. Panics if any of the files
+    /// in the other stack graph are already defined in the current one.
+    pub fn add_from_graph(&mut self, other: &StackGraph) -> Result<(), Handle<File>> {
+        let mut files = HashMap::new();
+        for other_file in other.iter_files() {
+            let file = self.add_file(other[other_file].name())?;
+            files.insert(other_file, file);
+        }
+        let node_id = |other_node_id: NodeID| {
+            if other_node_id.is_root() {
+                NodeID::root()
+            } else if other_node_id.is_jump_to() {
+                NodeID::jump_to()
+            } else {
+                NodeID::new_in_file(
+                    files[&other_node_id.file.into_option().unwrap()],
+                    other_node_id.local_id,
+                )
+            }
+        };
+        let mut nodes = HashMap::new();
+        nodes.insert(Self::root_node(), Self::root_node());
+        nodes.insert(Self::jump_to_node(), Self::jump_to_node());
+        for other_file in files.keys().cloned() {
+            let file = files[&other_file];
+            for other_node in other.nodes_for_file(other_file) {
+                let value: Node = match other[other_node] {
+                    Node::DropScopes(DropScopesNode { id, .. }) => DropScopesNode {
+                        id: NodeID::new_in_file(file, id.local_id),
+                        _symbol: ControlledOption::default(),
+                        _scope: NodeID::default(),
+                        _is_endpoint: bool::default(),
+                    }
+                    .into(),
+                    Node::JumpTo(JumpToNode { .. }) => JumpToNode {
+                        id: NodeID::jump_to(),
+                        _symbol: ControlledOption::default(),
+                        _scope: NodeID::default(),
+                        _is_endpoint: bool::default(),
+                    }
+                    .into(),
+                    Node::PopScopedSymbol(PopScopedSymbolNode {
+                        id,
+                        symbol,
+                        is_definition,
+                        ..
+                    }) => PopScopedSymbolNode {
+                        id: NodeID::new_in_file(file, id.local_id),
+                        symbol: self.add_symbol(&other[symbol]),
+                        _scope: NodeID::default(),
+                        is_definition: is_definition,
+                    }
+                    .into(),
+                    Node::PopSymbol(PopSymbolNode {
+                        id,
+                        symbol,
+                        is_definition,
+                        ..
+                    }) => PopSymbolNode {
+                        id: NodeID::new_in_file(file, id.local_id),
+                        symbol: self.add_symbol(&other[symbol]),
+                        _scope: NodeID::default(),
+                        is_definition: is_definition,
+                    }
+                    .into(),
+                    Node::PushScopedSymbol(PushScopedSymbolNode {
+                        id,
+                        symbol,
+                        scope,
+                        is_reference,
+                        ..
+                    }) => PushScopedSymbolNode {
+                        id: NodeID::new_in_file(file, id.local_id),
+                        symbol: self.add_symbol(&other[symbol]),
+                        scope: node_id(scope),
+                        is_reference: is_reference,
+                        _phantom: (),
+                    }
+                    .into(),
+                    Node::PushSymbol(PushSymbolNode {
+                        id,
+                        symbol,
+                        is_reference,
+                        ..
+                    }) => PushSymbolNode {
+                        id: NodeID::new_in_file(file, id.local_id),
+                        symbol: self.add_symbol(&other[symbol]),
+                        _scope: NodeID::default(),
+                        is_reference: is_reference,
+                    }
+                    .into(),
+                    Node::Root(RootNode { .. }) => RootNode {
+                        id: NodeID::root(),
+                        _symbol: ControlledOption::default(),
+                        _scope: NodeID::default(),
+                        _is_endpoint: bool::default(),
+                    }
+                    .into(),
+                    Node::Scope(ScopeNode {
+                        id, is_exported, ..
+                    }) => ScopeNode {
+                        id: NodeID::new_in_file(file, id.local_id),
+                        _symbol: ControlledOption::default(),
+                        _scope: NodeID::default(),
+                        is_exported: is_exported,
+                    }
+                    .into(),
+                };
+                let node = self.add_node(value.id(), value).unwrap();
+                nodes.insert(other_node, node);
+                if let Some(source_info) = other.source_info(other_node) {
+                    *self.source_info_mut(node) = SourceInfo {
+                        span: source_info.span.clone(),
+                        syntax_type: source_info
+                            .syntax_type
+                            .map(|st| self.add_string(&other[st])),
+                        containing_line: source_info
+                            .containing_line
+                            .into_option()
+                            .map(|cl| self.add_string(&other[cl]))
+                            .into(),
+                    };
+                }
+                if let Some(debug_info) = other.debug_info(other_node) {
+                    *self.debug_info_mut(node) = DebugInfo {
+                        entries: debug_info
+                            .entries
+                            .iter()
+                            .map(|e| DebugEntry {
+                                key: self.add_string(&other[e.key]),
+                                value: self.add_string(&other[e.value]),
+                            })
+                            .collect::<Vec<_>>(),
+                    };
+                }
+            }
+            for other_node in nodes.keys().cloned() {
+                for other_edge in other.outgoing_edges(other_node) {
+                    self.add_edge(
+                        nodes[&other_edge.source],
+                        nodes[&other_edge.sink],
+                        other_edge.precedence,
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 }
 

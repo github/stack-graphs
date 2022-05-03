@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use maplit::hashset;
 use stack_graphs::graph::StackGraph;
 
+use crate::test_graphs;
 use crate::test_graphs::CreateStackGraph;
 
 #[test]
@@ -175,4 +176,29 @@ fn singleton_nodes_have_correct_ids() {
     assert!(root.id().is_root());
     assert_eq!(root.display(&graph).to_string(), "[root]");
     assert_eq!(root.id().display(&graph).to_string(), "[root]");
+}
+
+#[test]
+fn can_add_graph_to_empty_graph() {
+    let mut graph = StackGraph::new();
+    let other = test_graphs::simple::new();
+    graph.add_from_graph(&other).expect("Adding graph failed");
+
+    for other_file in other.iter_files() {
+        let file = graph.get_file_unchecked(other[other_file].name());
+        assert_eq!(
+            graph.nodes_for_file(file).count(),
+            other.nodes_for_file(other_file).count()
+        );
+        assert_eq!(
+            graph
+                .nodes_for_file(file)
+                .map(|n| graph.outgoing_edges(n).count())
+                .sum::<usize>(),
+            other
+                .nodes_for_file(other_file)
+                .map(|n| graph.outgoing_edges(n).count())
+                .sum::<usize>()
+        );
+    }
 }
