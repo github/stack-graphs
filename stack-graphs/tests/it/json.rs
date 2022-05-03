@@ -6,6 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use serde_json::json;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
 
@@ -14,7 +16,10 @@ use crate::test_graphs;
 #[test]
 fn can_serialize_graph() {
     let graph: StackGraph = test_graphs::simple::new();
-    let actual = graph.to_json().to_value().expect("Cannot serialize graph");
+    let actual = graph
+        .to_json(&|_: &StackGraph, _: &Handle<File>| true)
+        .to_value()
+        .expect("Cannot serialize graph");
     // formatted using: json_pp -json_opt utf8,canoncical,pretty,indent_length=4
     let expected = json!(
         {
@@ -483,7 +488,7 @@ fn can_serialize_paths() {
     let graph: StackGraph = test_graphs::simple::new();
     let mut paths = Paths::new();
     let actual = paths
-        .to_json(&graph, |_, _, _| true)
+        .to_json(&graph, &|_: &StackGraph, _: &Handle<File>| true)
         .to_value()
         .expect("Cannot serialize paths");
     // formatted using: json_pp -json_opt utf8,canoncical,pretty,indent_length=4
