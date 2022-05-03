@@ -1412,7 +1412,7 @@ impl StackGraph {
 
     /// Copies the given stack graph into this stack graph. Panics if any of the files
     /// in the other stack graph are already defined in the current one.
-    pub fn add_graph(&mut self, other: &StackGraph) -> Result<(), Handle<File>> {
+    pub fn add_from_graph(&mut self, other: &StackGraph) -> Result<(), Handle<File>> {
         let mut files = HashMap::new();
         for other_file in other.iter_files() {
             let file = self.add_file(other[other_file].name())?;

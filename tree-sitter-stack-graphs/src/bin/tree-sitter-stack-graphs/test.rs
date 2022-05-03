@@ -236,7 +236,7 @@ impl Command {
         sgl: &mut StackGraphLanguage,
         graph: &mut StackGraph,
     ) -> anyhow::Result<()> {
-        if let Err(h) = graph.add_graph(sgl.builtins()) {
+        if let Err(h) = graph.add_from_graph(sgl.builtins()) {
             return Err(anyhow!("Duplicate builtin file {}", &graph[h]));
         }
         Ok(())

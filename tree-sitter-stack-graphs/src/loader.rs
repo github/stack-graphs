@@ -224,7 +224,7 @@ impl Loader {
                     .map_err(LoadError::other)?;
             }
         }
-        sgl.builtins_mut().add_graph(&graph).unwrap();
+        sgl.builtins_mut().add_from_graph(&graph).unwrap();
         Ok(())
     }
 }

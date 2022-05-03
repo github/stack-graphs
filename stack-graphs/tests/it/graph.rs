@@ -182,7 +182,7 @@ fn singleton_nodes_have_correct_ids() {
 fn can_add_graph_to_empty_graph() {
     let mut graph = StackGraph::new();
     let other = test_graphs::simple::new();
-    graph.add_graph(&other).expect("Adding graph failed");
+    graph.add_from_graph(&other).expect("Adding graph failed");
 
     for other_file in other.iter_files() {
         let file = graph.get_file_unchecked(other[other_file].name());
