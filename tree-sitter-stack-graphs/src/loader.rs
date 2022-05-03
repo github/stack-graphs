@@ -228,6 +228,7 @@ impl LoadError {
         Self::Other(error.into())
     }
 }
+
 // ------------------------------------------------------------------------------------------------
 // tree_sitter_loader supplements
 
