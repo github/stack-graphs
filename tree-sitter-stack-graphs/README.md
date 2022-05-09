@@ -14,7 +14,7 @@ To use this library, add the following to your `Cargo.toml`:
 
 ``` toml
 [dependencies]
-tree-sitter-stack-graphs = "0.0"
+tree-sitter-stack-graphs = "0.1"
 ```
 
 Check out our [documentation](https://docs.rs/tree-sitter-stack-graphs/*/) for
@@ -25,22 +25,46 @@ more details on how to use this library.
 The command-line program for `tree-sitter-stack-graphs` lets you do stack
 graph based analysis and lookup from the command line.
 
-To run from source, run the following command:
+Install the program using `cargo install` as follows:
 
 ``` sh
-cargo run --bin tree-sitter-stack-graphs --features cli -- ARGS
+$ cargo install --features cli tree-sitter-stack-graphs
+$ tree-sitter-stack-graphs --help
 ```
 
-To install, run the following command:
+## Development
+
+The project is written in Rust, and requires a recent version installed.
+Rust can be installed and updated using [rustup][].
+
+[rustup]: https://rustup.rs/
+
+Build the project by running:
+
+```
+$ cargo build
+```
+
+Run the tests by running:
+
+```
+$ cargo test
+```
+
+The project consists of a library and a CLI.
+By default, running `cargo` only applies to the library.
+To run `cargo` commands on the CLI as well, add `--features cli` or `--all-features`.
+
+Run the CLI from source as follows:
 
 ``` sh
-cargo install --path TARGETDIR --bin tree-sitter-stack-graphs --features cli
+$ cargo run --features cli -- ARGS
 ```
 
-Run the program as follows to show the supported commands:
+Sources are formatted using the standard Rust formatted, which is applied by running:
 
-```sh
-tree-sitter-stack-graphs --help
+```
+$ cargo fmt
 ```
 
 ## License
