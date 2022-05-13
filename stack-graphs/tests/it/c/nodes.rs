@@ -29,6 +29,7 @@ use stack_graphs::c::sg_stack_graph_nodes;
 use stack_graphs::c::sg_stack_graph_source_infos;
 use stack_graphs::c::sg_string_handle;
 use stack_graphs::c::sg_symbol_handle;
+use stack_graphs::c::SG_ARENA_CHUNK_SIZE;
 use stack_graphs::c::SG_JUMP_TO_NODE_HANDLE;
 use stack_graphs::c::SG_JUMP_TO_NODE_ID;
 use stack_graphs::c::SG_NULL_HANDLE;
@@ -39,6 +40,15 @@ use stack_graphs::graph::NodeID;
 
 fn node_id(file: sg_file_handle, local_id: u32) -> NodeID {
     NodeID::new_in_file(unsafe { std::mem::transmute(file) }, local_id)
+}
+
+fn index_chunked<'a, T>(chunks: *const *const T, index: usize) -> &'a T {
+    let chunk_index = index / SG_ARENA_CHUNK_SIZE;
+    let item_index = index % SG_ARENA_CHUNK_SIZE;
+    let chunks = unsafe { std::slice::from_raw_parts(chunks, chunk_index + 1) };
+    let chunk = chunks[chunk_index];
+    let items = unsafe { std::slice::from_raw_parts(chunk, item_index + 1) };
+    &items[item_index]
 }
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
@@ -127,8 +137,7 @@ fn root_node() -> sg_node {
 
 fn get_node(arena: &sg_nodes, handle: sg_node_handle) -> &Node {
     assert!(handle != SG_NULL_HANDLE);
-    let slice = unsafe { std::slice::from_raw_parts(arena.nodes as *const Node, arena.count) };
-    &slice[handle as usize]
+    index_chunked(arena.nodes as *const *const Node, handle as usize)
 }
 
 #[test]
@@ -154,13 +163,12 @@ fn can_dereference_singleton_nodes() {
 fn singleton_nodes_have_correct_ids() {
     let graph = sg_stack_graph_new();
     let arena = sg_stack_graph_nodes(graph);
-    let slice = unsafe { std::slice::from_raw_parts(arena.nodes, arena.count) };
 
-    let root = &slice[SG_ROOT_NODE_HANDLE as usize];
+    let root = index_chunked(arena.nodes, SG_ROOT_NODE_HANDLE as usize);
     assert!(root.id.file == SG_NULL_HANDLE);
     assert!(root.id.local_id == SG_ROOT_NODE_ID);
 
-    let jump_to = &slice[SG_JUMP_TO_NODE_HANDLE as usize];
+    let jump_to = index_chunked(arena.nodes, SG_JUMP_TO_NODE_HANDLE as usize);
     assert!(jump_to.id.file == SG_NULL_HANDLE);
     assert!(jump_to.id.local_id == SG_JUMP_TO_NODE_ID);
 
@@ -655,9 +663,12 @@ fn push_symbol_cannot_have_scope() {
 // Source info
 
 fn get_source_info(graph: *const sg_stack_graph, node: sg_node_handle) -> Option<sg_source_info> {
+    let index = node as usize;
     let infos = sg_stack_graph_source_infos(graph);
-    let infos = unsafe { std::slice::from_raw_parts(infos.infos, infos.count) };
-    infos.get(node as usize).copied()
+    if index >= infos.count {
+        return None;
+    }
+    Some(*index_chunked(infos.infos, index))
 }
 
 #[test]

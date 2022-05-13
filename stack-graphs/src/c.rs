@@ -12,6 +12,7 @@
 use std::convert::TryInto;
 
 use libc::c_char;
+use static_assertions::const_assert_eq;
 
 use crate::arena::Handle;
 use crate::graph::File;
@@ -37,6 +38,9 @@ use crate::paths::SymbolStack;
 use crate::stitching::Database;
 use crate::stitching::ForwardPartialPathStitcher;
 use crate::stitching::PathStitcher;
+
+pub const SG_ARENA_CHUNK_SIZE: usize = 512;
+const_assert_eq!(SG_ARENA_CHUNK_SIZE, crate::arena::CHUNK_SIZE);
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct sg_stack_graph {
@@ -164,12 +168,12 @@ pub struct sg_symbol {
 /// handles using simple equality, without having to dereference them.
 pub type sg_symbol_handle = u32;
 
-/// An array of all of the symbols in a stack graph.  Symbol handles are indices into this array.
+/// Holds all of the symbols in a stack graph.  Symbol handles are indices into these arrays.
 /// There will never be a valid symbol at index 0; a handle with the value 0 represents a missing
 /// symbol.
 #[repr(C)]
 pub struct sg_symbols {
-    pub symbols: *const sg_symbol,
+    pub symbols: *const *const sg_symbol,
     pub count: usize,
 }
 
@@ -179,7 +183,7 @@ pub struct sg_symbols {
 pub extern "C" fn sg_stack_graph_symbols(graph: *const sg_stack_graph) -> sg_symbols {
     let graph = unsafe { &(*graph).inner };
     sg_symbols {
-        symbols: graph.symbols.as_ptr() as *const sg_symbol,
+        symbols: graph.symbols.as_ptr() as *const *const sg_symbol,
         count: graph.symbols.len(),
     }
 }
@@ -239,12 +243,12 @@ pub struct sg_string {
 /// handles using simple equality, without having to dereference them.
 pub type sg_string_handle = u32;
 
-/// An array of all of the interned strings in a stack graph.  String handles are indices into this
-/// array. There will never be a valid string at index 0; a handle with the value 0 represents a
+/// Holds of all of the interned strings in a stack graph.  String handles are indices into these
+/// arrays.  There will never be a valid string at index 0; a handle with the value 0 represents a
 /// missing string.
 #[repr(C)]
 pub struct sg_strings {
-    pub strings: *const sg_string,
+    pub strings: *const *const sg_string,
     pub count: usize,
 }
 
@@ -254,7 +258,7 @@ pub struct sg_strings {
 pub extern "C" fn sg_stack_graph_strings(graph: *const sg_stack_graph) -> sg_strings {
     let graph = unsafe { &(*graph).inner };
     sg_strings {
-        strings: graph.strings.as_ptr() as *const sg_string,
+        strings: graph.strings.as_ptr() as *const *const sg_string,
         count: graph.strings.len(),
     }
 }
@@ -326,12 +330,11 @@ impl Into<Handle<File>> for sg_file_handle {
     }
 }
 
-/// An array of all of the files in a stack graph.  File handles are indices into this array.
-/// There will never be a valid file at index 0; a handle with the value 0 represents a missing
-/// file.
+/// Holds all of the files in a stack graph.  File handles are indices into these arrays.  There
+/// will never be a valid file at index 0; a handle with the value 0 represents a missing file.
 #[repr(C)]
 pub struct sg_files {
-    pub files: *const sg_file,
+    pub files: *const *const sg_file,
     pub count: usize,
 }
 
@@ -341,7 +344,7 @@ pub struct sg_files {
 pub extern "C" fn sg_stack_graph_files(graph: *const sg_stack_graph) -> sg_files {
     let graph = unsafe { &(*graph).inner };
     sg_files {
-        files: graph.files.as_ptr() as *const sg_file,
+        files: graph.files.as_ptr() as *const *const sg_file,
         count: graph.files.len(),
     }
 }
@@ -485,12 +488,11 @@ pub const SG_ROOT_NODE_HANDLE: sg_node_handle = 1;
 /// The handle of the singleton "jump to scope" node.
 pub const SG_JUMP_TO_NODE_HANDLE: sg_node_handle = 2;
 
-/// An array of all of the nodes in a stack graph.  Node handles are indices into this array.
-/// There will never be a valid node at index 0; a handle with the value 0 represents a missing
-/// node.
+/// Holds all of the nodes in a stack graph.  Node handles are indices into these arrays.  There
+/// will never be a valid node at index 0; a handle with the value 0 represents a missing node.
 #[repr(C)]
 pub struct sg_nodes {
-    pub nodes: *const sg_node,
+    pub nodes: *const *const sg_node,
     pub count: usize,
 }
 
@@ -500,7 +502,7 @@ pub struct sg_nodes {
 pub extern "C" fn sg_stack_graph_nodes(graph: *const sg_stack_graph) -> sg_nodes {
     let graph = unsafe { &(*graph).inner };
     sg_nodes {
-        nodes: graph.nodes.as_ptr() as *const sg_node,
+        nodes: graph.nodes.as_ptr() as *const *const sg_node,
         count: graph.nodes.len(),
     }
 }
@@ -681,17 +683,17 @@ pub struct sg_utf8_bounds {
     pub end: usize,
 }
 
-/// An array of all of the source information in a stack graph.  Source information is associated
-/// with nodes, so node handles are indices into this array.  It is _not_ guaranteed that there
-/// will an entry in this array for every node handle; if you have a node handle whose value is
-/// larger than `count`, then use a 0-valued `sg_source_info` if you need source information for
-/// that node.
+/// Holds all of the source information in a stack graph.  Source information is associated with
+/// nodes, so node handles are indices into these arrays.  It is _not_ guaranteed that there will
+/// an entry in this array for every node handle; if you have a node handle whose value is larger
+/// than `count`, then use a 0-valued `sg_source_info` if you need source information for that
+/// node.
 ///
 /// There will never be a valid entry at index 0; a handle with the value 0 represents a missing
 /// node.
 #[repr(C)]
 pub struct sg_source_infos {
-    pub infos: *const sg_source_info,
+    pub infos: *const *const sg_source_info,
     pub count: usize,
 }
 
@@ -701,7 +703,7 @@ pub struct sg_source_infos {
 pub extern "C" fn sg_stack_graph_source_infos(graph: *const sg_stack_graph) -> sg_source_infos {
     let graph = unsafe { &(*graph).inner };
     sg_source_infos {
-        infos: graph.source_info.as_ptr() as *const sg_source_info,
+        infos: graph.source_info.as_ptr() as *const *const sg_source_info,
         count: graph.source_info.len(),
     }
 }
@@ -780,10 +782,10 @@ pub struct sg_symbol_stack_cell {
     pub tail: sg_symbol_stack_cell_handle,
 }
 
-/// The array of all of the symbol stack content in a path arena.
+/// Holds all of the symbol stack content in a path arena.
 #[repr(C)]
 pub struct sg_symbol_stack_cells {
-    pub cells: *const sg_symbol_stack_cell,
+    pub cells: *const *const sg_symbol_stack_cell,
     pub count: usize,
 }
 
@@ -795,7 +797,7 @@ pub extern "C" fn sg_path_arena_symbol_stack_cells(
 ) -> sg_symbol_stack_cells {
     let paths = unsafe { &(*paths).inner };
     sg_symbol_stack_cells {
-        cells: paths.symbol_stacks.as_ptr() as *const sg_symbol_stack_cell,
+        cells: paths.symbol_stacks.as_ptr() as *const *const sg_symbol_stack_cell,
         count: paths.symbol_stacks.len(),
     }
 }
@@ -865,10 +867,10 @@ pub struct sg_scope_stack_cell {
     pub tail: sg_scope_stack_cell_handle,
 }
 
-/// The array of all of the scope stack content in a path arena.
+/// Holds all of the scope stack content in a path arena.
 #[repr(C)]
 pub struct sg_scope_stack_cells {
-    pub cells: *const sg_scope_stack_cell,
+    pub cells: *const *const sg_scope_stack_cell,
     pub count: usize,
 }
 
@@ -880,7 +882,7 @@ pub extern "C" fn sg_path_arena_scope_stack_cells(
 ) -> sg_scope_stack_cells {
     let paths = unsafe { &(*paths).inner };
     sg_scope_stack_cells {
-        cells: paths.scope_stacks.as_ptr() as *const sg_scope_stack_cell,
+        cells: paths.scope_stacks.as_ptr() as *const *const sg_scope_stack_cell,
         count: paths.scope_stacks.len(),
     }
 }
@@ -968,10 +970,10 @@ pub struct sg_path_edge_list_cell {
     pub reversed: sg_path_edge_list_cell_handle,
 }
 
-/// The array of all of the path edge list content in a path arena.
+/// Holds all of the path edge list content in a path arena.
 #[repr(C)]
 pub struct sg_path_edge_list_cells {
-    pub cells: *const sg_path_edge_list_cell,
+    pub cells: *const *const sg_path_edge_list_cell,
     pub count: usize,
 }
 
@@ -983,7 +985,7 @@ pub extern "C" fn sg_path_arena_path_edge_list_cells(
 ) -> sg_path_edge_list_cells {
     let paths = unsafe { &(*paths).inner };
     sg_path_edge_list_cells {
-        cells: paths.path_edges.as_ptr() as *const sg_path_edge_list_cell,
+        cells: paths.path_edges.as_ptr() as *const *const sg_path_edge_list_cell,
         count: paths.path_edges.len(),
     }
 }
@@ -1163,10 +1165,10 @@ pub struct sg_partial_symbol_stack_cell {
     pub reversed: sg_partial_symbol_stack_cell_handle,
 }
 
-/// The array of all of the partial symbol stack content in a partial path arena.
+/// Holds all of the partial symbol stack content in a partial path arena.
 #[repr(C)]
 pub struct sg_partial_symbol_stack_cells {
-    pub cells: *const sg_partial_symbol_stack_cell,
+    pub cells: *const *const sg_partial_symbol_stack_cell,
     pub count: usize,
 }
 
@@ -1179,7 +1181,8 @@ pub extern "C" fn sg_partial_path_arena_partial_symbol_stack_cells(
 ) -> sg_partial_symbol_stack_cells {
     let partials = unsafe { &(*partials).inner };
     sg_partial_symbol_stack_cells {
-        cells: partials.partial_symbol_stacks.as_ptr() as *const sg_partial_symbol_stack_cell,
+        cells: partials.partial_symbol_stacks.as_ptr()
+            as *const *const sg_partial_symbol_stack_cell,
         count: partials.partial_symbol_stacks.len(),
     }
 }
@@ -1273,10 +1276,10 @@ pub struct sg_partial_scope_stack_cell {
     pub reversed: sg_path_edge_list_cell_handle,
 }
 
-/// The array of all of the partial scope stack content in a partial path arena.
+/// Holds all of the partial scope stack content in a partial path arena.
 #[repr(C)]
 pub struct sg_partial_scope_stack_cells {
-    pub cells: *const sg_partial_scope_stack_cell,
+    pub cells: *const *const sg_partial_scope_stack_cell,
     pub count: usize,
 }
 
@@ -1289,7 +1292,7 @@ pub extern "C" fn sg_partial_path_arena_partial_scope_stack_cells(
 ) -> sg_partial_scope_stack_cells {
     let partials = unsafe { &(*partials).inner };
     sg_partial_scope_stack_cells {
-        cells: partials.partial_scope_stacks.as_ptr() as *const sg_partial_scope_stack_cell,
+        cells: partials.partial_scope_stacks.as_ptr() as *const *const sg_partial_scope_stack_cell,
         count: partials.partial_scope_stacks.len(),
     }
 }
@@ -1389,10 +1392,10 @@ pub struct sg_partial_path_edge_list_cell {
     pub reversed: sg_partial_path_edge_list_cell_handle,
 }
 
-/// The array of all of the partial path edge list content in a partial path arena.
+/// Holds all of the partial path edge list content in a partial path arena.
 #[repr(C)]
 pub struct sg_partial_path_edge_list_cells {
-    pub cells: *const sg_partial_path_edge_list_cell,
+    pub cells: *const *const sg_partial_path_edge_list_cell,
     pub count: usize,
 }
 
@@ -1405,7 +1408,7 @@ pub extern "C" fn sg_partial_path_arena_partial_path_edge_list_cells(
 ) -> sg_partial_path_edge_list_cells {
     let partials = unsafe { &(*partials).inner };
     sg_partial_path_edge_list_cells {
-        cells: partials.partial_path_edges.as_ptr() as *const sg_partial_path_edge_list_cell,
+        cells: partials.partial_path_edges.as_ptr() as *const *const sg_partial_path_edge_list_cell,
         count: partials.partial_path_edges.len(),
     }
 }
@@ -1552,12 +1555,12 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
 /// partial path.
 pub type sg_partial_path_handle = u32;
 
-/// An array of all of the partial paths in a partial path database.  Partial path handles are
-/// indices into this array.  There will never be a valid partial path at index 0; a handle with
-/// the value 0 represents a missing partial path.
+/// Holds all of the partial paths in a partial path database.  Partial path handles are indices
+/// into these arrays.  There will never be a valid partial path at index 0; a handle with the
+/// value 0 represents a missing partial path.
 #[repr(C)]
 pub struct sg_partial_paths {
-    pub paths: *const sg_partial_path,
+    pub paths: *const *const sg_partial_path,
     pub count: usize,
 }
 
@@ -1570,7 +1573,7 @@ pub extern "C" fn sg_partial_path_database_partial_paths(
 ) -> sg_partial_paths {
     let db = unsafe { &(*db).inner };
     sg_partial_paths {
-        paths: db.partial_paths.as_ptr() as *const sg_partial_path,
+        paths: db.partial_paths.as_ptr() as *const *const sg_partial_path,
         count: db.partial_paths.len(),
     }
 }

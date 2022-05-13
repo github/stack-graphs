@@ -41,6 +41,8 @@ use std::ops::IndexMut;
 
 use bitvec::vec::BitVec;
 use controlled_option::Niche;
+use itertools::Itertools;
+use itertools::Position;
 
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
@@ -161,14 +163,40 @@ unsafe impl<T> Sync for Handle<T> {}
 /// the arena.  All of the instances managed by this arena will be dropped as a single operation
 /// when the arena itself is dropped.
 pub struct Arena<T> {
-    items: Vec<MaybeUninit<T>>,
+    chunks: Vec<Box<[MaybeUninit<T>; CHUNK_SIZE]>>,
+    size: usize,
 }
+
+pub(crate) const CHUNK_SIZE: usize = 512;
 
 impl<T> Drop for Arena<T> {
     fn drop(&mut self) {
-        unsafe {
-            let items = std::mem::transmute::<_, &mut [T]>(&mut self.items[1..]) as *mut [T];
-            items.drop_in_place();
+        // We need to drop all of the elements that were added to the arena.  This doesn't happen
+        // automatically since our chunk arrays store MaybeUninit<T>.  Element 0 (for the null
+        // handle) is always uninitialized, and there can be an arbitrary number of uninitialized
+        // elements at the end of the last chunk.
+
+        let mut last_chunk_size = self.size % CHUNK_SIZE;
+        if last_chunk_size == 0 {
+            // If the size of the arena is a multiple of CHUNK_SIZE, then we won't have created an
+            // empty chunk for the next element yet.  That means the final chunk is completely
+            // full, not completely empty.
+            last_chunk_size = CHUNK_SIZE;
+        }
+
+        for chunk in self.chunks.iter_mut().with_position() {
+            let chunk = match chunk {
+                // Skip element 0 in the first chunk, skip any uninitialized elements at the end of
+                // the last chunk.
+                Position::First(chunk) => &mut chunk[1..],
+                Position::Middle(chunk) => &mut chunk[..],
+                Position::Last(chunk) => &mut chunk[..last_chunk_size],
+                Position::Only(chunk) => &mut chunk[1..last_chunk_size],
+            };
+            unsafe {
+                let items = std::mem::transmute::<_, &mut [T]>(chunk) as *mut [T];
+                items.drop_in_place();
+            }
         }
     }
 }
@@ -176,9 +204,24 @@ impl<T> Drop for Arena<T> {
 impl<T> Arena<T> {
     /// Creates a new arena.
     pub fn new() -> Arena<T> {
-        Arena {
-            items: vec![MaybeUninit::uninit()],
-        }
+        let mut result = Arena {
+            chunks: Vec::new(),
+            size: 1,
+        };
+        result.add_new_chunk();
+        result
+    }
+
+    fn add_new_chunk(&mut self) {
+        // This follows a pattern in the MaybeUninit docs [1].  The `assume_init` here is not
+        // assuming that any of the elements _in_ the new chunk are initialized.  Instead, the
+        // `uninit` call gives us a MaybeUninit[MaybeUninit<T>; CHUNK_SIZE] — i.e., an
+        // uninitialized array of uninitialized elements.  That is equivalent to an array of
+        // uninitialized elements, so it's safe for the `assume_init` call to unwrap the outer
+        // `MaybeUninit`.
+        // [1] https://doc.rust-lang.org/std/mem/union.MaybeUninit.html#initializing-an-array-element-by-element
+        let chunk = Box::new(unsafe { MaybeUninit::uninit().assume_init() });
+        self.chunks.push(chunk);
     }
 
     /// Adds a new instance to this arena, returning a stable handle to it.
@@ -186,39 +229,61 @@ impl<T> Arena<T> {
     /// Note that we do not deduplicate instances of `T` in any way.  If you add two instances that
     /// have the same content, you will get distinct handles for each one.
     pub fn add(&mut self, item: T) -> Handle<T> {
-        let index = self.items.len() as u32;
-        self.items.push(MaybeUninit::new(item));
-        Handle::new(unsafe { NonZeroU32::new_unchecked(index) })
+        if (self.size % CHUNK_SIZE) == 0 {
+            self.add_new_chunk();
+        }
+        let last_chunk = unsafe { self.chunks.last_mut().unwrap_unchecked() };
+        let item_index = self.size % CHUNK_SIZE;
+        last_chunk[item_index].write(item);
+        let handle = Handle::new(unsafe { NonZeroU32::new_unchecked(self.size as u32) });
+        self.size += 1;
+        handle
     }
 
     /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
     pub fn get(&self, handle: Handle<T>) -> &T {
-        unsafe { std::mem::transmute(&self.items[handle.as_usize()]) }
+        debug_assert!(handle.as_usize() < self.size);
+        let chunk_index = handle.as_usize() / CHUNK_SIZE;
+        let item_index = handle.as_usize() % CHUNK_SIZE;
+        unsafe {
+            self.chunks
+                .get_unchecked(chunk_index)
+                .get_unchecked(item_index)
+                .assume_init_ref()
+        }
     }
-    ///
+
     /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
     /// it.
     pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
-        unsafe { std::mem::transmute(&mut self.items[handle.as_usize()]) }
+        debug_assert!(handle.as_usize() < self.size);
+        let chunk_index = handle.as_usize() / CHUNK_SIZE;
+        let item_index = handle.as_usize() % CHUNK_SIZE;
+        unsafe {
+            self.chunks
+                .get_unchecked_mut(chunk_index)
+                .get_unchecked_mut(item_index)
+                .assume_init_mut()
+        }
     }
 
     /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
     /// retain a reference to the arena!)
     pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
-        (1..self.items.len())
+        (1..self.size)
             .into_iter()
             .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
     }
 
     /// Returns a pointer to this arena's storage.
-    pub(crate) fn as_ptr(&self) -> *const T {
-        self.items.as_ptr() as *const T
+    pub(crate) fn as_ptr(&self) -> *const *const T {
+        self.chunks.as_ptr() as *const *const T
     }
 
     /// Returns the number of instances stored in this arena.
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.items.len()
+        self.size
     }
 }
 
@@ -258,62 +323,60 @@ impl<T> Arena<T> {
 /// [`Arena`]: struct.Arena.html
 /// [`get`]: #method.get
 pub struct SupplementalArena<H, T> {
-    items: Vec<MaybeUninit<T>>,
+    // TODO: Right now, we don't use MaybeUninit in these chunks, and always initialize every
+    // element of each chunk array.  (It's just convention that we don't actually _use_ the element
+    // for the null handle; we still store a valid instance of T for it.) As a result, it's not
+    // really possible to use SupplementalArena with a T that doesn't implement Default.
+    //
+    // At some point, we should update this to use MaybeUninit, and at that point could even add in
+    // a HandleSet to keep track of which H handles have T values associated, making
+    // SupplementalArena actually behave like a HashMap (which isn't required to have an entry for
+    // every key value).
+    chunks: Vec<Box<[T; CHUNK_SIZE]>>,
+    size: usize,
     _phantom: PhantomData<H>,
 }
 
-impl<H, T> Drop for SupplementalArena<H, T> {
-    fn drop(&mut self) {
-        unsafe {
-            let items = std::mem::transmute::<_, &mut [T]>(&mut self.items[1..]) as *mut [T];
-            items.drop_in_place();
-        }
-    }
-}
-
 impl<H, T> SupplementalArena<H, T> {
-    /// Creates a new, empty supplemental arena.
-    pub fn new() -> SupplementalArena<H, T> {
-        SupplementalArena {
-            items: vec![MaybeUninit::uninit()],
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental
-    /// data for all of the instances that have already been allocated in a (regular) arena.
-    pub fn with_capacity(arena: &Arena<H>) -> SupplementalArena<H, T> {
-        let mut items = Vec::with_capacity(arena.items.len());
-        items[0] = MaybeUninit::uninit();
-        SupplementalArena {
-            items,
-            _phantom: PhantomData,
-        }
-    }
-
     /// Returns the item belonging to a particular handle, if it exists.
     pub fn get(&self, handle: Handle<H>) -> Option<&T> {
-        self.items
-            .get(handle.as_usize())
-            .map(|x| unsafe { &*(x.as_ptr()) })
+        let index = handle.as_usize();
+        if index >= self.size {
+            return None;
+        }
+        let chunk_index = index / CHUNK_SIZE;
+        let item_index = index % CHUNK_SIZE;
+        Some(unsafe {
+            self.chunks
+                .get_unchecked(chunk_index)
+                .get_unchecked(item_index)
+        })
     }
 
     /// Returns a mutable reference to the item belonging to a particular handle, if it exists.
     pub fn get_mut(&mut self, handle: Handle<H>) -> Option<&mut T> {
-        self.items
-            .get_mut(handle.as_usize())
-            .map(|x| unsafe { &mut *(x.as_mut_ptr()) })
+        let index = handle.as_usize();
+        if index >= self.size {
+            return None;
+        }
+        let chunk_index = index / CHUNK_SIZE;
+        let item_index = index % CHUNK_SIZE;
+        Some(unsafe {
+            self.chunks
+                .get_unchecked_mut(chunk_index)
+                .get_unchecked_mut(item_index)
+        })
     }
 
     /// Returns a pointer to this arena's storage.
-    pub(crate) fn as_ptr(&self) -> *const T {
-        self.items.as_ptr() as *const T
+    pub(crate) fn as_ptr(&self) -> *const *const T {
+        self.chunks.as_ptr() as *const *const T
     }
 
     /// Returns the number of instances stored in this arena.
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.items.len()
+        self.size
     }
 }
 
@@ -321,19 +384,76 @@ impl<H, T> SupplementalArena<H, T>
 where
     T: Default,
 {
+    /// Creates a new, empty supplemental arena.
+    pub fn new() -> SupplementalArena<H, T> {
+        let mut result = SupplementalArena {
+            chunks: Vec::new(),
+            size: 1,
+            _phantom: PhantomData,
+        };
+        result.add_new_chunk();
+        result
+    }
+
+    /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental
+    /// data for all of the instances that have already been allocated in a (regular) arena.
+    pub fn with_capacity(arena: &Arena<H>) -> SupplementalArena<H, T> {
+        let mut result = Self::new();
+        result.ensure_size(arena.len());
+        result
+    }
+
+    fn add_new_chunk(&mut self) {
+        // This follows a pattern in the MaybeUninit docs [1].  The `assume_init` here is not
+        // assuming that any of the elements _in_ the new chunk are initialized.  Instead, the
+        // `uninit` call gives us a MaybeUninit[MaybeUninit<T>; CHUNK_SIZE] — i.e., an
+        // uninitialized array of uninitialized elements.  That is equivalent to an array of
+        // uninitialized elements, so it's safe for the `assume_init` call to unwrap the outer
+        // `MaybeUninit`.
+        //
+        // (All of this is needed only because it's currently the only way in stable Rust to create
+        // an array whose elements are initialized to `T::default()`.)
+        //
+        // [1] https://doc.rust-lang.org/std/mem/union.MaybeUninit.html#initializing-an-array-element-by-element
+        let mut chunk: Box<[MaybeUninit<T>; CHUNK_SIZE]> =
+            Box::new(unsafe { MaybeUninit::uninit().assume_init() });
+        for item in chunk.as_mut() {
+            item.write(T::default());
+        }
+        let chunk: Box<[T; CHUNK_SIZE]> = unsafe { std::mem::transmute(chunk) };
+        self.chunks.push(chunk);
+    }
+
+    fn ensure_size(&mut self, size: usize) {
+        if self.size >= size {
+            return;
+        }
+        let required_chunk_length = (size / CHUNK_SIZE) + 1;
+        while self.chunks.len() < required_chunk_length {
+            self.add_new_chunk();
+        }
+        self.size = size;
+    }
+
     /// Returns a mutable reference to the item belonging to a particular handle, creating it first
     /// (using the type's `Default` implementation) if it doesn't already exist.
     pub fn get_mut_or_default(&mut self, handle: Handle<H>) -> &mut T {
         let index = handle.as_usize();
-        if self.items.len() <= index {
-            self.items
-                .resize_with(index + 1, || MaybeUninit::new(T::default()));
+        self.ensure_size(index + 1);
+        let chunk_index = index / CHUNK_SIZE;
+        let item_index = index % CHUNK_SIZE;
+        unsafe {
+            self.chunks
+                .get_unchecked_mut(chunk_index)
+                .get_unchecked_mut(item_index)
         }
-        unsafe { std::mem::transmute(&mut self.items[handle.as_usize()]) }
     }
 }
 
-impl<H, T> Default for SupplementalArena<H, T> {
+impl<H, T> Default for SupplementalArena<H, T>
+where
+    T: Default,
+{
     fn default() -> SupplementalArena<H, T> {
         SupplementalArena::new()
     }
@@ -342,7 +462,8 @@ impl<H, T> Default for SupplementalArena<H, T> {
 impl<H, T> Index<Handle<H>> for SupplementalArena<H, T> {
     type Output = T;
     fn index(&self, handle: Handle<H>) -> &T {
-        unsafe { std::mem::transmute(&self.items[handle.as_usize()]) }
+        self.get(handle)
+            .expect("Missing supplemental arena element")
     }
 }
 

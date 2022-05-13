@@ -14,6 +14,7 @@ use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_stack_graph_symbols;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::sg_symbols;
+use stack_graphs::c::SG_ARENA_CHUNK_SIZE;
 use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::graph::Symbol;
 
@@ -21,9 +22,17 @@ fn lengths(data: &[&'static str]) -> Vec<usize> {
     data.iter().map(|s| s.len()).collect()
 }
 
+fn index_chunked<'a, T>(chunks: *const *const T, index: usize) -> &'a T {
+    let chunk_index = index / SG_ARENA_CHUNK_SIZE;
+    let item_index = index % SG_ARENA_CHUNK_SIZE;
+    let chunks = unsafe { std::slice::from_raw_parts(chunks, chunk_index + 1) };
+    let chunk = chunks[chunk_index];
+    let items = unsafe { std::slice::from_raw_parts(chunk, item_index + 1) };
+    &items[item_index]
+}
+
 fn get_symbol(arena: &sg_symbols, handle: Handle<Symbol>) -> &str {
-    let slice = unsafe { std::slice::from_raw_parts(arena.symbols, arena.count) };
-    let symbol = &slice[handle.as_usize()];
+    let symbol = index_chunked(arena.symbols, handle.as_usize());
     unsafe {
         let bytes = std::slice::from_raw_parts(symbol.symbol as *const u8, symbol.symbol_len);
         std::str::from_utf8_unchecked(bytes)

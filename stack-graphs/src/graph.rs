@@ -317,6 +317,7 @@ impl Handle<InternedString> {
 /// choice.  If your files belong to packages or repositories, they should include the package or
 /// repository IDs to make sure that files in different packages or repositories don't clash with
 /// each other.
+#[repr(C)]
 pub struct File {
     /// The name of this source file.
     name: InternedStringContent,

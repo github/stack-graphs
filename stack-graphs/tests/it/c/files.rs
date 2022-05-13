@@ -14,6 +14,7 @@ use stack_graphs::c::sg_stack_graph_add_files;
 use stack_graphs::c::sg_stack_graph_files;
 use stack_graphs::c::sg_stack_graph_free;
 use stack_graphs::c::sg_stack_graph_new;
+use stack_graphs::c::SG_ARENA_CHUNK_SIZE;
 use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::graph::File;
 
@@ -21,9 +22,17 @@ fn lengths(data: &[&'static str]) -> Vec<usize> {
     data.iter().map(|s| s.len()).collect()
 }
 
+fn index_chunked<'a, T>(chunks: *const *const T, index: usize) -> &'a T {
+    let chunk_index = index / SG_ARENA_CHUNK_SIZE;
+    let item_index = index % SG_ARENA_CHUNK_SIZE;
+    let chunks = unsafe { std::slice::from_raw_parts(chunks, chunk_index + 1) };
+    let chunk = chunks[chunk_index];
+    let items = unsafe { std::slice::from_raw_parts(chunk, item_index + 1) };
+    &items[item_index]
+}
+
 fn get_file(arena: &sg_files, handle: Handle<File>) -> &str {
-    let slice = unsafe { std::slice::from_raw_parts(arena.files, arena.count) };
-    let file = &slice[handle.as_usize()];
+    let file = index_chunked(arena.files, handle.as_usize());
     unsafe {
         let bytes = std::slice::from_raw_parts(file.name as *const u8, file.name_len);
         std::str::from_utf8_unchecked(bytes)

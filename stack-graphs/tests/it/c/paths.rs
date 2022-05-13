@@ -37,11 +37,21 @@ use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::sg_symbol_stack;
 use stack_graphs::c::sg_symbol_stack_cells;
+use stack_graphs::c::SG_ARENA_CHUNK_SIZE;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
 use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::paths::PathEdgeList;
 use stack_graphs::paths::ScopeStack;
 use stack_graphs::paths::SymbolStack;
+
+fn index_chunked<'a, T>(chunks: *const *const T, index: usize) -> &'a T {
+    let chunk_index = index / SG_ARENA_CHUNK_SIZE;
+    let item_index = index % SG_ARENA_CHUNK_SIZE;
+    let chunks = unsafe { std::slice::from_raw_parts(chunks, chunk_index + 1) };
+    let chunk = chunks[chunk_index];
+    let items = unsafe { std::slice::from_raw_parts(chunk, item_index + 1) };
+    &items[item_index]
+}
 
 fn add_file(graph: *mut sg_stack_graph, filename: &str) -> sg_file_handle {
     let lengths = [filename.len()];
@@ -108,13 +118,12 @@ fn symbol_stack_contains(
     stack: &sg_symbol_stack,
     expected: &[sg_scoped_symbol],
 ) -> bool {
-    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = stack.cells;
     for node in expected {
         if current == SG_LIST_EMPTY_HANDLE {
             return false;
         }
-        let cell = &cells[current as usize];
+        let cell = index_chunked(cells.cells, current as usize);
         if cell.head != *node {
             return false;
         }
@@ -197,13 +206,12 @@ fn scope_stack_contains(
     stack: &sg_scope_stack,
     expected: &[sg_node_handle],
 ) -> bool {
-    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = stack.cells;
     for node in expected {
         if current == SG_LIST_EMPTY_HANDLE {
             return false;
         }
-        let cell = &cells[current as usize];
+        let cell = index_chunked(cells.cells, current as usize);
         if cell.head != *node {
             return false;
         }
@@ -276,7 +284,6 @@ fn path_edge_list_contains(
     list: &sg_path_edge_list,
     expected: &[sg_path_edge],
 ) -> bool {
-    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = list.cells;
     let expected = if list.direction == sg_deque_direction::SG_DEQUE_FORWARDS {
         Either::Left(expected.iter())
@@ -287,7 +294,7 @@ fn path_edge_list_contains(
         if current == SG_LIST_EMPTY_HANDLE {
             return false;
         }
-        let cell = &cells[current as usize];
+        let cell = index_chunked(cells.cells, current as usize);
         if cell.head != *node {
             return false;
         }
@@ -300,12 +307,11 @@ fn path_edge_list_available_in_both_directions(
     cells: &sg_path_edge_list_cells,
     list: &sg_path_edge_list,
 ) -> bool {
-    let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let head = list.cells;
     if head == SG_LIST_EMPTY_HANDLE {
         return true;
     }
-    let cell = &cells[head as usize];
+    let cell = index_chunked(cells.cells, head as usize);
     cell.reversed != SG_NULL_HANDLE
 }
 

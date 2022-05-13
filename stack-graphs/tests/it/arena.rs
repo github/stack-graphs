@@ -28,6 +28,16 @@ fn can_allocate_in_arena() {
     assert_ne!(arena.get(hello2), arena.get(there));
 }
 
+const CHUNK_SIZE: usize = 512;
+
+#[test]
+fn can_allocate_full_chunk() {
+    let mut arena = Arena::new();
+    for _ in 1..CHUNK_SIZE {
+        arena.add("hello".to_string());
+    }
+}
+
 #[test]
 fn can_allocate_in_supplemental_arena() {
     let mut arena = Arena::<u32>::new();

@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define SG_ARENA_CHUNK_SIZE 512
+
 // The null value for all of our handles.
 #define SG_NULL_HANDLE 0
 
@@ -90,11 +92,11 @@ struct sg_symbol {
     size_t symbol_len;
 };
 
-// An array of all of the symbols in a stack graph.  Symbol handles are indices into this array.
+// Holds all of the symbols in a stack graph.  Symbol handles are indices into these arrays.
 // There will never be a valid symbol at index 0; a handle with the value 0 represents a missing
 // symbol.
 struct sg_symbols {
-    const struct sg_symbol *symbols;
+    const struct sg_symbol *const *symbols;
     size_t count;
 };
 
@@ -111,11 +113,11 @@ struct sg_string {
     size_t length;
 };
 
-// An array of all of the interned strings in a stack graph.  String handles are indices into this
-// array. There will never be a valid string at index 0; a handle with the value 0 represents a
+// Holds of all of the interned strings in a stack graph.  String handles are indices into these
+// arrays.  There will never be a valid string at index 0; a handle with the value 0 represents a
 // missing string.
 struct sg_strings {
-    const struct sg_string *strings;
+    const struct sg_string *const *strings;
     size_t count;
 };
 
@@ -138,11 +140,10 @@ struct sg_file {
     size_t name_len;
 };
 
-// An array of all of the files in a stack graph.  File handles are indices into this array.
-// There will never be a valid file at index 0; a handle with the value 0 represents a missing
-// file.
+// Holds all of the files in a stack graph.  File handles are indices into these arrays.  There
+// will never be a valid file at index 0; a handle with the value 0 represents a missing file.
 struct sg_files {
-    const struct sg_file *files;
+    const struct sg_file *const *files;
     size_t count;
 };
 
@@ -181,11 +182,10 @@ struct sg_node {
     bool is_endpoint;
 };
 
-// An array of all of the nodes in a stack graph.  Node handles are indices into this array.
-// There will never be a valid node at index 0; a handle with the value 0 represents a missing
-// node.
+// Holds all of the nodes in a stack graph.  Node handles are indices into these arrays.  There
+// will never be a valid node at index 0; a handle with the value 0 represents a missing node.
 struct sg_nodes {
-    const struct sg_node *nodes;
+    const struct sg_node *const *nodes;
     size_t count;
 };
 
@@ -256,16 +256,16 @@ struct sg_source_info {
     sg_string_handle containing_line;
 };
 
-// An array of all of the source information in a stack graph.  Source information is associated
-// with nodes, so node handles are indices into this array.  It is _not_ guaranteed that there
-// will an entry in this array for every node handle; if you have a node handle whose value is
-// larger than `count`, then use a 0-valued `sg_source_info` if you need source information for
-// that node.
+// Holds all of the source information in a stack graph.  Source information is associated with
+// nodes, so node handles are indices into these arrays.  It is _not_ guaranteed that there will
+// an entry in this array for every node handle; if you have a node handle whose value is larger
+// than `count`, then use a 0-valued `sg_source_info` if you need source information for that
+// node.
 //
 // There will never be a valid entry at index 0; a handle with the value 0 represents a missing
 // node.
 struct sg_source_infos {
-    const struct sg_source_info *infos;
+    const struct sg_source_info *const *infos;
     size_t count;
 };
 
@@ -307,9 +307,9 @@ struct sg_symbol_stack_cell {
     sg_symbol_stack_cell_handle tail;
 };
 
-// The array of all of the symbol stack content in a path arena.
+// Holds all of the symbol stack content in a path arena.
 struct sg_symbol_stack_cells {
-    const struct sg_symbol_stack_cell *cells;
+    const struct sg_symbol_stack_cell *const *cells;
     size_t count;
 };
 
@@ -331,9 +331,9 @@ struct sg_scope_stack_cell {
     sg_scope_stack_cell_handle tail;
 };
 
-// The array of all of the scope stack content in a path arena.
+// Holds all of the scope stack content in a path arena.
 struct sg_scope_stack_cells {
-    const struct sg_scope_stack_cell *cells;
+    const struct sg_scope_stack_cell *const *cells;
     size_t count;
 };
 
@@ -358,9 +358,9 @@ struct sg_path_edge_list_cell {
     sg_path_edge_list_cell_handle reversed;
 };
 
-// The array of all of the path edge list content in a path arena.
+// Holds all of the path edge list content in a path arena.
 struct sg_path_edge_list_cells {
-    const struct sg_path_edge_list_cell *cells;
+    const struct sg_path_edge_list_cell *const *cells;
     size_t count;
 };
 
@@ -427,9 +427,9 @@ struct sg_partial_symbol_stack_cell {
     sg_partial_symbol_stack_cell_handle reversed;
 };
 
-// The array of all of the partial symbol stack content in a partial path arena.
+// Holds all of the partial symbol stack content in a partial path arena.
 struct sg_partial_symbol_stack_cells {
-    const struct sg_partial_symbol_stack_cell *cells;
+    const struct sg_partial_symbol_stack_cell *const *cells;
     size_t count;
 };
 
@@ -468,9 +468,9 @@ struct sg_partial_scope_stack_cell {
     sg_path_edge_list_cell_handle reversed;
 };
 
-// The array of all of the partial scope stack content in a partial path arena.
+// Holds all of the partial scope stack content in a partial path arena.
 struct sg_partial_scope_stack_cells {
-    const struct sg_partial_scope_stack_cell *cells;
+    const struct sg_partial_scope_stack_cell *const *cells;
     size_t count;
 };
 
@@ -495,9 +495,9 @@ struct sg_partial_path_edge_list_cell {
     sg_partial_path_edge_list_cell_handle reversed;
 };
 
-// The array of all of the partial path edge list content in a partial path arena.
+// Holds all of the partial path edge list content in a partial path arena.
 struct sg_partial_path_edge_list_cells {
-    const struct sg_partial_path_edge_list_cell *cells;
+    const struct sg_partial_path_edge_list_cell *const *cells;
     size_t count;
 };
 
@@ -537,11 +537,11 @@ struct sg_partial_path {
     struct sg_partial_path_edge_list edges;
 };
 
-// An array of all of the partial paths in a partial path database.  Partial path handles are
-// indices into this array.  There will never be a valid partial path at index 0; a handle with
-// the value 0 represents a missing partial path.
+// Holds all of the partial paths in a partial path database.  Partial path handles are indices
+// into these arrays.  There will never be a valid partial path at index 0; a handle with the
+// value 0 represents a missing partial path.
 struct sg_partial_paths {
-    const struct sg_partial_path *paths;
+    const struct sg_partial_path *const *paths;
     size_t count;
 };
 

@@ -22,10 +22,20 @@ use stack_graphs::c::sg_partial_path_list_free;
 use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_stack_graph_nodes;
+use stack_graphs::c::SG_ARENA_CHUNK_SIZE;
 use stack_graphs::graph::Node;
 
 use crate::c::test_graph::TestGraph;
 use crate::test_graphs;
+
+fn index_chunked<'a, T>(chunks: *const *const T, index: usize) -> &'a T {
+    let chunk_index = index / SG_ARENA_CHUNK_SIZE;
+    let item_index = index % SG_ARENA_CHUNK_SIZE;
+    let chunks = unsafe { std::slice::from_raw_parts(chunks, chunk_index + 1) };
+    let chunk = chunks[chunk_index];
+    let items = unsafe { std::slice::from_raw_parts(chunk, item_index + 1) };
+    &items[item_index]
+}
 
 fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str]) {
     let rust_graph = unsafe { &(*graph.graph).inner };
@@ -68,12 +78,11 @@ fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str
     }
 
     let nodes = sg_stack_graph_nodes(graph.graph);
-    let nodes = unsafe { std::slice::from_raw_parts(nodes.nodes as *const Node, nodes.count) };
-    let results = nodes
-        .iter()
-        .enumerate()
-        .filter(|(idx, _)| get_is_local(&local_nodes, *idx))
-        .map(|(_, node)| node.display(rust_graph).to_string())
+    let (nodes, node_count) = (nodes.nodes as *const *const Node, nodes.count);
+    let results = (1..node_count)
+        .into_iter()
+        .filter(|idx| get_is_local(&local_nodes, *idx))
+        .map(|idx| index_chunked(nodes, idx).display(rust_graph).to_string())
         .collect::<BTreeSet<_>>();
 
     let expected_local_nodes = expected_local_nodes
