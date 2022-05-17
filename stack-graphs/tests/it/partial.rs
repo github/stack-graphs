@@ -8,6 +8,8 @@
 use controlled_option::ControlledOption;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::partial::PartialPath;
+use stack_graphs::partial::PartialPathEdgeList;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::partial::PartialScopeStack;
 use stack_graphs::partial::PartialScopeStackBindings;
@@ -17,6 +19,7 @@ use stack_graphs::partial::PartialSymbolStackBindings;
 use stack_graphs::partial::ScopeStackVariable;
 use stack_graphs::partial::SymbolStackVariable;
 use stack_graphs::paths::PathResolutionError;
+use stack_graphs::stitching::Database;
 
 type NiceSymbolStack<'a> = (&'a [NiceScopedSymbol<'a>], Option<SymbolStackVariable>);
 type NiceScopedSymbol<'a> = (&'a str, Option<NiceScopeStack<'a>>);
@@ -44,6 +47,32 @@ fn create_symbol_stack(
         stack.push_back(partials, scoped_symbol);
     }
     stack
+}
+
+#[test]
+fn will_skip_divergent_partial_paths() {
+    let mut graph = StackGraph::new();
+    let mut partials = PartialPaths::new();
+    let mut db = Database::new();
+    let start_node = StackGraph::root_node();
+    let end_node = StackGraph::root_node();
+    let symbol_stack_precondition = create_symbol_stack(&mut graph, &mut partials, (&[], None));
+    let symbol_stack_postcondition =
+        create_symbol_stack(&mut graph, &mut partials, (&[("a", None)], None));
+    let variable = ScopeStackVariable::new(1).unwrap();
+    let scope_stack_precondition = PartialScopeStack::from_variable(variable);
+    let scope_stack_postcondition = PartialScopeStack::from_variable(variable);
+    let edges = PartialPathEdgeList::empty();
+    let partial_path = PartialPath {
+        start_node,
+        end_node,
+        symbol_stack_precondition,
+        symbol_stack_postcondition,
+        scope_stack_precondition,
+        scope_stack_postcondition,
+        edges,
+    };
+    db.add_partial_path(&graph, &mut partials, partial_path);
 }
 
 #[test]

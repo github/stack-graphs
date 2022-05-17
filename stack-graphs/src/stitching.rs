@@ -121,8 +121,10 @@ impl Database {
                 self,
                 symbol_stack_precondition,
             );
-            let key_handle = key.back_handle();
-            self.root_paths_by_precondition[key_handle].push(handle);
+            if !key.is_empty() {
+                let key_handle = key.back_handle();
+                self.root_paths_by_precondition[key_handle].push(handle);
+            }
         } else {
             // Otherwise index it by its source node.
             self.paths_by_start_node[start_node].push(handle);
@@ -317,6 +319,10 @@ impl SymbolStackKey {
         SymbolStackKey {
             symbols: List::empty(),
         }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.symbols.is_empty()
     }
 
     /// Pushes a new symbol onto the back of this symbol stack key.
