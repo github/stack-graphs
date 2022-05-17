@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- We no longer add divergent partial paths to a `Database`.  A divergent partial
+  path starts at the root node and has an empty symbol stack precondition.  That
+  empty precondition means that it can be concatenated to _any_ path that
+  currently ends at the root node — including the result of that concatenation!
+  That gives us a divergence, since we can continually prepend the path's
+  postcondition to the current symbol stack, forever.  To avoid this divergence,
+  we skip these partial paths when constructing a database.
+
 ## stack-graphs 0.7.2 -- 2022-05-09
 
 ### Added
