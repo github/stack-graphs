@@ -1,6 +1,6 @@
 [package]
 name = "stack-graphs"
-version = "0.7.2"
+version = "0.7.3"
 description = "Name binding for arbitrary programming languages"
 homepage = "https://github.com/github/stack-graphs/"
 repository = "https://github.com/github/stack-graphs/"
