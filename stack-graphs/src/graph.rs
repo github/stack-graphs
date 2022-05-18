@@ -1533,6 +1533,7 @@ impl StackGraph {
                             .into_option()
                             .map(|cl| self.add_string(&other[cl]))
                             .into(),
+                        definiens_span: source_info.definiens_span.clone(),
                     };
                 }
                 if let Some(debug_info) = other.debug_info(other_node) {

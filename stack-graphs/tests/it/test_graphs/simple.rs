@@ -76,6 +76,7 @@ pub fn new() -> StackGraph {
         },
         syntax_type: str_var.into(),
         containing_line: str_line0.into(),
+        definiens_span: Span::default(),
     };
     *graph.source_info_mut(ref_x) = SourceInfo {
         span: Span {
@@ -102,6 +103,7 @@ pub fn new() -> StackGraph {
         },
         syntax_type: str_var.into(),
         containing_line: str_line1.into(),
+        definiens_span: Span::default(),
     };
 
     let str_dsl_var = graph.add_string("dsl_var");

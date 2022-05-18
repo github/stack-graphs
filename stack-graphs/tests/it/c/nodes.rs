@@ -681,6 +681,7 @@ fn can_create_source_info() {
             span: sg_span::default(),
             syntax_type,
             containing_line,
+            definiens_span: sg_span::default(),
         },
     }];
     infos[0].source_info.span.start.line = 17;
