@@ -1333,7 +1333,11 @@ pub struct SourceInfo {
     pub syntax_type: Option<Handle<InternedString>>,
     /// The full content of the line containing this node in its source file.
     pub containing_line: ControlledOption<Handle<InternedString>>,
+    
     /// The location in its containing file of the source code that this node's definiens represents.
+    /// This is used for things like the bodies of functions, rather than the RHSes of equations.
+    /// If you need one of these to make the type checker happy, but you don't have one, just use
+    /// lsp_positions::Span::default(), as this will correspond to the all-0s spans which mean "no definiens".
     pub definiens_span: lsp_positions::Span,
 }
 
