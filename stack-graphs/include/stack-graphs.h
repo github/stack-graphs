@@ -254,6 +254,11 @@ struct sg_source_info {
     sg_string_handle syntax_type;
     // The full content of the line containing this node in its source file.
     sg_string_handle containing_line;
+    // The location in its containing file of the source code that this node's definiens represents.
+    // This is used for things like the bodies of functions, rather than the RHSes of equations.
+    // If you need one of these to make the type checker happy, but you don't have one, just use
+    // sg_span::default(), as this will correspond to the all-0s spans which mean "no definiens".
+    struct sg_span definiens_span;
 };
 
 // An array of all of the source information in a stack graph.  Source information is associated

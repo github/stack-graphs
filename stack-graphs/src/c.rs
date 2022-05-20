@@ -629,6 +629,12 @@ pub struct sg_source_info {
     pub syntax_type: sg_string_handle,
     /// The full content of the line containing this node in its source file.
     pub containing_line: sg_string_handle,
+
+    /// The location in its containing file of the source code that this node's definiens represents.
+    /// This is used for things like the bodies of functions, rather than the RHSes of equations.
+    /// If you need one of these to make the type checker happy, but you don't have one, just use
+    /// sg_span::default(), as this will correspond to the all-0s spans which mean "no definiens".
+    pub definiens_span: sg_span,
 }
 
 /// All of the position information that we have about a range of content in a source file
