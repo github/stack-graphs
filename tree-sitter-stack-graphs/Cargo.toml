@@ -2,7 +2,7 @@
 name = "tree-sitter-stack-graphs"
 version = "0.1.0"
 description = "Create stack graphs using tree-sitter parsers"
-homepage = "https://github.com/github/stack-graphs/tree-sitter-stack-graphs"
+homepage = "https://github.com/github/stack-graphs/tree/main/tree-sitter-stack-graphs"
 repository = "https://github.com/github/stack-graphs/"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
