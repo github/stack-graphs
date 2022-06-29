@@ -999,6 +999,11 @@ impl PartialSymbolStack {
         self.symbols
             .ensure_forwards(&mut partials.partial_symbol_stacks);
     }
+
+    fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
+        self.symbols
+            .ensure_forwards(&mut partials.partial_symbol_stacks);
+    }
 }
 
 impl DisplayWithPartialPaths for PartialSymbolStack {
@@ -1408,6 +1413,11 @@ impl PartialScopeStack {
     fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
         self.scopes
             .ensure_backwards(&mut partials.partial_scope_stacks);
+        self.scopes
+            .ensure_forwards(&mut partials.partial_scope_stacks);
+    }
+
+    fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
         self.scopes
             .ensure_forwards(&mut partials.partial_scope_stacks);
     }
@@ -1829,6 +1839,10 @@ impl PartialPathEdgeList {
             .ensure_backwards(&mut partials.partial_path_edges);
         self.edges.ensure_forwards(&mut partials.partial_path_edges);
     }
+
+    fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
+        self.edges.ensure_forwards(&mut partials.partial_path_edges);
+    }
 }
 
 impl DisplayWithPartialPaths for PartialPathEdgeList {
@@ -2092,6 +2106,29 @@ impl PartialPath {
         while let Some(symbol) = stack.pop_front(partials) {
             if let Some(mut scopes) = symbol.scopes.into_option() {
                 scopes.ensure_both_directions(partials);
+            }
+        }
+    }
+
+    /// Ensures that the content of this partial path is in forwards direction.
+    pub fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
+        self.symbol_stack_precondition.ensure_forwards(partials);
+        self.symbol_stack_postcondition.ensure_forwards(partials);
+        self.scope_stack_precondition.ensure_forwards(partials);
+        self.scope_stack_postcondition.ensure_forwards(partials);
+        self.edges.ensure_forwards(partials);
+
+        let mut stack = self.symbol_stack_precondition;
+        while let Some(symbol) = stack.pop_front(partials) {
+            if let Some(mut scopes) = symbol.scopes.into_option() {
+                scopes.ensure_forwards(partials);
+            }
+        }
+
+        let mut stack = self.symbol_stack_postcondition;
+        while let Some(symbol) = stack.pop_front(partials) {
+            if let Some(mut scopes) = symbol.scopes.into_option() {
+                scopes.ensure_forwards(partials);
             }
         }
     }

@@ -283,6 +283,20 @@ impl Database {
     pub fn iter_partial_paths(&self) -> impl Iterator<Item = Handle<PartialPath>> {
         self.partial_paths.iter_handles()
     }
+
+    pub fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+        for path in self.partial_paths.iter_handles() {
+            self.partial_paths
+                .get_mut(path)
+                .ensure_both_directions(partials);
+        }
+    }
+
+    pub fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
+        for path in self.partial_paths.iter_handles() {
+            self.partial_paths.get_mut(path).ensure_forwards(partials);
+        }
+    }
 }
 
 impl Index<Handle<PartialPath>> for Database {
