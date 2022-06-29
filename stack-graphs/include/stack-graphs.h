@@ -661,6 +661,14 @@ struct sg_partial_path_database *sg_partial_path_database_new(void);
 // Frees a partial path database, and all of its contents.
 void sg_partial_path_database_free(struct sg_partial_path_database *db);
 
+// Ensures all partial paths in the database are availabe in both forwards and backwards orientation.
+void sg_partial_path_database_ensure_both_directions(struct sg_partial_path_database *db,
+                                                     struct sg_partial_path_arena *partials);
+
+// Ensures all partial paths in the database are in forwards orientation.
+void sg_partial_path_database_ensure_forwards(struct sg_partial_path_database *db,
+                                              struct sg_partial_path_arena *partials);
+
 // Returns a reference to the array of symbol data in this stack graph.  The resulting array
 // pointer is only valid until the next call to any function that mutates the stack graph.
 struct sg_symbols sg_stack_graph_symbols(const struct sg_stack_graph *graph);

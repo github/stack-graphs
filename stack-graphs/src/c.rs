@@ -142,6 +142,28 @@ impl Default for sg_deque_direction {
     }
 }
 
+/// Ensures all partial paths in the database are availabe in both forwards and backwards orientation.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_database_ensure_both_directions(
+    db: *mut sg_partial_path_database,
+    partials: *mut sg_partial_path_arena,
+) {
+    let db = unsafe { &mut (*db).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    db.ensure_both_directions(partials);
+}
+
+/// Ensures all partial paths in the database are in forwards orientation.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_database_ensure_forwards(
+    db: *mut sg_partial_path_database,
+    partials: *mut sg_partial_path_arena,
+) {
+    let db = unsafe { &mut (*db).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    db.ensure_forwards(partials);
+}
+
 //-------------------------------------------------------------------------------------------------
 // Symbols
 
