@@ -294,9 +294,7 @@ impl Database {
 
     pub fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
         for path in self.partial_paths.iter_handles() {
-            self.partial_paths
-                .get_mut(path)
-                .ensure_both_directions(partials);
+            self.partial_paths.get_mut(path).ensure_forwards(partials);
         }
     }
 }
