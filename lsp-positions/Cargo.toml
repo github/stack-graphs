@@ -2,7 +2,7 @@
 name = "lsp-positions"
 version = "0.3.0"
 description = "LSP-compatible character positions"
-homepage = "https://github.com/github/stack-graphs/lsp-positions"
+homepage = "https://github.com/github/stack-graphs/tree/main/lsp-positions"
 repository = "https://github.com/github/stack-graphs/"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
