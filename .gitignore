@@ -1,6 +1,7 @@
 # Rust build stuff
 Cargo.lock
 /target/
+*/target/
 
 # Locally installed binaries
 /.crates.toml
