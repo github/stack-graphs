@@ -430,7 +430,7 @@ impl StackGraphLanguage {
     /// (The source file must be implemented in this language, otherwise you'll probably get a
     /// parse error.)
     pub fn build_stack_graph_into(
-        &mut self,
+        &self,
         stack_graph: &mut StackGraph,
         file: Handle<File>,
         source: &str,
@@ -459,7 +459,7 @@ impl StackGraphLanguage {
                 format!("{}", &stack_graph[file]).into(),
             )
             .expect("Failed to set FILE_PATH");
-        let mut config = ExecutionConfig::new(&mut self.functions, &globals)
+        let mut config = ExecutionConfig::new(&self.functions, &globals)
             .lazy(true)
             .debug_attributes(
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),

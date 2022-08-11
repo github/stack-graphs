@@ -12,7 +12,7 @@ use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
 fn build_stack_graph(python_source: &str, tsg_source: &str) -> Result<StackGraph, LoadError> {
-    let mut language =
+    let language =
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
     let mut graph = StackGraph::new();
     let file = graph.get_or_create_file("test.py");

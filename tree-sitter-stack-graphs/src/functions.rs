@@ -47,21 +47,21 @@ pub mod path {
 
     pub fn path_fn<F>(f: F) -> impl Function
     where
-        F: FnMut(&Path) -> Option<std::ffi::OsString>,
+        F: Fn(&Path) -> Option<std::ffi::OsString>,
     {
         PathFn(f)
     }
 
     struct PathFn<F>(F)
     where
-        F: FnMut(&Path) -> Option<std::ffi::OsString>;
+        F: Fn(&Path) -> Option<std::ffi::OsString>;
 
     impl<F> Function for PathFn<F>
     where
-        F: FnMut(&Path) -> Option<std::ffi::OsString>,
+        F: Fn(&Path) -> Option<std::ffi::OsString>,
     {
         fn call(
-            &mut self,
+            &self,
             _graph: &mut Graph,
             _source: &str,
             parameters: &mut dyn Parameters,
@@ -84,7 +84,7 @@ pub mod path {
 
     impl Function for PathJoin {
         fn call(
-            &mut self,
+            &self,
             _graph: &mut Graph,
             _source: &str,
             parameters: &mut dyn Parameters,
@@ -102,7 +102,7 @@ pub mod path {
 
     impl Function for PathSplit {
         fn call(
-            &mut self,
+            &self,
             _graph: &mut Graph,
             _source: &str,
             parameters: &mut dyn Parameters,
