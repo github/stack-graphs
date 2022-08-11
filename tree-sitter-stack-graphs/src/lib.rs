@@ -361,7 +361,7 @@ static FILE_PATH_VAR: &'static str = "FILE_PATH";
 
 /// Holds information about how to construct stack graphs for a particular language
 pub struct StackGraphLanguage {
-    parser: Parser,
+    language: tree_sitter::Language,
     tsg: tree_sitter_graph::ast::File,
     functions: Functions,
     builtins: StackGraph,
@@ -375,10 +375,8 @@ impl StackGraphLanguage {
         tsg: tree_sitter_graph::ast::File,
     ) -> Result<StackGraphLanguage, LanguageError> {
         debug_assert_eq!(language, tsg.language);
-        let mut parser = Parser::new();
-        parser.set_language(language)?;
         Ok(StackGraphLanguage {
-            parser,
+            language,
             tsg,
             functions: Self::default_functions(),
             builtins: StackGraph::new(),
@@ -391,11 +389,9 @@ impl StackGraphLanguage {
         language: tree_sitter::Language,
         tsg_source: &str,
     ) -> Result<StackGraphLanguage, LanguageError> {
-        let mut parser = Parser::new();
-        parser.set_language(language)?;
         let tsg = tree_sitter_graph::ast::File::from_str(language, tsg_source)?;
         Ok(StackGraphLanguage {
-            parser,
+            language,
             tsg,
             functions: Self::default_functions(),
             builtins: StackGraph::new(),
@@ -425,8 +421,6 @@ impl StackGraphLanguage {
 #[derive(Debug, Error)]
 pub enum LanguageError {
     #[error(transparent)]
-    LanguageError(#[from] tree_sitter::LanguageError),
-    #[error(transparent)]
     ParseError(#[from] tree_sitter_graph::ParseError),
 }
 
@@ -442,10 +436,9 @@ impl StackGraphLanguage {
         source: &str,
         globals: &mut Variables,
     ) -> Result<(), LoadError> {
-        let tree = self
-            .parser
-            .parse(source, None)
-            .ok_or(LoadError::ParseError)?;
+        let mut parser = Parser::new();
+        parser.set_language(self.language)?;
+        let tree = parser.parse(source, None).ok_or(LoadError::ParseError)?;
 
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
@@ -503,6 +496,8 @@ pub enum LoadError {
     ParseErrors(TreeWithParseErrorVec),
     #[error("Error converting shorthand ‘{0}’ on {1} with value {2}")]
     ConversionError(String, String, String),
+    #[error(transparent)]
+    LanguageError(#[from] tree_sitter::LanguageError),
 }
 
 struct StackGraphLoader<'a> {
