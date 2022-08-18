@@ -82,6 +82,7 @@ fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[
         partials,
         file.as_u32(),
         path_list,
+        std::ptr::null(),
     );
 
     // Ensure that every path has its content available in both directions.

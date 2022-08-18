@@ -12,6 +12,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::CancellationFlags;
 
 use crate::test_graphs;
 
@@ -21,15 +22,22 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
 
     // Generate partial paths for everything in the database.
     for file in graph.iter_files() {
-        partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
-            if !path.is_complete_as_possible(graph) {
-                return;
-            }
-            if !path.is_productive(partials) {
-                return;
-            }
-            db.add_partial_path(graph, partials, path);
-        });
+        partials
+            .find_all_partial_paths_in_file(
+                graph,
+                file,
+                &CancellationFlags::none(),
+                |graph, partials, path| {
+                    if !path.is_complete_as_possible(graph) {
+                        return;
+                    }
+                    if !path.is_productive(partials) {
+                        return;
+                    }
+                    db.add_partial_path(graph, partials, path);
+                },
+            )
+            .expect("should never be cancelled");
     }
 
     let references = graph
@@ -40,7 +48,9 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
         &mut partials,
         &mut db,
         references,
-    );
+        &CancellationFlags::none(),
+    )
+    .expect("should never be cancelled");
     let results = complete_partial_paths
         .into_iter()
         .map(|partial_path| partial_path.display(graph, &mut partials).to_string())

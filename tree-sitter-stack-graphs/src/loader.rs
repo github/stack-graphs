@@ -35,6 +35,7 @@ use tree_sitter_loader::Config as TsConfig;
 use tree_sitter_loader::LanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
 
+use crate::CancellationFlag;
 use crate::StackGraphLanguage;
 
 pub struct Loader {
@@ -103,6 +104,7 @@ impl Loader {
         &mut self,
         path: &Path,
         content: Option<&str>,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
         let selected_language = self.select_language_for_file(path, content)?;
         let language = match selected_language {
@@ -117,7 +119,7 @@ impl Loader {
                 let tsg = self.load_tsg_for_language(&language)?;
                 let mut sgl =
                     StackGraphLanguage::new(language.language, tsg).map_err(LoadError::other)?;
-                self.load_builtins(&language, &mut sgl)?;
+                self.load_builtins(&language, &mut sgl, cancellation_flag)?;
                 self.cache.push((language.language, sgl));
 
                 self.cache.len() - 1
@@ -210,6 +212,7 @@ impl Loader {
         &self,
         language: &SupplementedLanguage,
         sgl: &mut StackGraphLanguage,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError> {
         let mut graph = StackGraph::new();
         for ext in &language.file_types {
@@ -220,8 +223,14 @@ impl Loader {
                     .with_context(|| format!("Failed to read {}", path.display()))?;
                 let source = String::from_utf8(source).map_err(LoadError::other)?;
                 let mut globals = Variables::new();
-                sgl.build_stack_graph_into(&mut graph, file, &source, &mut globals)
-                    .map_err(LoadError::other)?;
+                sgl.build_stack_graph_into(
+                    &mut graph,
+                    file,
+                    &source,
+                    &mut globals,
+                    cancellation_flag,
+                )
+                .map_err(LoadError::other)?;
             }
         }
         sgl.builtins_mut().add_from_graph(&graph).unwrap();

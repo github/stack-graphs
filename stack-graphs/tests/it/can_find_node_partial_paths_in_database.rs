@@ -14,6 +14,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::CancellationFlags;
 
 use crate::test_graphs;
 
@@ -27,15 +28,22 @@ fn check_node_partial_paths(
     let node = graph.node_for_id(id).expect("Cannot find node");
     let mut partials = PartialPaths::new();
     let mut database = Database::new();
-    partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
-        if !path.is_complete_as_possible(graph) {
-            return;
-        }
-        if !path.is_productive(partials) {
-            return;
-        }
-        database.add_partial_path(graph, partials, path);
-    });
+    partials
+        .find_all_partial_paths_in_file(
+            graph,
+            file,
+            &CancellationFlags::none(),
+            |graph, partials, path| {
+                if !path.is_complete_as_possible(graph) {
+                    return;
+                }
+                if !path.is_productive(partials) {
+                    return;
+                }
+                database.add_partial_path(graph, partials, path);
+            },
+        )
+        .expect("should never be cancelled");
 
     let mut results = Vec::<Handle<PartialPath>>::new();
     database.find_candidate_partial_paths_from_node(graph, &mut partials, node, &mut results);

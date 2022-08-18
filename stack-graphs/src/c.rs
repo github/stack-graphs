@@ -10,6 +10,7 @@
 #![allow(non_camel_case_types)]
 
 use std::convert::TryInto;
+use std::sync::atomic::AtomicUsize;
 
 use libc::c_char;
 
@@ -37,6 +38,8 @@ use crate::paths::SymbolStack;
 use crate::stitching::Database;
 use crate::stitching::ForwardPartialPathStitcher;
 use crate::stitching::PathStitcher;
+use crate::CancellationError;
+use crate::CancellationFlag;
 
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct sg_stack_graph {
@@ -1110,20 +1113,26 @@ pub extern "C" fn sg_path_arena_find_all_complete_paths(
     starting_node_count: usize,
     starting_nodes: *const sg_node_handle,
     path_list: *mut sg_path_list,
-) {
+    cancellation_flag: *const usize,
+) -> sg_result {
     let graph = unsafe { &(*graph).inner };
     let paths = unsafe { &mut (*paths).inner };
     let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, starting_node_count) };
     let path_list = unsafe { &mut *path_list };
-    paths.find_all_paths(
-        graph,
-        starting_nodes.iter().copied().map(sg_node_handle::into),
-        |graph, _paths, path| {
-            if path.is_complete(graph) {
-                path_list.paths.push(path);
-            }
-        },
-    );
+    let cancellation_flag: Option<&AtomicUsize> =
+        unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
+    paths
+        .find_all_paths(
+            graph,
+            starting_nodes.iter().copied().map(sg_node_handle::into),
+            &AtomicUsizeCancellationFlag(cancellation_flag),
+            |graph, _paths, path| {
+                if path.is_complete(graph) {
+                    path_list.paths.push(path);
+                }
+            },
+        )
+        .into()
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1559,21 +1568,31 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     partials: *mut sg_partial_path_arena,
     file: sg_file_handle,
     partial_path_list: *mut sg_partial_path_list,
-) {
+    cancellation_flag: *const usize,
+) -> sg_result {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let file = file.into();
     let partial_path_list = unsafe { &mut *partial_path_list };
-    partials.find_all_partial_paths_in_file(graph, file, |graph, partials, mut path| {
-        if !path.is_complete_as_possible(graph) {
-            return;
-        }
-        if !path.is_productive(partials) {
-            return;
-        }
-        path.ensure_both_directions(partials);
-        partial_path_list.partial_paths.push(path);
-    });
+    let cancellation_flag: Option<&AtomicUsize> =
+        unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
+    partials
+        .find_all_partial_paths_in_file(
+            graph,
+            file,
+            &AtomicUsizeCancellationFlag(cancellation_flag),
+            |graph, partials, mut path| {
+                if !path.is_complete_as_possible(graph) {
+                    return;
+                }
+                if !path.is_productive(partials) {
+                    return;
+                }
+                path.ensure_both_directions(partials);
+                partial_path_list.partial_paths.push(path);
+            },
+        )
+        .into()
 }
 
 /// A handle to a partial path in a partial path database.  A zero handle represents a missing
@@ -2034,4 +2053,39 @@ pub extern "C" fn sg_forward_partial_path_stitcher_free(
     stitcher: *mut sg_forward_partial_path_stitcher,
 ) {
     drop(unsafe { Box::from_raw(stitcher as *mut InternalForwardPartialPathStitcher) });
+}
+
+//-------------------------------------------------------------------------------------------------
+// Cancellation
+
+struct AtomicUsizeCancellationFlag<'a>(Option<&'a AtomicUsize>);
+impl CancellationFlag for AtomicUsizeCancellationFlag<'_> {
+    fn check(&self, at: &'static str) -> Result<(), crate::CancellationError> {
+        self.0
+            .map(|flag| {
+                if flag.fetch_and(0b0, std::sync::atomic::Ordering::Relaxed) != 0 {
+                    Err(CancellationError(at))
+                } else {
+                    Ok(())
+                }
+            })
+            .unwrap_or(Ok(()))
+    }
+}
+
+/// Describes the result of a computation
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum sg_result {
+    Success,
+    Cancelled,
+}
+
+impl<T> From<Result<T, CancellationError>> for sg_result {
+    fn from(result: Result<T, CancellationError>) -> Self {
+        match result {
+            Ok(_) => Self::Success,
+            Err(_) => Self::Cancelled,
+        }
+    }
 }

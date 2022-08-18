@@ -68,6 +68,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
 
+use crate::CancellationError;
+use crate::CancellationFlag;
+use crate::StackGraphsCancellationFlag;
+
 lazy_static! {
     static ref PATH_REGEX: Regex = Regex::new(r#"---\s*path:\s*([^\s]+)\s*---"#).unwrap();
     static ref ASSERTION_REGEX: Regex =
@@ -349,6 +353,7 @@ pub enum TestFailure {
         missing_lines: Vec<usize>,
         unexpected_lines: HashMap<String, Vec<Option<usize>>>,
     },
+    Cancelled(CancellationError),
 }
 
 impl std::fmt::Display for TestFailure {
@@ -410,6 +415,7 @@ impl std::fmt::Display for TestFailure {
                 }
                 Ok(())
             }
+            Self::Cancelled(at) => write!(f, "Cancelled at {}", at),
         }
     }
 }
@@ -418,12 +424,19 @@ impl Test {
     /// Run the test. It is the responsibility of the caller to ensure that
     /// the stack graph has been constructed for the test fragments before running
     /// the test.
-    pub fn run(&mut self) -> TestResult {
+    pub fn run(
+        &mut self,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<TestResult, CancellationError> {
         let mut result = TestResult::new();
         for fragment in &self.fragments {
             for assertion in &fragment.assertions {
                 match assertion
-                    .run(&self.graph, &mut self.paths)
+                    .run(
+                        &self.graph,
+                        &mut self.paths,
+                        &StackGraphsCancellationFlag(cancellation_flag),
+                    )
                     .map_or_else(|e| self.from_error(e), |v| Ok(v))
                 {
                     Ok(_) => result.add_success(),
@@ -431,7 +444,7 @@ impl Test {
                 }
             }
         }
-        result
+        Ok(result)
     }
 
     /// Construct a TestFailure from an AssertionError.
@@ -489,6 +502,7 @@ impl Test {
                     unexpected_lines,
                 })
             }
+            AssertionError::Cancelled(at) => Err(TestFailure::Cancelled(at.into())),
         }
     }
 

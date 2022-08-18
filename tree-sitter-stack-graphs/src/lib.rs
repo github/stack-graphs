@@ -287,7 +287,13 @@
 //! let mut stack_graph = StackGraph::new();
 //! let file_handle = stack_graph.get_or_create_file("test.py");
 //! let mut globals = Variables::new();
-//! language.build_stack_graph_into(&mut stack_graph, file_handle, python_source, &mut globals)?;
+//! language.build_stack_graph_into(
+//!     &mut stack_graph,
+//!     file_handle,
+//!     python_source,
+//!     &mut globals,
+//!     &tree_sitter_stack_graphs::CancellationFlags::none(),
+//! )?;
 //! # Ok(())
 //! # }
 //! ```
@@ -301,6 +307,7 @@ use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
 use std::collections::HashSet;
+use std::sync::atomic::AtomicUsize;
 use thiserror::Error;
 use tree_sitter::Parser;
 use tree_sitter_graph::functions::Functions;
@@ -435,9 +442,11 @@ impl StackGraphLanguage {
         file: Handle<File>,
         source: &str,
         globals: &mut Variables,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError> {
         let mut parser = Parser::new();
         parser.set_language(self.language)?;
+        unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
         let tree = parser.parse(source, None).ok_or(LoadError::ParseError)?;
 
         let parse_errors = ParseError::into_all(tree);
@@ -465,17 +474,80 @@ impl StackGraphLanguage {
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
                 [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
             );
-        self.tsg
-            .execute_into(&mut graph, &tree, source, &mut config)?;
+        self.tsg.execute_into(
+            &mut graph,
+            &tree,
+            source,
+            &mut config,
+            &TreeSitterGraphCancellationFlag(cancellation_flag),
+        )?;
 
         let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
-        loader.load()
+        loader.load(cancellation_flag)
+    }
+}
+
+/// Trait to signal that the execution is cancelled
+pub trait CancellationFlag {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError>;
+    fn flag(&self) -> Option<&AtomicUsize>;
+}
+
+pub struct CancellationFlags;
+impl CancellationFlags {
+    pub fn none() -> impl CancellationFlag {
+        struct NoCancellation;
+        impl CancellationFlag for NoCancellation {
+            fn check(&self, _at: &'static str) -> Result<(), CancellationError> {
+                Ok(())
+            }
+            fn flag(&self) -> Option<&AtomicUsize> {
+                None
+            }
+        }
+        NoCancellation
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("Cancelled at \"{0}\"")]
+pub struct CancellationError(pub &'static str);
+
+impl From<tree_sitter_graph::CancellationError> for CancellationError {
+    fn from(value: tree_sitter_graph::CancellationError) -> Self {
+        Self(value.0)
+    }
+}
+
+impl From<stack_graphs::CancellationError> for CancellationError {
+    fn from(value: stack_graphs::CancellationError) -> Self {
+        Self(value.0)
+    }
+}
+
+pub(crate) struct StackGraphsCancellationFlag<'a>(&'a dyn CancellationFlag);
+impl stack_graphs::CancellationFlag for StackGraphsCancellationFlag<'_> {
+    fn check(&self, at: &'static str) -> Result<(), stack_graphs::CancellationError> {
+        self.0
+            .check(at)
+            .map_err(|e| stack_graphs::CancellationError(e.0))
+    }
+}
+
+pub(crate) struct TreeSitterGraphCancellationFlag<'a>(&'a dyn CancellationFlag);
+impl tree_sitter_graph::CancellationFlag for TreeSitterGraphCancellationFlag<'_> {
+    fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
+        self.0
+            .check(at)
+            .map_err(|e| tree_sitter_graph::CancellationError(e.0))
     }
 }
 
 /// An error that can occur while loading a stack graph from a TSG file
 #[derive(Debug, Error)]
 pub enum LoadError {
+    #[error(transparent)]
+    Cancelled(#[from] CancellationError),
     #[error("Missing ‘type’ attribute on graph node")]
     MissingNodeType(GraphNodeRef),
     #[error("Missing ‘symbol’ attribute on graph node")]
@@ -527,11 +599,12 @@ impl<'a> StackGraphLoader<'a> {
 }
 
 impl<'a> StackGraphLoader<'a> {
-    fn load(&mut self) -> Result<(), LoadError> {
+    fn load(&mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
         // First create a stack graph node for each TSG node.  (The skip(2) is because the first
         // two DSL nodes that we create are the proxies for the stack graph's “root” and “jump to
         // scope” nodes.)
         for node_ref in self.graph.iter_nodes().skip(2) {
+            cancellation_flag.check("loading graph nodes")?;
             let node = &self.graph[node_ref];
             let handle = match get_node_type(node)? {
                 NodeType::DropScopes => self.load_drop_scopes(node_ref),
@@ -554,6 +627,7 @@ impl<'a> StackGraphLoader<'a> {
             let source_node_id = self.node_id_for_graph_node(source_ref);
             let source_handle = self.stack_graph.node_for_id(source_node_id).unwrap();
             for (sink_ref, edge) in source.iter_edges() {
+                cancellation_flag.check("loading graph edges")?;
                 let precedence = match edge.attributes.get(PRECEDENCE_ATTR) {
                     Some(precedence) => precedence.as_integer()? as i32,
                     None => 0,

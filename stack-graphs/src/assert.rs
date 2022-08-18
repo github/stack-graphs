@@ -16,6 +16,8 @@ use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::paths::Path;
 use crate::paths::Paths;
+use crate::CancellationError;
+use crate::CancellationFlag;
 
 /// A stack graph assertion
 #[derive(Debug, Clone)]
@@ -78,14 +80,26 @@ pub enum AssertionError {
         missing_targets: Vec<AssertionTarget>,
         unexpected_paths: Vec<Path>,
     },
+    Cancelled(CancellationError),
+}
+
+impl From<CancellationError> for AssertionError {
+    fn from(value: CancellationError) -> Self {
+        Self::Cancelled(value)
+    }
 }
 
 impl Assertion {
     /// Run this assertion against the given graph, using the given paths object for path search.
-    pub fn run(&self, graph: &StackGraph, paths: &mut Paths) -> Result<(), AssertionError> {
+    pub fn run(
+        &self,
+        graph: &StackGraph,
+        paths: &mut Paths,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), AssertionError> {
         match self {
             Assertion::Defined { source, targets } => {
-                self.run_defined(graph, paths, source, targets)
+                self.run_defined(graph, paths, source, targets, cancellation_flag)
             }
         }
     }
@@ -96,6 +110,7 @@ impl Assertion {
         paths: &mut Paths,
         source: &AssertionSource,
         expected_targets: &Vec<AssertionTarget>,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
         let references = source.reference_iter(graph).collect::<Vec<_>>();
         if references.is_empty() {
@@ -105,12 +120,12 @@ impl Assertion {
         }
 
         let mut actual_paths = Vec::new();
-        paths.find_all_paths(graph, references.clone(), |g, _ps, p| {
+        paths.find_all_paths(graph, references.clone(), cancellation_flag, |g, _ps, p| {
             if p.is_complete(g) {
                 actual_paths.push(p);
             }
-        });
-        paths.remove_shadowed_paths(&mut actual_paths);
+        })?;
+        paths.remove_shadowed_paths(&mut actual_paths, cancellation_flag)?;
         let missing_targets = expected_targets
             .iter()
             .filter(|t| {

@@ -33,6 +33,7 @@ use crate::paths::Paths;
 use crate::paths::ScopeStack;
 use crate::paths::ScopedSymbol;
 use crate::paths::SymbolStack;
+use crate::CancellationFlags;
 
 #[derive(Debug, Error)]
 #[error(transparent)]
@@ -535,13 +536,20 @@ impl<'a> JsonPaths<'a> {
 
     fn to_path_vec(graph: &StackGraph, paths: &mut Paths, filter: &dyn Filter) -> Vec<Path> {
         let mut path_vec = Vec::new();
-        paths.find_all_paths(graph, graph.iter_nodes(), |g, ps, p| {
-            if filter.include_path(g, ps, &p) {
-                let mut p = p;
-                p.edges.ensure_forwards(ps);
-                path_vec.push(p);
-            }
-        });
+        paths
+            .find_all_paths(
+                graph,
+                graph.iter_nodes(),
+                &CancellationFlags::none(),
+                |g, ps, p| {
+                    if filter.include_path(g, ps, &p) {
+                        let mut p = p;
+                        p.edges.ensure_forwards(ps);
+                        path_vec.push(p);
+                    }
+                },
+            )
+            .expect("should never be cancelled");
         path_vec
     }
 }

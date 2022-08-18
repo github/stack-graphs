@@ -25,6 +25,7 @@ use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::test::Test;
 use tree_sitter_stack_graphs::test::TestFragment;
 use tree_sitter_stack_graphs::test::TestResult;
+use tree_sitter_stack_graphs::CancellationFlags;
 use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 use walkdir::WalkDir;
@@ -197,15 +198,16 @@ impl Command {
         loader: &mut Loader,
     ) -> anyhow::Result<usize> {
         let source = String::from_utf8(std::fs::read(test_path)?)?;
-        let sgl = match loader.load_for_file(test_path, Some(&source))? {
-            Some(sgl) => sgl,
-            None => {
-                if self.show_ignored {
-                    println!("{} {}", "⦵".dimmed(), test_path.display());
+        let sgl =
+            match loader.load_for_file(test_path, Some(&source), &CancellationFlags::none())? {
+                Some(sgl) => sgl,
+                None => {
+                    if self.show_ignored {
+                        println!("{} {}", "⦵".dimmed(), test_path.display());
+                    }
+                    return Ok(0);
                 }
-                return Ok(0);
-            }
-        };
+            };
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         self.load_builtins_into(sgl, &mut test.graph)
@@ -226,7 +228,7 @@ impl Command {
                 &mut test.graph,
             )?;
         }
-        let result = test.run();
+        let result = test.run(&CancellationFlags::none())?;
         let success = self.handle_result(test_path, &result)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
@@ -266,6 +268,7 @@ impl Command {
             test_fragment.file,
             &test_fragment.source,
             &mut globals,
+            &CancellationFlags::none(),
         ) {
             Err(LoadError::ParseErrors(parse_errors)) => {
                 Err(self.map_parse_errors(test_path, &parse_errors, &test_fragment.source))

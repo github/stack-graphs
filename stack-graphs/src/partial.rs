@@ -63,6 +63,8 @@ use crate::paths::ScopedSymbol;
 use crate::paths::SymbolStack;
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
+use crate::CancellationError;
+use crate::CancellationFlag;
 
 //-------------------------------------------------------------------------------------------------
 // Displaying stuff
@@ -2426,8 +2428,10 @@ impl PartialPaths {
         &mut self,
         graph: &StackGraph,
         file: Handle<File>,
+        cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
-    ) where
+    ) -> Result<(), CancellationError>
+    where
         F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
     {
         let mut cycle_detector = CycleDetector::new();
@@ -2445,12 +2449,14 @@ impl PartialPaths {
                 .map(|node| PartialPath::from_node(graph, self, node).unwrap()),
         );
         while let Some(path) = queue.pop_front() {
+            cancellation_flag.check("finding partial paths in file")?;
             if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
                 continue;
             }
             path.extend_from_file(graph, self, file, &mut queue);
             visit(graph, self, path);
         }
+        Ok(())
     }
 }
 

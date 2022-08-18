@@ -14,6 +14,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::test::Test;
+use tree_sitter_stack_graphs::CancellationFlags;
 use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
@@ -60,7 +61,13 @@ fn build_stack_graph_into(
     let language =
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
     let mut globals = Variables::new();
-    language.build_stack_graph_into(graph, file, python_source, &mut globals)?;
+    language.build_stack_graph_into(
+        graph,
+        file,
+        python_source,
+        &mut globals,
+        &CancellationFlags::none(),
+    )?;
     Ok(())
 }
 
@@ -90,7 +97,9 @@ fn check_test(
         )
         .expect("Could not load stack graph");
     }
-    let results = test.run();
+    let results = test
+        .run(&CancellationFlags::none())
+        .expect("should never be cancelled");
     assert_eq!(
         expected_successes,
         results.success_count(),

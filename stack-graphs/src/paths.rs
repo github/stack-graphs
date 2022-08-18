@@ -34,6 +34,8 @@ use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
+use crate::CancellationError;
+use crate::CancellationFlag;
 
 //-------------------------------------------------------------------------------------------------
 // Displaying stuff
@@ -876,7 +878,13 @@ impl Paths {
     /// pieces, then you should code up your own loop that calls [`Path::extend`][] manually.
     ///
     /// [`Path::extend`]: struct.Path.html#method.extend
-    pub fn find_all_paths<I, F>(&mut self, graph: &StackGraph, starting_nodes: I, mut visit: F)
+    pub fn find_all_paths<I, F>(
+        &mut self,
+        graph: &StackGraph,
+        starting_nodes: I,
+        cancellation_flag: &dyn CancellationFlag,
+        mut visit: F,
+    ) -> Result<(), CancellationError>
     where
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
@@ -887,12 +895,14 @@ impl Paths {
             .filter_map(|node| Path::from_node(graph, self, node))
             .collect::<VecDeque<_>>();
         while let Some(path) = queue.pop_front() {
+            cancellation_flag.check("finding paths")?;
             if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
                 continue;
             }
             path.extend(graph, self, &mut queue);
             visit(graph, self, path);
         }
+        Ok(())
     }
 }
 
@@ -932,10 +942,15 @@ impl<T> Extend<T> for VecDeque<T> {
 impl Paths {
     /// Removes any paths that are shadowed by any other path, according to the precedence values
     /// of the edges in the paths.
-    pub fn remove_shadowed_paths(&mut self, paths: &mut Vec<Path>) {
+    pub fn remove_shadowed_paths(
+        &mut self,
+        paths: &mut Vec<Path>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), CancellationError> {
         let mut keep = vec![true; paths.len()];
         for (i, comparator) in paths.iter().enumerate() {
             for (j, other) in paths.iter().enumerate() {
+                cancellation_flag.check("path shadowing")?;
                 if i == j || !keep[j] {
                     continue;
                 }
@@ -946,6 +961,7 @@ impl Paths {
         }
         let mut iter = keep.iter().copied();
         paths.retain(|_| iter.next().unwrap());
+        Ok(())
     }
 }
 

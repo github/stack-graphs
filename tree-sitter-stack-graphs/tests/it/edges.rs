@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use tree_sitter_graph::Variables;
+use tree_sitter_stack_graphs::CancellationFlags;
 use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
@@ -19,7 +20,13 @@ fn build_stack_graph(python_source: &str, tsg_source: &str) -> Result<StackGraph
     let mut graph = StackGraph::new();
     let file = graph.get_or_create_file("test.py");
     let mut globals = Variables::new();
-    language.build_stack_graph_into(&mut graph, file, python_source, &mut globals)?;
+    language.build_stack_graph_into(
+        &mut graph,
+        file,
+        python_source,
+        &mut globals,
+        &CancellationFlags::none(),
+    )?;
     Ok(graph)
 }
 

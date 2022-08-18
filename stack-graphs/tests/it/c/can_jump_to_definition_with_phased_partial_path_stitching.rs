@@ -54,6 +54,7 @@ impl StorageLayer {
                 partials,
                 file.as_u32(),
                 path_list,
+                std::ptr::null(),
             );
         }
         let path_slice = unsafe {

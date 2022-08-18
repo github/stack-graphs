@@ -38,6 +38,7 @@ fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str
         partials,
         file.as_u32(),
         path_list,
+        std::ptr::null(),
     );
 
     let db = sg_partial_path_database_new();
