@@ -11,7 +11,7 @@ use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
-use stack_graphs::CancellationFlags;
+use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
 
@@ -20,20 +20,15 @@ fn check_local_nodes(graph: &StackGraph, file: &str, expected_local_nodes: &[&st
     let mut partials = PartialPaths::new();
     let mut database = Database::new();
     partials
-        .find_all_partial_paths_in_file(
-            graph,
-            file,
-            &CancellationFlags::none(),
-            |graph, partials, path| {
-                if !path.is_complete_as_possible(graph) {
-                    return;
-                }
-                if !path.is_productive(partials) {
-                    return;
-                }
-                database.add_partial_path(graph, partials, path);
-            },
-        )
+        .find_all_partial_paths_in_file(graph, file, &NoCancellation, |graph, partials, path| {
+            if !path.is_complete_as_possible(graph) {
+                return;
+            }
+            if !path.is_productive(partials) {
+                return;
+            }
+            database.add_partial_path(graph, partials, path);
+        })
         .expect("should never be cancelled");
 
     let mut results = BTreeSet::new();

@@ -12,7 +12,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
-use stack_graphs::CancellationFlags;
+use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
 
@@ -26,7 +26,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
             .find_all_partial_paths_in_file(
                 graph,
                 file,
-                &CancellationFlags::none(),
+                &NoCancellation,
                 |graph, partials, path| {
                     if !path.is_complete_as_possible(graph) {
                         return;
@@ -48,7 +48,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
         &mut partials,
         &mut db,
         references,
-        &CancellationFlags::none(),
+        &NoCancellation,
     )
     .expect("should never be cancelled");
     let results = complete_partial_paths

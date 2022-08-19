@@ -18,7 +18,7 @@ use stack_graphs::paths::Paths;
 use stack_graphs::paths::ScopeStack;
 use stack_graphs::paths::ScopedSymbol;
 use stack_graphs::paths::SymbolStack;
-use stack_graphs::CancellationFlags;
+use stack_graphs::NoCancellation;
 
 use crate::test_graphs::CreateStackGraph;
 
@@ -157,7 +157,7 @@ fn can_remove_shadowed_paths() {
     let path2 = test.new_path(1, &vec![(0, 2), (1, 5), (0, 3)]);
     let mut paths = vec![path1.clone(), path2.clone()];
     test.paths
-        .remove_shadowed_paths(&mut paths, &CancellationFlags::none())
+        .remove_shadowed_paths(&mut paths, &NoCancellation)
         .expect("should never be cancelled");
     let expected = vec![path2];
     assert!(paths
@@ -173,7 +173,7 @@ fn nonshadowed_paths_are_not_removed() {
     let path2 = test.new_path(1, &vec![(0, 5), (1, 6), (0, 7)]);
     let mut paths = vec![path1.clone(), path2.clone()];
     test.paths
-        .remove_shadowed_paths(&mut paths, &CancellationFlags::none())
+        .remove_shadowed_paths(&mut paths, &NoCancellation)
         .expect("should never be cancelled");
     let expected = vec![path1, path2];
     assert!(paths
@@ -187,7 +187,7 @@ fn can_remove_shadowed_paths_for_empty_paths() {
     let mut test = ShadowingTest::new();
     let mut paths = vec![];
     test.paths
-        .remove_shadowed_paths(&mut paths, &CancellationFlags::none())
+        .remove_shadowed_paths(&mut paths, &NoCancellation)
         .expect("should never be cancelled");
     let expected = vec![];
     assert!(paths
