@@ -55,8 +55,8 @@ enum sg_node_kind {
 
 // Describes the result of a computation
 enum sg_result {
-    Success,
-    Cancelled,
+    SG_RESULT_SUCCESS,
+    SG_RESULT_CANCELLED,
 };
 
 // Manages the state of a collection of partial paths to be used in the path-stitching algorithm.

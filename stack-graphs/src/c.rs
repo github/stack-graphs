@@ -2077,15 +2077,15 @@ impl CancellationFlag for AtomicUsizeCancellationFlag<'_> {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum sg_result {
-    Success,
-    Cancelled,
+    SG_RESULT_SUCCESS,
+    SG_RESULT_CANCELLED,
 }
 
 impl<T> From<Result<T, CancellationError>> for sg_result {
     fn from(result: Result<T, CancellationError>) -> Self {
         match result {
-            Ok(_) => Self::Success,
-            Err(_) => Self::Cancelled,
+            Ok(_) => Self::SG_RESULT_SUCCESS,
+            Err(_) => Self::SG_RESULT_CANCELLED,
         }
     }
 }
