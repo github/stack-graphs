@@ -68,9 +68,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
 
-use crate::CancellationError;
 use crate::CancellationFlag;
-use crate::StackGraphsCancellationFlag;
 
 lazy_static! {
     static ref PATH_REGEX: Regex = Regex::new(r#"---\s*path:\s*([^\s]+)\s*---"#).unwrap();
@@ -353,7 +351,7 @@ pub enum TestFailure {
         missing_lines: Vec<usize>,
         unexpected_lines: HashMap<String, Vec<Option<usize>>>,
     },
-    Cancelled(CancellationError),
+    Cancelled(stack_graphs::CancellationError),
 }
 
 impl std::fmt::Display for TestFailure {
@@ -415,7 +413,7 @@ impl std::fmt::Display for TestFailure {
                 }
                 Ok(())
             }
-            Self::Cancelled(at) => write!(f, "Cancelled at {}", at),
+            Self::Cancelled(err) => write!(f, "{}", err),
         }
     }
 }
@@ -427,16 +425,12 @@ impl Test {
     pub fn run(
         &mut self,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<TestResult, CancellationError> {
+    ) -> Result<TestResult, stack_graphs::CancellationError> {
         let mut result = TestResult::new();
         for fragment in &self.fragments {
             for assertion in &fragment.assertions {
                 match assertion
-                    .run(
-                        &self.graph,
-                        &mut self.paths,
-                        &StackGraphsCancellationFlag(cancellation_flag),
-                    )
+                    .run(&self.graph, &mut self.paths, &cancellation_flag)
                     .map_or_else(|e| self.from_error(e), |v| Ok(v))
                 {
                     Ok(_) => result.add_success(),
@@ -502,7 +496,7 @@ impl Test {
                     unexpected_lines,
                 })
             }
-            AssertionError::Cancelled(at) => Err(TestFailure::Cancelled(at.into())),
+            AssertionError::Cancelled(err) => Err(TestFailure::Cancelled(err)),
         }
     }
 

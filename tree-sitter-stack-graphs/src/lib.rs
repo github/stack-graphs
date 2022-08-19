@@ -270,6 +270,7 @@
 //! # use tree_sitter_graph::functions::Functions;
 //! # use tree_sitter_stack_graphs::StackGraphLanguage;
 //! # use tree_sitter_stack_graphs::LoadError;
+//! # use tree_sitter_stack_graphs::NoCancellation;
 //! #
 //! # // This documentation test is not meant to test Python's actual stack graph
 //! # // construction rules.  An empty TSG file is perfectly valid (it just won't produce any stack
@@ -287,13 +288,7 @@
 //! let mut stack_graph = StackGraph::new();
 //! let file_handle = stack_graph.get_or_create_file("test.py");
 //! let mut globals = Variables::new();
-//! language.build_stack_graph_into(
-//!     &mut stack_graph,
-//!     file_handle,
-//!     python_source,
-//!     &mut globals,
-//!     &tree_sitter_stack_graphs::CancellationFlags::none(),
-//! )?;
+//! language.build_stack_graph_into(&mut stack_graph, file_handle, python_source, &mut globals, &NoCancellation)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -308,6 +303,7 @@ use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use thiserror::Error;
 use tree_sitter::Parser;
 use tree_sitter_graph::functions::Functions;
@@ -474,13 +470,8 @@ impl StackGraphLanguage {
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
                 [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
             );
-        self.tsg.execute_into(
-            &mut graph,
-            &tree,
-            source,
-            &mut config,
-            &TreeSitterGraphCancellationFlag(cancellation_flag),
-        )?;
+        self.tsg
+            .execute_into(&mut graph, &tree, source, &mut config, &cancellation_flag)?;
 
         let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
         loader.load(cancellation_flag)
@@ -489,57 +480,29 @@ impl StackGraphLanguage {
 
 /// Trait to signal that the execution is cancelled
 pub trait CancellationFlag {
-    fn check(&self, at: &'static str) -> Result<(), CancellationError>;
     fn flag(&self) -> Option<&AtomicUsize>;
 }
-
-pub struct CancellationFlags;
-impl CancellationFlags {
-    pub fn none() -> impl CancellationFlag {
-        struct NoCancellation;
-        impl CancellationFlag for NoCancellation {
-            fn check(&self, _at: &'static str) -> Result<(), CancellationError> {
-                Ok(())
-            }
-            fn flag(&self) -> Option<&AtomicUsize> {
-                None
-            }
-        }
-        NoCancellation
-    }
-}
-
-#[derive(Clone, Debug, Error)]
-#[error("Cancelled at \"{0}\"")]
-pub struct CancellationError(pub &'static str);
-
-impl From<tree_sitter_graph::CancellationError> for CancellationError {
-    fn from(value: tree_sitter_graph::CancellationError) -> Self {
-        Self(value.0)
-    }
-}
-
-impl From<stack_graphs::CancellationError> for CancellationError {
-    fn from(value: stack_graphs::CancellationError) -> Self {
-        Self(value.0)
-    }
-}
-
-pub(crate) struct StackGraphsCancellationFlag<'a>(&'a dyn CancellationFlag);
-impl stack_graphs::CancellationFlag for StackGraphsCancellationFlag<'_> {
+impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), stack_graphs::CancellationError> {
-        self.0
-            .check(at)
-            .map_err(|e| stack_graphs::CancellationError(e.0))
+        if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
+            return Err(stack_graphs::CancellationError(at));
+        }
+        Ok(())
+    }
+}
+impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
+    fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
+        if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
+            return Err(tree_sitter_graph::CancellationError(at));
+        }
+        Ok(())
     }
 }
 
-pub(crate) struct TreeSitterGraphCancellationFlag<'a>(&'a dyn CancellationFlag);
-impl tree_sitter_graph::CancellationFlag for TreeSitterGraphCancellationFlag<'_> {
-    fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
-        self.0
-            .check(at)
-            .map_err(|e| tree_sitter_graph::CancellationError(e.0))
+pub struct NoCancellation;
+impl CancellationFlag for NoCancellation {
+    fn flag(&self) -> Option<&AtomicUsize> {
+        None
     }
 }
 
@@ -547,7 +510,7 @@ impl tree_sitter_graph::CancellationFlag for TreeSitterGraphCancellationFlag<'_>
 #[derive(Debug, Error)]
 pub enum LoadError {
     #[error(transparent)]
-    Cancelled(#[from] CancellationError),
+    Cancelled(#[from] stack_graphs::CancellationError),
     #[error("Missing ‘type’ attribute on graph node")]
     MissingNodeType(GraphNodeRef),
     #[error("Missing ‘symbol’ attribute on graph node")]
@@ -600,6 +563,8 @@ impl<'a> StackGraphLoader<'a> {
 
 impl<'a> StackGraphLoader<'a> {
     fn load(&mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
+        let cancellation_flag: &dyn stack_graphs::CancellationFlag = &cancellation_flag;
+
         // First create a stack graph node for each TSG node.  (The skip(2) is because the first
         // two DSL nodes that we create are the proxies for the stack graph's “root” and “jump to
         // scope” nodes.)

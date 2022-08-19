@@ -8,8 +8,8 @@
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use tree_sitter_graph::Variables;
-use tree_sitter_stack_graphs::CancellationFlags;
 use tree_sitter_stack_graphs::LoadError;
+use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
 fn build_stack_graph(python_source: &str, tsg_source: &str) -> Result<StackGraph, LoadError> {
@@ -23,7 +23,7 @@ fn build_stack_graph(python_source: &str, tsg_source: &str) -> Result<StackGraph
         file,
         python_source,
         &mut globals,
-        &CancellationFlags::none(),
+        &NoCancellation,
     )?;
     Ok(graph)
 }
