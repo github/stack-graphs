@@ -184,7 +184,7 @@
 //! (function_definition name: (identifier) @id) @func {
 //!   node def
 //!   attr (def) type = "pop_symbol", symbol = (source-text @id), source_node = @func, is_definition
-//!   edge (ROOT_NODE -> def)
+//!   edge ROOT_NODE -> def
 //! }
 //! ```
 //!
