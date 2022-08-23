@@ -34,6 +34,7 @@ fn check_jump_to_definition(graph: &TestGraph, expected_paths: &[&str]) {
         references.len(),
         references.as_ptr() as *const _,
         path_list,
+        std::ptr::null(),
     );
 
     let rust_paths = unsafe { &mut (*paths).inner };

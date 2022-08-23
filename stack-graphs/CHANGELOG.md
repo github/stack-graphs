@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Cancellation of potentially long-running operations is now supported by passing an implementation of the `CancellationFlag` trait. The `NoCancellation` type provides a noop implementation.
+
+### Changed
+
+- `Assertion::run` requires an extra cancellation flag parameter.
+- `PartialPaths::find_all_partial_paths_in_file`, `Paths::find_all_paths`, `Paths::remove_shadowed_paths`, `PathStitcher::find_all_complete_paths` and `ForwardPartialPathStitcher::find_all_complete_partial_paths` require an extra cancellation flag parameter and now return a `Result` to indicate if the computation was successful or cancelled.
+- C API functions `sg_path_arena_find_all_complete_paths` and `sg_partial_path_arena_find_partial_paths_in_file` require an extra `const size_t *cancellation_flag` parameter and return an `sg_result` value to indicate if the operation was successful or cancelled. A null pointer can be passed if no cancellation is necessary.
+
 ## stack-graphs 0.9.0 - 2022-06-29
 
 ### Added

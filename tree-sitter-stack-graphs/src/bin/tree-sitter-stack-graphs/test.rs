@@ -26,6 +26,7 @@ use tree_sitter_stack_graphs::test::Test;
 use tree_sitter_stack_graphs::test::TestFragment;
 use tree_sitter_stack_graphs::test::TestResult;
 use tree_sitter_stack_graphs::LoadError;
+use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 use walkdir::WalkDir;
 
@@ -197,7 +198,7 @@ impl Command {
         loader: &mut Loader,
     ) -> anyhow::Result<usize> {
         let source = String::from_utf8(std::fs::read(test_path)?)?;
-        let sgl = match loader.load_for_file(test_path, Some(&source))? {
+        let sgl = match loader.load_for_file(test_path, Some(&source), &NoCancellation)? {
             Some(sgl) => sgl,
             None => {
                 if self.show_ignored {
@@ -226,7 +227,7 @@ impl Command {
                 &mut test.graph,
             )?;
         }
-        let result = test.run();
+        let result = test.run(&NoCancellation)?;
         let success = self.handle_result(test_path, &result)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
@@ -266,6 +267,7 @@ impl Command {
             test_fragment.file,
             &test_fragment.source,
             &mut globals,
+            &NoCancellation,
         ) {
             Err(LoadError::ParseErrors(parse_errors)) => {
                 Err(self.map_parse_errors(test_path, &parse_errors, &test_fragment.source))

@@ -55,6 +55,8 @@
 //! importantly, each “chunk” of the overall graph only depends on “local” information from the
 //! original source file.  (a.k.a., it’s incremental!)
 
+use thiserror::Error;
+
 pub mod arena;
 pub mod assert;
 pub mod c;
@@ -70,3 +72,19 @@ pub mod stitching;
 pub(crate) mod utils;
 #[cfg(feature = "json")]
 pub mod visualization;
+
+/// Trait to signal that the execution is cancelled
+pub trait CancellationFlag {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError>;
+}
+
+pub struct NoCancellation;
+impl CancellationFlag for NoCancellation {
+    fn check(&self, _at: &'static str) -> Result<(), CancellationError> {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("Cancelled at \"{0}\"")]
+pub struct CancellationError(pub &'static str);

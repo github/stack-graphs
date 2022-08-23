@@ -53,6 +53,12 @@ enum sg_node_kind {
     SG_NODE_KIND_SCOPE,
 };
 
+// Describes the result of a computation
+enum sg_result {
+    SG_RESULT_SUCCESS,
+    SG_RESULT_CANCELLED,
+};
+
 // Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
 struct sg_partial_path_arena;
 
@@ -855,11 +861,12 @@ const struct sg_path *sg_path_list_paths(const struct sg_path_list *path_list);
 // already contain a complete stack graph.  If you have a very large stack graph stored in some
 // other storage system, and want more control over lazily loading only the necessary pieces, then
 // you should use sg_forward_path_stitcher.
-void sg_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
-                                           struct sg_path_arena *paths,
-                                           size_t starting_node_count,
-                                           const sg_node_handle *starting_nodes,
-                                           struct sg_path_list *path_list);
+enum sg_result sg_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
+                                                     struct sg_path_arena *paths,
+                                                     size_t starting_node_count,
+                                                     const sg_node_handle *starting_nodes,
+                                                     struct sg_path_list *path_list,
+                                                     const size_t *cancellation_flag);
 
 // Returns a reference to the array of partial symbol stack content in a partial path arena.  The
 // resulting array pointer is only valid until the next call to any function that mutates the path
@@ -945,10 +952,11 @@ const struct sg_partial_path *sg_partial_path_list_paths(const struct sg_partial
 // already contain a complete stack graph.  If you have a very large stack graph stored in some
 // other storage system, and want more control over lazily loading only the necessary pieces, then
 // you should use sg_forward_path_stitcher.
-void sg_partial_path_arena_find_partial_paths_in_file(const struct sg_stack_graph *graph,
-                                                      struct sg_partial_path_arena *partials,
-                                                      sg_file_handle file,
-                                                      struct sg_partial_path_list *partial_path_list);
+enum sg_result sg_partial_path_arena_find_partial_paths_in_file(const struct sg_stack_graph *graph,
+                                                                struct sg_partial_path_arena *partials,
+                                                                sg_file_handle file,
+                                                                struct sg_partial_path_list *partial_path_list,
+                                                                const size_t *cancellation_flag);
 
 // Returns a reference to the array of partial path data in this partial path database.  The
 // resulting array pointer is only valid until the next call to any function that mutates the

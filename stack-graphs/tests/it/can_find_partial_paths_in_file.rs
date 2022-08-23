@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
+use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
 
@@ -17,15 +18,17 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
     let file = graph.get_file_unchecked(file);
     let mut partials = PartialPaths::new();
     let mut results = BTreeSet::new();
-    partials.find_all_partial_paths_in_file(graph, file, |graph, partials, path| {
-        if !path.is_complete_as_possible(graph) {
-            return;
-        }
-        if !path.is_productive(partials) {
-            return;
-        }
-        results.insert(path.display(graph, partials).to_string());
-    });
+    partials
+        .find_all_partial_paths_in_file(graph, file, &NoCancellation, |graph, partials, path| {
+            if !path.is_complete_as_possible(graph) {
+                return;
+            }
+            if !path.is_productive(partials) {
+                return;
+            }
+            results.insert(path.display(graph, partials).to_string());
+        })
+        .expect("should never be cancelled");
     let expected_paths = expected_paths
         .iter()
         .map(|s| s.to_string())

@@ -58,6 +58,8 @@ use crate::partial::PartialSymbolStack;
 use crate::paths::Path;
 use crate::paths::Paths;
 use crate::paths::SymbolStack;
+use crate::CancellationError;
+use crate::CancellationFlag;
 
 //-------------------------------------------------------------------------------------------------
 // Databases
@@ -655,20 +657,22 @@ impl PathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         starting_nodes: I,
-    ) -> Vec<Path>
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Vec<Path>, CancellationError>
     where
         I: IntoIterator<Item = Handle<Node>>,
     {
         let mut result = Vec::new();
         let mut stitcher = PathStitcher::new(graph, paths, partials, db, starting_nodes);
         while !stitcher.is_complete() {
+            cancellation_flag.check("finding complete paths")?;
             let complete_paths = stitcher
                 .previous_phase_paths()
                 .filter(|path| path.is_complete(graph));
             result.extend(complete_paths.cloned());
             stitcher.process_next_phase(graph, paths, partials, db);
         }
-        result
+        Ok(result)
     }
 }
 
@@ -952,7 +956,8 @@ impl ForwardPartialPathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         starting_nodes: I,
-    ) -> Vec<PartialPath>
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Vec<PartialPath>, CancellationError>
     where
         I: IntoIterator<Item = Handle<Node>>,
     {
@@ -960,12 +965,13 @@ impl ForwardPartialPathStitcher {
         let mut stitcher =
             ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
         while !stitcher.is_complete() {
+            cancellation_flag.check("finding complete partial paths")?;
             let complete_partial_paths = stitcher
                 .previous_phase_partial_paths()
                 .filter(|partial_path| partial_path.is_complete(graph));
             result.extend(complete_partial_paths.cloned());
             stitcher.process_next_phase(graph, partials, db);
         }
-        result
+        Ok(result)
     }
 }

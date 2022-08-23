@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::paths::Paths;
+use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
 
@@ -19,11 +20,13 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
     let references = graph
         .iter_nodes()
         .filter(|handle| graph[*handle].is_reference());
-    paths.find_all_paths(graph, references, |graph, paths, path| {
-        if path.is_complete(graph) {
-            results.insert(path.display(graph, paths).to_string());
-        }
-    });
+    paths
+        .find_all_paths(graph, references, &NoCancellation, |graph, paths, path| {
+            if path.is_complete(graph) {
+                results.insert(path.display(graph, paths).to_string());
+            }
+        })
+        .expect("should never be cancelled");
     let expected_paths = expected_paths
         .iter()
         .map(|s| s.to_string())

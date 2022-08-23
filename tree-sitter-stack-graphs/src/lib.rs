@@ -270,6 +270,7 @@
 //! # use tree_sitter_graph::functions::Functions;
 //! # use tree_sitter_stack_graphs::StackGraphLanguage;
 //! # use tree_sitter_stack_graphs::LoadError;
+//! # use tree_sitter_stack_graphs::NoCancellation;
 //! #
 //! # // This documentation test is not meant to test Python's actual stack graph
 //! # // construction rules.  An empty TSG file is perfectly valid (it just won't produce any stack
@@ -287,7 +288,7 @@
 //! let mut stack_graph = StackGraph::new();
 //! let file_handle = stack_graph.get_or_create_file("test.py");
 //! let mut globals = Variables::new();
-//! language.build_stack_graph_into(&mut stack_graph, file_handle, python_source, &mut globals)?;
+//! language.build_stack_graph_into(&mut stack_graph, file_handle, python_source, &mut globals, &NoCancellation)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -301,6 +302,8 @@ use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
 use std::collections::HashSet;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use thiserror::Error;
 use tree_sitter::Parser;
 use tree_sitter_graph::functions::Functions;
@@ -361,7 +364,7 @@ static FILE_PATH_VAR: &'static str = "FILE_PATH";
 
 /// Holds information about how to construct stack graphs for a particular language
 pub struct StackGraphLanguage {
-    parser: Parser,
+    language: tree_sitter::Language,
     tsg: tree_sitter_graph::ast::File,
     functions: Functions,
     builtins: StackGraph,
@@ -375,10 +378,8 @@ impl StackGraphLanguage {
         tsg: tree_sitter_graph::ast::File,
     ) -> Result<StackGraphLanguage, LanguageError> {
         debug_assert_eq!(language, tsg.language);
-        let mut parser = Parser::new();
-        parser.set_language(language)?;
         Ok(StackGraphLanguage {
-            parser,
+            language,
             tsg,
             functions: Self::default_functions(),
             builtins: StackGraph::new(),
@@ -391,11 +392,9 @@ impl StackGraphLanguage {
         language: tree_sitter::Language,
         tsg_source: &str,
     ) -> Result<StackGraphLanguage, LanguageError> {
-        let mut parser = Parser::new();
-        parser.set_language(language)?;
         let tsg = tree_sitter_graph::ast::File::from_str(language, tsg_source)?;
         Ok(StackGraphLanguage {
-            parser,
+            language,
             tsg,
             functions: Self::default_functions(),
             builtins: StackGraph::new(),
@@ -425,8 +424,6 @@ impl StackGraphLanguage {
 #[derive(Debug, Error)]
 pub enum LanguageError {
     #[error(transparent)]
-    LanguageError(#[from] tree_sitter::LanguageError),
-    #[error(transparent)]
     ParseError(#[from] tree_sitter_graph::ParseError),
 }
 
@@ -436,16 +433,17 @@ impl StackGraphLanguage {
     /// (The source file must be implemented in this language, otherwise you'll probably get a
     /// parse error.)
     pub fn build_stack_graph_into(
-        &mut self,
+        &self,
         stack_graph: &mut StackGraph,
         file: Handle<File>,
         source: &str,
         globals: &mut Variables,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError> {
-        let tree = self
-            .parser
-            .parse(source, None)
-            .ok_or(LoadError::ParseError)?;
+        let mut parser = Parser::new();
+        parser.set_language(self.language)?;
+        unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
+        let tree = parser.parse(source, None).ok_or(LoadError::ParseError)?;
 
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
@@ -466,23 +464,53 @@ impl StackGraphLanguage {
                 format!("{}", &stack_graph[file]).into(),
             )
             .expect("Failed to set FILE_PATH");
-        let mut config = ExecutionConfig::new(&mut self.functions, &globals)
+        let mut config = ExecutionConfig::new(&self.functions, &globals)
             .lazy(true)
             .debug_attributes(
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
                 [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
             );
         self.tsg
-            .execute_into(&mut graph, &tree, source, &mut config)?;
+            .execute_into(&mut graph, &tree, source, &mut config, &cancellation_flag)?;
 
         let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
-        loader.load()
+        loader.load(cancellation_flag)
+    }
+}
+
+/// Trait to signal that the execution is cancelled
+pub trait CancellationFlag {
+    fn flag(&self) -> Option<&AtomicUsize>;
+}
+impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
+    fn check(&self, at: &'static str) -> Result<(), stack_graphs::CancellationError> {
+        if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
+            return Err(stack_graphs::CancellationError(at));
+        }
+        Ok(())
+    }
+}
+impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
+    fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
+        if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
+            return Err(tree_sitter_graph::CancellationError(at));
+        }
+        Ok(())
+    }
+}
+
+pub struct NoCancellation;
+impl CancellationFlag for NoCancellation {
+    fn flag(&self) -> Option<&AtomicUsize> {
+        None
     }
 }
 
 /// An error that can occur while loading a stack graph from a TSG file
 #[derive(Debug, Error)]
 pub enum LoadError {
+    #[error(transparent)]
+    Cancelled(#[from] stack_graphs::CancellationError),
     #[error("Missing ‘type’ attribute on graph node")]
     MissingNodeType(GraphNodeRef),
     #[error("Missing ‘symbol’ attribute on graph node")]
@@ -503,6 +531,8 @@ pub enum LoadError {
     ParseErrors(TreeWithParseErrorVec),
     #[error("Error converting shorthand ‘{0}’ on {1} with value {2}")]
     ConversionError(String, String, String),
+    #[error(transparent)]
+    LanguageError(#[from] tree_sitter::LanguageError),
 }
 
 struct StackGraphLoader<'a> {
@@ -532,11 +562,14 @@ impl<'a> StackGraphLoader<'a> {
 }
 
 impl<'a> StackGraphLoader<'a> {
-    fn load(&mut self) -> Result<(), LoadError> {
+    fn load(&mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
+        let cancellation_flag: &dyn stack_graphs::CancellationFlag = &cancellation_flag;
+
         // First create a stack graph node for each TSG node.  (The skip(2) is because the first
         // two DSL nodes that we create are the proxies for the stack graph's “root” and “jump to
         // scope” nodes.)
         for node_ref in self.graph.iter_nodes().skip(2) {
+            cancellation_flag.check("loading graph nodes")?;
             let node = &self.graph[node_ref];
             let handle = match get_node_type(node)? {
                 NodeType::DropScopes => self.load_drop_scopes(node_ref),
@@ -559,6 +592,7 @@ impl<'a> StackGraphLoader<'a> {
             let source_node_id = self.node_id_for_graph_node(source_ref);
             let source_handle = self.stack_graph.node_for_id(source_node_id).unwrap();
             for (sink_ref, edge) in source.iter_edges() {
+                cancellation_flag.check("loading graph edges")?;
                 let precedence = match edge.attributes.get(PRECEDENCE_ATTR) {
                     Some(precedence) => precedence.as_integer()? as i32,
                     None => 0,
