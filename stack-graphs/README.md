@@ -9,7 +9,7 @@ To use this library, add the following to your `Cargo.toml`:
 
 ``` toml
 [dependencies]
-stack-graphs = "0.9"
+stack-graphs = "0.10"
 ```
 
 Check out our [documentation](https://docs.rs/stack-graphs/) for more details on
