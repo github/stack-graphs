@@ -2441,8 +2441,8 @@ impl PartialPaths {
             graph
                 .nodes_for_file(file)
                 .filter(|node| match &graph[*node] {
-                    Node::PushScopedSymbol(_) => true,
-                    Node::PushSymbol(_) => true,
+                    node @ Node::PushScopedSymbol(_) => node.is_reference(),
+                    node @ Node::PushSymbol(_) => node.is_reference(),
                     node @ Node::Scope(_) => node.is_exported_scope(),
                     _ => false,
                 })
