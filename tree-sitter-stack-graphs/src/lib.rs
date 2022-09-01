@@ -509,8 +509,8 @@ impl CancellationFlag for NoCancellation {
 /// An error that can occur while loading a stack graph from a TSG file
 #[derive(Debug, Error)]
 pub enum LoadError {
-    #[error(transparent)]
-    Cancelled(#[from] stack_graphs::CancellationError),
+    #[error("{0}")]
+    Cancelled(&'static str),
     #[error("Missing ‘type’ attribute on graph node")]
     MissingNodeType(GraphNodeRef),
     #[error("Missing ‘symbol’ attribute on graph node")]
@@ -524,7 +524,7 @@ pub enum LoadError {
     #[error("Unknown symbol type {0}")]
     UnknownSymbolType(String),
     #[error(transparent)]
-    ExecutionError(#[from] tree_sitter_graph::ExecutionError),
+    ExecutionError(tree_sitter_graph::ExecutionError),
     #[error("Error parsing source")]
     ParseError,
     #[error("Error parsing source")]
@@ -533,6 +533,21 @@ pub enum LoadError {
     ConversionError(String, String, String),
     #[error(transparent)]
     LanguageError(#[from] tree_sitter::LanguageError),
+}
+
+impl From<stack_graphs::CancellationError> for LoadError {
+    fn from(value: stack_graphs::CancellationError) -> Self {
+        Self::Cancelled(value.0)
+    }
+}
+
+impl From<tree_sitter_graph::ExecutionError> for LoadError {
+    fn from(value: tree_sitter_graph::ExecutionError) -> Self {
+        match value {
+            tree_sitter_graph::ExecutionError::Cancelled(err) => Self::Cancelled(err.0),
+            err => Self::ExecutionError(err),
+        }
+    }
 }
 
 struct StackGraphLoader<'a> {
