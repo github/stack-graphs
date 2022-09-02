@@ -2418,7 +2418,10 @@ impl PartialPaths {
     /// Finds all partial paths in a file, calling the `visit` closure for each one.
     ///
     /// This function ensures that the set of visited partial paths covers all complete
-    /// paths, from references to definitions, when used for path stitching.
+    /// paths, from references to definitions, when used for path stitching. Callers are
+    /// advised _not_ to filter this set in the visitor using functions like
+    /// [`PartialPath::is_complete_as_possible`][] or [`PartialPath::is_productive`][] as
+    /// that may interfere with implementation changes of this function.
     ///
     /// This function will not return until all reachable partial paths have been processed, so
     /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
