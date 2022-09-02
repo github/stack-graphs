@@ -34,12 +34,6 @@ fn check_root_partial_paths(
     let mut database = Database::new();
     partials
         .find_all_partial_paths_in_file(graph, file, &NoCancellation, |graph, partials, path| {
-            if !path.is_complete_as_possible(graph) {
-                return;
-            }
-            if !path.is_productive(partials) {
-                return;
-            }
             database.add_partial_path(graph, partials, path);
         })
         .expect("should never be cancelled");

@@ -2454,7 +2454,9 @@ impl PartialPaths {
                 continue;
             }
             path.extend_from_file(graph, self, file, &mut queue);
-            visit(graph, self, path);
+            if path.is_complete_as_possible(graph) && path.is_productive(self) {
+                visit(graph, self, path);
+            }
         }
         Ok(())
     }

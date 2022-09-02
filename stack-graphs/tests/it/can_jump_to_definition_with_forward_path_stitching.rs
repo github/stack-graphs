@@ -30,12 +30,6 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
                 file,
                 &NoCancellation,
                 |graph, partials, path| {
-                    if !path.is_complete_as_possible(graph) {
-                        return;
-                    }
-                    if !path.is_productive(partials) {
-                        return;
-                    }
                     db.add_partial_path(graph, partials, path);
                 },
             )
