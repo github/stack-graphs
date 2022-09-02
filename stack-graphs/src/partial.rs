@@ -2417,6 +2417,9 @@ impl PartialPath {
 impl PartialPaths {
     /// Finds all partial paths in a file, calling the `visit` closure for each one.
     ///
+    /// This function ensures that the set of visited partial paths covers all complete
+    /// paths, from references to definitions, when used for path stitching.
+    ///
     /// This function will not return until all reachable partial paths have been processed, so
     /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
     /// stored in some other storage system, and want more control over lazily loading only the
