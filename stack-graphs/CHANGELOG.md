@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- The amount of work done in `PartialPaths::find_all_partial_paths_in_file` is reduced. The documentation now makes it clear that the function itself is responsible for returning a set that is big enough to cover all complete paths. Callers should not have to filter this set further anymore, and any visitors filtering with `PartialPath::is_complete_as_possible` or `PartialPath::is_productive` should remove those checks, as they may interfere with future ompitmizations of this fynction.
+
 ## 0.10.0 -- 2022-08-23
 
 ### Added
