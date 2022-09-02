@@ -20,12 +20,6 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
     let mut results = BTreeSet::new();
     partials
         .find_all_partial_paths_in_file(graph, file, &NoCancellation, |graph, partials, path| {
-            if !path.is_complete_as_possible(graph) {
-                return;
-            }
-            if !path.is_productive(partials) {
-                return;
-            }
             results.insert(path.display(graph, partials).to_string());
         })
         .expect("should never be cancelled");

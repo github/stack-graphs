@@ -2417,6 +2417,12 @@ impl PartialPath {
 impl PartialPaths {
     /// Finds all partial paths in a file, calling the `visit` closure for each one.
     ///
+    /// This function ensures that the set of visited partial paths covers all complete
+    /// paths, from references to definitions, when used for path stitching. Callers are
+    /// advised _not_ to filter this set in the visitor using functions like
+    /// [`PartialPath::is_complete_as_possible`][] or [`PartialPath::is_productive`][] as
+    /// that may interfere with implementation changes of this function.
+    ///
     /// This function will not return until all reachable partial paths have been processed, so
     /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
     /// stored in some other storage system, and want more control over lazily loading only the
@@ -2441,8 +2447,8 @@ impl PartialPaths {
             graph
                 .nodes_for_file(file)
                 .filter(|node| match &graph[*node] {
-                    Node::PushScopedSymbol(_) => true,
-                    Node::PushSymbol(_) => true,
+                    node @ Node::PushScopedSymbol(_) => node.is_reference(),
+                    node @ Node::PushSymbol(_) => node.is_reference(),
                     node @ Node::Scope(_) => node.is_exported_scope(),
                     _ => false,
                 })
@@ -2453,8 +2459,13 @@ impl PartialPaths {
             if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
                 continue;
             }
-            path.extend_from_file(graph, self, file, &mut queue);
-            visit(graph, self, path);
+            let should_extend = path.end_node == path.start_node || !graph[path.end_node].is_root();
+            if should_extend {
+                path.extend_from_file(graph, self, file, &mut queue);
+            }
+            if path.is_complete_as_possible(graph) && path.is_productive(self) {
+                visit(graph, self, path);
+            }
         }
         Ok(())
     }
