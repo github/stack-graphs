@@ -2453,7 +2453,10 @@ impl PartialPaths {
             if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
                 continue;
             }
-            path.extend_from_file(graph, self, file, &mut queue);
+            let should_extend = path.end_node == path.start_node || !graph[path.end_node].is_root();
+            if should_extend {
+                path.extend_from_file(graph, self, file, &mut queue);
+            }
             if path.is_complete_as_possible(graph) && path.is_productive(self) {
                 visit(graph, self, path);
             }
