@@ -303,6 +303,7 @@ use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::mem::transmute;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use thiserror::Error;
@@ -439,16 +440,10 @@ impl StackGraphLanguage {
         file: Handle<File>,
         source: &'a str,
         globals: &'a mut Variables<'a>,
-        cancellation_flag: &dyn CancellationFlag,
+        cancellation_flag: &'a dyn CancellationFlag,
     ) -> Result<(), LoadError> {
-        Builder {
-            sgl: self,
-            stack_graph,
-            file,
-            source,
-            globals,
-        }
-        .build(cancellation_flag)
+        self.into_stack_graph_builder(stack_graph, file, source, globals)
+            .build(cancellation_flag)
     }
 
     /// Create a builder that will the graph construction rules for this language against a source
@@ -462,13 +457,18 @@ impl StackGraphLanguage {
         source: &'a str,
         globals: &'a mut Variables<'a>,
     ) -> Builder<'a> {
-        Builder {
-            sgl: self,
-            stack_graph,
-            file,
-            source,
-            globals,
-        }
+        let mut builder = Builder::new(self, stack_graph, file, source, globals);
+        let root_node = builder.inject_node(NodeID::root());
+        builder
+            .globals
+            .add(ROOT_NODE_VAR.into(), root_node.into())
+            .expect("Failed to set ROOT_NODE");
+        let jump_to_scope_node = builder.inject_node(NodeID::jump_to());
+        builder
+            .globals
+            .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
+            .expect("Failed to set JUMP_TO_SCOPE_NODE");
+        builder
     }
 }
 
@@ -478,31 +478,48 @@ pub struct Builder<'a> {
     file: Handle<File>,
     source: &'a str,
     globals: &'a mut Variables<'a>,
+    graph: Graph<'a>,
+    remapped_local_ids: HashMap<usize, NodeID>,
+    injected_node_count: usize,
+    span_calculator: SpanCalculator<'a>,
 }
 
-impl Builder<'_> {
+impl<'a> Builder<'a> {
+    fn new(
+        sgl: &'a StackGraphLanguage,
+        stack_graph: &'a mut StackGraph,
+        file: Handle<File>,
+        source: &'a str,
+        globals: &'a mut Variables<'a>,
+    ) -> Self {
+        let span_calculator = SpanCalculator::new(source);
+        Builder {
+            sgl,
+            stack_graph,
+            file,
+            source,
+            globals,
+            graph: Graph::new(),
+            remapped_local_ids: HashMap::new(),
+            injected_node_count: 0,
+            span_calculator,
+        }
+    }
+
     /// Executes this builder.
-    pub fn build(self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
+    pub fn build(mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
         let mut parser = Parser::new();
         parser.set_language(self.sgl.language)?;
         unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
         let tree = parser
             .parse(self.source, None)
             .ok_or(LoadError::ParseError)?;
-
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
             return Err(LoadError::ParseErrors(parse_errors));
         }
         let tree = parse_errors.into_tree();
 
-        let mut graph = Graph::new();
-        self.globals
-            .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
-            .expect("Failed to set ROOT_NODE");
-        self.globals
-            .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
-            .expect("Failed to set JUMP_TO_SCOPE_NODE");
         self.globals
             .add(
                 FILE_PATH_VAR.into(),
@@ -515,16 +532,35 @@ impl Builder<'_> {
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
                 [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
             );
+
+        // The execute_into() method requires that the reference to the tree matches the lifetime
+        // parameter 'a of the Graph, because the Graph can hold references to the Tree. In this Builder,
+        // the Graph is created _before_ the Tree, so that it can be prepopulated with nodes. Because of
+        // that, the borrow checker complains that the Tree only lives as long as this method, not as long
+        // as the lifetime parameter 'a. Here we transmute the Tree reference to give it the required 'a
+        // lifetime, which is safe because:
+        // (1) this method takes ownership of the Builder; and
+        // (2) it returns no values connected to 'a.
+        // These together guarantee that no values connected to the lifetime 'a outlive the Tree.
+        let tree: &'a tree_sitter::Tree = unsafe { transmute(&tree) };
         self.sgl.tsg.execute_into(
-            &mut graph,
-            &tree,
+            &mut self.graph,
+            tree,
             self.source,
             &mut config,
             &cancellation_flag,
         )?;
 
-        let mut loader = StackGraphLoader::new(self.stack_graph, self.file, &graph, self.source);
-        loader.load(cancellation_flag)
+        self.load(cancellation_flag)
+    }
+
+    /// Create a graph node to represent the stack graph node. It is the callers responisibility to
+    /// ensure the stack graph node exists.
+    pub fn inject_node(&mut self, id: NodeID) -> GraphNodeRef {
+        let node = self.graph.add_graph_node();
+        self.remapped_local_ids.insert(node.index(), id);
+        self.injected_node_count += 1;
+        node
     }
 }
 
@@ -600,77 +636,51 @@ impl From<tree_sitter_graph::ExecutionError> for LoadError {
     }
 }
 
-struct StackGraphLoader<'a> {
-    stack_graph: &'a mut StackGraph,
-    file: Handle<File>,
-    graph: &'a Graph<'a>,
-    source: &'a str,
-    span_calculator: SpanCalculator<'a>,
-    remapped_local_ids: HashMap<usize, NodeID>,
-}
-
-impl<'a> StackGraphLoader<'a> {
-    fn new(
-        stack_graph: &'a mut StackGraph,
-        file: Handle<File>,
-        graph: &'a Graph<'a>,
-        source: &'a str,
-    ) -> Self {
-        let span_calculator = SpanCalculator::new(source);
+impl<'a> Builder<'a> {
+    fn load(mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
+        let cancellation_flag: &dyn stack_graphs::CancellationFlag = &cancellation_flag;
 
         // By default graph ids are used for stack graph local_ids. A remapping is computed
         // for local_ids that already exist in the graph---all other graph ids are mapped to
         // the same local_id.
-        let mut remapped_local_ids = HashMap::new();
-        remapped_local_ids.insert(0usize, NodeID::root());
-        remapped_local_ids.insert(1usize, NodeID::jump_to());
-        // remap beyond the range of graph nodes
-        let mut next_local_id = (graph.node_count() as u32) - 2;
-        for node in stack_graph.nodes_for_file(file) {
-            let local_id = stack_graph[node].id().local_id();
-            let index = (local_id as usize) + 2;
+        let mut next_local_id = (self.graph.node_count() - self.injected_node_count) as u32;
+        for node in self.stack_graph.nodes_for_file(self.file) {
+            let local_id = self.stack_graph[node].id().local_id();
+            let index = (local_id as usize) + self.injected_node_count;
             // find next available id for which no stack graph node exists yet
-            while stack_graph
-                .node_for_id(NodeID::new_in_file(file, next_local_id))
+            while self
+                .stack_graph
+                .node_for_id(NodeID::new_in_file(self.file, next_local_id))
                 .is_some()
             {
                 next_local_id += 1;
             }
             // remap occupied local_id to next available id
-            remapped_local_ids.insert(index, NodeID::new_in_file(file, next_local_id));
+            self.remapped_local_ids
+                .insert(index, NodeID::new_in_file(self.file, next_local_id));
         }
-
-        StackGraphLoader {
-            stack_graph,
-            file,
-            graph,
-            source,
-            span_calculator,
-            remapped_local_ids,
-        }
-    }
-}
-
-impl<'a> StackGraphLoader<'a> {
-    fn load(&mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
-        let cancellation_flag: &dyn stack_graphs::CancellationFlag = &cancellation_flag;
 
         // First create a stack graph node for each TSG node.  (The skip(2) is because the first
         // two DSL nodes that we create are the proxies for the stack graph's “root” and “jump to
         // scope” nodes.)
-        for node_ref in self.graph.iter_nodes().skip(2) {
+        let injected_node_count = self.injected_node_count;
+        for node_ref in self
+            .graph
+            .iter_nodes()
+            .filter(|n| n.index() >= injected_node_count)
+        {
             cancellation_flag.check("loading graph nodes")?;
-            let node = &self.graph[node_ref];
-            let handle = match get_node_type(node)? {
+            let node_type = self.get_node_type(node_ref)?;
+            let handle = match node_type {
                 NodeType::DropScopes => self.load_drop_scopes(node_ref),
-                NodeType::PopScopedSymbol => self.load_pop_scoped_symbol(node, node_ref)?,
-                NodeType::PopSymbol => self.load_pop_symbol(node, node_ref)?,
-                NodeType::PushScopedSymbol => self.load_push_scoped_symbol(node, node_ref)?,
-                NodeType::PushSymbol => self.load_push_symbol(node, node_ref)?,
-                NodeType::Scope => self.load_scope(node, node_ref)?,
+                NodeType::PopScopedSymbol => self.load_pop_scoped_symbol(node_ref)?,
+                NodeType::PopSymbol => self.load_pop_symbol(node_ref)?,
+                NodeType::PushScopedSymbol => self.load_push_scoped_symbol(node_ref)?,
+                NodeType::PushSymbol => self.load_push_symbol(node_ref)?,
+                NodeType::Scope => self.load_scope(node_ref)?,
             };
-            self.load_span(node, handle)?;
-            self.load_debug_info(node, handle)?;
+            self.load_span(node_ref, handle)?;
+            self.load_debug_info(node_ref, handle)?;
         }
 
         // Then add stack graph edges for each TSG edge.  Note that we _don't_ skip(2) here because
@@ -696,6 +706,29 @@ impl<'a> StackGraphLoader<'a> {
 
         Ok(())
     }
+
+    fn get_node_type(&self, node_ref: GraphNodeRef) -> Result<NodeType, LoadError> {
+        let node = &self.graph[node_ref];
+        let node_type = match node.attributes.get(TYPE_ATTR) {
+            Some(node_type) => node_type.as_str()?,
+            None => return Ok(NodeType::Scope),
+        };
+        if node_type == DROP_SCOPES_TYPE {
+            return Ok(NodeType::DropScopes);
+        } else if node_type == POP_SCOPED_SYMBOL_TYPE {
+            return Ok(NodeType::PopScopedSymbol);
+        } else if node_type == POP_SYMBOL_TYPE {
+            return Ok(NodeType::PopSymbol);
+        } else if node_type == PUSH_SCOPED_SYMBOL_TYPE {
+            return Ok(NodeType::PushScopedSymbol);
+        } else if node_type == PUSH_SYMBOL_TYPE {
+            return Ok(NodeType::PushSymbol);
+        } else if node_type == SCOPE_TYPE {
+            return Ok(NodeType::Scope);
+        } else {
+            return Err(LoadError::UnknownNodeType(format!("{}", node_type)));
+        }
+    }
 }
 
 enum NodeType {
@@ -707,33 +740,11 @@ enum NodeType {
     Scope,
 }
 
-fn get_node_type(node: &GraphNode) -> Result<NodeType, LoadError> {
-    let node_type = match node.attributes.get(TYPE_ATTR) {
-        Some(node_type) => node_type.as_str()?,
-        None => return Ok(NodeType::Scope),
-    };
-    if node_type == DROP_SCOPES_TYPE {
-        return Ok(NodeType::DropScopes);
-    } else if node_type == POP_SCOPED_SYMBOL_TYPE {
-        return Ok(NodeType::PopScopedSymbol);
-    } else if node_type == POP_SYMBOL_TYPE {
-        return Ok(NodeType::PopSymbol);
-    } else if node_type == PUSH_SCOPED_SYMBOL_TYPE {
-        return Ok(NodeType::PushScopedSymbol);
-    } else if node_type == PUSH_SYMBOL_TYPE {
-        return Ok(NodeType::PushSymbol);
-    } else if node_type == SCOPE_TYPE {
-        return Ok(NodeType::Scope);
-    } else {
-        return Err(LoadError::UnknownNodeType(format!("{}", node_type)));
-    }
-}
-
-impl<'a> StackGraphLoader<'a> {
-    fn node_id_for_graph_node(&mut self, node_ref: GraphNodeRef) -> NodeID {
+impl<'a> Builder<'a> {
+    fn node_id_for_graph_node(&self, node_ref: GraphNodeRef) -> NodeID {
         let index = node_ref.index();
         self.remapped_local_ids.get(&index).map_or_else(
-            || NodeID::new_in_file(self.file, (index as u32) - 2),
+            || NodeID::new_in_file(self.file, (index - self.injected_node_count) as u32),
             |id| *id,
         )
     }
@@ -745,9 +756,9 @@ impl<'a> StackGraphLoader<'a> {
 
     fn load_pop_scoped_symbol(
         &mut self,
-        node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
+        let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
@@ -762,11 +773,8 @@ impl<'a> StackGraphLoader<'a> {
             .unwrap())
     }
 
-    fn load_pop_symbol(
-        &mut self,
-        node: &GraphNode,
-        node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
+    fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+        let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
@@ -783,9 +791,9 @@ impl<'a> StackGraphLoader<'a> {
 
     fn load_push_scoped_symbol(
         &mut self,
-        node: &GraphNode,
         node_ref: GraphNodeRef,
     ) -> Result<Handle<Node>, LoadError> {
+        let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
@@ -804,11 +812,8 @@ impl<'a> StackGraphLoader<'a> {
             .unwrap())
     }
 
-    fn load_push_symbol(
-        &mut self,
-        node: &GraphNode,
-        node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
+    fn load_push_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+        let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
             None => return Err(LoadError::MissingSymbol(node_ref)),
@@ -823,11 +828,8 @@ impl<'a> StackGraphLoader<'a> {
             .unwrap())
     }
 
-    fn load_scope(
-        &mut self,
-        node: &GraphNode,
-        node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
+    fn load_scope(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+        let node = &self.graph[node_ref];
         let id = self.node_id_for_graph_node(node_ref);
         let is_exported =
             self.load_flag(node, IS_EXPORTED_ATTR)? || self.load_flag(node, IS_ENDPOINT_ATTR)?;
@@ -843,7 +845,7 @@ impl<'a> StackGraphLoader<'a> {
         }
     }
 
-    fn load_flag(&mut self, node: &GraphNode, attribute: &str) -> Result<bool, LoadError> {
+    fn load_flag(&self, node: &GraphNode, attribute: &str) -> Result<bool, LoadError> {
         match node.attributes.get(attribute) {
             Some(value) => value.as_boolean().map_err(|_| {
                 LoadError::UnknownFlagType(format!("{}", attribute), format!("{}", value))
@@ -852,7 +854,12 @@ impl<'a> StackGraphLoader<'a> {
         }
     }
 
-    fn load_span(&mut self, node: &GraphNode, node_handle: Handle<Node>) -> Result<(), LoadError> {
+    fn load_span(
+        &mut self,
+        node_ref: GraphNodeRef,
+        node_handle: Handle<Node>,
+    ) -> Result<(), LoadError> {
+        let node = &self.graph[node_ref];
         let source_node = match node.attributes.get(SOURCE_NODE_ATTR) {
             Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
             None => return Ok(()),
@@ -868,9 +875,10 @@ impl<'a> StackGraphLoader<'a> {
 
     fn load_debug_info(
         &mut self,
-        node: &GraphNode,
+        node_ref: GraphNodeRef,
         node_handle: Handle<Node>,
     ) -> Result<(), LoadError> {
+        let node = &self.graph[node_ref];
         for (name, value) in node.attributes.iter() {
             let name = name.to_string();
             if name.starts_with(DEBUG_ATTR_PREFIX) {
