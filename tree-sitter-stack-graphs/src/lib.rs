@@ -433,18 +433,62 @@ impl StackGraphLanguage {
     /// nodes and edges in `stack_graph`.  Any new nodes that we create will belong to `file`.
     /// (The source file must be implemented in this language, otherwise you'll probably get a
     /// parse error.)
-    pub fn build_stack_graph_into(
-        &self,
-        stack_graph: &mut StackGraph,
+    pub fn build_stack_graph_into<'a>(
+        &'a self,
+        stack_graph: &'a mut StackGraph,
         file: Handle<File>,
-        source: &str,
-        globals: &mut Variables,
+        source: &'a str,
+        globals: &'a mut Variables<'a>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError> {
+        Builder {
+            sgl: self,
+            stack_graph,
+            file,
+            source,
+            globals,
+        }
+        .build(cancellation_flag)
+    }
+
+    /// Create a builder that will the graph construction rules for this language against a source
+    /// file, creating new nodes and edges in `stack_graph`.  Any new nodes that we create will
+    /// belong to `file`.  (The source file must be implemented in this language, otherwise you'll
+    /// probably get a parse error.)
+    pub fn into_stack_graph_builder<'a>(
+        &'a self,
+        stack_graph: &'a mut StackGraph,
+        file: Handle<File>,
+        source: &'a str,
+        globals: &'a mut Variables<'a>,
+    ) -> Builder<'a> {
+        Builder {
+            sgl: self,
+            stack_graph,
+            file,
+            source,
+            globals,
+        }
+    }
+}
+
+pub struct Builder<'a> {
+    sgl: &'a StackGraphLanguage,
+    stack_graph: &'a mut StackGraph,
+    file: Handle<File>,
+    source: &'a str,
+    globals: &'a mut Variables<'a>,
+}
+
+impl Builder<'_> {
+    /// Executes this builder.
+    pub fn build(self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
         let mut parser = Parser::new();
-        parser.set_language(self.language)?;
+        parser.set_language(self.sgl.language)?;
         unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
-        let tree = parser.parse(source, None).ok_or(LoadError::ParseError)?;
+        let tree = parser
+            .parse(self.source, None)
+            .ok_or(LoadError::ParseError)?;
 
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
@@ -453,28 +497,33 @@ impl StackGraphLanguage {
         let tree = parse_errors.into_tree();
 
         let mut graph = Graph::new();
-        globals
+        self.globals
             .add(ROOT_NODE_VAR.into(), graph.add_graph_node().into())
             .expect("Failed to set ROOT_NODE");
-        globals
+        self.globals
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), graph.add_graph_node().into())
             .expect("Failed to set JUMP_TO_SCOPE_NODE");
-        globals
+        self.globals
             .add(
                 FILE_PATH_VAR.into(),
-                format!("{}", &stack_graph[file]).into(),
+                format!("{}", &self.stack_graph[self.file]).into(),
             )
             .expect("Failed to set FILE_PATH");
-        let mut config = ExecutionConfig::new(&self.functions, &globals)
+        let mut config = ExecutionConfig::new(&self.sgl.functions, &self.globals)
             .lazy(true)
             .debug_attributes(
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
                 [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
             );
-        self.tsg
-            .execute_into(&mut graph, &tree, source, &mut config, &cancellation_flag)?;
+        self.sgl.tsg.execute_into(
+            &mut graph,
+            &tree,
+            self.source,
+            &mut config,
+            &cancellation_flag,
+        )?;
 
-        let mut loader = StackGraphLoader::new(stack_graph, file, &graph, source);
+        let mut loader = StackGraphLoader::new(self.stack_graph, self.file, &graph, self.source);
         loader.load(cancellation_flag)
     }
 }
