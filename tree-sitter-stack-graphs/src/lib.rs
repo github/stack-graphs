@@ -557,7 +557,7 @@ struct StackGraphLoader<'a> {
     graph: &'a Graph<'a>,
     source: &'a str,
     span_calculator: SpanCalculator<'a>,
-    remapped_local_ids: HashMap<u32, u32>,
+    remapped_local_ids: HashMap<usize, NodeID>,
 }
 
 impl<'a> StackGraphLoader<'a> {
@@ -573,9 +573,13 @@ impl<'a> StackGraphLoader<'a> {
         // for local_ids that already exist in the graph---all other graph ids are mapped to
         // the same local_id.
         let mut remapped_local_ids = HashMap::new();
+        remapped_local_ids.insert(0usize, NodeID::root());
+        remapped_local_ids.insert(1usize, NodeID::jump_to());
         // remap beyond the range of graph nodes
-        let mut next_local_id = graph.node_count() as u32;
+        let mut next_local_id = (graph.node_count() as u32) - 2;
         for node in stack_graph.nodes_for_file(file) {
+            let local_id = stack_graph[node].id().local_id();
+            let index = (local_id as usize) + 2;
             // find next available id for which no stack graph node exists yet
             while stack_graph
                 .node_for_id(NodeID::new_in_file(file, next_local_id))
@@ -584,8 +588,7 @@ impl<'a> StackGraphLoader<'a> {
                 next_local_id += 1;
             }
             // remap occupied local_id to next available id
-            let local_id = stack_graph[node].id().local_id();
-            remapped_local_ids.insert(local_id, next_local_id);
+            remapped_local_ids.insert(index, NodeID::new_in_file(file, next_local_id));
         }
 
         StackGraphLoader {
@@ -680,15 +683,10 @@ fn get_node_type(node: &GraphNode) -> Result<NodeType, LoadError> {
 impl<'a> StackGraphLoader<'a> {
     fn node_id_for_graph_node(&mut self, node_ref: GraphNodeRef) -> NodeID {
         let index = node_ref.index();
-        if index == 0 {
-            NodeID::root()
-        } else if index == 1 {
-            NodeID::jump_to()
-        } else {
-            let local_id = (index - 2) as u32;
-            let local_id = *self.remapped_local_ids.get(&local_id).unwrap_or(&local_id);
-            NodeID::new_in_file(self.file, local_id)
-        }
+        self.remapped_local_ids.get(&index).map_or_else(
+            || NodeID::new_in_file(self.file, (index as u32) - 2),
+            |id| *id,
+        )
     }
 
     fn load_drop_scopes(&mut self, node_ref: GraphNodeRef) -> Handle<Node> {
