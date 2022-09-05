@@ -287,3 +287,26 @@ fn can_calculate_spans() {
     let trimmed_line = &python[source_info.span.start.trimmed_line.clone()];
     assert_eq!(trimmed_line, "a");
 }
+
+#[test]
+fn can_support_preexisting_nodes() {
+    let tsg = r#"
+    (module)@mod {
+      node @mod.lexical_scope
+    }
+    "#;
+    let python = "pass";
+
+    let mut graph = StackGraph::new();
+    let file = graph.get_or_create_file("test.py");
+    let node_id = graph.new_node_id(file);
+    let _preexisting_node = graph.add_scope_node(node_id, true).unwrap();
+
+    let mut globals = Variables::new();
+
+    let language = StackGraphLanguage::from_str(tree_sitter_python::language(), tsg).unwrap();
+
+    language
+        .build_stack_graph_into(&mut graph, file, python, &mut globals, &NoCancellation)
+        .expect("Failed to build graph");
+}
