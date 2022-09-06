@@ -518,7 +518,7 @@ impl<'a> Builder<'a> {
         globals
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
             .expect("Failed to set JUMP_TO_SCOPE_NODE");
-        let file_name = format!("{}", &self.stack_graph[self.file]);
+        let file_name = self.stack_graph[self.file].to_string();
         globals
             .add(FILE_PATH_VAR.into(), file_name.into())
             .expect("Failed to set FILE_PATH");
