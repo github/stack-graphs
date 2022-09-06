@@ -442,8 +442,8 @@ impl StackGraphLanguage {
         globals: &'a mut Variables<'a>,
         cancellation_flag: &'a dyn CancellationFlag,
     ) -> Result<(), LoadError> {
-        self.into_stack_graph_builder(stack_graph, file, source, globals)
-            .build(cancellation_flag)
+        self.into_stack_graph_builder(stack_graph, file, source)
+            .build(globals, cancellation_flag)
     }
 
     /// Create a builder that will the graph construction rules for this language against a source
@@ -455,20 +455,8 @@ impl StackGraphLanguage {
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
         source: &'a str,
-        globals: &'a mut Variables<'a>,
     ) -> Builder<'a> {
-        let mut builder = Builder::new(self, stack_graph, file, source, globals);
-        let root_node = builder.inject_node(NodeID::root());
-        builder
-            .globals
-            .add(ROOT_NODE_VAR.into(), root_node.into())
-            .expect("Failed to set ROOT_NODE");
-        let jump_to_scope_node = builder.inject_node(NodeID::jump_to());
-        builder
-            .globals
-            .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
-            .expect("Failed to set JUMP_TO_SCOPE_NODE");
-        builder
+        Builder::new(self, stack_graph, file, source)
     }
 }
 
@@ -477,7 +465,6 @@ pub struct Builder<'a> {
     stack_graph: &'a mut StackGraph,
     file: Handle<File>,
     source: &'a str,
-    globals: &'a mut Variables<'a>,
     graph: Graph<'a>,
     remapped_local_ids: HashMap<usize, NodeID>,
     injected_node_count: usize,
@@ -490,7 +477,6 @@ impl<'a> Builder<'a> {
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
         source: &'a str,
-        globals: &'a mut Variables<'a>,
     ) -> Self {
         let span_calculator = SpanCalculator::new(source);
         Builder {
@@ -498,7 +484,6 @@ impl<'a> Builder<'a> {
             stack_graph,
             file,
             source,
-            globals,
             graph: Graph::new(),
             remapped_local_ids: HashMap::new(),
             injected_node_count: 0,
@@ -507,7 +492,11 @@ impl<'a> Builder<'a> {
     }
 
     /// Executes this builder.
-    pub fn build(mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
+    pub fn build(
+        mut self,
+        globals: &'a mut Variables<'a>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), LoadError> {
         let mut parser = Parser::new();
         parser.set_language(self.sgl.language)?;
         unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
@@ -520,13 +509,21 @@ impl<'a> Builder<'a> {
         }
         let tree = parse_errors.into_tree();
 
-        self.globals
-            .add(
-                FILE_PATH_VAR.into(),
-                format!("{}", &self.stack_graph[self.file]).into(),
-            )
+        let mut globals = Variables::nested(globals);
+        let root_node = self.inject_node(NodeID::root());
+        globals
+            .add(ROOT_NODE_VAR.into(), root_node.into())
+            .expect("Failed to set ROOT_NODE");
+        let jump_to_scope_node = self.inject_node(NodeID::jump_to());
+        globals
+            .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
+            .expect("Failed to set JUMP_TO_SCOPE_NODE");
+        let file_name = format!("{}", &self.stack_graph[self.file]);
+        globals
+            .add(FILE_PATH_VAR.into(), file_name.into())
             .expect("Failed to set FILE_PATH");
-        let mut config = ExecutionConfig::new(&self.sgl.functions, &self.globals)
+
+        let mut config = ExecutionConfig::new(&self.sgl.functions, &globals)
             .lazy(true)
             .debug_attributes(
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
