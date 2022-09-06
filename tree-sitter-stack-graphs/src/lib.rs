@@ -442,7 +442,7 @@ impl StackGraphLanguage {
         globals: &'a mut Variables<'a>,
         cancellation_flag: &'a dyn CancellationFlag,
     ) -> Result<(), LoadError> {
-        self.into_stack_graph_builder(stack_graph, file, source)
+        self.builder_into_stack_graph(stack_graph, file, source)
             .build(globals, cancellation_flag)
     }
 
@@ -450,7 +450,7 @@ impl StackGraphLanguage {
     /// file, creating new nodes and edges in `stack_graph`.  Any new nodes that we create will
     /// belong to `file`.  (The source file must be implemented in this language, otherwise you'll
     /// probably get a parse error.)
-    pub fn into_stack_graph_builder<'a>(
+    pub fn builder_into_stack_graph<'a>(
         &'a self,
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
