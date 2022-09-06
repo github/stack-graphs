@@ -657,9 +657,8 @@ impl<'a> Builder<'a> {
                 .insert(index, NodeID::new_in_file(self.file, next_local_id));
         }
 
-        // First create a stack graph node for each TSG node.  (The skip(2) is because the first
-        // two DSL nodes that we create are the proxies for the stack graph's “root” and “jump to
-        // scope” nodes.)
+        // First create a stack graph node for each TSG node.  (The filter(...) is because the first
+        // DSL nodes that we create are the proxies for the injected stack graph nodes.)
         let injected_node_count = self.injected_node_count;
         for node_ref in self
             .graph
