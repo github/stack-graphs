@@ -287,8 +287,8 @@
 //! let mut language = StackGraphLanguage::from_str(grammar, tsg_source)?;
 //! let mut stack_graph = StackGraph::new();
 //! let file_handle = stack_graph.get_or_create_file("test.py");
-//! let mut globals = Variables::new();
-//! language.build_stack_graph_into(&mut stack_graph, file_handle, python_source, &mut globals, &NoCancellation)?;
+//! let globals = Variables::new();
+//! language.build_stack_graph_into(&mut stack_graph, file_handle, python_source, &globals, &NoCancellation)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -439,7 +439,7 @@ impl StackGraphLanguage {
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
         source: &'a str,
-        globals: &'a mut Variables<'a>,
+        globals: &'a Variables<'a>,
         cancellation_flag: &'a dyn CancellationFlag,
     ) -> Result<(), LoadError> {
         self.builder_into_stack_graph(stack_graph, file, source)
@@ -494,7 +494,7 @@ impl<'a> Builder<'a> {
     /// Executes this builder.
     pub fn build(
         mut self,
-        globals: &'a mut Variables<'a>,
+        globals: &'a Variables<'a>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError> {
         let mut parser = Parser::new();

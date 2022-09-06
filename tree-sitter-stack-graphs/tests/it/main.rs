@@ -24,13 +24,7 @@ pub(self) fn build_stack_graph(
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
     let mut graph = StackGraph::new();
     let file = graph.get_or_create_file("test.py");
-    let mut globals = Variables::new();
-    language.build_stack_graph_into(
-        &mut graph,
-        file,
-        python_source,
-        &mut globals,
-        &NoCancellation,
-    )?;
+    let globals = Variables::new();
+    language.build_stack_graph_into(&mut graph, file, python_source, &globals, &NoCancellation)?;
     Ok(graph)
 }

@@ -261,12 +261,12 @@ impl Command {
         test_fragment: &TestFragment,
         graph: &mut StackGraph,
     ) -> anyhow::Result<()> {
-        let mut globals = Variables::new();
+        let globals = Variables::new();
         match sgl.build_stack_graph_into(
             graph,
             test_fragment.file,
             &test_fragment.source,
-            &mut globals,
+            &globals,
             &NoCancellation,
         ) {
             Err(LoadError::ParseErrors(parse_errors)) => {

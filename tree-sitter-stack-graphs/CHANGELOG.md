@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `StackGraphLanguage::builder_into_stack_graph` method can be used to create a `Builer` that allows injecting preexisting `StackGraph` nodes using `Builder::inject_node` to obtain `tree_sitter_graph::graph::Value` instances. These can be used for global variables such that the TSG rules can refer to stack graph nodes that were not created by them.
 
+#### Changed
+
+- Global `Variables` do not require a mutable reference anymore.
+
 ## 0.3.0 -- 2022-08-23
 
 ### Library

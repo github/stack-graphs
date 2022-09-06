@@ -222,15 +222,9 @@ impl Loader {
                 let source = std::fs::read(path.clone())
                     .with_context(|| format!("Failed to read {}", path.display()))?;
                 let source = String::from_utf8(source).map_err(LoadError::other)?;
-                let mut globals = Variables::new();
-                sgl.build_stack_graph_into(
-                    &mut graph,
-                    file,
-                    &source,
-                    &mut globals,
-                    cancellation_flag,
-                )
-                .map_err(LoadError::other)?;
+                let globals = Variables::new();
+                sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)
+                    .map_err(LoadError::other)?;
             }
         }
         sgl.builtins_mut().add_from_graph(&graph).unwrap();
