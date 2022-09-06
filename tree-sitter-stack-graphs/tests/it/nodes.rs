@@ -7,29 +7,20 @@
 
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
-use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::LoadError;
-use tree_sitter_stack_graphs::NoCancellation;
-use tree_sitter_stack_graphs::StackGraphLanguage;
 
-fn build_stack_graph(python_source: &str, tsg_source: &str) -> Result<StackGraph, LoadError> {
-    let language =
-        StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
-    let mut graph = StackGraph::new();
-    let file = graph.get_or_create_file("test.py");
-    let mut globals = Variables::new();
-    language.build_stack_graph_into(
-        &mut graph,
-        file,
-        python_source,
-        &mut globals,
-        &NoCancellation,
-    )?;
-    Ok(graph)
+use super::build_stack_graph;
+
+fn build_and_check_stack_graph_nodes(
+    python_source: &str,
+    tsg_source: &str,
+    expected_nodes: &[&str],
+) {
+    let graph = build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
+    check_stack_graph_nodes(&graph, expected_nodes);
 }
 
-fn check_stack_graph_node(python_source: &str, tsg_source: &str, expected_nodes: &[&str]) {
-    let graph = build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
+pub(super) fn check_stack_graph_nodes(graph: &StackGraph, expected_nodes: &[&str]) {
     let actual_nodes = graph
         .iter_nodes()
         .skip(2) // skip root and jump-to-scope nodes
@@ -47,7 +38,7 @@ fn can_create_definition_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) definition a]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) definition a]"]);
 }
 
 #[test]
@@ -72,7 +63,7 @@ fn can_create_drop_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) drop scopes]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) drop scopes]"]);
 }
 
 #[test]
@@ -84,7 +75,7 @@ fn can_create_exported_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) exported scope]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) exported scope]"]);
 }
 
 #[test]
@@ -96,7 +87,7 @@ fn can_create_endpoint_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) exported scope]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) exported scope]"]);
 }
 
 #[test]
@@ -107,7 +98,7 @@ fn can_create_implicit_internal_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) scope]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) scope]"]);
 }
 
 #[test]
@@ -119,7 +110,7 @@ fn can_create_explicit_internal_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) scope]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) scope]"]);
 }
 
 #[test]
@@ -131,7 +122,7 @@ fn can_create_pop_symbol_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) pop a]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) pop a]"]);
 }
 
 #[test]
@@ -156,7 +147,7 @@ fn can_create_pop_scoped_symbol_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) pop scoped a]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) pop scoped a]"]);
 }
 
 #[test]
@@ -181,7 +172,7 @@ fn can_create_push_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) push a]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) push a]"]);
 }
 
 #[test]
@@ -208,7 +199,7 @@ fn can_create_push_scoped_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(
+    build_and_check_stack_graph_nodes(
         python,
         tsg,
         &[
@@ -242,7 +233,7 @@ fn can_create_reference_node() {
       }
     "#;
     let python = "a";
-    check_stack_graph_node(python, tsg, &["[test.py(0) reference a]"]);
+    build_and_check_stack_graph_nodes(python, tsg, &["[test.py(0) reference a]"]);
 }
 
 #[test]
@@ -286,27 +277,4 @@ fn can_calculate_spans() {
 
     let trimmed_line = &python[source_info.span.start.trimmed_line.clone()];
     assert_eq!(trimmed_line, "a");
-}
-
-#[test]
-fn can_support_preexisting_nodes() {
-    let tsg = r#"
-    (module)@mod {
-      node @mod.lexical_scope
-    }
-    "#;
-    let python = "pass";
-
-    let mut graph = StackGraph::new();
-    let file = graph.get_or_create_file("test.py");
-    let node_id = graph.new_node_id(file);
-    let _preexisting_node = graph.add_scope_node(node_id, true).unwrap();
-
-    let mut globals = Variables::new();
-
-    let language = StackGraphLanguage::from_str(tree_sitter_python::language(), tsg).unwrap();
-
-    language
-        .build_stack_graph_into(&mut graph, file, python, &mut globals, &NoCancellation)
-        .expect("Failed to build graph");
 }
