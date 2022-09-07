@@ -466,7 +466,7 @@ pub struct Builder<'a> {
     file: Handle<File>,
     source: &'a str,
     graph: Graph<'a>,
-    remapped_local_ids: HashMap<usize, NodeID>,
+    remapped_nodes: HashMap<usize, NodeID>,
     injected_node_count: usize,
     span_calculator: SpanCalculator<'a>,
 }
@@ -485,7 +485,7 @@ impl<'a> Builder<'a> {
             file,
             source,
             graph: Graph::new(),
-            remapped_local_ids: HashMap::new(),
+            remapped_nodes: HashMap::new(),
             injected_node_count: 0,
             span_calculator,
         }
@@ -551,11 +551,11 @@ impl<'a> Builder<'a> {
         self.load(cancellation_flag)
     }
 
-    /// Create a graph node to represent the stack graph node. It is the callers responisibility to
+    /// Create a graph node to represent the stack graph node. It is the callers responsibility to
     /// ensure the stack graph node exists.
     pub fn inject_node(&mut self, id: NodeID) -> GraphNodeRef {
         let node = self.graph.add_graph_node();
-        self.remapped_local_ids.insert(node.index(), id);
+        self.remapped_nodes.insert(node.index(), id);
         self.injected_node_count += 1;
         node
     }
@@ -639,12 +639,12 @@ impl<'a> Builder<'a> {
 
         // By default graph ids are used for stack graph local_ids. A remapping is computed
         // for local_ids that already exist in the graph---all other graph ids are mapped to
-        // the same local_id.
+        // the same local_id. See [`self.node_id_for_index`] for more details.
         let mut next_local_id = (self.graph.node_count() - self.injected_node_count) as u32;
         for node in self.stack_graph.nodes_for_file(self.file) {
             let local_id = self.stack_graph[node].id().local_id();
             let index = (local_id as usize) + self.injected_node_count;
-            // find next available id for which no stack graph node exists yet
+            // find next available local_id for which no stack graph node exists yet
             while self
                 .stack_graph
                 .node_for_id(NodeID::new_in_file(self.file, next_local_id))
@@ -652,19 +652,15 @@ impl<'a> Builder<'a> {
             {
                 next_local_id += 1;
             }
-            // remap occupied local_id to next available id
-            self.remapped_local_ids
-                .insert(index, NodeID::new_in_file(self.file, next_local_id));
+            // remap graph node index to the available stack graph node local_id
+            self.remapped_nodes
+                .insert(index, NodeID::new_in_file(self.file, next_local_id))
+                .map(|_| panic!("index already remapped"));
         }
 
-        // First create a stack graph node for each TSG node.  (The filter(...) is because the first
+        // First create a stack graph node for each TSG node.  (The skip(...) is because the first
         // DSL nodes that we create are the proxies for the injected stack graph nodes.)
-        let injected_node_count = self.injected_node_count;
-        for node_ref in self
-            .graph
-            .iter_nodes()
-            .filter(|n| n.index() >= injected_node_count)
-        {
+        for node_ref in self.graph.iter_nodes().skip(self.injected_node_count) {
             cancellation_flag.check("loading graph nodes")?;
             let node_type = self.get_node_type(node_ref)?;
             let handle = match node_type {
@@ -679,7 +675,7 @@ impl<'a> Builder<'a> {
             self.load_debug_info(node_ref, handle)?;
         }
 
-        // Then add stack graph edges for each TSG edge.  Note that we _don't_ skip(2) here because
+        // Then add stack graph edges for each TSG edge.  Note that we _don't_ skip(...) here because
         // there might be outgoing nodes from the “root” node that we need to process.
         // (Technically the caller could add outgoing nodes from “jump to scope” as well, but those
         // are invalid according to the stack graph semantics and will never be followed.
@@ -737,9 +733,17 @@ enum NodeType {
 }
 
 impl<'a> Builder<'a> {
+    /// Get the NodeID corresponding to a Graph node.
+    ///
+    /// By default, graph nodes get their index shifted by [`self.injected_node_count`] as their
+    /// local_id, unless they have a corresponding entry in the [`self.remapped_nodes`] map. This
+    /// is the case if:
+    /// 1. The node was injected, in which case it is mapped to the NodeID of the injected node.
+    /// 2. The node's default local_id clashes with a preexisting node, in which case it is mapped to
+    ///    an available local_id beyond the range of default local_ids.
     fn node_id_for_graph_node(&self, node_ref: GraphNodeRef) -> NodeID {
         let index = node_ref.index();
-        self.remapped_local_ids.get(&index).map_or_else(
+        self.remapped_nodes.get(&index).map_or_else(
             || NodeID::new_in_file(self.file, (index - self.injected_node_count) as u32),
             |id| *id,
         )
