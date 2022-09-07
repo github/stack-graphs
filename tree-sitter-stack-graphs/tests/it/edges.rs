@@ -5,33 +5,23 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::BTreeSet;
-
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
-use tree_sitter_graph::Variables;
-use tree_sitter_stack_graphs::LoadError;
-use tree_sitter_stack_graphs::NoCancellation;
-use tree_sitter_stack_graphs::StackGraphLanguage;
+use std::collections::BTreeSet;
 
-fn build_stack_graph(python_source: &str, tsg_source: &str) -> Result<StackGraph, LoadError> {
-    let language =
-        StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
-    let mut graph = StackGraph::new();
-    let file = graph.get_or_create_file("test.py");
-    let mut globals = Variables::new();
-    language.build_stack_graph_into(
-        &mut graph,
-        file,
-        python_source,
-        &mut globals,
-        &NoCancellation,
-    )?;
-    Ok(graph)
+use super::build_stack_graph;
+
+fn build_and_check_stack_graph_edges(
+    python_source: &str,
+    tsg_source: &str,
+    expected_edges: &[&str],
+) {
+    let (graph, _) =
+        build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
+    check_stack_graph_edges(&graph, expected_edges);
 }
 
-fn check_stack_graph_edges(python_source: &str, tsg_source: &str, expected_edges: &[&str]) {
-    let graph = build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
+pub(super) fn check_stack_graph_edges(graph: &StackGraph, expected_edges: &[&str]) {
     let mut actual_edges = BTreeSet::new();
     for source in graph.iter_nodes() {
         for edge in graph.outgoing_edges(source) {
@@ -62,7 +52,7 @@ fn can_create_edges() {
       }
     "#;
     let python = "a";
-    check_stack_graph_edges(
+    build_and_check_stack_graph_edges(
         python,
         tsg,
         &[
@@ -84,7 +74,7 @@ fn can_create_edges_with_precedence() {
       }
     "#;
     let python = "a";
-    check_stack_graph_edges(
+    build_and_check_stack_graph_edges(
         python,
         tsg,
         &[
@@ -96,6 +86,9 @@ fn can_create_edges_with_precedence() {
 #[test]
 fn can_create_edges_to_singleton_nodes() {
     let tsg = r#"
+      global ROOT_NODE
+      global JUMP_TO_SCOPE_NODE
+
       (identifier) @id {
          node source
          attr (source) type = "push_symbol", symbol = (source-text @id), is_reference
@@ -115,7 +108,7 @@ fn can_create_edges_to_singleton_nodes() {
       }
     "#;
     let python = "a";
-    check_stack_graph_edges(
+    build_and_check_stack_graph_edges(
         python,
         tsg,
         &[

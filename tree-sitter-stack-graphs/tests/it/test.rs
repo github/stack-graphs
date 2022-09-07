@@ -60,8 +60,8 @@ fn build_stack_graph_into(
 ) -> Result<(), LoadError> {
     let language =
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
-    let mut globals = Variables::new();
-    language.build_stack_graph_into(graph, file, python_source, &mut globals, &NoCancellation)?;
+    let globals = Variables::new();
+    language.build_stack_graph_into(graph, file, python_source, &globals, &NoCancellation)?;
     Ok(())
 }
 
