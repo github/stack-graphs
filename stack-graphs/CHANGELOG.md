@@ -5,35 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.10.1 -- 2022-09-07
 
 ### Changed
 
-- The amount of work done in `PartialPaths::find_all_partial_paths_in_file` is reduced. The documentation now makes it clear that the function itself is responsible for returning a set that is big enough to cover all complete paths. Callers should not have to filter this set further anymore, and any visitors filtering with `PartialPath::is_complete_as_possible` or `PartialPath::is_productive` should remove those checks, as they may interfere with future ompitmizations of this fynction.
+- The amount of work done in `PartialPaths::find_all_partial_paths_in_file`
+  is reduced. The documentation now makes it clear that the
+  function itself is responsible for returning a set that is big
+  enough to cover all complete paths. Callers should not have to
+  filter this set further anymore, and any visitors filtering with
+  `PartialPath::is_complete_as_possible` or `PartialPath::is_productive`
+  should remove those checks, as they may interfere with future
+  ompitmizations of this fynction.
 
 ## 0.10.0 -- 2022-08-23
 
 ### Added
 
-- Cancellation of potentially long-running operations is now supported by passing an implementation of the `CancellationFlag` trait. The `NoCancellation` type provides a noop implementation.
+- Cancellation of potentially long-running operations is now supported
+  by passing an implementation of the `CancellationFlag` trait. The
+  `NoCancellation` type provides a noop implementation.
 
 ### Changed
 
 - `Assertion::run` requires an extra cancellation flag parameter.
-- `PartialPaths::find_all_partial_paths_in_file`, `Paths::find_all_paths`, `Paths::remove_shadowed_paths`, `PathStitcher::find_all_complete_paths` and `ForwardPartialPathStitcher::find_all_complete_partial_paths` require an extra cancellation flag parameter and now return a `Result` to indicate if the computation was successful or cancelled.
-- C API functions `sg_path_arena_find_all_complete_paths` and `sg_partial_path_arena_find_partial_paths_in_file` require an extra `const size_t *cancellation_flag` parameter and return an `sg_result` value to indicate if the operation was successful or cancelled. A null pointer can be passed if no cancellation is necessary.
+- `PartialPaths::find_all_partial_paths_in_file`, `Paths::find_all_paths`,
+  `Paths::remove_shadowed_paths`, `PathStitcher::find_all_complete_paths`
+  and `ForwardPartialPathStitcher::find_all_complete_partial_paths`
+  require an extra cancellation flag parameter and now return a `Result`
+  to indicate if the computation was successful or cancelled.
+- C API functions `sg_path_arena_find_all_complete_paths` and
+  `sg_partial_path_arena_find_partial_paths_in_file` require an extra
+  parameter `const size_t *cancellation_flag` parameter and return an
+  `sg_result` value to indicate if the operation was successful or
+  cancelled. A null pointer can be passed if no cancellation is necessary.
 
 ## stack-graphs 0.9.0 - 2022-06-29
 
 ### Added
 
-- C API functions `sg_partial_path_database_ensure_both_directions` and `sg_partial_path_database_ensure_forwards` to ensure the available directions of deques in partial paths in a database.
+- C API functions `sg_partial_path_database_ensure_both_directions` and
+  `sg_partial_path_database_ensure_forwards` to ensure the available
+  directions of deques in partial paths in a database.
 
 ## stack-graphs 0.8.0 - 2022-05-19
 
 ### Added
 
-- Source info field `definiens_span` for the source span that corresponds to the definiens of a function declaration (i.e. the body of a function declaration, not an assignment).
+- Source info field `definiens_span` for the source span that corresponds
+  to the definiens of a function declaration (i.e. the body of a function
+  declaration, not an assignment).
 
 ## stack-graphs 0.7.3 -- 2022-05-17
 
