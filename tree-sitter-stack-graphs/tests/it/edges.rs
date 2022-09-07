@@ -85,6 +85,9 @@ fn can_create_edges_with_precedence() {
 #[test]
 fn can_create_edges_to_singleton_nodes() {
     let tsg = r#"
+      global ROOT_NODE
+      global JUMP_TO_SCOPE_NODE
+
       (identifier) @id {
          node source
          attr (source) type = "push_symbol", symbol = (source-text @id), is_reference
