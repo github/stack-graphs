@@ -6,6 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use pretty_assertions::assert_eq;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use tree_sitter_stack_graphs::LoadError;
 
@@ -16,14 +18,18 @@ fn build_and_check_stack_graph_nodes(
     tsg_source: &str,
     expected_nodes: &[&str],
 ) {
-    let graph = build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
-    check_stack_graph_nodes(&graph, expected_nodes);
+    let (graph, file) =
+        build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
+    check_stack_graph_nodes(&graph, file, expected_nodes);
 }
 
-pub(super) fn check_stack_graph_nodes(graph: &StackGraph, expected_nodes: &[&str]) {
+pub(super) fn check_stack_graph_nodes(
+    graph: &StackGraph,
+    file: Handle<File>,
+    expected_nodes: &[&str],
+) {
     let actual_nodes = graph
-        .iter_nodes()
-        .skip(2) // skip root and jump-to-scope nodes
+        .nodes_for_file(file)
         .map(|handle| graph[handle].display(&graph).to_string())
         .collect::<Vec<_>>();
     assert_eq!(expected_nodes, actual_nodes);
@@ -258,8 +264,8 @@ fn can_calculate_spans() {
       }
     "#;
     let python = "  a  ";
-    let graph = build_stack_graph(python, tsg).unwrap();
-    let node_handle = graph.iter_nodes().nth(2).unwrap();
+    let (graph, file) = build_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.nodes_for_file(file).next().unwrap();
     let source_info = graph.source_info(node_handle).unwrap();
 
     let span = format!(

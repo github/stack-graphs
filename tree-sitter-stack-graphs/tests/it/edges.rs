@@ -16,7 +16,8 @@ fn build_and_check_stack_graph_edges(
     tsg_source: &str,
     expected_edges: &[&str],
 ) {
-    let graph = build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
+    let (graph, _) =
+        build_stack_graph(python_source, tsg_source).expect("Could not load stack graph");
     check_stack_graph_edges(&graph, expected_edges);
 }
 

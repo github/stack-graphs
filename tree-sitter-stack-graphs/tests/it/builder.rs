@@ -64,6 +64,7 @@ fn can_support_injected_nodes() {
 
     check_stack_graph_nodes(
         &graph,
+        file,
         &["[test.py(0) exported scope]", "[test.py(1) scope]"],
     );
     check_stack_graph_edges(
