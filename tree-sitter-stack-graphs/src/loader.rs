@@ -229,6 +229,9 @@ impl Loader {
         return Err(LoadError::NoTsgFound);
     }
 
+    // Builtins are loaded from queries/builtins.EXT and an optional queries/builtins.cfg configuration.
+    // In the future, we may extend this to support builtins spread over multiple files queries/builtins/NAME.EXT
+    // and optional corresponding configuration files queries/builtins/NAME.cfg.
     fn load_builtins(
         &self,
         language: &SupplementedLanguage,
