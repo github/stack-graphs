@@ -19,6 +19,7 @@
 //!
 //! Previously loaded languages are cached in the loader, so subsequent loads are fast.
 
+use ini::Ini;
 use itertools::Itertools;
 use regex::Regex;
 use stack_graphs::graph::StackGraph;
@@ -242,10 +243,28 @@ impl Loader {
                 let source = std::fs::read(path.clone())?;
                 let source = String::from_utf8(source)?;
                 let mut globals = Variables::new();
+                let globals_path = language.root_path.join("queries/builtins.cfg");
+                if globals_path.exists() {
+                    self.load_cfg_into(&globals_path, &mut globals)?;
+                }
                 sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)?;
             }
         }
         sgl.builtins_mut().add_from_graph(&graph).unwrap();
+        Ok(())
+    }
+
+    fn load_cfg_into(&self, path: &Path, globals: &mut Variables) -> Result<(), LoadError> {
+        let conf = Ini::load_from_file(path)?;
+        if let Some(globals_section) = conf.section(Some("globals")) {
+            for (name, value) in globals_section.iter() {
+                globals.add(name.into(), value.into()).map_err(|_| {
+                    LoadError::Reader(
+                        format!("Duplicate global variable {} in config", name).into(),
+                    )
+                })?;
+            }
+        }
         Ok(())
     }
 }
@@ -254,6 +273,8 @@ impl Loader {
 pub enum LoadError {
     #[error("{0}")]
     Cancelled(&'static str),
+    #[error(transparent)]
+    Config(#[from] ini::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
