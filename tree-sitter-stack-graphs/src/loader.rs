@@ -245,7 +245,7 @@ impl Loader {
                 let mut globals = Variables::new();
                 let globals_path = language.root_path.join("queries/builtins.cfg");
                 if globals_path.exists() {
-                    self.load_cfg_into(&globals_path, &mut globals)?;
+                    self.load_config_from_path(&globals_path, &mut globals)?;
                 }
                 sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)?;
             }
@@ -254,8 +254,25 @@ impl Loader {
         Ok(())
     }
 
-    fn load_cfg_into(&self, path: &Path, globals: &mut Variables) -> Result<(), LoadError> {
+    pub fn load_config_from_path(
+        &self,
+        path: &Path,
+        globals: &mut Variables,
+    ) -> Result<(), LoadError> {
         let conf = Ini::load_from_file(path)?;
+        self.load_config(&conf, globals)
+    }
+
+    pub fn load_config_from_str(
+        &self,
+        config: &str,
+        globals: &mut Variables,
+    ) -> Result<(), LoadError> {
+        let conf = Ini::load_from_str(config).map_err(ini::Error::Parse)?;
+        self.load_config(&conf, globals)
+    }
+
+    fn load_config(&self, conf: &Ini, globals: &mut Variables) -> Result<(), LoadError> {
         if let Some(globals_section) = conf.section(Some("globals")) {
             for (name, value) in globals_section.iter() {
                 globals.add(name.into(), value.into()).map_err(|_| {
