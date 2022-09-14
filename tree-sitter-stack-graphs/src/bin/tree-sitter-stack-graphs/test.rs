@@ -23,7 +23,6 @@ use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::test::Test;
-use tree_sitter_stack_graphs::test::TestFragment;
 use tree_sitter_stack_graphs::test::TestResult;
 use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::NoCancellation;
@@ -211,6 +210,7 @@ impl Command {
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         self.load_builtins_into(sgl, &mut test.graph)
             .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
+        let mut globals = Variables::new();
         for test_fragment in &test.fragments {
             let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
             if test_path.extension() != fragment_path.extension() {
@@ -220,10 +220,14 @@ impl Command {
                     test_path.display()
                 ));
             }
+            globals.clear();
+            test_fragment.add_globals_to(&mut globals);
             self.build_fragment_stack_graph_into(
                 &fragment_path,
                 sgl,
-                test_fragment,
+                test_fragment.file,
+                &test_fragment.source,
+                &globals,
                 &mut test.graph,
             )?;
         }
@@ -258,19 +262,14 @@ impl Command {
         &self,
         test_path: &Path,
         sgl: &mut StackGraphLanguage,
-        test_fragment: &TestFragment,
+        file: Handle<File>,
+        source: &str,
+        globals: &Variables,
         graph: &mut StackGraph,
     ) -> anyhow::Result<()> {
-        let globals = Variables::new();
-        match sgl.build_stack_graph_into(
-            graph,
-            test_fragment.file,
-            &test_fragment.source,
-            &globals,
-            &NoCancellation,
-        ) {
+        match sgl.build_stack_graph_into(graph, file, source, globals, &NoCancellation) {
             Err(LoadError::ParseErrors(parse_errors)) => {
-                Err(self.map_parse_errors(test_path, &parse_errors, &test_fragment.source))
+                Err(self.map_parse_errors(test_path, &parse_errors, source))
             }
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
