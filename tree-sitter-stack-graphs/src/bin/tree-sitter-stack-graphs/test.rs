@@ -196,7 +196,7 @@ impl Command {
         test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<usize> {
-        let source = String::from_utf8(std::fs::read(test_path)?)?;
+        let source = std::fs::read_to_string(test_path)?;
         let sgl = match loader.load_for_file(test_path, Some(&source), &NoCancellation)? {
             Some(sgl) => sgl,
             None => {

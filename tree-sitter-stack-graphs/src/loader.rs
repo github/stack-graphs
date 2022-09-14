@@ -27,7 +27,6 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
-use std::string::FromUtf8Error;
 use thiserror::Error;
 use tree_sitter::Language;
 use tree_sitter_graph::ast::File as TsgFile;
@@ -220,8 +219,7 @@ impl Loader {
 
         let tsg_path = language.root_path.join("queries/stack-graphs.tsg");
         if tsg_path.exists() {
-            let tsg_source = std::fs::read(tsg_path.clone())?;
-            let tsg_source = String::from_utf8(tsg_source)?;
+            let tsg_source = std::fs::read_to_string(tsg_path.clone())?;
             let tsg = TsgFile::from_str(language.language, &tsg_source)?;
             return Ok(tsg);
         }
@@ -243,8 +241,7 @@ impl Loader {
             let path = language.root_path.join(format!("queries/builtins.{}", ext));
             if path.exists() {
                 let file = graph.add_file(&path.to_string_lossy()).unwrap();
-                let source = std::fs::read(path.clone())?;
-                let source = String::from_utf8(source)?;
+                let source = std::fs::read_to_string(path.clone())?;
                 let mut globals = Variables::new();
                 let globals_path = language.root_path.join("queries/builtins.cfg");
                 if globals_path.exists() {
@@ -294,8 +291,6 @@ pub enum LoadError {
     TsgParse(#[from] tree_sitter_graph::ParseError),
     #[error(transparent)]
     TreeSitter(anyhow::Error),
-    #[error(transparent)]
-    Utf8(#[from] FromUtf8Error),
 }
 
 impl From<crate::LoadError> for LoadError {

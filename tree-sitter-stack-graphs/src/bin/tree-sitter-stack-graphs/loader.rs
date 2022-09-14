@@ -57,8 +57,7 @@ impl LoaderArgs {
         language: Language,
         tsg_path: &Path,
     ) -> Result<TsgFile, Box<dyn std::error::Error + Send + Sync>> {
-        let tsg_source = std::fs::read(tsg_path)?;
-        let tsg_source = String::from_utf8(tsg_source)?;
+        let tsg_source = std::fs::read_to_string(tsg_path)?;
         let tsg = TsgFile::from_str(language, &tsg_source)?;
         return Ok(tsg);
     }
