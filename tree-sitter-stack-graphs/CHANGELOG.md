@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Library
+
+#### Changed
+
+- The TSG reader function passed to `loader::Loader::from_*` may now return any `std::error::Error` and does not require the specific `anyhow::Error` anymore.
+
+#### Added
+
+- Tests can specify global variables that are passed to the TSG rules using `--- global: NAME+VALUE ---` in comments.
+- `loader::Loader` reads global variables for the builtins from an optional `queries/builtins.cfg` configuration file in the language repository when loading TSG files. API users can call `loader::Loader::load_config_from_*` methods to read configuration files.
+
 ## 0.3.1 -- 2022-09-07
 
 ### Library
