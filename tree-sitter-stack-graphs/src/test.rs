@@ -67,11 +67,14 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
+use tree_sitter_graph::Variables;
 
 use crate::CancellationFlag;
 
 lazy_static! {
     static ref PATH_REGEX: Regex = Regex::new(r#"---\s*path:\s*([^\s]+)\s*---"#).unwrap();
+    static ref GLOBAL_REGEX: Regex =
+        Regex::new(r#"---\s*global:\s*([^\s]+)=([^\s]+)\s*---"#).unwrap();
     static ref ASSERTION_REGEX: Regex =
         Regex::new(r#"(\^)\s*defined:\s*(\d+(?:\s*,\s*\d+)*)?"#).unwrap();
     static ref LINE_NUMBER_REGEX: Regex = Regex::new(r#"\d+"#).unwrap();
@@ -81,7 +84,9 @@ lazy_static! {
 #[derive(Debug, Error)]
 pub enum TestError {
     AssertionRefersToNonSourceLine,
+    DuplicateGlobalVariable(String),
     DuplicatePath(String),
+    GlobalBeforeFirstFragment,
     InvalidColumn(usize, usize, usize),
 }
 
@@ -91,7 +96,13 @@ impl std::fmt::Display for TestError {
             Self::AssertionRefersToNonSourceLine => {
                 write!(f, "Assertion refers to non-source line")
             }
+            Self::DuplicateGlobalVariable(global) => {
+                write!(f, "Duplicate global variable {}", global)
+            }
             Self::DuplicatePath(path) => write!(f, "Duplicate path {}", path),
+            Self::GlobalBeforeFirstFragment => {
+                write!(f, "Global set before first fragment")
+            }
             Self::InvalidColumn(assertion_line, column, regular_line) => write!(
                 f,
                 "Assertion on line {} refers to missing column {} on line {}",
@@ -117,6 +128,7 @@ pub struct TestFragment {
     pub file: Handle<File>,
     pub source: String,
     pub assertions: Vec<Assertion>,
+    pub globals: HashMap<String, String>,
 }
 
 impl Test {
@@ -132,6 +144,8 @@ impl Test {
         let mut have_fragments = false;
         let mut current_path = default_fragment_path.to_path_buf();
         let mut current_source = String::new();
+        let mut current_globals = HashMap::new();
+        let mut have_globals = false;
         let mut prev_source = String::new();
         let mut line_files = Vec::new();
         let mut line_count = 0;
@@ -155,13 +169,28 @@ impl Test {
                         file,
                         source: current_source,
                         assertions: Vec::new(),
+                        globals: current_globals,
                     });
                 } else {
+                    if have_globals {
+                        return Err(TestError::GlobalBeforeFirstFragment);
+                    }
                     have_fragments = true;
                     (line_files.len()..current_line_number).for_each(|_| line_files.push(None));
                 }
                 current_path = m.get(1).unwrap().as_str().into();
                 current_source = prev_source.clone();
+                current_globals = HashMap::new();
+            } else if let Some(m) = GLOBAL_REGEX.captures_iter(current_line.content).next() {
+                have_globals = true;
+                let global_name = m.get(1).unwrap().as_str();
+                let global_value = m.get(2).unwrap().as_str();
+                if current_globals
+                    .insert(global_name.into(), global_value.into())
+                    .is_some()
+                {
+                    return Err(TestError::DuplicateGlobalVariable(global_name.to_string()));
+                }
             }
 
             current_source.push_str(current_line.content);
@@ -179,6 +208,7 @@ impl Test {
                 file,
                 source: current_source,
                 assertions: Vec::new(),
+                globals: current_globals,
             });
         }
 
@@ -508,5 +538,15 @@ impl Test {
                 && si.span.end.line == 0
                 && si.span.end.column.utf8_offset == 0)
         })
+    }
+}
+
+impl TestFragment {
+    pub fn add_globals_to(&self, variables: &mut Variables) {
+        for (name, value) in self.globals.iter() {
+            variables
+                .add(name.as_str().into(), value.as_str().into())
+                .unwrap();
+        }
     }
 }

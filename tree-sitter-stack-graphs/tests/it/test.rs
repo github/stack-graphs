@@ -20,7 +20,8 @@ use tree_sitter_stack_graphs::StackGraphLanguage;
 
 lazy_static! {
     static ref PATH: PathBuf = PathBuf::from("test.py");
-    static ref TSG: &'static str = r#"
+    static ref TSG: String = r#"
+      global ROOT_NODE
       (module) @mod {
           node @mod.lexical_in
           node @mod.lexical_out
@@ -49,7 +50,10 @@ lazy_static! {
           attr (@name.ref) type = "push_symbol", symbol = (source-text @name), source_node = @name, is_reference
           edge @name.ref -> @stmt.lexical_in
       }
-    "#;
+    "#.to_string();
+    static ref TSG_WITH_PKG: String = r#"
+      global PKG
+    "#.to_string() + &TSG;
 }
 
 fn build_stack_graph_into(
@@ -57,11 +61,11 @@ fn build_stack_graph_into(
     file: Handle<File>,
     python_source: &str,
     tsg_source: &str,
+    globals: &Variables,
 ) -> Result<(), LoadError> {
     let language =
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
-    let globals = Variables::new();
-    language.build_stack_graph_into(graph, file, python_source, &globals, &NoCancellation)?;
+    language.build_stack_graph_into(graph, file, python_source, globals, &NoCancellation)?;
     Ok(())
 }
 
@@ -82,12 +86,16 @@ fn check_test(
         expected_successes + expected_failures,
         assertion_count,
     );
+    let mut globals = Variables::new();
     for fragments in &test.fragments {
+        globals.clear();
+        fragments.add_globals_to(&mut globals);
         build_stack_graph_into(
             &mut test.graph,
             fragments.file,
             &fragments.source,
             tsg_source,
+            &globals,
         )
         .expect("Could not load stack graph");
     }
@@ -192,6 +200,40 @@ fn test_cannot_assert_before_first_fragment() {
       # --- path: a.py ---
         x;
       # ^ defined: 1
+    "#;
+    if let Ok(_) = Test::from_source(&PATH, python, &PATH) {
+        panic!("Parsing test unexpectedly succeeded.");
+    }
+}
+
+#[test]
+fn test_can_set_global() {
+    let python = r#"
+      # --- global: PKG=test ---
+      pass
+    "#;
+    check_test(&PathBuf::from("test.py"), python, &TSG_WITH_PKG, 0, 0);
+}
+
+#[test]
+fn test_can_set_global_in_fragments() {
+    let python = r#"
+      # --- path: a.py ---
+      # --- global: PKG=test ---
+      pass
+      # --- path: b.py ---
+      # --- global: PKG=test ---
+      pass
+    "#;
+    check_test(&PathBuf::from("test.py"), python, &TSG_WITH_PKG, 0, 0);
+}
+
+#[test]
+fn test_cannot_set_global_before_first_fragment() {
+    let python = r#"
+      # --- global: PKG=test ---
+      # --- path: a.py ---
+      pass
     "#;
     if let Ok(_) = Test::from_source(&PATH, python, &PATH) {
         panic!("Parsing test unexpectedly succeeded.");

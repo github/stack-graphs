@@ -35,6 +35,7 @@ lazy_static = "1.4"
 log = "0.4"
 lsp-positions = { version="0.3", path="../lsp-positions" }
 regex = "1"
+rust-ini = "0.18"
 stack-graphs = { version="0.10", path="../stack-graphs" }
 thiserror = "1.0"
 tree-sitter = ">= 0.19"
