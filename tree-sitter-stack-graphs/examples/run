@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+
+set -eu
+
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+py_pkg="tree-sitter-python@0.20.1"
+py_dir="$dir/.$py_pkg"
+if [ ! -e "$py_dir" ]; then
+    echo "Missing Python grammar. Run bootstrap script to install."
+    exit 1
+fi
+
+tsg_file="stack-graphs.tsg"
+tests_dir="tests"
+if [ $# -gt 0 ]; then
+    tsg_file="$1/$tsg_file"
+    tests_dir="$1/$tests_dir"
+fi
+if [ ! -e "$tsg_file" ]; then
+    echo "Missing TSG file $tsg_file. Not an example directory?"
+    exit 1
+fi
+if [ ! -e "$tests_dir" ]; then
+    echo "Missing directory $tests_dir. Not an example directory?"
+    exit 1
+fi
+
+cargo -q run --features=cli -- test --grammar "$py_dir" --tsg "$tsg_file" "$tests_dir"

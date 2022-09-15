@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+
+set -eu
+
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+py_pkg="tree-sitter-python@0.20.1"
+py_dir="$dir/.$py_pkg"
+
+if [ ! -e "$py_dir" ]; then
+    mkdir "$py_dir"
+    curl -s "$(npm v "$py_pkg" dist.tarball)" | tar -xz --strip-components=1 --directory "$py_dir"
+fi
