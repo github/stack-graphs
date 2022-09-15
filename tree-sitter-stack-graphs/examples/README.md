@@ -13,3 +13,4 @@ $ cargo run --features=cli -- test --tsg stack-graphs.tsg tests/
 The following examples are available:
 
 - [Nested scoping](nested-scoping/)
+- [Sequential Definitions](sequential-definitions/)
