@@ -9,3 +9,7 @@ Running the examples requires a working Tree-sitter installation with a Python g
 ```bash
 $ cargo run --features=cli -- test --tsg stack-graphs.tsg tests/
 ```
+
+The following examples are available:
+
+- [Nested scoping](nested-scoping/)
