@@ -1,0 +1,100 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Sequential Definitions                                                     ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Sequential definitions is a pattern where definitions cannot be refered to
+;; before they are defined, and definitions are shadowed by later definitions.
+;;
+;; These rules implement the following name binding behavior:
+;; - Definitions are cannot be refered to before they are defined.
+;; - Definitions are shadowed by later definitions in the same block.
+;;
+;; The supported Python syntax is:
+;; - Top-level function definitions without parameters.
+;; - Function calls without arguments.
+;; - Pass statements.
+;; - Comments.
+;;
+;; The following nodes are used:
+;; - @node.lexical_scope nodes form a tree connecting "upwards" to the lexical
+;;   scope, and are used to resolve references in.
+;; - @node.lexical_defs nodes are connected "downwards" to the definitions
+;;   introduced by statements. Lexical scopes are connected to them to make the
+;;   definitions available when resolving references.
+
+;;;;;;;;;;;;;;;;;;;;;;;
+;; Attribute Shorthands
+
+attribute node_definition = node => type = "pop_symbol", node_symbol = node, is_definition
+attribute node_reference = node  => type = "push_symbol", node_symbol = node, is_reference
+attribute node_symbol = node     => symbol = (source-text node), source_node = node
+
+;;;;;;;;;;
+;; Modules
+
+(module)@mod {
+    node @mod.lexical_scope
+}
+
+(module (_)@left_stmt . (_)@right_stmt)@mod {
+    ;; Every statements in the module can reach all definitions from previous statements in the module
+    edge @right_stmt.lexical_scope -> @left_stmt.lexical_scope
+
+    ;; The definitions from a statement are visible from the next statement on
+    edge @right_stmt.lexical_scope -> @left_stmt.lexical_defs
+    attr (@right_stmt.lexical_scope -> @left_stmt.lexical_defs) precedence = 1
+}
+
+;;;;;;;;;;;;;
+;; Statements
+
+[
+    (expression_statement)
+    (function_definition)
+    (pass_statement)
+]@stmt {
+    node @stmt.lexical_scope
+    node @stmt.lexical_defs
+}
+
+(expression_statement (_)@expr)@expr_stmt {
+    ;; The expression can reach all definitions visible in the enclosing scope
+    edge @expr.lexical_scope -> @expr_stmt.lexical_scope
+}
+
+(function_definition name:(identifier)@name)@fun_def {
+    ;; A definition with the name @name is introduced
+    node def
+    attr (def) node_definition = @name
+
+    ;; The definition is exposed to the surrounding block or module
+    edge @fun_def.lexical_defs -> def
+}
+
+;;;;;;;;;;;;;;
+;; Expressions
+
+[
+    (call)
+]@expr {
+    node @expr.lexical_scope
+}
+
+(call function:(identifier)@name)@call_expr {
+    ;; A reference for the name @name is introduced
+    node ref
+    attr (ref) node_reference = @name
+
+    ;; The reference is resolved in the the enclosing scope
+    edge ref -> @call_expr.lexical_scope
+}
+
+;;;;;;;;;;;
+;; Comments
+
+(comment)@comment {
+    ;; Because comments can appear everywhere, we define all possible nodes on
+    ;; them to prevent undefined errors
+    node @comment.lexical_scope
+    node @comment.lexical_defs
+}

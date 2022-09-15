@@ -1,0 +1,115 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Nested Scope                                                               ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Nested scoping is the scoping introduced by enclosed blocks such as modules or
+;; method bodies. Definitions are visible in the block itself, and any enclosed
+;; blocks. This kind of scoping, where visibility follows the structure of the
+;; syntax tree (downward), is also referred to as lexical scoping.
+;;
+;; These rules implement the following name binding behavior:
+;; - All definitions are hoisted within a block.
+;; - Definitions are shadowed by definitions in enclosed blocks.
+;;
+;; The supported Python syntax is:
+;; - Top-level and nested function definitions without parameters.
+;; - Function calls without arguments.
+;; - Pass statements.
+;; - Comments.
+;;
+;; The following nodes are used:
+;; - @node.lexical_scope nodes form a tree connecting "upwards" to the lexical
+;;   scope, and are used to resolve references in.
+;; - @node.lexical_defs nodes are connected "downwards" to the definitions
+;;   introduced by statements. Lexical scopes are connected to them to make the
+;;   definitions available when resolving references.
+
+;;;;;;;;;;;;;;;;;;;;;;;
+;; Attribute Shorthands
+
+attribute node_definition = node => type = "pop_symbol", node_symbol = node, is_definition
+attribute node_reference = node  => type = "push_symbol", node_symbol = node, is_reference
+attribute node_symbol = node     => symbol = (source-text node), source_node = node
+
+;;;;;;;;;;
+;; Modules
+
+(module)@mod {
+    node @mod.lexical_scope
+}
+
+(module (_)@stmt)@mod {
+    ;; Every statements in the module can reach all definitions visible in the module
+    edge @stmt.lexical_scope -> @mod.lexical_scope
+
+    ;; All statement definitions are visible in the module
+    edge @mod.lexical_scope -> @stmt.lexical_defs
+}
+
+;;;;;;;;;;;;;
+;; Statements
+
+[
+    (block)
+    (expression_statement)
+    (function_definition)
+    (pass_statement)
+]@stmt {
+    node @stmt.lexical_scope
+    node @stmt.lexical_defs
+}
+
+(block (_)@stmt)@blk {
+    ;; All statements in the block can reach definitions in the enclosing scope of the block
+    edge @stmt.lexical_scope -> @blk.lexical_scope
+
+    ;; All statement definitions are visible in the block (but not outside!)
+    edge @blk.lexical_scope -> @stmt.lexical_defs
+    ;; Local definitions shadow definitions in the enclosing scope
+    attr (@blk.lexical_scope -> @stmt.lexical_defs) precedence = 1
+}
+
+(expression_statement (_)@expr)@expr_stmt {
+    ;; The expression can reach all definitions visible in the enclosing scope
+    edge @expr.lexical_scope -> @expr_stmt.lexical_scope
+}
+
+(function_definition name:(identifier)@name  body:(_)@body)@fun_def {
+    ;; A definition with the name @name is introduced 
+    node def
+    attr (def) node_definition = @name
+
+    ;; The definition is exposed to the surrounding block or module
+    edge @fun_def.lexical_defs -> def
+
+    ;; The body can reach all definitions visible in the enclosing scope
+    edge @body.lexical_scope -> @fun_def.lexical_scope
+}
+
+;;;;;;;;;;;;;;
+;; Expressions
+
+[
+    (call)
+]@expr {
+    node @expr.lexical_scope
+}
+
+(call function:(identifier)@name)@call_expr {
+    ;; A reference for the name @name is introduced
+    node ref
+    attr (ref) node_reference = @name
+
+    ;; The reference is resolved in the the enclosing scope
+    edge ref -> @call_expr.lexical_scope
+}
+
+;;;;;;;;;;;
+;; Comments
+
+(comment)@comment {
+    ;; Because comments can appear everywhere, we define all possible nodes on
+    ;; them to prevent undefined errors
+    node @comment.lexical_scope
+    node @comment.lexical_defs
+}
