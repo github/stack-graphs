@@ -9,13 +9,13 @@ use itertools::Itertools;
 use lsp_positions::Offset;
 use lsp_positions::Position;
 use lsp_positions::Span;
+use serde::de::Deserialize;
+use serde::de::Deserializer;
 use serde::de::Visitor;
 use serde::ser::Serialize;
 use serde::ser::SerializeSeq;
 use serde::ser::SerializeStruct;
 use serde::ser::Serializer;
-use serde::de::Deserialize;
-use serde::de::Deserializer;
 use serde_json::Value;
 use std::ops::Index;
 use thiserror::Error;
@@ -175,12 +175,9 @@ impl<'a> JsonStackGraph<'a> {
     }
 
     pub fn from_json(&self, json: &'a str) -> Result<(), JsonError> {
-
         Ok(serde_json::from_str(json)?)
     }
 }
-
-
 
 impl Serialize for JsonStackGraph<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -190,20 +187,20 @@ impl Serialize for JsonStackGraph<'_> {
         let mut ser = serializer.serialize_struct(GRAPH_NAME, 2)?;
         for field in FIELDS {
             match *field {
-                "files" =>  ser.serialize_field(
-                            *field,
-                            &InStackGraph(&Files, self.0, &ImplicationFilter(self.1)),
-                            )?,
+                "files" => ser.serialize_field(
+                    *field,
+                    &InStackGraph(&Files, self.0, &ImplicationFilter(self.1)),
+                )?,
                 "nodes" => ser.serialize_field(
-                                *field,
-                                &InStackGraph(&Nodes, self.0, &ImplicationFilter(self.1)),
-                            )?,
+                    *field,
+                    &InStackGraph(&Nodes, self.0, &ImplicationFilter(self.1)),
+                )?,
                 "edges" => ser.serialize_field(
-                                *field,
-                                &InStackGraph(&Edges, self.0, &ImplicationFilter(self.1)),
-                            )?,
+                    *field,
+                    &InStackGraph(&Edges, self.0, &ImplicationFilter(self.1)),
+                )?,
                 // should never reach here!
-                _ => panic!("No serialization implemented for {}", *field)
+                _ => panic!("No serialization implemented for {}", *field),
             }
         }
         ser.end()
@@ -222,9 +219,9 @@ impl<'de> Visitor<'de> for JsonStackGraphVisitor {
 
 impl<'de> Deserialize<'de> for JsonStackGraph<'de> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de> {
-        
+    where
+        D: Deserializer<'de>,
+    {
         let des = deserializer.deserialize_struct(GRAPH_NAME, FIELDS, JsonStackGraphVisitor)?;
         Ok(des)
     }

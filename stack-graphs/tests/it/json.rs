@@ -1813,5 +1813,7 @@ pub fn can_deserialize_graph() {
     let jsonified_graph = init_graph.to_json(&|_: &StackGraph, _: &Handle<File>| true);
     let string = jsonified_graph.to_string_pretty().unwrap();
     let mut graph = StackGraph::new();
-    graph.from_json(&string, &|_: &StackGraph, _: &Handle<File>| true).expect("failed to build stackgraph from json");
+    graph
+        .from_json(&string, &|_: &StackGraph, _: &Handle<File>| true)
+        .expect("failed to build stackgraph from json");
 }
