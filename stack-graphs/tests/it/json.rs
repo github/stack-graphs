@@ -1806,3 +1806,12 @@ fn can_serialize_paths() {
     );
     assert_eq!(actual, expected);
 }
+
+#[test]
+pub fn can_deserialize_graph() {
+    let init_graph: StackGraph = test_graphs::simple::new();
+    let jsonified_graph = init_graph.to_json(&|_: &StackGraph, _: &Handle<File>| true);
+    let string = jsonified_graph.to_string_pretty().unwrap();
+    let mut graph = StackGraph::new();
+    graph.from_json(&string, &|_: &StackGraph, _: &Handle<File>| true).expect("failed to build stackgraph from json");
+}

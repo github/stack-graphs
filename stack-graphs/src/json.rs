@@ -9,10 +9,13 @@ use itertools::Itertools;
 use lsp_positions::Offset;
 use lsp_positions::Position;
 use lsp_positions::Span;
+use serde::de::Visitor;
 use serde::ser::Serialize;
 use serde::ser::SerializeSeq;
 use serde::ser::SerializeStruct;
 use serde::ser::Serializer;
+use serde::de::Deserialize;
+use serde::de::Deserializer;
 use serde_json::Value;
 use std::ops::Index;
 use thiserror::Error;
@@ -34,6 +37,9 @@ use crate::paths::ScopeStack;
 use crate::paths::ScopedSymbol;
 use crate::paths::SymbolStack;
 use crate::NoCancellation;
+
+const FIELDS: &'static [&'static str] = &["files", "nodes", "edges"];
+const GRAPH_NAME: &'static str = "stack_graph";
 
 #[derive(Debug, Error)]
 #[error(transparent)]
@@ -144,6 +150,13 @@ impl<'a> StackGraph {
     pub fn to_json(&'a self, f: &'a dyn Filter) -> JsonStackGraph {
         JsonStackGraph(self, f)
     }
+    pub fn from_json(&'a mut self, json: &'a str, f: &'a dyn Filter) -> Result<(), JsonError> {
+        let jsonsg = JsonStackGraph(self, f);
+        jsonsg.from_json(json)?;
+        //test add quick
+        let _a1 = self.add_symbol("a");
+        Ok(())
+    }
 }
 
 pub struct JsonStackGraph<'a>(&'a StackGraph, &'a dyn Filter);
@@ -160,27 +173,60 @@ impl<'a> JsonStackGraph<'a> {
     pub fn to_string_pretty(&self) -> Result<String, JsonError> {
         Ok(serde_json::to_string_pretty(self)?)
     }
+
+    pub fn from_json(&self, json: &'a str) -> Result<(), JsonError> {
+
+        Ok(serde_json::from_str(json)?)
+    }
 }
+
+
 
 impl Serialize for JsonStackGraph<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut ser = serializer.serialize_struct("stack_graph", 2)?;
-        ser.serialize_field(
-            "files",
-            &InStackGraph(&Files, self.0, &ImplicationFilter(self.1)),
-        )?;
-        ser.serialize_field(
-            "nodes",
-            &InStackGraph(&Nodes, self.0, &ImplicationFilter(self.1)),
-        )?;
-        ser.serialize_field(
-            "edges",
-            &InStackGraph(&Edges, self.0, &ImplicationFilter(self.1)),
-        )?;
+        let mut ser = serializer.serialize_struct(GRAPH_NAME, 2)?;
+        for field in FIELDS {
+            match *field {
+                "files" =>  ser.serialize_field(
+                            *field,
+                            &InStackGraph(&Files, self.0, &ImplicationFilter(self.1)),
+                            )?,
+                "nodes" => ser.serialize_field(
+                                *field,
+                                &InStackGraph(&Nodes, self.0, &ImplicationFilter(self.1)),
+                            )?,
+                "edges" => ser.serialize_field(
+                                *field,
+                                &InStackGraph(&Edges, self.0, &ImplicationFilter(self.1)),
+                            )?,
+                // should never reach here!
+                _ => panic!("No serialization implemented for {}", *field)
+            }
+        }
         ser.end()
+    }
+}
+
+struct JsonStackGraphVisitor;
+
+impl<'de> Visitor<'de> for JsonStackGraphVisitor {
+    type Value = JsonStackGraph<'de>;
+
+    fn expecting(&self, _formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl<'de> Deserialize<'de> for JsonStackGraph<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de> {
+        
+        let des = deserializer.deserialize_struct(GRAPH_NAME, FIELDS, JsonStackGraphVisitor)?;
+        Ok(des)
     }
 }
 
@@ -672,3 +718,6 @@ impl Serialize for InPaths<'_, &PathEdge> {
         ser.end()
     }
 }
+
+//-----------------------------------------------------------------------------
+// StackGraph
