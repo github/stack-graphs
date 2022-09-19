@@ -1,0 +1,196 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Modules and imports                                                        ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Modules, or packages, organize code in a static, usually hierarchic, structure.
+;; These modules can then be imported, or refered to via qualified names.
+;;
+;; These rules implement the following name binding behavior:
+;; - Hierarchical modules, with module names derived from the file name.
+;; - Imports for a single definition or all definitions from a module.
+;;
+;; The supported Python syntax is:
+;; - Top-level function definitions without parameters.
+;; - Function calls without arguments.
+;; - Import statements.
+;; - Comments.
+;;
+;; The following nodes are used:
+;; - @node.lexical_scope nodes form a tree connecting "upwards" to the lexical
+;;   scope, and are used to resolve references in.
+;; - @node.lexical_defs nodes are connected "downwards" to the definitions
+;;   introduced by statements. Lexical scopes are connected to them to make the
+;;   definitions available when resolving references.
+;; - @node.module_defs nodes are used to collect the exported definitions for the
+;;   definitions of a module, or to expose the imported definitions for a reference
+;;   to a module.
+
+;;;;;;;;;;;;;;;;;;;
+;; Global Variables
+
+global FILE_PATH ; provided by tree-sitter-stack-graphs
+global ROOT_NODE ; provided by tree-sitter-stack-graphs
+
+;;;;;;;;;;;;;;;;;;;;;;;
+;; Attribute Shorthands
+
+attribute node_definition = node     => type = "pop_symbol", node_symbol = node, is_definition
+attribute node_reference = node      => type = "push_symbol", node_symbol = node, is_reference
+attribute node_symbol = node         => symbol = (source-text node), source_node = node
+attribute pop_symbol = symbol        => type = "pop_symbol", symbol = symbol
+attribute push_symbol = symbol       => type = "push_symbol", symbol = symbol
+attribute symbol_definition = symbol => type = "pop_symbol", symbol = symbol, is_definition
+attribute symbol_reference = symbol  => type = "push_symbol", symbol = symbol, is_reference
+
+;;;;;;;;;;
+;; Modules
+
+(module)@mod {
+    node @mod.lexical_scope
+    node @mod.module_defs
+}
+
+(module)@mod {
+    ;; decompose the path, and create a chain of definitions
+    var root = ROOT_NODE
+    scan FILE_PATH {
+        "([^/]+)/" {
+            node def
+            attr (def) symbol_definition = $1
+            edge root -> def
+
+            node module_defs
+            attr (module_defs) pop_symbol = "."
+            edge def -> module_defs
+
+            set root = module_defs
+        }
+        "([^/]+)\.py" {
+            node def
+            attr (def) symbol_definition = $1
+            edge root -> def
+
+            attr (@mod.module_defs) pop_symbol = "."
+            edge def -> @mod.module_defs
+        }
+    }
+}
+
+(module (_)@stmt)@mod {
+    ;; Every statements in the module can reach all definitions visible in the module
+    edge @stmt.lexical_scope -> @mod.lexical_scope
+
+    ;; All statement definitions are visible in the module
+    edge @mod.lexical_scope -> @stmt.lexical_defs
+
+    ;; Module definitions are exported by the module
+    edge @mod.module_defs -> @stmt.module_defs
+}
+
+;;;;;;;;;;;;;
+;; Statements
+
+[
+    (expression_statement)
+    (function_definition)
+    (import_from_statement)
+]@stmt {
+    node @stmt.lexical_scope
+    node @stmt.lexical_defs
+    node @stmt.module_defs
+}
+
+(expression_statement (_)@expr)@expr_stmt {
+    ;; The expression can reach all definitions visible in the enclosing scope
+    edge @expr.lexical_scope -> @expr_stmt.lexical_scope
+}
+
+(function_definition name:(identifier)@name)@fun_def {
+    ;; A definition with the name @name is introduced
+    node def
+    attr (def) node_definition = @name
+
+    ;; The definition is exposed to the surrounding block or module
+    edge @fun_def.lexical_defs -> def
+
+    ;; The definition is exported from the module
+    edge @fun_def.module_defs -> def
+}
+
+;; the behavior of import statements is specified by several rules
+;; this is done to prevent repetition but still handle different variants
+
+(import_from_statement module_name:(dotted_name (_)@name))@import {
+    ;; all components of the module name are references
+    ;; where they are resolved is determined by the rules below
+    node @name.ref
+    attr (@name.ref) node_reference = @name
+
+    ;; definiitons of a module are access via a guard node marked with "."
+    node @name.module_defs
+    attr (@name.module_defs) push_symbol = "."
+    edge @name.module_defs -> @name.ref
+}
+
+(import_from_statement module_name:(dotted_name . (_)@first_name))@import {
+    ;; the first component of the module name is resolved in the root scope
+    edge @first_name.ref -> ROOT_NODE
+}
+
+(import_from_statement module_name:(dotted_name (_)@left_name . (_)@right_name))@import {
+    ;; every following component is resolved in the previous module's members
+    edge @right_name.ref -> @left_name.module_defs
+}
+
+(import_from_statement module_name:(dotted_name (_)@last_name .) (wildcard_import))@import {
+    ;; the members from the last component of a wildcard import are exposed as a local definitions
+    edge @import.lexical_defs -> @last_name.module_defs
+}
+
+(import_from_statement module_name:(dotted_name (_)@last_name .) name:(_)@name)@import {
+    ;; a pop node is introduced for the imported name which is exposed in the local scope
+    ;; because this is a pop node, references will not resolve to this node, but only to the imported definition
+    ;; this means that if the imported name does not exist in the module, references to this name will not resolve at all
+    ;; an alternative design choice is to make `def` a proper definition, in which case references will resolve to the import
+    ;; statement, and possible also to the imported definition
+    node def
+    attr (def) pop_symbol = (source-text @name)
+    edge @import.lexical_defs -> def
+
+    ;; a reference for the imported name is introduced and resolved in the module definitions of the last component
+    node ref
+    attr (ref) node_reference = @name
+    edge ref -> @last_name.module_defs
+
+    ;; the definition is an alias for the reference
+    edge def -> ref
+}
+
+;;;;;;;;;;;;;;
+;; Expressions
+
+[
+    (call)
+]@expr {
+    node @expr.lexical_scope
+}
+
+(call function:(identifier)@name)@call_expr {
+    ;; A reference for the name @name is introduced
+    node ref
+    attr (ref) node_reference = @name
+
+    ;; The reference is resolved in the the enclosing scope
+    edge ref -> @call_expr.lexical_scope
+}
+
+;;;;;;;;;;;
+;; Comments
+
+(comment)@comment {
+    ;; Because comments can appear everywhere, we define all possible nodes on
+    ;; them to prevent undefined errors
+    node @comment.lexical_defs
+    node @comment.lexical_scope
+    node @comment.module_defs
+}

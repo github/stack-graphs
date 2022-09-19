@@ -4,6 +4,14 @@ set -eu
 
 dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+error() {
+    echo "Error: $1" 1>&2
+}
+
+usage() {
+    echo "Usage: $0 [-h|--help] [-V|--save-visualization] [EXAMPLE_DIR]"
+}
+
 py_pkg="tree-sitter-python@0.20.1"
 py_dir="$dir/.$py_pkg"
 if [ ! -e "$py_dir" ]; then
@@ -11,19 +19,39 @@ if [ ! -e "$py_dir" ]; then
     exit 1
 fi
 
-tsg_file="stack-graphs.tsg"
-tests_dir="tests"
-if [ $# -gt 0 ]; then
-    tsg_file="$1/$tsg_file"
-    tests_dir="$1/$tests_dir"
-fi
+tssg_opts="--output-mode=always"
+example_dir="."
+while [ $# -gt 0 ]; do
+    arg="$1"
+    shift 1
+    case "$arg" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -V|--save-visualization)
+            tssg_opts="$tssg_opts -V=%r/%d/%n.html"
+            ;;
+        *)
+            example_dir="$arg"
+            if [ $# -gt 0 ]; then
+                error "Too many positional arguments provided."
+                usage 1>&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+tsg_file="$example_dir/stack-graphs.tsg"
+tests_dir="$example_dir/tests"
 if [ ! -e "$tsg_file" ]; then
-    echo "Missing TSG file $tsg_file. Not an example directory?"
+    error "Missing TSG file $tsg_file. Is $example_dir not an example directory?"
     exit 1
 fi
 if [ ! -e "$tests_dir" ]; then
-    echo "Missing directory $tests_dir. Not an example directory?"
+    error "Missing directory $tests_dir. Is $example_dir not an example directory?"
     exit 1
 fi
 
-cargo -q run --features=cli -- test --grammar "$py_dir" --tsg "$tsg_file" "$tests_dir"
+cargo -q run --features=cli -- test $tssg_opts --grammar "$py_dir" --tsg "$tsg_file" "$tests_dir"

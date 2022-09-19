@@ -22,7 +22,10 @@ or, from within the example's directory:
 $ ../run
 ```
 
+To render HTML visualizations of the stack graphs for the tests in an example, add the `-V` flag to run.
+
 The following examples are available:
 
 - [Nested scoping](nested-scoping/)
-- [Sequential Definitions](sequential-definitions/)
+- [Sequential definitions](sequential-definitions/)
+- [Modules and imports](modules/)
