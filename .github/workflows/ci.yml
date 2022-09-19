@@ -50,7 +50,7 @@ jobs:
         run: cargo valgrind test -p stack-graphs
       - name: Run lsp-positions tests without tree-sitter
         run: cargo test -p lsp-positions --no-default-features
-      - name: Run test suite with copious debugging
-        run: cargo test --features copious-debugging
+      - name: Run test suite with all features enabled
+        run: cargo test --all-features
       - name: Run test suite with all optimizations
         run: cargo test --release
