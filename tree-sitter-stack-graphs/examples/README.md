@@ -26,6 +26,6 @@ To render HTML visualizations of the stack graphs for the tests in an example, a
 
 The following examples are available:
 
-- [Nested scoping](nested-scoping/)
+- [Nested scoping](nested-scope/)
 - [Sequential definitions](sequential-definitions/)
 - [Modules and imports](modules/)
