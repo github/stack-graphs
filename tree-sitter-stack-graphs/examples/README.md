@@ -24,6 +24,12 @@ $ ../run
 
 To render HTML visualizations of the stack graphs for the tests in an example, add the `-V` flag to run.
 
+Print the parse tree of an example file by executing:
+
+```bash
+$ ./parse EXAMPLE_FILE
+```
+
 The following examples are available:
 
 - [Nested scoping](nested-scope/)

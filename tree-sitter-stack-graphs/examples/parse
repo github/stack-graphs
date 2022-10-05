@@ -1,0 +1,46 @@
+#!/usr/bin/env sh
+
+set -eu
+
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+error() {
+    echo "Error: $1" 1>&2
+}
+
+usage() {
+    echo "Usage: $0 [-h|--help] EXAMPLE_FILE"
+}
+
+py_pkg="tree-sitter-python@0.20.1"
+py_dir="$dir/.$py_pkg"
+if [ ! -e "$py_dir" ]; then
+    echo "Missing Python grammar. Run bootstrap script to install."
+    exit 1
+fi
+
+while [ $# -gt 0 ]; do
+    arg="$1"
+    shift 1
+    case "$arg" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            example_file="$arg"
+            if [ $# -gt 0 ]; then
+                error "Too many positional arguments provided."
+                usage 1>&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+if [ ! -e "$example_file" ]; then
+    error "Missing file $example_file."
+    exit 1
+fi
+
+cargo -q run --features=cli -- parse --grammar "$py_dir" "$example_file"
