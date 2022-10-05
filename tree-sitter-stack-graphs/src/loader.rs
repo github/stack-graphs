@@ -119,6 +119,21 @@ impl Loader {
         Ok(paths)
     }
 
+    /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
+    /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
+    /// is necessary, as it will not attempt to load the TSG file.
+    pub fn load_tree_sitter_language_for_file(
+        &mut self,
+        path: &Path,
+        content: Option<&str>,
+    ) -> Result<Option<tree_sitter::Language>, LoadError> {
+        if let Some(selected_language) = self.select_language_for_file(path, content)? {
+            return Ok(Some(selected_language.language));
+        }
+        Ok(None)
+    }
+
+    /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
     pub fn load_for_file(
         &mut self,
         path: &Path,

@@ -420,6 +420,10 @@ impl StackGraphLanguage {
     pub fn builtins_mut(&mut self) -> &mut StackGraph {
         &mut self.builtins
     }
+
+    pub fn language(&self) -> tree_sitter::Language {
+        self.language
+    }
 }
 
 /// An error that can occur while loading in the TSG stack graph construction rules for a language
