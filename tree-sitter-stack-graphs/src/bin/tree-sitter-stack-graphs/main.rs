@@ -19,16 +19,20 @@ struct Cli {
 }
 
 mod loader;
+mod parse;
 mod test;
+mod util;
 
 #[derive(Subcommand)]
 enum Commands {
+    Parse(parse::Command),
     Test(test::Command),
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match &cli.command {
+        Commands::Parse(cmd) => cmd.run(),
         Commands::Test(cmd) => cmd.run(),
     }
 }
