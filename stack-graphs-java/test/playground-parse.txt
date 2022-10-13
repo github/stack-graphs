@@ -1,0 +1,10 @@
+(program [0, 0] - [6, 0]
+  (class_declaration [0, 0] - [2, 1]
+    name: (identifier [0, 6] - [0, 15])
+    superclass: (superclass [0, 16] - [0, 39]
+      (type_identifier [0, 24] - [0, 39]))
+    body: (class_body [0, 40] - [2, 1]
+      (line_comment [1, 21] - [1, 36])))
+  (class_declaration [4, 0] - [5, 1]
+    name: (identifier [4, 6] - [4, 21])
+    body: (class_body [4, 22] - [5, 1])))
