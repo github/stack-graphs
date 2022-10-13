@@ -7,12 +7,12 @@ homepage = "https://github.com/github/stack-graphs/tree/main/stack-graphs/stack-
 repository = "https://github.com/github/stack-graphs"
 license = "MIT OR Apache-2.0"
 readme = "stack-graphs-java/README.md"
-edition = "2022"
+edition = "2021"
 
 authors = [
   "GitHub <opensource+stack-graphs@github.com>",
-  "Beka Valentine <bekavalentine@github.com">,
-  "Douglas Creager <dcreager@dcreager.net">,
+  "Beka Valentine <bekavalentine@github.com>",
+  "Douglas Creager <dcreager@dcreager.net>",
   "Hendrik van Antwerpen <hendrikvanantwerpen@github.com>",
   "Nina Kaufman <rnkaufman@github.com>",
 ]
