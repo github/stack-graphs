@@ -1,0 +1,31 @@
+[package]
+name = "stack-graphs-java"
+version = "0.1.0"
+description = "Stack graphs for precise code navigation for the Java programming language"
+
+homepage = "https://github.com/github/stack-graphs/tree/main/stack-graphs/stack-graphs-java"
+repository = "https://github.com/github/stack-graphs"
+license = "MIT OR Apache-2.0"
+readme = "stack-graphs-java/README.md"
+edition = "2022"
+
+authors = [
+  "GitHub <opensource+stack-graphs@github.com>",
+  "Beka Valentine <bekavalentine@github.com">,
+  "Douglas Creager <dcreager@dcreager.net">,
+  "Hendrik van Antwerpen <hendrikvanantwerpen@github.com>",
+  "Nina Kaufman <rnkaufman@github.com>",
+]
+
+keywords = ["java"]
+
+include = [
+  "src/*",
+  "stack-graphs.tsg"
+]
+
+[lib]
+path = "bindings/rust/lib.rs"
+
+[dependencies]
+tree-sitter = ">= 0.19, < 0.21"
