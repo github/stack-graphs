@@ -43,71 +43,25 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; in .defs
 ;     Lexical and variable definitions.
 ;
-; in .exports
-;     Exported definitions.
-;
-; out .mod_def
-;     Module definition
 
 (program)@prog {
   node @prog.defs
-  node @prog.exports
   node @prog.lexical_scope
-  node @prog.mod_def
-  node @prog.mod_def__ns
 }
 
-(program)@prog {
-  ; propagate lexical scope
-  edge @prog.lexical_scope -> ROOT_NODE
+(program (_)@declaration)@prog {
+  print @declaration
 
-  ; expose definitions
-  edge @prog.lexical_scope -> @prog.defs
-
-  ; module definition in ROOT_NODE scope
-  edge ROOT_NODE -> @prog.mod_def__ns
-  ;
-  attr (@prog.mod_def__ns) pop_symbol = "%M"
-  edge @prog.mod_def__ns -> @prog.mod_def
-  ;
-  let mod_name = (path-filestem FILE_PATH)
-  let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
-  attr (@prog.mod_def) symbol_definition = mod_path, source_node = @prog
-  ; expose exports via module definition
-  edge @prog.mod_def -> @prog.exports
-
-  ; if this is an index.ts, also add a definition for the directory of this file
-  scan mod_name {
-    "index" {
-      node mod_index_def
-      edge @prog.mod_def__ns -> mod_index_def
-      let mod_dir = (path-normalize (path-dir FILE_PATH))
-      attr (mod_index_def) symbol_definition = mod_dir, source_node = @prog
-      edge mod_index_def -> @prog.exports
-    }
-  }
+  edge @declaration.lexical_scope -> @prog.lexical_scope
+  edge @prog.lexical_scope -> @declaration.lexical_defs
 }
 
-(program
-  (_)@stmt
-)@prog {
-  ; propagate lexical scope
-  edge @stmt.lexical_scope -> @prog.lexical_scope
-
-  ; expose lexical and variable declarations
-  edge @prog.defs -> @stmt.lexical_defs
-  edge @prog.defs -> @stmt.var_defs
-
-  ; exports are visible via module definition
-  edge @prog.exports -> @stmt.exports
-}
-
-;; Statements
+;; Declarations
 [
   (class_declaration)
-]@stmt {
-  node @stmt.lexical_scope
-  node @stmt.lexical_defs
+]@declaration {
+  node @declaration.lexical_scope
+  node @declaration.lexical_defs
 }
 
 ;; Class Expressions
@@ -122,8 +76,90 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (class_declaration
   name: (identifier) @name) @class
 {
-    node @class.def
-    attr (@class.def) kind = "definition"
-    attr (@class.def) symbol = @name
-    edge @class.containing_scope -> @class.def
+}
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Expressions and Statements
+
+(block) @block {
+  node @block.before_scope
+  node @block.after_scope
+}
+
+(block
+  (_) @left
+  .
+  (_) @right
+)
+{
+  edge @right.before_scope -> @left.after_scope
+}
+
+(block
+  .
+  (_) @first) @block {
+  edge @first.before_scope -> @block.before_scope
+}
+
+(block
+  (_) @last
+  . ) @block {
+  edge @block.after_scope -> @last.after_scope
+}
+
+(local_variable_declaration
+  declarator: (variable_declarator
+    name: (_) @name
+  )
+) @local_var
+{
+  node @local_var.before_scope
+  node @local_var.after_scope
+  node pop
+  attr (pop) node_definition = @name
+  edge @local_var.after_scope -> pop
+  edge @local_var.after_scope -> @local_var.before_scope
+}
+
+(expression_statement) @expr_stmt
+{
+  node @expr_stmt.before_scope
+  node @expr_stmt.after_scope
+}
+
+(expression_statement (_) @expr) @expr_stmt
+{
+  edge @expr.before_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @expr.after_scope
+}
+
+(primary_expression/identifier) @ident
+{
+  node @ident.value
+  attr (@ident.value) node_reference = @ident
+  node @ident.before_scope
+  node @ident.after_scope
+
+  edge @ident.after_scope -> @ident.before_scope
+  edge @ident.value -> @ident.before_scope
+}
+
+;;;;;;;;;;;
+;; Comments
+
+(line_comment)@line_comment {
+  node @line_comment.lexical_scope
+  node @line_comment.lexical_defs
+  node @line_comment.before_scope
+  node @line_comment.after_scope
+
+  edge @line_comment.after_scope -> @line_comment.before_scope
+}
+
+(block_comment)@block_comment {
+  node @block_comment.lexical_scope
+  node @block_comment.lexical_defs
+  node @block_comment.before_scope
+  node @block_comment.after_scope
+  edge @block_comment.after_scope -> @block_comment.before_scope
 }
