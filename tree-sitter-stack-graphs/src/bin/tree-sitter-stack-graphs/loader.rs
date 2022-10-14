@@ -6,19 +6,25 @@
 // ------------------------------------------------------------------------------------------------
 
 use clap::Args;
-use std::path::Path;
 use std::path::PathBuf;
-use tree_sitter::Language;
 use tree_sitter_config::Config as TsConfig;
-use tree_sitter_graph::ast::File as TsgFile;
 use tree_sitter_stack_graphs::loader::LoadError;
+use tree_sitter_stack_graphs::loader::LoadPath;
 use tree_sitter_stack_graphs::loader::Loader;
+use tree_sitter_stack_graphs::loader::DEFAULT_BUILTINS_PATHS;
+use tree_sitter_stack_graphs::loader::DEFAULT_TSG_PATHS;
 
 #[derive(Args)]
 pub struct LoaderArgs {
     /// The TSG file to use for stack graph construction.
+    /// If the file extension is omitted, `.tsg` is implicitly added.
     #[clap(long, value_name = "TSG_PATH")]
     tsg: Option<PathBuf>,
+
+    /// The builtins file to use for stack graph construction.
+    /// If the file extension is omitted, the file extension of the language is implicitly added.
+    #[clap(long, value_name = "BUILTINS_PATH")]
+    builtins: Option<PathBuf>,
 
     /// The path to look for tree-sitter grammars.
     /// Can be specified multiple times.
@@ -33,32 +39,33 @@ pub struct LoaderArgs {
 
 impl LoaderArgs {
     pub fn new_loader(&self) -> Result<Loader, LoadError> {
-        let tsg_path = self.tsg.clone();
-        let tsg = move |language| {
-            if let Some(tsg_path) = &tsg_path {
-                Self::load_tsg_from_path(language, &tsg_path).map(Some)
-            } else {
-                Ok(None)
-            }
+        let tsg_paths = match &self.tsg {
+            Some(tsg_path) => vec![LoadPath::Regular(tsg_path.clone())],
+            None => DEFAULT_TSG_PATHS.clone(),
+        };
+        let builtins_paths = match &self.builtins {
+            Some(builtins_path) => vec![LoadPath::Regular(builtins_path.clone())],
+            None => DEFAULT_BUILTINS_PATHS.clone(),
         };
 
         let loader = if !self.grammar.is_empty() {
-            Loader::from_paths(self.grammar.clone(), self.scope.clone(), tsg)?
+            Loader::from_paths(
+                self.grammar.clone(),
+                self.scope.clone(),
+                tsg_paths,
+                builtins_paths,
+            )?
         } else {
             let loader_config = TsConfig::load()
                 .and_then(|v| v.get())
                 .map_err(LoadError::TreeSitter)?;
-            Loader::from_config(&loader_config, self.scope.clone(), tsg)?
+            Loader::from_config(
+                &loader_config,
+                self.scope.clone(),
+                tsg_paths,
+                builtins_paths,
+            )?
         };
         Ok(loader)
-    }
-
-    fn load_tsg_from_path(
-        language: Language,
-        tsg_path: &Path,
-    ) -> Result<TsgFile, Box<dyn std::error::Error + Send + Sync>> {
-        let tsg_source = std::fs::read_to_string(tsg_path)?;
-        let tsg = TsgFile::from_str(language, &tsg_source)?;
-        return Ok(tsg);
     }
 }

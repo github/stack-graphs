@@ -7,16 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### CLI
+
+#### Added
+
+- Builtins can be explicitly supplied using the `--builtins` flag. If the given path does not have a file extension, the file extension of the language is implicitly added.
+
+#### Changed
+
+- The path supplied to `--tsg` may omit the file extension, in which case it is implicitly added.
+
 ### Library
 
 #### Changed
 
-- The TSG reader function passed to `loader::Loader::from_*` may now return any `std::error::Error` and does not require the specific `anyhow::Error` anymore.
+- The `loader::Loader::from_*` functions now take two new argument, a search path for the TSG file and a search path for builtins, instead of the `loader::Reader`. The search paths are specified as a vector of `Loader::LoadPath`s, which can be either regular paths, or relative to the grammar location.
 
 #### Added
 
 - Tests can specify global variables that are passed to the TSG rules using `--- global: NAME+VALUE ---` in comments.
-- `loader::Loader` reads global variables for the builtins from an optional `queries/builtins.cfg` configuration file in the language repository when loading TSG files. API users can call `loader::Loader::load_config_from_*` methods to read configuration files.
+- `loader::Loader` can read global variables for the builtins from an optional configuration file next to the builtins file. The configuration file should have the `.cfg` extension and the same name as the builtins file. API users can call `loader::Loader::load_globals_from_config_*` methods to read configuration files.
 
 ## 0.3.1 -- 2022-09-07
 
