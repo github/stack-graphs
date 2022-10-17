@@ -6,6 +6,7 @@ The `tree-sitter-stack-graphs` crate lets you create stack graphs using the
 [tree-sitter]: https://tree-sitter.github.io/
 
 - [API documentation](https://docs.rs/tree-sitter-stack-graphs/)
+- [Examples](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/examples/)
 - [Release notes](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/CHANGELOG.md)
 
 ## Usage
@@ -31,6 +32,14 @@ Install the program using `cargo install` as follows:
 $ cargo install --features cli tree-sitter-stack-graphs
 $ tree-sitter-stack-graphs --help
 ```
+
+Alternatively, the program can be invoked via NPM as follows:
+
+``` sh
+$ npx tree-sitter-stack-graphs
+```
+
+Check out our [examples](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/examples/) for more details on how to work with the CLI.
 
 ## Development
 

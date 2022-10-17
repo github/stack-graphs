@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Added
 
 - Builtins can be explicitly supplied using the `--builtins` flag. If the given path does not have a file extension, the file extension of the language is implicitly added.
+- A new `init` command can be used to generate new tree-sitter-stack-graphs projects for NPM distributed Tree-sitter grammars.
 
 #### Changed
 
