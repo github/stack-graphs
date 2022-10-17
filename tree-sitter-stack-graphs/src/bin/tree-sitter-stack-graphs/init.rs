@@ -209,6 +209,8 @@ impl ProjectSettings {
         self.generate_cargo_toml(project_path)?;
         self.generate_rust_lib(project_path)?;
         self.generate_stack_graphs_tsg(project_path)?;
+        self.generate_builtins_src(project_path)?;
+        self.generate_builtins_cfg(project_path)?;
         self.generate_test(project_path)?;
         self.generate_gitignore(project_path)?;
         Ok(())
@@ -260,9 +262,9 @@ impl ProjectSettings {
                     "{}": "{}"
                 }},
                 "scripts": {{
-                    "test": "npx tree-sitter-stack-graphs test --grammar node_modules/{} --tsg src/stack-graphs test",
+                    "test": "npx tree-sitter-stack-graphs test --grammar node_modules/{} --tsg src/stack-graphs --builtins src/builtins test",
                     "parse-file": "npx tree-sitter-stack-graphs parse --grammar node_modules/{}",
-                    "test-file": "npx tree-sitter-stack-graphs test --grammar node_modules/{} --tsg src/stack-graphs"
+                    "test-file": "npx tree-sitter-stack-graphs test --grammar node_modules/{} --tsg src/stack-graphs --builtins src/builtins"
                 }}
             }}
             "##,
@@ -319,6 +321,11 @@ impl ProjectSettings {
         writedoc! {file, r#"
             /// The stack graphs query for this language
             pub const STACK_GRAPHS_QUERY: &str = include_str!("../../src/stack-graphs.tsg");
+
+            /// The stack graphs builtins configuration for this language
+            pub const STACK_GRAPHS_BUILTINS_CONFIG: &str = include_str!("../../src/builtins.cfg");
+            /// The stack graphs builtins source for this language
+            pub const STACK_GRAPHS_BUILTINS_SOURCE: &str = include_str!("../../src/builtins.ts");
             "#
         }?;
         Ok(())
@@ -364,6 +371,22 @@ impl ProjectSettings {
             ; Have fun!
             "#,
             self.language_name,
+        }?;
+        Ok(())
+    }
+
+    fn generate_builtins_src(&self, project_path: &Path) -> anyhow::Result<()> {
+        File::create(
+            project_path.join("src/builtins.".to_string() + &self.language_file_extension),
+        )?;
+        Ok(())
+    }
+
+    fn generate_builtins_cfg(&self, project_path: &Path) -> anyhow::Result<()> {
+        let mut file = File::create(project_path.join("src/builtins.cfg"))?;
+        writedoc! {file, r#"
+            [globals]
+            "#,
         }?;
         Ok(())
     }
