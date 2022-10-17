@@ -36,7 +36,7 @@ pub struct Command {
 
 impl Command {
     pub fn run(&self) -> anyhow::Result<()> {
-        self.ensure_project_dir()?;
+        self.check_project_dir()?;
         let config = ProjectSettings::read_from_console()?;
         config.generate_files_into(&self.project_path)?;
         printdoc! {r#"
@@ -47,21 +47,15 @@ impl Command {
         Ok(())
     }
 
-    fn ensure_project_dir(&self) -> anyhow::Result<()> {
-        if self.project_path.exists() {
-            if !self.project_path.is_dir() {
-                return Err(anyhow!("Project path exists but is not a directory"));
-            }
-            if fs::read_dir(&self.project_path)?.next().is_some() {
-                return Err(anyhow!("Project directory exists but is not empty"));
-            }
-            println!("Using project directory: {}", self.project_path.display());
-        } else {
-            println!(
-                "Creating project directory: {}",
-                self.project_path.display()
-            );
-            fs::create_dir_all(&self.project_path)?;
+    fn check_project_dir(&self) -> anyhow::Result<()> {
+        if !self.project_path.exists() {
+            return Ok(());
+        }
+        if !self.project_path.is_dir() {
+            return Err(anyhow!("Project path exists but is not a directory"));
+        }
+        if fs::read_dir(&self.project_path)?.next().is_some() {
+            return Err(anyhow!("Project directory exists but is not empty"));
         }
         Ok(())
     }
@@ -206,6 +200,7 @@ impl ProjectSettings {
     }
 
     fn generate_files_into(&self, project_path: &Path) -> anyhow::Result<()> {
+        fs::create_dir_all(project_path)?;
         fs::create_dir_all(project_path.join("src"))?;
         fs::create_dir_all(project_path.join("test"))?;
         fs::create_dir_all(project_path.join("bindings/rust"))?;
