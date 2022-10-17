@@ -246,7 +246,11 @@ impl ProjectSettings {
 
             Additional flags can be passed to these commands as well. For example, to generate a visualization for the test, execute:
 
-                npm run test-file -V test/test.{}
+                npm run test-file -- -V test/test.{}
+
+            To generate the visualization regardless of test outcome, execute:
+
+                npm run test-file -- -V --output-mode=always test/test.{}
 
             These commands should be enough for regular development. If necessary, the `tree-sitter-stack-graphs` command can be invoked directly as well, by executing:
 
@@ -256,6 +260,7 @@ impl ProjectSettings {
             "####,
             self.language_name,
             self.language_name, self.grammar_npm_name, self.grammar_npm_name,
+            self.language_file_extension,
             self.language_file_extension,
             self.language_file_extension,
             self.language_file_extension,
