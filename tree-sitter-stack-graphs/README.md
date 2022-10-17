@@ -33,6 +33,14 @@ $ cargo install --features cli tree-sitter-stack-graphs
 $ tree-sitter-stack-graphs --help
 ```
 
+Alternatively, the program can be invoked via NPM as follows:
+
+``` sh
+$ npx tree-sitter-stack-graphs
+```
+
+Check out our [examples](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/examples/) for more details on how to work with the CLI.
+
 ## Development
 
 The project is written in Rust, and requires a recent version installed.
