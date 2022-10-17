@@ -148,7 +148,10 @@ impl ProjectSettings {
             Give the project author in the format NAME <EMAIL>. Leave empty to omit.
             "#
         };
-        let project_author: String = Input::new().with_prompt("Author").interact_text()?;
+        let project_author: String = Input::new()
+            .with_prompt("Author")
+            .allow_empty(true)
+            .interact_text()?;
         println!();
 
         printdoc! {r#"
@@ -156,7 +159,10 @@ impl ProjectSettings {
             Give the project license as an SPDX expression. Leave empty to omit.
             "#
         };
-        let project_license: String = Input::new().with_prompt("License").interact_text()?;
+        let project_license: String = Input::new()
+            .with_prompt("License")
+            .allow_empty(true)
+            .interact_text()?;
         println!();
 
         printdoc! {r#"
