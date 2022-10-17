@@ -121,7 +121,7 @@ impl ProjectSettings {
         };
         let project_npm_name: String = Input::new()
             .with_prompt("Project NPM package name")
-            .with_initial_text(language_id.clone() + "-stack-graphs")
+            .with_initial_text("stack-graphs-".to_string() + &language_id)
             .validate_with(regex_validator(&VALID_NPM_PKG))
             .interact_text()?;
         println!();
