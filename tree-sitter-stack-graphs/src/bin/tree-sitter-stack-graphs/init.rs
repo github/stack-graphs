@@ -39,6 +39,11 @@ impl Command {
         self.ensure_project_dir()?;
         let config = ProjectSettings::read_from_console()?;
         config.generate_files_into(&self.project_path)?;
+        printdoc! {r#"
+
+            Project created! More information about the project can be found in README.md.
+            "#
+        };
         Ok(())
     }
 
@@ -213,16 +218,48 @@ impl ProjectSettings {
     fn generate_readme(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("README.md"))?;
         writedoc! {file, r####"
-            # Stack graph definition for {}
+            # Stack graphs definition for {}
 
             This project defines stack graph rules for {} using the [{}](https://www.npmjs.com/package/{}) grammar.
 
-            ## Project Layout
-
             ## Development
 
-            "####
-        , self.language_name, self.language_name, self.grammar_npm_name, self.grammar_npm_name}?;
+            The project is organized as follows:
+
+            - The stack graph rules are defined in `src/stack-graphs.tsg`.
+            - Builtins sources and configuration are defined in `src/builtins.{}` and `builtins.cfg` respectively.
+            - Tests are put into the `test` directory.
+
+            Make sure all development dependencies are installed by running:
+
+                npm install
+
+            Run all tests in the project by executing the following:
+
+                npm test
+
+            Parse and test a single file by executing the following commands:
+
+                npm run parse-file test/test.{}
+                npm run test-file test/test.{}
+
+            Additional flags can be passed to these commands as well. For example, to generate a visualization for the test, execute:
+
+                npm run test-file -V test/test.{}
+
+            These commands should be enough for regular development. If necessary, the `tree-sitter-stack-graphs` command can be invoked directly as well, by executing:
+
+                npx tree-sitter-stack-graphs
+
+            Go to https://crates.io/crates/tree-sitter-stack-graphs for links to examples and documentation.
+            "####,
+            self.language_name,
+            self.language_name, self.grammar_npm_name, self.grammar_npm_name,
+            self.language_file_extension,
+            self.language_file_extension,
+            self.language_file_extension,
+            self.language_file_extension,
+        }?;
         Ok(())
     }
 
@@ -236,8 +273,7 @@ impl ProjectSettings {
             "##,
             self.project_npm_name,
             self.project_npm_version,
-            self.language_name,
-            self.grammar_npm_name,
+            self.language_name, self.grammar_npm_name,
         }?;
         if !self.project_author.is_empty() {
             writeln!(file, r#"    "author": "{}""#, self.project_author)?;
@@ -264,8 +300,7 @@ impl ProjectSettings {
             "##,
             self.language_id,
             TSSG_VERSION,
-            self.grammar_npm_name,
-            self.grammar_npm_version,
+            self.grammar_npm_name, self.grammar_npm_version,
             self.grammar_npm_name,
             self.grammar_npm_name,
             self.grammar_npm_name,
@@ -285,8 +320,7 @@ impl ProjectSettings {
             "#,
             self.project_npm_name,
             self.project_npm_version,
-            self.language_name,
-            self.grammar_npm_name,
+            self.language_name, self.grammar_npm_name,
             self.language_id
         }?;
         if !self.project_author.is_empty() {
