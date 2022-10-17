@@ -6,6 +6,7 @@ The `tree-sitter-stack-graphs` crate lets you create stack graphs using the
 [tree-sitter]: https://tree-sitter.github.io/
 
 - [API documentation](https://docs.rs/tree-sitter-stack-graphs/)
+- [Examples](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/examples/)
 - [Release notes](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/CHANGELOG.md)
 
 ## Usage
