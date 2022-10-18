@@ -1,0 +1,28 @@
+name: Publish tree-sitter-stack-graphs to NPM
+
+on:
+  push:
+    tags:
+      - tree-sitter-stack-graphs-v*'
+
+env:
+  PACKAGE_DIR: './tree-sitter-stack-graphs/npm'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Node environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16.x
+          registry-url: 'https://registry.npmjs.org'
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      # TODO Verify the package version matches the tag
+      - name: Verify package
+        run: npm publish --dry-run ${{ env.PACKAGE_DIR }}
+      - name: Publish package
+        run: npm publish ${{ env.PACKAGE_DIR }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
