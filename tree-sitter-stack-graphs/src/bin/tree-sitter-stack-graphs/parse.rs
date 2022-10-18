@@ -94,12 +94,12 @@ impl Command {
                         print!("{}: ", field_name);
                     }
                     print!(
-                        "({} [{}, {}] - [{}, {}]",
+                        "({} [{}:{} - {}:{}]",
                         node.kind(),
-                        start.row,
-                        start.column,
-                        end.row,
-                        end.column
+                        start.row + 1,
+                        start.column + 1,
+                        end.row + 1,
+                        end.column + 1
                     );
                     needs_newline = true;
                 }
