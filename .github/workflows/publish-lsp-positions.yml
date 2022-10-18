@@ -38,4 +38,6 @@ jobs:
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
         with:
+          body: |
+            Find more info on all releases at https://crates.io/crates/lsp-positions.
           token: ${{ secrets.GITHUB_TOKEN }}
