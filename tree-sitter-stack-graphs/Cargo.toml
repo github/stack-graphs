@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-stack-graphs"
-version = "0.3.1"
+version = "0.4.0"
 description = "Create stack graphs using tree-sitter parsers"
 homepage = "https://github.com/github/stack-graphs/tree/main/tree-sitter-stack-graphs"
 repository = "https://github.com/github/stack-graphs/"
@@ -42,7 +42,7 @@ stack-graphs = { version="0.10", path="../stack-graphs" }
 thiserror = "1.0"
 tree-sitter = ">= 0.19"
 tree-sitter-config = { version = "0.19", optional = true }
-tree-sitter-graph = "0.6"
+tree-sitter-graph = "0.7"
 tree-sitter-loader = "0.20"
 walkdir = { version = "2.3", optional = true }
 

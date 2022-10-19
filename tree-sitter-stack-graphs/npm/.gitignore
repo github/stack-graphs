@@ -1,3 +1,4 @@
 /.crates.toml
 /.crates2.json
 /bin/
+/package-lock.json

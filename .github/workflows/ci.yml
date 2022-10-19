@@ -54,29 +54,3 @@ jobs:
         run: cargo test --all-features
       - name: Run test suite with all optimizations
         run: cargo test --release
-
-  test-npm:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        node: [16.x]
-        os: [ubuntu-latest]
-        rust: [stable]
-
-    defaults:
-      run:
-        working-directory: tree-sitter-stack-graphs/npm
-
-    steps:
-      - name: Install Node environment
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ matrix.node }}
-      - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: ${{ matrix.rust }}
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Build NPM package
-        run: npm ci

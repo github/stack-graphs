@@ -29,6 +29,7 @@ jobs:
           path: ${{ env.CRATE_DIR }}
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
   publish-npm:
+    needs: publish-crate
     runs-on: ubuntu-latest
     env:
       PACKAGE_DIR: './tree-sitter-stack-graphs/npm'
@@ -41,13 +42,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
       # TODO Verify the package version matches the tag
+      - name: Install dependencies
+        run: npm install
+        working-directory: ${{ env.PACKAGE_DIR }}
       - name: Verify package
-        run: npm publish --dry-run ${{ env.PACKAGE_DIR }}
+        run: npm publish --dry-run
+        working-directory: ${{ env.PACKAGE_DIR }}
       - name: Publish package
-        run: npm publish ${{ env.PACKAGE_DIR }}
+        run: npm publish
+        working-directory: ${{ env.PACKAGE_DIR }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
   create-release:
+    needs: publish-crate
     runs-on: ubuntu-latest
     permissions:
       contents: write
