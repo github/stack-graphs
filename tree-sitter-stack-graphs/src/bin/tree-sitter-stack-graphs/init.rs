@@ -212,7 +212,9 @@ impl ProjectSettings {
 
             Give the NPM package version or dependency string for the {} dependency. The
             format can be any of:
-             - MAJOR.MINOR.PATCH                    An NPM release version
+             - MAJOR.MINOR.PATCH                    An NPM release version.
+                                                    Prefix with ~ to allow any patch version, for example: ~0.4.1
+                                                    Prefix with ^ to allow any minor version, for example: ^1.2.7
              - github:OWNER/REPOSITORY#COMMITISH    A GitHub dependency, tagged to a branch, tag, or commit SHA
             "##,
             grammar_npm_name,
