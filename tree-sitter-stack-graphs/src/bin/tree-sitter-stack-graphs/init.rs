@@ -330,7 +330,7 @@ impl ProjectSettings {
                     "{}"
                 ],
                 "devDependencies": {{
-                    "tree-sitter-stack-graphs": "{}",
+                    "tree-sitter-stack-graphs": "~{}",
                     "{}": "{}"
                 }},
                 "scripts": {{
@@ -381,7 +381,11 @@ impl ProjectSettings {
 
             [lib]
             path = "bindings/rust/lib.rs"
+
+            [dev-dependencies]
+            tree-sitter-stack-graphs = "~{}"
             "#,
+            TSSG_VERSION,
         }?;
         Ok(())
     }
