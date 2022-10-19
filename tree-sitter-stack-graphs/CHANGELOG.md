@@ -25,11 +25,11 @@ Depend on `tree-sitter-graph` version 0.7.
 
 #### Changed
 
-- The `loader::Loader::from_*` functions now take two new argument, a search path for the TSG file and a search path for builtins, instead of the `loader::Reader`. The search paths are specified as a vector of `Loader::LoadPath`s, which can be either regular paths, or relative to the grammar location.
+- The `loader::Loader::from_*` functions now take two new arguments, a search path for the TSG file and a search path for builtins, instead of the `loader::Reader`. The search paths are specified as a vector of `Loader::LoadPath`s, which can be either regular paths, or paths relative to the grammar location.
 
 #### Added
 
-- Tests can specify global variables that are passed to the TSG rules using `--- global: NAME+VALUE ---` in comments.
+- Tests can specify global variables that are passed to the TSG rules using `--- global: NAME=VALUE ---` in comments.
 - `loader::Loader` can read global variables for the builtins from an optional configuration file next to the builtins file. The configuration file should have the `.cfg` extension and the same name as the builtins file. API users can call `loader::Loader::load_globals_from_config_*` methods to read configuration files.
 
 ## 0.3.1 -- 2022-09-07
