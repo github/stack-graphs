@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  # library projects
   "lsp-positions",
   "stack-graphs",
   "tree-sitter-stack-graphs",
