@@ -1,0 +1,20 @@
+interface V { v: number; }
+
+function f() {
+  return class A<X> { declare f: X; };
+}
+//              ^ defined: 3
+
+class B extends f()<V> {}
+//              ^ defined: 6
+//                  ^ defined: 1
+
+declare let b: B;
+//             ^ defined: 9
+
+  b.f.v;
+//^ defined: 13
+//  ^ defined: 3
+//    ^ defined: 1
+
+export {};

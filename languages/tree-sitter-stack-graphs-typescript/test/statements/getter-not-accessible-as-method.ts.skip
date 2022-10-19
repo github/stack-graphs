@@ -1,0 +1,13 @@
+interface I {
+    get p(): { v: number }
+}
+
+declare let x: I;
+//             ^ defined: 1
+
+  x.p().v;
+//^ defined: 5
+//  ^ defined: 2
+//  ^ defined:
+
+export {};

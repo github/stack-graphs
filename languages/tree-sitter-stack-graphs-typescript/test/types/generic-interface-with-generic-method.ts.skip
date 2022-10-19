@@ -1,0 +1,126 @@
+interface V {
+  v: number;
+}
+interface C {
+  c: number;
+}
+
+interface I<X> {
+  m0<Y>(y: Y): V;
+  //      ^ defined: 9
+  //          ^ defined: 8
+  m1<Y>(y: Y): Y;
+  //      ^ defined: 9
+  //          ^ defined: 8
+  m2<Y>(y: Y): X;
+  //      ^ defined: 9
+  //          ^ defined: 8
+}
+
+{
+  let x: I<V>;
+  //     ^ defined: 8
+  //       ^ defined: 1
+
+    x.m0<C>(null).v;
+  //^ defined: 21
+  //  ^ defined: 9
+  //     ^ defined: 4
+  //              ^ defined: 2
+
+    x.m1<C>(null).c;
+  //^ defined: 21
+  //  ^ defined: 12
+  //     ^ defined: 4
+  //              ^ defined: 5
+
+    x.m2<C>(null).v;
+  //^ defined: 21
+  //  ^ defined: 15
+  //     ^ defined: 4
+  //              ^ defined: 2
+
+    x.m2<C>(null).c; // tsc: Property 'c' does not exist on type 'V'.
+  //^ defined: 21
+  //  ^ defined: 15
+  //     ^ defined: 4
+  //              ^ defined:
+}
+
+interface E { e: {}; }
+
+interface A<Q> {
+
+  f: I<Q>;
+
+  g<P>(): I<P>;
+
+}
+
+{
+  let x: A<V>;
+  //     ^ defined: 52
+  //       ^ defined: 1
+
+    x.f.m0<C>(null).v;
+  //^ defined: 61
+  //  ^ defined: 54
+  //    ^ defined: 9
+  //       ^ defined: 4
+  //                ^ defined: 2
+
+    x.f.m1<C>(null).c;
+  //^ defined: 61
+  //  ^ defined: 54
+  //    ^ defined: 12
+  //       ^ defined: 4
+  //                ^ defined: 5
+
+    x.f.m2<C>(null).v;
+  //^ defined: 61
+  //  ^ defined: 54
+  //    ^ defined: 15
+  //       ^ defined: 4
+  //                ^ defined: 2
+
+    x.f.m2<C>(null).c; // tsc: Property 'c' does not exist on type 'V'.
+  //^ defined: 61
+  //  ^ defined: 54
+  //    ^ defined: 15
+  //       ^ defined: 4
+  //                ^ defined:
+
+    x.g<E>().m0<C>(null).v;
+  //^ defined: 61
+  //  ^ defined: 56
+  //    ^ defined: 50
+  //         ^ defined: 9
+  //            ^ defined: 4
+  //                     ^ defined: 2
+
+    x.g<E>().m1<C>(null).c;
+  //^ defined: 61
+  //  ^ defined: 56
+  //    ^ defined: 50
+  //         ^ defined: 12
+  //            ^ defined: 4
+  //                     ^ defined: 5
+
+    x.g<E>().m2<C>(null).e;
+  //^ defined: 61
+  //  ^ defined: 56
+  //    ^ defined: 50
+  //         ^ defined: 15
+  //            ^ defined: 4
+  //                     ^ defined: 50
+
+    x.g<E>().m2<C>(null).e; // tsc: Property 'c' does not exist on type 'V'.
+  //^ defined: 61
+  //  ^ defined: 56
+  //    ^ defined: 50
+  //         ^ defined: 15
+  //            ^ defined: 4
+  //                     ^ defined:
+}
+
+export {}

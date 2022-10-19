@@ -1,0 +1,21 @@
+interface V { v: number; }
+
+type A = new<X>() => { f: X; };
+//                        ^ defined: 3
+
+declare let a: A;
+//             ^ defined: 3
+
+class B extends a<V> {}
+//              ^ defined: 6
+//                ^ defined: 1
+
+declare let b: B;
+//             ^ defined: 9
+
+  b.f.v;
+//^ defined: 13
+//  ^ defined: 3
+//    ^ defined: 1
+
+export {};

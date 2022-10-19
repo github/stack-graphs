@@ -1,0 +1,21 @@
+/* --- path: A.ts --- */
+
+export = A;
+
+class B {
+    f = 42;
+}
+
+const A = B;
+
+/* --- path: B.ts --- */
+
+import C = require("./A");
+
+let c: C = new C();
+//     ^ defined:
+//             ^ defined: 13
+
+  c.f;
+//^ defined: 15
+//  ^ defined: 6

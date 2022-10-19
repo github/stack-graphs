@@ -1,0 +1,31 @@
+type Constructor<T = {}> = new (...args: any[]) => T;
+//                                                 ^ defined: 1
+
+function Timestamped<TBase extends Constructor>(Base: TBase) {
+//                                                    ^ defined: 4
+  return class extends Base {
+  //                   ^ defined: 4
+    timestamp: number;
+  };
+}
+
+class User {
+  name: string;
+}
+
+const TimestampedUser = Timestamped(User);
+//                      ^ defined: 4
+//                                  ^ defined: 12
+
+let tsu = new TimestampedUser();
+//            ^ defined: 16
+
+  tsu.name;
+//^ defined: 20
+//    ^ defined: 13
+
+  tsu.timestamp;
+//^ defined: 20
+//    ^ defined: 8
+
+export {}
