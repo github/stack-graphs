@@ -18,6 +18,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       # TODO Verify the crate version matches the tag
+      - name: Test crate
+        run: cargo test --all-features
+        working-directory: ${{ env.CRATE_DIR }}
       - name: Verify publish crate
         run: cargo publish --dry-run
         working-directory: ${{ env.CRATE_DIR }}
