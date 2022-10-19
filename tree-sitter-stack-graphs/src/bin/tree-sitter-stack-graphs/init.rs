@@ -317,7 +317,7 @@ impl ProjectSettings {
     }
 
     fn generate_cargo_toml(&self, project_path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(project_path.join("bindings/rust/Cargo.toml"))?;
+        let mut file = File::create(project_path.join("Cargo.toml"))?;
         writedoc! {file, r#"
             [package]
             name = "{}"
