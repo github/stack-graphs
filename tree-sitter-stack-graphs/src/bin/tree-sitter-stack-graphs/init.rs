@@ -7,6 +7,7 @@
 
 use anyhow::anyhow;
 use clap::ValueHint;
+use dialoguer::Confirm;
 use dialoguer::{Input, Validator};
 use indoc::printdoc;
 use indoc::writedoc;
@@ -38,11 +39,47 @@ impl Command {
     pub fn run(&self) -> anyhow::Result<()> {
         self.check_project_dir()?;
         let config = ProjectSettings::read_from_console()?;
+
+        printdoc! {r##"
+            Review project settings:
+
+                Project directory          : {}
+                Language name              : {}
+                Language identifier        : {}
+                Language file extension    : {}
+                Project package name       : {}
+                Project package version    : {}
+                Project author             : {}
+                Project license            : {}
+                Grammar dependency name    : {}
+                Grammar dependency version : {}
+
+            "##,
+            self.project_path.display(),
+            config.language_name,
+            config.language_id,
+            config.language_file_extension,
+            config.project_npm_name,
+            config.project_npm_version,
+            config.project_author,
+            config.project_license,
+            config.grammar_npm_name,
+            config.grammar_npm_version,
+        };
+        let confirm = Confirm::new()
+            .with_prompt("Generate project")
+            .default(true)
+            .interact()?;
+        if !confirm {
+            println!("Project not created.")
+        }
+
         config.generate_files_into(&self.project_path)?;
         printdoc! {r#"
 
-            Project created! More information about the project can be found in README.md.
-            "#
+            Project created. See {} to get started!
+            "#,
+            self.project_path.join("README.md").display(),
         };
         Ok(())
     }
@@ -127,12 +164,12 @@ impl ProjectSettings {
 
         printdoc! {r#"
 
-            Give the NPM package version for this project. Usually matches the version of the
-            grammar being used.
+            Give the NPM package version for this project.
             "#
         };
         let project_npm_version: String = Input::new()
             .with_prompt("Project NPM package version")
+            .with_initial_text("0.1.0")
             .validate_with(regex_validator(&VALID_NPM_VERSION))
             .interact_text()?;
         println!();
@@ -175,14 +212,15 @@ impl ProjectSettings {
 
             Give the NPM package version or dependency string for the {} dependency. The
             format can be any of:
-             - MAJOR.MINOR.PATCH                    A regular version
+             - MAJOR.MINOR.PATCH                    An NPM release version.
+                                                    Prefix with ~ to allow any patch version, for example: ~0.4.1
+                                                    Prefix with ^ to allow any minor version, for example: ^1.2.7
              - github:OWNER/REPOSITORY#COMMITISH    A GitHub dependency, tagged to a branch, tag, or commit SHA
             "##,
             grammar_npm_name,
         };
         let grammar_npm_version: String = Input::new()
             .with_prompt("Grammar NPM package version")
-            .with_initial_text(&project_npm_version)
             .interact_text()?;
         println!();
 
@@ -282,10 +320,10 @@ impl ProjectSettings {
             self.language_name, self.grammar_npm_name,
         }?;
         if !self.project_author.is_empty() {
-            writeln!(file, r#"    "author": "{}""#, self.project_author)?;
+            writeln!(file, r#"    "author": "{}","#, self.project_author)?;
         }
         if !self.project_license.is_empty() {
-            writeln!(file, r#"    "license": "{}""#, self.project_license)?;
+            writeln!(file, r#"    "license": "{}","#, self.project_license)?;
         }
         writedoc! {file, r##"
                 "keywords": [
@@ -294,7 +332,7 @@ impl ProjectSettings {
                     "{}"
                 ],
                 "devDependencies": {{
-                    "tree-sitter-stack-graphs": "{}",
+                    "tree-sitter-stack-graphs": "~{}",
                     "{}": "{}"
                 }},
                 "scripts": {{
@@ -315,7 +353,7 @@ impl ProjectSettings {
     }
 
     fn generate_cargo_toml(&self, project_path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(project_path.join("bindings/rust/Cargo.toml"))?;
+        let mut file = File::create(project_path.join("Cargo.toml"))?;
         writedoc! {file, r#"
             [package]
             name = "{}"
@@ -345,7 +383,11 @@ impl ProjectSettings {
 
             [lib]
             path = "bindings/rust/lib.rs"
+
+            [dev-dependencies]
+            tree-sitter-stack-graphs = "~{}"
             "#,
+            TSSG_VERSION,
         }?;
         Ok(())
     }
