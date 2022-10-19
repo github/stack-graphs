@@ -120,7 +120,7 @@ impl ProjectSettings {
         };
         let project_npm_name: String = Input::new()
             .with_prompt("Project NPM package name")
-            .with_initial_text("stack-graphs-".to_string() + &language_id)
+            .with_initial_text("tree-sitter-stack-graphs-".to_string() + &language_id)
             .validate_with(regex_validator(&VALID_NPM_PKG))
             .interact_text()?;
         println!();
@@ -219,9 +219,9 @@ impl ProjectSettings {
     fn generate_readme(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("README.md"))?;
         writedoc! {file, r####"
-            # Stack graphs definition for {}
+            # tree-sitter-stack-graphs definition for {}
 
-            This project defines stack graph rules for {} using the [{}](https://www.npmjs.com/package/{}) grammar.
+            This project defines tree-sitter-stack-graphs rules for {} using the [{}](https://www.npmjs.com/package/{}) grammar.
 
             ## Development
 
