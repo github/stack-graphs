@@ -284,10 +284,10 @@ impl ProjectSettings {
             self.language_name, self.grammar_npm_name,
         }?;
         if !self.project_author.is_empty() {
-            writeln!(file, r#"    "author": "{}""#, self.project_author)?;
+            writeln!(file, r#"    "author": "{}","#, self.project_author)?;
         }
         if !self.project_license.is_empty() {
-            writeln!(file, r#"    "license": "{}""#, self.project_license)?;
+            writeln!(file, r#"    "license": "{}","#, self.project_license)?;
         }
         writedoc! {file, r##"
                 "keywords": [
