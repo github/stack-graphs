@@ -7,6 +7,7 @@
 
 use anyhow::anyhow;
 use clap::ValueHint;
+use dialoguer::Confirm;
 use dialoguer::{Input, Validator};
 use indoc::printdoc;
 use indoc::writedoc;
@@ -38,13 +39,46 @@ impl Command {
     pub fn run(&self) -> anyhow::Result<()> {
         self.check_project_dir()?;
         let config = ProjectSettings::read_from_console()?;
+
+        printdoc! {r##"
+            Review project settings:
+
+                Project directory          : {}
+                Language name              : {}
+                Language identifier        : {}
+                Language file extension    : {}
+                Project package name       : {}
+                Project package version    : {}
+                Project author             : {}
+                Project license            : {}
+                Grammar dependency name    : {}
+                Grammar dependency version : {}
+
+            "##,
+            self.project_path.display(),
+            config.language_name,
+            config.language_id,
+            config.language_file_extension,
+            config.project_npm_name,
+            config.project_npm_version,
+            config.project_author,
+            config.project_license,
+            config.grammar_npm_name,
+            config.grammar_npm_version,
+        };
+        let confirm = Confirm::new()
+            .with_prompt("Generate project")
+            .default(true)
+            .interact()?;
+        if !confirm {
+            println!("Project not created.")
+        }
+
         config.generate_files_into(&self.project_path)?;
         printdoc! {r#"
 
-            Project created in {}.
-            See {} to get started!
+            Project created. See {} to get started!
             "#,
-            self.project_path.display(),
             self.project_path.join("README.md").display(),
         };
         Ok(())
