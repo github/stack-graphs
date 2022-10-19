@@ -1,0 +1,24 @@
+interface V {
+  val: number;
+}
+interface N {
+  num: number;
+}
+
+let id: <X = V>(x: X) => X;
+//                 ^ defined: 8
+//                       ^ defined: 8
+
+let n: N;
+
+  id(n).num;
+//^ defined: 8
+//   ^ defined: 12
+//      ^ defined: 5
+
+  id(n).val;
+//^ defined: 8
+//   ^ defined: 12
+//      ^ defined:
+
+export {}

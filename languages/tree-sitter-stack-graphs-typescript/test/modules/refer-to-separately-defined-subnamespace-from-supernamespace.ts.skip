@@ -1,0 +1,11 @@
+export {};
+
+namespace M.N.O.P {
+  export interface A {}
+}
+
+namespace M.N.O {
+  interface B extends P.A {}
+  //                  ^ defined: 3
+  //                    ^ defined: 4
+}

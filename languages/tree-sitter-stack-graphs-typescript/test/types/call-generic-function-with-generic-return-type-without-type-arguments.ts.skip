@@ -1,0 +1,18 @@
+interface V {
+  value: number;
+}
+
+let id: <X>(x: X) => X;
+//             ^ defined: 5
+//                   ^ defined: 5
+
+let v: V;
+//     ^ defined: 1
+
+
+  id(v).value;
+//^ defined: 5
+//   ^ defined: 9
+//      ^ defined: 2
+
+export {}

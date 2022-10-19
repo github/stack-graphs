@@ -1,0 +1,12 @@
+export {};
+
+namespace M {
+  export namespace N {
+    export interface A {};
+  };
+};
+
+namespace M.N {
+  interface B extends A {};
+  //                  ^ defined: 5
+}
