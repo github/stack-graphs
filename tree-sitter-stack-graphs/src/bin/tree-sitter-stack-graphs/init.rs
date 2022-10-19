@@ -41,8 +41,11 @@ impl Command {
         config.generate_files_into(&self.project_path)?;
         printdoc! {r#"
 
-            Project created! More information about the project can be found in README.md.
-            "#
+            Project created in {}.
+            See {} to get started!
+            "#,
+            self.project_path.display(),
+            self.project_path.join("README.md").display(),
         };
         Ok(())
     }
