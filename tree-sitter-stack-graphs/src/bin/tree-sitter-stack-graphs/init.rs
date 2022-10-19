@@ -127,12 +127,12 @@ impl ProjectSettings {
 
         printdoc! {r#"
 
-            Give the NPM package version for this project. Usually matches the version of the
-            grammar being used.
+            Give the NPM package version for this project.
             "#
         };
         let project_npm_version: String = Input::new()
             .with_prompt("Project NPM package version")
+            .with_initial_text("0.1.0")
             .validate_with(regex_validator(&VALID_NPM_VERSION))
             .interact_text()?;
         println!();
@@ -175,14 +175,13 @@ impl ProjectSettings {
 
             Give the NPM package version or dependency string for the {} dependency. The
             format can be any of:
-             - MAJOR.MINOR.PATCH                    A regular version
+             - MAJOR.MINOR.PATCH                    An NPM release version
              - github:OWNER/REPOSITORY#COMMITISH    A GitHub dependency, tagged to a branch, tag, or commit SHA
             "##,
             grammar_npm_name,
         };
         let grammar_npm_version: String = Input::new()
             .with_prompt("Grammar NPM package version")
-            .with_initial_text(&project_npm_version)
             .interact_text()?;
         println!();
 
