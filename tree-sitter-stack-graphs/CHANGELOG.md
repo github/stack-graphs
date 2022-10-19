@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+Depend on `tree-sitter-graph` version 0.7.
+
 ### CLI
 
 #### Added
