@@ -235,11 +235,11 @@ impl From<crate::LoadError> for LoadError {
 // provided languages loader
 
 pub struct LanguageConfiguration {
-    language: Language,
-    file_types: Vec<String>,
-    tsg_source: String,
-    builtins_source: String,
-    builtins_config: String,
+    pub language: Language,
+    pub file_types: Vec<String>,
+    pub tsg_source: String,
+    pub builtins_source: String,
+    pub builtins_config: String,
 }
 
 impl LanguageConfiguration {
