@@ -21,7 +21,6 @@ use std::path::PathBuf;
 use tree_sitter_graph::Variables;
 use walkdir::WalkDir;
 
-use crate::cli::load::LoadArgs;
 use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
 use crate::cli::util::PathSpec;
@@ -133,8 +132,7 @@ pub struct TestArgs {
 }
 
 impl TestArgs {
-    pub fn run(&self, loader: &LoadArgs) -> anyhow::Result<()> {
-        let mut loader = loader.new_loader()?;
+    pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
         let mut total_failure_count = 0;
         for test_path in &self.tests {
             if test_path.is_dir() {
@@ -147,12 +145,11 @@ impl TestArgs {
                 {
                     let test_path = test_entry.path();
                     total_failure_count +=
-                        self.run_test_with_context(test_root, test_path, &mut loader)?;
+                        self.run_test_with_context(test_root, test_path, loader)?;
                 }
             } else {
                 let test_root = test_path.parent().unwrap();
-                total_failure_count +=
-                    self.run_test_with_context(test_root, test_path, &mut loader)?;
+                total_failure_count += self.run_test_with_context(test_root, test_path, loader)?;
             }
         }
 

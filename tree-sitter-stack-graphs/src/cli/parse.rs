@@ -14,7 +14,6 @@ use std::path::PathBuf;
 use tree_sitter::Parser;
 use tree_sitter_graph::parse_error::ParseError;
 
-use crate::cli::load::LoadArgs;
 use crate::cli::util::path_exists;
 use crate::loader::Loader;
 use crate::LoadError;
@@ -28,9 +27,8 @@ pub struct ParseArgs {
 }
 
 impl ParseArgs {
-    pub fn run(&self, loader: &LoadArgs) -> anyhow::Result<()> {
-        let mut loader = loader.new_loader()?;
-        self.parse_file(&self.file_path, &mut loader)
+    pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+        self.parse_file(&self.file_path, loader)
             .with_context(|| format!("Error parsing file {}", self.file_path.display()))?;
         Ok(())
     }

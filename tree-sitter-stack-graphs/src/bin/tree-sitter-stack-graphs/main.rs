@@ -40,15 +40,16 @@ fn main() -> Result<()> {
 #[derive(clap::Parser)]
 pub struct Parse {
     #[clap(flatten)]
-    loader: cli::load::LoadArgs,
+    load_args: cli::load::LoadArgs,
 
     #[clap(flatten)]
-    parser: cli::parse::ParseArgs,
+    parse_args: cli::parse::ParseArgs,
 }
 
 impl Parse {
     pub fn run(&self) -> anyhow::Result<()> {
-        self.parser.run(&self.loader)
+        let mut loader = self.load_args.new_loader()?;
+        self.parse_args.run(&mut loader)
     }
 }
 
@@ -56,14 +57,15 @@ impl Parse {
 #[derive(clap::Parser)]
 pub struct Test {
     #[clap(flatten)]
-    loader: cli::load::LoadArgs,
+    load_args: cli::load::LoadArgs,
 
     #[clap(flatten)]
-    tester: cli::test::TestArgs,
+    test_args: cli::test::TestArgs,
 }
 
 impl Test {
     pub fn run(&self) -> anyhow::Result<()> {
-        self.tester.run(&self.loader)
+        let mut loader = self.load_args.new_loader()?;
+        self.test_args.run(&mut loader)
     }
 }
