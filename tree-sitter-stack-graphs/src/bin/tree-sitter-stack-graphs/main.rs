@@ -18,11 +18,9 @@ struct Cli {
     command: Commands,
 }
 
-mod init;
-
 #[derive(Subcommand)]
 enum Commands {
-    Init(init::Command),
+    Init(Init),
     Parse(Parse),
     Test(Test),
 }
@@ -33,6 +31,19 @@ fn main() -> Result<()> {
         Commands::Init(cmd) => cmd.run(),
         Commands::Parse(cmd) => cmd.run(),
         Commands::Test(cmd) => cmd.run(),
+    }
+}
+
+/// Init command
+#[derive(clap::Parser)]
+pub struct Init {
+    #[clap(flatten)]
+    init_args: cli::init::InitArgs,
+}
+
+impl Init {
+    pub fn run(&self) -> anyhow::Result<()> {
+        self.init_args.run()
     }
 }
 

@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
+use clap::Args;
 use clap::ValueHint;
 use dialoguer::Confirm;
 use dialoguer::{Input, Validator};
@@ -28,14 +29,14 @@ lazy_static! {
 }
 
 /// Initialize project
-#[derive(clap::Parser)]
-pub struct Command {
+#[derive(Args)]
+pub struct InitArgs {
     /// Project directory path.
     #[clap(value_name = "PROJECT_PATH", required = false, default_value = ".", value_hint = ValueHint::AnyPath, parse(from_os_str))]
     project_path: PathBuf,
 }
 
-impl Command {
+impl InitArgs {
     pub fn run(&self) -> anyhow::Result<()> {
         self.check_project_dir()?;
         let config = ProjectSettings::read_from_console()?;

@@ -9,6 +9,7 @@
 
 pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
+pub mod init;
 pub mod load;
 pub mod parse;
 pub mod test;
