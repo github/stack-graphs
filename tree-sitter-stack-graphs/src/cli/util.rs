@@ -12,9 +12,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 
-use crate::MAX_PARSE_ERRORS;
+use crate::cli::MAX_PARSE_ERRORS;
 
-pub(crate) fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
+pub fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
     let path = PathBuf::from(path);
     if !path.exists() {
         return Err(anyhow!("path does not exist"));
@@ -24,7 +24,7 @@ pub(crate) fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
 
 /// A path specification that can be formatted into a path based on a root and path
 /// contained in that root.
-pub(crate) struct PathSpec {
+pub struct PathSpec {
     spec: String,
 }
 
@@ -102,7 +102,7 @@ impl PathSpec {
             panic!("Unsupported '%' at end");
         }
         let path = Path::new(&path);
-        tree_sitter_stack_graphs::functions::path::normalize(&path)
+        crate::functions::path::normalize(&path)
     }
 }
 
@@ -119,7 +119,7 @@ impl From<&str> for PathSpec {
     }
 }
 
-pub(crate) fn map_parse_errors(
+pub fn map_parse_errors(
     test_path: &Path,
     parse_errors: &TreeWithParseErrorVec,
     source: &str,

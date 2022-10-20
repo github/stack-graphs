@@ -8,14 +8,15 @@
 use clap::Args;
 use std::path::PathBuf;
 use tree_sitter_config::Config as TsConfig;
-use tree_sitter_stack_graphs::loader::LoadError;
-use tree_sitter_stack_graphs::loader::LoadPath;
-use tree_sitter_stack_graphs::loader::Loader;
-use tree_sitter_stack_graphs::loader::DEFAULT_BUILTINS_PATHS;
-use tree_sitter_stack_graphs::loader::DEFAULT_TSG_PATHS;
+
+use crate::loader::LoadError;
+use crate::loader::LoadPath;
+use crate::loader::Loader;
+use crate::loader::DEFAULT_BUILTINS_PATHS;
+use crate::loader::DEFAULT_TSG_PATHS;
 
 #[derive(Args)]
-pub struct LoaderArgs {
+pub struct LoadArgs {
     /// The TSG file to use for stack graph construction.
     /// If the file extension is omitted, `.tsg` is implicitly added.
     #[clap(long, value_name = "TSG_PATH")]
@@ -37,7 +38,7 @@ pub struct LoaderArgs {
     scope: Option<String>,
 }
 
-impl LoaderArgs {
+impl LoadArgs {
     pub fn new_loader(&self) -> Result<Loader, LoadError> {
         let tsg_paths = match &self.tsg {
             Some(tsg_path) => vec![LoadPath::Regular(tsg_path.clone())],

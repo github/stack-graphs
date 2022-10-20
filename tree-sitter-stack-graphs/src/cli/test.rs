@@ -8,6 +8,7 @@
 use anyhow::anyhow;
 use anyhow::Context as _;
 use clap::ArgEnum;
+use clap::Args;
 use clap::ValueHint;
 use colored::Colorize as _;
 use stack_graphs::arena::Handle;
@@ -18,18 +19,18 @@ use stack_graphs::paths::Paths;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
-use tree_sitter_stack_graphs::loader::Loader;
-use tree_sitter_stack_graphs::test::Test;
-use tree_sitter_stack_graphs::test::TestResult;
-use tree_sitter_stack_graphs::LoadError;
-use tree_sitter_stack_graphs::NoCancellation;
-use tree_sitter_stack_graphs::StackGraphLanguage;
 use walkdir::WalkDir;
 
-use crate::loader::LoaderArgs;
-use crate::util::map_parse_errors;
-use crate::util::path_exists;
-use crate::util::PathSpec;
+use crate::cli::load::LoadArgs;
+use crate::cli::util::map_parse_errors;
+use crate::cli::util::path_exists;
+use crate::cli::util::PathSpec;
+use crate::loader::Loader;
+use crate::test::Test;
+use crate::test::TestResult;
+use crate::LoadError;
+use crate::NoCancellation;
+use crate::StackGraphLanguage;
 
 /// Flag to control output
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -48,7 +49,7 @@ impl OutputMode {
 }
 
 /// Run tests
-#[derive(clap::Parser)]
+#[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
     Output filenames can be specified using placeholders based on the input file.
     The following placeholders are supported:
@@ -67,10 +68,7 @@ impl OutputMode {
     paths (including ones that are not valid Unicode) are accepted as arguments, and
     placeholders are correctly subtituted for all paths.
 "#)]
-pub struct Command {
-    #[clap(flatten)]
-    loader: LoaderArgs,
-
+pub struct TestArgs {
     /// Test file or directory paths.
     #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
     tests: Vec<PathBuf>,
@@ -134,9 +132,9 @@ pub struct Command {
     output_mode: OutputMode,
 }
 
-impl Command {
-    pub fn run(&self) -> anyhow::Result<()> {
-        let mut loader = self.loader.new_loader()?;
+impl TestArgs {
+    pub fn run(&self, loader: &LoadArgs) -> anyhow::Result<()> {
+        let mut loader = loader.new_loader()?;
         let mut total_failure_count = 0;
         for test_path in &self.tests {
             if test_path.is_dir() {

@@ -8,9 +8,9 @@
 use anyhow::Result;
 use clap::Parser;
 use clap::Subcommand;
+use tree_sitter_stack_graphs::cli;
 
-pub(crate) const MAX_PARSE_ERRORS: usize = 5;
-
+/// The CLI
 #[derive(Parser)]
 #[clap(about, version)]
 struct Cli {
@@ -19,16 +19,12 @@ struct Cli {
 }
 
 mod init;
-mod loader;
-mod parse;
-mod test;
-mod util;
 
 #[derive(Subcommand)]
 enum Commands {
     Init(init::Command),
-    Parse(parse::Command),
-    Test(test::Command),
+    Parse(Parse),
+    Test(Test),
 }
 
 fn main() -> Result<()> {
@@ -37,5 +33,37 @@ fn main() -> Result<()> {
         Commands::Init(cmd) => cmd.run(),
         Commands::Parse(cmd) => cmd.run(),
         Commands::Test(cmd) => cmd.run(),
+    }
+}
+
+/// Parse command
+#[derive(clap::Parser)]
+pub struct Parse {
+    #[clap(flatten)]
+    loader: cli::load::LoadArgs,
+
+    #[clap(flatten)]
+    parser: cli::parse::ParseArgs,
+}
+
+impl Parse {
+    pub fn run(&self) -> anyhow::Result<()> {
+        self.parser.run(&self.loader)
+    }
+}
+
+/// Test command
+#[derive(clap::Parser)]
+pub struct Test {
+    #[clap(flatten)]
+    loader: cli::load::LoadArgs,
+
+    #[clap(flatten)]
+    tester: cli::test::TestArgs,
+}
+
+impl Test {
+    pub fn run(&self) -> anyhow::Result<()> {
+        self.tester.run(&self.loader)
     }
 }

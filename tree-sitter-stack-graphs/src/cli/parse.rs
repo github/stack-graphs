@@ -7,31 +7,29 @@
 
 use anyhow::anyhow;
 use anyhow::Context as _;
+use clap::Args;
 use clap::ValueHint;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter::Parser;
 use tree_sitter_graph::parse_error::ParseError;
-use tree_sitter_stack_graphs::loader::Loader;
-use tree_sitter_stack_graphs::LoadError;
 
-use crate::loader::LoaderArgs;
-use crate::util::path_exists;
+use crate::cli::load::LoadArgs;
+use crate::cli::util::path_exists;
+use crate::loader::Loader;
+use crate::LoadError;
 
 /// Parse file
-#[derive(clap::Parser)]
-pub struct Command {
-    #[clap(flatten)]
-    loader: LoaderArgs,
-
+#[derive(Args)]
+pub struct ParseArgs {
     /// Input file path.
     #[clap(value_name = "FILE_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
     file_path: PathBuf,
 }
 
-impl Command {
-    pub fn run(&self) -> anyhow::Result<()> {
-        let mut loader = self.loader.new_loader()?;
+impl ParseArgs {
+    pub fn run(&self, loader: &LoadArgs) -> anyhow::Result<()> {
+        let mut loader = loader.new_loader()?;
         self.parse_file(&self.file_path, &mut loader)
             .with_context(|| format!("Error parsing file {}", self.file_path.display()))?;
         Ok(())
