@@ -21,7 +21,7 @@ use tree_sitter::Language;
 use tree_sitter_graph::ast::File as TsgFile;
 use tree_sitter_graph::Variables;
 use tree_sitter_loader::Config as TsConfig;
-use tree_sitter_loader::LanguageConfiguration;
+use tree_sitter_loader::LanguageConfiguration as TSLanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
 
 use crate::CancellationFlag;
@@ -66,13 +66,11 @@ impl LoadPath {
 /// are always optional.
 ///
 /// Previously loaded languages are cached in the loader, so subsequent loads are fast.
-pub struct Loader {
-    loader: SupplementedTsLoader,
-    paths: Vec<PathBuf>,
-    scope: Option<String>,
-    tsg_paths: Vec<LoadPath>,
-    builtins_paths: Vec<LoadPath>,
-    cache: Vec<(Language, StackGraphLanguage)>,
+pub struct Loader(LoaderImpl);
+
+enum LoaderImpl {
+    Paths(PathsLoader),
+    Provided(ProvidedLoader),
 }
 
 impl Loader {
@@ -82,14 +80,14 @@ impl Loader {
         tsg_paths: Vec<LoadPath>,
         builtins_paths: Vec<LoadPath>,
     ) -> Result<Self, LoadError> {
-        Ok(Self {
+        Ok(Self(LoaderImpl::Paths(PathsLoader {
             loader: SupplementedTsLoader::new()?,
             paths,
             scope,
             tsg_paths,
             builtins_paths,
             cache: Vec::new(),
-        })
+        })))
     }
 
     pub fn from_config(
@@ -98,16 +96,134 @@ impl Loader {
         tsg_paths: Vec<LoadPath>,
         builtins_paths: Vec<LoadPath>,
     ) -> Result<Self, LoadError> {
-        Ok(Self {
+        Ok(Self(LoaderImpl::Paths(PathsLoader {
             loader: SupplementedTsLoader::new()?,
-            paths: Self::config_paths(config)?,
+            paths: PathsLoader::config_paths(config)?,
             scope,
             tsg_paths,
             builtins_paths,
             cache: Vec::new(),
-        })
+        })))
     }
 
+    pub fn from_configurations(
+        configurations: Vec<LanguageConfiguration>,
+    ) -> Result<Self, LoadError> {
+        Ok(Self(LoaderImpl::Provided(ProvidedLoader(configurations))))
+    }
+
+    /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
+    /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
+    /// is necessary, as it will not attempt to load the TSG file.
+    pub fn load_tree_sitter_language_for_file(
+        &mut self,
+        path: &Path,
+        content: Option<&str>,
+    ) -> Result<Option<tree_sitter::Language>, LoadError> {
+        match &mut self.0 {
+            LoaderImpl::Paths(paths_loader) => {
+                paths_loader.load_tree_sitter_language_for_file(path, content)
+            }
+            LoaderImpl::Provided(_loader) => todo!(),
+        }
+    }
+
+    /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
+    pub fn load_for_file(
+        &mut self,
+        path: &Path,
+        content: Option<&str>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
+        match &mut self.0 {
+            LoaderImpl::Paths(loader) => loader.load_for_file(path, content, cancellation_flag),
+            LoaderImpl::Provided(_loader) => todo!(),
+        }
+    }
+
+    pub fn load_globals_from_config_path(
+        path: &Path,
+        globals: &mut Variables,
+    ) -> Result<(), LoadError> {
+        let conf = Ini::load_from_file(path)?;
+        Self::load_globals_from_config(&conf, globals)
+    }
+
+    pub fn load_globals_from_config_str(
+        config: &str,
+        globals: &mut Variables,
+    ) -> Result<(), LoadError> {
+        let conf = Ini::load_from_str(config).map_err(ini::Error::Parse)?;
+        Self::load_globals_from_config(&conf, globals)
+    }
+
+    fn load_globals_from_config(conf: &Ini, globals: &mut Variables) -> Result<(), LoadError> {
+        if let Some(globals_section) = conf.section(Some("globals")) {
+            for (name, value) in globals_section.iter() {
+                globals.add(name.into(), value.into()).map_err(|_| {
+                    LoadError::Reader(
+                        format!("Duplicate global variable {} in config", name).into(),
+                    )
+                })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum LoadError {
+    #[error("{0}")]
+    Cancelled(&'static str),
+    #[error(transparent)]
+    Config(#[from] ini::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Language(#[from] crate::LanguageError),
+    #[error("No languages found {0}")]
+    NoLanguagesFound(String),
+    #[error("No TSG file found")]
+    NoTsgFound,
+    #[error(transparent)]
+    Reader(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    StackGraph(crate::LoadError),
+    #[error(transparent)]
+    TsgParse(#[from] tree_sitter_graph::ParseError),
+    #[error(transparent)]
+    TreeSitter(anyhow::Error),
+}
+
+impl From<crate::LoadError> for LoadError {
+    fn from(value: crate::LoadError) -> Self {
+        match value {
+            crate::LoadError::Cancelled(at) => Self::Cancelled(at),
+            other => Self::StackGraph(other),
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// provided languages loader
+
+pub struct LanguageConfiguration {}
+
+struct ProvidedLoader(Vec<LanguageConfiguration>);
+
+// ------------------------------------------------------------------------------------------------
+// path based loader
+
+struct PathsLoader {
+    loader: SupplementedTsLoader,
+    paths: Vec<PathBuf>,
+    scope: Option<String>,
+    tsg_paths: Vec<LoadPath>,
+    builtins_paths: Vec<LoadPath>,
+    cache: Vec<(Language, StackGraphLanguage)>,
+}
+
+impl PathsLoader {
     // Adopted from tree_sitter_loader::Loader::load
     fn config_paths(config: &TsConfig) -> Result<Vec<PathBuf>, LoadError> {
         if config.parser_directories.is_empty() {
@@ -133,9 +249,6 @@ impl Loader {
         Ok(paths)
     }
 
-    /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
-    /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
-    /// is necessary, as it will not attempt to load the TSG file.
     pub fn load_tree_sitter_language_for_file(
         &mut self,
         path: &Path,
@@ -147,7 +260,6 @@ impl Loader {
         Ok(None)
     }
 
-    /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
     pub fn load_for_file(
         &mut self,
         path: &Path,
@@ -293,73 +405,11 @@ impl Loader {
         let mut config_path = builtins_path.to_path_buf();
         config_path.set_extension("cfg");
         if config_path.exists() {
-            Self::load_globals_from_config_path(&config_path, &mut globals)?;
+            Loader::load_globals_from_config_path(&config_path, &mut globals)?;
         }
         sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)?;
         sgl.builtins_mut().add_from_graph(&graph).unwrap();
         return Ok(());
-    }
-
-    pub fn load_globals_from_config_path(
-        path: &Path,
-        globals: &mut Variables,
-    ) -> Result<(), LoadError> {
-        let conf = Ini::load_from_file(path)?;
-        Self::load_globals_from_config(&conf, globals)
-    }
-
-    pub fn load_globals_from_config_str(
-        config: &str,
-        globals: &mut Variables,
-    ) -> Result<(), LoadError> {
-        let conf = Ini::load_from_str(config).map_err(ini::Error::Parse)?;
-        Self::load_globals_from_config(&conf, globals)
-    }
-
-    fn load_globals_from_config(conf: &Ini, globals: &mut Variables) -> Result<(), LoadError> {
-        if let Some(globals_section) = conf.section(Some("globals")) {
-            for (name, value) in globals_section.iter() {
-                globals.add(name.into(), value.into()).map_err(|_| {
-                    LoadError::Reader(
-                        format!("Duplicate global variable {} in config", name).into(),
-                    )
-                })?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum LoadError {
-    #[error("{0}")]
-    Cancelled(&'static str),
-    #[error(transparent)]
-    Config(#[from] ini::Error),
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Language(#[from] crate::LanguageError),
-    #[error("No languages found {0}")]
-    NoLanguagesFound(String),
-    #[error("No TSG file found")]
-    NoTsgFound,
-    #[error(transparent)]
-    Reader(Box<dyn std::error::Error + Send + Sync>),
-    #[error(transparent)]
-    StackGraph(crate::LoadError),
-    #[error(transparent)]
-    TsgParse(#[from] tree_sitter_graph::ParseError),
-    #[error(transparent)]
-    TreeSitter(anyhow::Error),
-}
-
-impl From<crate::LoadError> for LoadError {
-    fn from(value: crate::LoadError) -> Self {
-        match value {
-            crate::LoadError::Cancelled(at) => Self::Cancelled(at),
-            other => Self::StackGraph(other),
-        }
     }
 }
 
@@ -461,8 +511,8 @@ impl SupplementedLanguage {
     }
 }
 
-impl From<(Language, &LanguageConfiguration<'_>)> for SupplementedLanguage {
-    fn from((language, config): (Language, &LanguageConfiguration)) -> Self {
+impl From<(Language, &TSLanguageConfiguration<'_>)> for SupplementedLanguage {
+    fn from((language, config): (Language, &TSLanguageConfiguration)) -> Self {
         Self {
             scope: config.scope.clone(),
             content_regex: config.content_regex.clone(),
