@@ -109,7 +109,10 @@ impl Loader {
     pub fn from_configurations(
         configurations: Vec<LanguageConfiguration>,
     ) -> Result<Self, LoadError> {
-        Ok(Self(LoaderImpl::Provided(ProvidedLoader(configurations))))
+        Ok(Self(LoaderImpl::Provided(ProvidedLoader {
+            configurations,
+            cache: Vec::new(),
+        })))
     }
 
     /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
@@ -153,8 +156,32 @@ impl Loader {
         config: &str,
         globals: &mut Variables,
     ) -> Result<(), LoadError> {
+        if config.is_empty() {
+            return Ok(());
+        }
         let conf = Ini::load_from_str(config).map_err(ini::Error::Parse)?;
         Self::load_globals_from_config(&conf, globals)
+    }
+
+    fn load_tsg(language: Language, tsg_source: &str) -> Result<TsgFile, LoadError> {
+        let tsg = TsgFile::from_str(language, &tsg_source)?;
+        Ok(tsg)
+    }
+
+    fn load_builtins(
+        sgl: &mut StackGraphLanguage,
+        path: &Path,
+        source: &str,
+        config: &str,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), LoadError> {
+        let mut graph = StackGraph::new();
+        let file = graph.add_file(&path.to_string_lossy()).unwrap();
+        let mut globals = Variables::new();
+        Self::load_globals_from_config_str(&config, &mut globals)?;
+        sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)?;
+        sgl.builtins_mut().add_from_graph(&graph).unwrap();
+        return Ok(());
     }
 
     fn load_globals_from_config(conf: &Ini, globals: &mut Variables) -> Result<(), LoadError> {
@@ -210,6 +237,9 @@ impl From<crate::LoadError> for LoadError {
 pub struct LanguageConfiguration {
     language: Language,
     file_types: Vec<String>,
+    tsg_source: String,
+    builtins_source: String,
+    builtins_config: String,
 }
 
 impl LanguageConfiguration {
@@ -223,7 +253,10 @@ impl LanguageConfiguration {
     }
 }
 
-struct ProvidedLoader(Vec<LanguageConfiguration>);
+struct ProvidedLoader {
+    configurations: Vec<LanguageConfiguration>,
+    cache: Vec<(Language, StackGraphLanguage)>,
+}
 
 impl ProvidedLoader {
     /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
@@ -234,7 +267,7 @@ impl ProvidedLoader {
         path: &Path,
         _content: Option<&str>,
     ) -> Result<Option<tree_sitter::Language>, LoadError> {
-        let configuration = match self.0.iter().find(|l| l.supports_path(path)) {
+        let configuration = match self.configurations.iter().find(|l| l.supports_path(path)) {
             Some(language) => language,
             None => return Ok(None),
         };
@@ -246,13 +279,36 @@ impl ProvidedLoader {
         &mut self,
         path: &Path,
         _content: Option<&str>,
-        _cancellation_flag: &dyn CancellationFlag,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
-        let _configuration = match self.0.iter().find(|l| l.supports_path(path)) {
+        let configuration = match self.configurations.iter().find(|l| l.supports_path(path)) {
             Some(language) => language,
             None => return Ok(None),
         };
-        todo!()
+        // the borrow checker is a hard master...
+        let index = self
+            .cache
+            .iter()
+            .position(|e| &e.0 == &configuration.language);
+        let index = match index {
+            Some(index) => index,
+            None => {
+                let tsg = Loader::load_tsg(configuration.language, &configuration.tsg_source)?;
+                let mut sgl = StackGraphLanguage::new(configuration.language, tsg)?;
+                Loader::load_builtins(
+                    &mut sgl,
+                    path,
+                    &configuration.builtins_source,
+                    &configuration.builtins_config,
+                    cancellation_flag,
+                )?;
+                self.cache.push((configuration.language, sgl));
+
+                self.cache.len() - 1
+            }
+        };
+        let sgl = &mut self.cache[index].1;
+        Ok(Some(sgl))
     }
 }
 
@@ -401,16 +457,11 @@ impl PathsLoader {
                 tsg_path.set_extension("tsg");
             }
             if tsg_path.exists() {
-                return self.load_tsg(language.language, &tsg_path);
+                let tsg_source = std::fs::read_to_string(tsg_path)?;
+                return Loader::load_tsg(language.language, &tsg_source);
             }
         }
         return Err(LoadError::NoTsgFound);
-    }
-
-    fn load_tsg(&self, language: Language, tsg_path: &Path) -> Result<TsgFile, LoadError> {
-        let tsg_source = std::fs::read_to_string(tsg_path)?;
-        let tsg = TsgFile::from_str(language, &tsg_source)?;
-        Ok(tsg)
     }
 
     // Builtins are loaded from queries/builtins.EXT and an optional queries/builtins.cfg configuration.
@@ -425,36 +476,32 @@ impl PathsLoader {
         for builtins_path in &self.builtins_paths {
             let mut builtins_path = builtins_path.get_for_grammar(&language.root_path);
             if builtins_path.exists() && !builtins_path.is_dir() {
-                return self.load_builtins(sgl, &builtins_path, cancellation_flag);
+                return Self::load_builtins_from_path(sgl, &builtins_path, cancellation_flag);
             }
             for extension in &language.file_types {
                 builtins_path.set_extension(extension);
                 if builtins_path.exists() && !builtins_path.is_dir() {
-                    return self.load_builtins(sgl, &builtins_path, cancellation_flag);
+                    return Self::load_builtins_from_path(sgl, &builtins_path, cancellation_flag);
                 }
             }
         }
         Ok(())
     }
 
-    fn load_builtins(
-        &self,
+    fn load_builtins_from_path(
         sgl: &mut StackGraphLanguage,
         builtins_path: &Path,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError> {
-        let mut graph = StackGraph::new();
-        let file = graph.add_file(&builtins_path.to_string_lossy()).unwrap();
         let source = std::fs::read_to_string(builtins_path.clone())?;
-        let mut globals = Variables::new();
         let mut config_path = builtins_path.to_path_buf();
         config_path.set_extension("cfg");
-        if config_path.exists() {
-            Loader::load_globals_from_config_path(&config_path, &mut globals)?;
-        }
-        sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)?;
-        sgl.builtins_mut().add_from_graph(&graph).unwrap();
-        return Ok(());
+        let config = if config_path.exists() {
+            std::fs::read_to_string(builtins_path.clone())?
+        } else {
+            "".into()
+        };
+        Loader::load_builtins(sgl, builtins_path, &source, &config, cancellation_flag)
     }
 }
 
