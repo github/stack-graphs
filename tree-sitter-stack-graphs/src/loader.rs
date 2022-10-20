@@ -121,10 +121,10 @@ impl Loader {
         content: Option<&str>,
     ) -> Result<Option<tree_sitter::Language>, LoadError> {
         match &mut self.0 {
-            LoaderImpl::Paths(paths_loader) => {
-                paths_loader.load_tree_sitter_language_for_file(path, content)
+            LoaderImpl::Paths(loader) => loader.load_tree_sitter_language_for_file(path, content),
+            LoaderImpl::Provided(loader) => {
+                loader.load_tree_sitter_language_for_file(path, content)
             }
-            LoaderImpl::Provided(_loader) => todo!(),
         }
     }
 
@@ -137,7 +137,7 @@ impl Loader {
     ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
         match &mut self.0 {
             LoaderImpl::Paths(loader) => loader.load_for_file(path, content, cancellation_flag),
-            LoaderImpl::Provided(_loader) => todo!(),
+            LoaderImpl::Provided(loader) => loader.load_for_file(path, content, cancellation_flag),
         }
     }
 
@@ -207,9 +207,54 @@ impl From<crate::LoadError> for LoadError {
 // ------------------------------------------------------------------------------------------------
 // provided languages loader
 
-pub struct LanguageConfiguration {}
+pub struct LanguageConfiguration {
+    language: Language,
+    file_types: Vec<String>,
+}
+
+impl LanguageConfiguration {
+    fn supports_path(&self, path: &Path) -> bool {
+        let file_type = match path.extension() {
+            Some(file_type) => file_type,
+            None => return false,
+        };
+        self.file_types
+            .contains(&file_type.to_string_lossy().to_string())
+    }
+}
 
 struct ProvidedLoader(Vec<LanguageConfiguration>);
+
+impl ProvidedLoader {
+    /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
+    /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
+    /// is necessary, as it will not attempt to load the TSG file.
+    pub fn load_tree_sitter_language_for_file(
+        &mut self,
+        path: &Path,
+        _content: Option<&str>,
+    ) -> Result<Option<tree_sitter::Language>, LoadError> {
+        let configuration = match self.0.iter().find(|l| l.supports_path(path)) {
+            Some(language) => language,
+            None => return Ok(None),
+        };
+        Ok(Some(configuration.language))
+    }
+
+    /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
+    pub fn load_for_file(
+        &mut self,
+        path: &Path,
+        _content: Option<&str>,
+        _cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
+        let _configuration = match self.0.iter().find(|l| l.supports_path(path)) {
+            Some(language) => language,
+            None => return Ok(None),
+        };
+        todo!()
+    }
+}
 
 // ------------------------------------------------------------------------------------------------
 // path based loader
