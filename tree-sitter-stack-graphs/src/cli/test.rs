@@ -146,7 +146,7 @@ impl TestArgs {
     }
 
     pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
-        let mut total_failure_count = 0;
+        let mut total_result = TestResult::new();
         for test_path in &self.test_paths {
             if test_path.is_dir() {
                 let test_root = test_path;
@@ -157,21 +157,18 @@ impl TestArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let test_path = test_entry.path();
-                    total_failure_count +=
-                        self.run_test_with_context(test_root, test_path, loader)?;
+                    let test_result = self.run_test_with_context(test_root, test_path, loader)?;
+                    total_result.absorb(test_result);
                 }
             } else {
                 let test_root = test_path.parent().unwrap();
-                total_failure_count += self.run_test_with_context(test_root, test_path, loader)?;
+                let test_result = self.run_test_with_context(test_root, test_path, loader)?;
+                total_result.absorb(test_result);
             }
         }
 
-        if total_failure_count > 0 {
-            return Err(anyhow!(
-                "{} assertion{} failed",
-                total_failure_count,
-                if total_failure_count == 1 { "" } else { "s" }
-            ));
+        if total_result.failure_count() > 0 {
+            return Err(anyhow!(total_result.to_string()));
         }
 
         Ok(())
@@ -183,7 +180,7 @@ impl TestArgs {
         test_root: &Path,
         test_path: &Path,
         loader: &mut Loader,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<TestResult> {
         self.run_test(test_root, test_path, loader)
             .with_context(|| format!("Error running test {}", test_path.display()))
     }
@@ -194,7 +191,7 @@ impl TestArgs {
         test_root: &Path,
         test_path: &Path,
         loader: &mut Loader,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<TestResult> {
         let source = std::fs::read_to_string(test_path)?;
         let sgl = match loader.load_for_file(test_path, Some(&source), &NoCancellation)? {
             Some(sgl) => sgl,
@@ -202,7 +199,7 @@ impl TestArgs {
                 if self.show_ignored {
                     println!("{} {}", "⦵".dimmed(), test_path.display());
                 }
-                return Ok(0);
+                return Ok(TestResult::new());
             }
         };
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
@@ -243,7 +240,7 @@ impl TestArgs {
                 success,
             )?;
         }
-        Ok(result.failure_count())
+        Ok(result)
     }
 
     fn load_builtins_into(
