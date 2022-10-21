@@ -50,8 +50,9 @@ impl LoadPath {
     }
 }
 
-/// The loader is created from a tree-sitter configuration or list of search paths, an optional scope,
-/// and search paths for stack graphs definitions and builtins.
+/// The loader is created from either a tree-sitter configuration or a list of search paths, and an
+/// optional scope and search paths for stack graphs definitions and builtins; or a list of language
+/// configurations.
 ///
 /// The loader is called with a file path and optional file content and tries to find the language for
 /// that file. The loader will search for tree-sitter languages in the given search paths, or in current
@@ -90,7 +91,7 @@ impl Loader {
         })))
     }
 
-    pub fn from_config(
+    pub fn from_tree_sitter_configuration(
         config: &TsConfig,
         scope: Option<String>,
         tsg_paths: Vec<LoadPath>,
@@ -106,7 +107,7 @@ impl Loader {
         })))
     }
 
-    pub fn from_configurations(
+    pub fn from_language_configurations(
         configurations: Vec<LanguageConfiguration>,
     ) -> Result<Self, LoadError> {
         Ok(Self(LoaderImpl::Provided(ProvidedLoader {

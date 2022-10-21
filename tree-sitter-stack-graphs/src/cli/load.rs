@@ -15,8 +15,9 @@ use crate::loader::Loader;
 use crate::loader::DEFAULT_BUILTINS_PATHS;
 use crate::loader::DEFAULT_TSG_PATHS;
 
+/// CLI arguments for creating a path based loader.
 #[derive(Args)]
-pub struct LoadArgs {
+pub struct PathsLoadArgs {
     /// The TSG file to use for stack graph construction.
     /// If the file extension is omitted, `.tsg` is implicitly added.
     #[clap(long, value_name = "TSG_PATH")]
@@ -38,7 +39,7 @@ pub struct LoadArgs {
     scope: Option<String>,
 }
 
-impl LoadArgs {
+impl PathsLoadArgs {
     pub fn new_loader(&self) -> Result<Loader, LoadError> {
         let tsg_paths = match &self.tsg {
             Some(tsg_path) => vec![LoadPath::Regular(tsg_path.clone())],
@@ -60,7 +61,7 @@ impl LoadArgs {
             let loader_config = TsConfig::load()
                 .and_then(|v| v.get())
                 .map_err(LoadError::TreeSitter)?;
-            Loader::from_config(
+            Loader::from_tree_sitter_configuration(
                 &loader_config,
                 self.scope.clone(),
                 tsg_paths,

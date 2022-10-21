@@ -23,7 +23,7 @@ lazy_static! {
 #[test]
 fn can_load_from_provided_language_configuration() {
     let language = tree_sitter_python::language();
-    let mut loader = Loader::from_configurations(vec![LanguageConfiguration {
+    let mut loader = Loader::from_language_configurations(vec![LanguageConfiguration {
         language: language,
         file_types: vec!["py".into()],
         tsg_source: TSG.to_string(),
