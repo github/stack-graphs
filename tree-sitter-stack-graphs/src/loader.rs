@@ -251,14 +251,8 @@ pub struct LanguageConfiguration {
 }
 
 impl LanguageConfiguration {
-    fn to_supplemented_language(&self) -> SupplementedLanguage {
-        SupplementedLanguage {
-            language: self.language,
-            scope: self.scope.clone(),
-            content_regex: self.content_regex.clone(),
-            file_types: self.file_types.clone(),
-            root_path: PathBuf::new(),
-        }
+    fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
+        matches_file(&self.file_types, &self.content_regex, path, content).is_some()
     }
 }
 
@@ -276,11 +270,11 @@ impl LanguageConfigurationsLoader {
         path: &Path,
         content: Option<&str>,
     ) -> Result<Option<tree_sitter::Language>, LoadError> {
-        let configuration = match self.configurations.iter().find(|l| {
-            l.to_supplemented_language()
-                .matches_file(path, content)
-                .is_some()
-        }) {
+        let configuration = match self
+            .configurations
+            .iter()
+            .find(|l| l.matches_file(path, content))
+        {
             Some(language) => language,
             None => return Ok(None),
         };
@@ -294,11 +288,11 @@ impl LanguageConfigurationsLoader {
         content: Option<&str>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
-        let configuration = match self.configurations.iter().find(|l| {
-            l.to_supplemented_language()
-                .matches_file(path, content)
-                .is_some()
-        }) {
+        let configuration = match self
+            .configurations
+            .iter()
+            .find(|l| l.matches_file(path, content))
+        {
             Some(language) => language,
             None => return Ok(None),
         };
@@ -576,28 +570,7 @@ impl SupplementedLanguage {
 
     // Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
     pub fn matches_file(&self, path: &Path, content: Option<&str>) -> Option<isize> {
-        // Check path extension
-        if !path
-            .extension()
-            .and_then(OsStr::to_str)
-            .map_or(false, |ext| self.file_types.iter().any(|ft| ft == ext))
-        {
-            return None;
-        }
-
-        // Apply content regex
-        if let (Some(file_content), Some(content_regex)) = (content, &self.content_regex) {
-            // If the language configuration has a content regex, assign
-            // a score based on the length of the first match.
-            if let Some(mat) = content_regex.find(&file_content) {
-                let score = (mat.end() - mat.start()) as isize;
-                return Some(score);
-            } else {
-                return None;
-            }
-        }
-
-        Some(0isize)
+        matches_file(&self.file_types, &self.content_regex, path, content)
     }
 
     // Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
@@ -630,4 +603,35 @@ impl From<(Language, &TSLanguageConfiguration<'_>)> for SupplementedLanguage {
             language,
         }
     }
+}
+
+// Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
+pub fn matches_file(
+    file_types: &Vec<String>,
+    content_regex: &Option<Regex>,
+    path: &Path,
+    content: Option<&str>,
+) -> Option<isize> {
+    // Check path extension
+    if !path
+        .extension()
+        .and_then(OsStr::to_str)
+        .map_or(false, |ext| file_types.iter().any(|ft| ft == ext))
+    {
+        return None;
+    }
+
+    // Apply content regex
+    if let (Some(file_content), Some(content_regex)) = (content, &content_regex) {
+        // If the language configuration has a content regex, assign
+        // a score based on the length of the first match.
+        if let Some(mat) = content_regex.find(&file_content) {
+            let score = (mat.end() - mat.start()) as isize;
+            return Some(score);
+        } else {
+            return None;
+        }
+    }
+
+    Some(0isize)
 }
