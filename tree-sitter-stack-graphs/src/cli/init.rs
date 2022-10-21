@@ -33,10 +33,14 @@ lazy_static! {
 pub struct InitArgs {
     /// Project directory path.
     #[clap(value_name = "PROJECT_PATH", required = false, default_value = ".", value_hint = ValueHint::AnyPath, parse(from_os_str))]
-    project_path: PathBuf,
+    pub project_path: PathBuf,
 }
 
 impl InitArgs {
+    pub fn new(project_path: PathBuf) -> Self {
+        Self { project_path }
+    }
+
     pub fn run(&self) -> anyhow::Result<()> {
         self.check_project_dir()?;
         let config = ProjectSettings::read_from_console()?;

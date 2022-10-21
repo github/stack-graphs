@@ -18,30 +18,39 @@ use crate::loader::DEFAULT_TSG_PATHS;
 
 /// CLI arguments for creating a path based loader.
 #[derive(Args)]
-pub struct PathLoadArgs {
+pub struct PathLoaderArgs {
     /// The TSG file to use for stack graph construction.
     /// If the file extension is omitted, `.tsg` is implicitly added.
     #[clap(long, value_name = "TSG_PATH")]
-    tsg: Option<PathBuf>,
+    pub tsg: Option<PathBuf>,
 
     /// The builtins file to use for stack graph construction.
     /// If the file extension is omitted, the file extension of the language is implicitly added.
     #[clap(long, value_name = "BUILTINS_PATH")]
-    builtins: Option<PathBuf>,
+    pub builtins: Option<PathBuf>,
 
     /// The path to look for tree-sitter grammars.
     /// Can be specified multiple times.
     #[clap(long, value_name = "GRAMMAR_PATH")]
-    grammar: Vec<PathBuf>,
+    pub grammar: Vec<PathBuf>,
 
     /// The scope of the tree-sitter grammar.
     /// See https://tree-sitter.github.io/tree-sitter/syntax-highlighting#basics for details.
     #[clap(long, value_name = "SCOPE")]
-    scope: Option<String>,
+    pub scope: Option<String>,
 }
 
-impl PathLoadArgs {
-    pub fn new_loader(&self) -> Result<Loader, LoadError> {
+impl PathLoaderArgs {
+    pub fn new() -> Self {
+        Self {
+            tsg: None,
+            builtins: None,
+            grammar: Vec::new(),
+            scope: None,
+        }
+    }
+
+    pub fn get(&self) -> Result<Loader, LoadError> {
         let tsg_paths = match &self.tsg {
             Some(tsg_path) => vec![LoadPath::Regular(tsg_path.clone())],
             None => DEFAULT_TSG_PATHS.clone(),
@@ -75,18 +84,19 @@ impl PathLoadArgs {
 
 /// CLI arguments for creating a path based loader.
 #[derive(Args)]
-pub struct LanguageConfigurationsLoadArgs {
+pub struct LanguageConfigurationsLoaderArgs {
     /// The scope of the tree-sitter grammar.
     /// See https://tree-sitter.github.io/tree-sitter/syntax-highlighting#basics for details.
     #[clap(long, value_name = "SCOPE")]
     scope: Option<String>,
 }
 
-impl LanguageConfigurationsLoadArgs {
-    pub fn new_loader(
-        &self,
-        configurations: Vec<LanguageConfiguration>,
-    ) -> Result<Loader, LoadError> {
+impl LanguageConfigurationsLoaderArgs {
+    pub fn new() -> Self {
+        Self { scope: None }
+    }
+
+    pub fn get(&self, configurations: Vec<LanguageConfiguration>) -> Result<Loader, LoadError> {
         let loader = Loader::from_language_configurations(configurations, self.scope.clone())?;
         Ok(loader)
     }

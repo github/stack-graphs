@@ -24,7 +24,7 @@ mod path_loading {
     use clap::Subcommand;
 
     use crate::cli::init::InitArgs;
-    use crate::cli::load::PathLoadArgs;
+    use crate::cli::load::PathLoaderArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::test::TestArgs;
 
@@ -71,14 +71,14 @@ mod path_loading {
     #[derive(clap::Parser)]
     pub struct Parse {
         #[clap(flatten)]
-        load_args: PathLoadArgs,
+        load_args: PathLoaderArgs,
         #[clap(flatten)]
         parse_args: ParseArgs,
     }
 
     impl Parse {
         pub fn run(&self) -> anyhow::Result<()> {
-            let mut loader = self.load_args.new_loader()?;
+            let mut loader = self.load_args.get()?;
             self.parse_args.run(&mut loader)
         }
     }
@@ -87,14 +87,14 @@ mod path_loading {
     #[derive(clap::Parser)]
     pub struct Test {
         #[clap(flatten)]
-        load_args: PathLoadArgs,
+        load_args: PathLoaderArgs,
         #[clap(flatten)]
         test_args: TestArgs,
     }
 
     impl Test {
         pub fn run(&self) -> anyhow::Result<()> {
-            let mut loader = self.load_args.new_loader()?;
+            let mut loader = self.load_args.get()?;
             self.test_args.run(&mut loader)
         }
     }
@@ -109,7 +109,7 @@ mod provided_languages {
     use crate::cli::test::TestArgs;
     use crate::loader::LanguageConfiguration;
 
-    use super::load::LanguageConfigurationsLoadArgs;
+    use super::load::LanguageConfigurationsLoaderArgs;
 
     /// CLI implementation that loads from provided grammars and stack graph definitions.
     #[derive(Parser)]
@@ -139,14 +139,14 @@ mod provided_languages {
     #[derive(clap::Parser)]
     pub struct Parse {
         #[clap(flatten)]
-        load_args: LanguageConfigurationsLoadArgs,
+        load_args: LanguageConfigurationsLoaderArgs,
         #[clap(flatten)]
         parse_args: ParseArgs,
     }
 
     impl Parse {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
-            let mut loader = self.load_args.new_loader(configurations)?;
+            let mut loader = self.load_args.get(configurations)?;
             self.parse_args.run(&mut loader)
         }
     }
@@ -155,14 +155,14 @@ mod provided_languages {
     #[derive(clap::Parser)]
     pub struct Test {
         #[clap(flatten)]
-        load_args: LanguageConfigurationsLoadArgs,
+        load_args: LanguageConfigurationsLoaderArgs,
         #[clap(flatten)]
         test_args: TestArgs,
     }
 
     impl Test {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
-            let mut loader = self.load_args.new_loader(configurations)?;
+            let mut loader = self.load_args.get(configurations)?;
             self.test_args.run(&mut loader)
         }
     }

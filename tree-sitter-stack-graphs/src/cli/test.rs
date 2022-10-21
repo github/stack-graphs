@@ -70,19 +70,19 @@ impl OutputMode {
 pub struct TestArgs {
     /// Test file or directory paths.
     #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
-    tests: Vec<PathBuf>,
+    pub test_paths: Vec<PathBuf>,
 
     /// Hide passing tests.
     #[clap(long)]
-    hide_passing: bool,
+    pub hide_passing: bool,
 
     /// Hide failure error details.
     #[clap(long)]
-    hide_failure_errors: bool,
+    pub hide_failure_errors: bool,
 
     /// Show ignored files in output.
     #[clap(long)]
-    show_ignored: bool,
+    pub show_ignored: bool,
 
     /// Save graph for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -96,7 +96,7 @@ pub struct TestArgs {
         require_equals = true,
         default_missing_value = "%n.graph.json"
     )]
-    save_graph: Option<PathSpec>,
+    pub save_graph: Option<PathSpec>,
 
     /// Save paths for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -110,7 +110,7 @@ pub struct TestArgs {
         require_equals = true,
         default_missing_value = "%n.paths.json"
     )]
-    save_paths: Option<PathSpec>,
+    pub save_paths: Option<PathSpec>,
 
     /// Save visualization for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -124,17 +124,30 @@ pub struct TestArgs {
         require_equals = true,
         default_missing_value = "%n.html"
     )]
-    save_visualization: Option<PathSpec>,
+    pub save_visualization: Option<PathSpec>,
 
     /// Controls when graphs, paths, or visualization are saved.
     #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
-    output_mode: OutputMode,
+    pub output_mode: OutputMode,
 }
 
 impl TestArgs {
+    pub fn new(test_paths: Vec<PathBuf>) -> Self {
+        Self {
+            test_paths,
+            hide_passing: false,
+            hide_failure_errors: false,
+            show_ignored: false,
+            save_graph: None,
+            save_paths: None,
+            save_visualization: None,
+            output_mode: OutputMode::OnFailure,
+        }
+    }
+
     pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
         let mut total_failure_count = 0;
-        for test_path in &self.tests {
+        for test_path in &self.test_paths {
             if test_path.is_dir() {
                 let test_root = test_path;
                 for test_entry in WalkDir::new(test_path)

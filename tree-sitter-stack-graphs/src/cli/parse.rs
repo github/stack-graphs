@@ -23,7 +23,7 @@ use crate::LoadError;
 pub struct ParseArgs {
     /// Input file path.
     #[clap(value_name = "FILE_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
-    file_path: PathBuf,
+    pub file_path: PathBuf,
 }
 
 impl ParseArgs {
