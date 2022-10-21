@@ -20,11 +20,11 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Cache dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo
@@ -62,7 +62,7 @@ jobs:
         working-directory: languages
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: List languages
         id: language-list
         run: echo "languages=$(find -mindepth 1 -maxdepth 1 -type d -printf '%P\n' | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
@@ -83,7 +83,7 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Cache dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo
@@ -92,7 +92,7 @@ jobs:
           restore-keys: |
             ${{ runner.OS }}-cargo-
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Build
         run: cargo build -p ${{ matrix.language }}
       - name: Test
