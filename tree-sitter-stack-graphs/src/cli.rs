@@ -108,7 +108,8 @@ mod provided_languages {
     use crate::cli::parse::ParseArgs;
     use crate::cli::test::TestArgs;
     use crate::loader::LanguageConfiguration;
-    use crate::loader::Loader;
+
+    use super::load::LanguageConfigurationsLoadArgs;
 
     /// CLI implementation that loads from provided grammars and stack graph definitions.
     #[derive(Parser)]
@@ -121,10 +122,9 @@ mod provided_languages {
     impl Cli {
         pub fn main(configurations: Vec<LanguageConfiguration>) -> Result<()> {
             let cli = Cli::parse();
-            let mut loader = Loader::from_language_configurations(configurations)?;
             match &cli.command {
-                Commands::Parse(cmd) => cmd.run(&mut loader),
-                Commands::Test(cmd) => cmd.run(&mut loader),
+                Commands::Parse(cmd) => cmd.run(configurations),
+                Commands::Test(cmd) => cmd.run(configurations),
             }
         }
     }
@@ -139,12 +139,15 @@ mod provided_languages {
     #[derive(clap::Parser)]
     pub struct Parse {
         #[clap(flatten)]
+        load_args: LanguageConfigurationsLoadArgs,
+        #[clap(flatten)]
         parse_args: ParseArgs,
     }
 
     impl Parse {
-        pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
-            self.parse_args.run(loader)
+        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            let mut loader = self.load_args.new_loader(configurations)?;
+            self.parse_args.run(&mut loader)
         }
     }
 
@@ -152,12 +155,15 @@ mod provided_languages {
     #[derive(clap::Parser)]
     pub struct Test {
         #[clap(flatten)]
+        load_args: LanguageConfigurationsLoadArgs,
+        #[clap(flatten)]
         test_args: TestArgs,
     }
 
     impl Test {
-        pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
-            self.test_args.run(loader)
+        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            let mut loader = self.load_args.new_loader(configurations)?;
+            self.test_args.run(&mut loader)
         }
     }
 }

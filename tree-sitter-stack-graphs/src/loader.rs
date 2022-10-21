@@ -70,8 +70,8 @@ impl LoadPath {
 pub struct Loader(LoaderImpl);
 
 enum LoaderImpl {
-    Paths(PathsLoader),
-    Provided(ProvidedLoader),
+    Paths(PathLoader),
+    Provided(LanguageConfigurationsLoader),
 }
 
 impl Loader {
@@ -81,7 +81,7 @@ impl Loader {
         tsg_paths: Vec<LoadPath>,
         builtins_paths: Vec<LoadPath>,
     ) -> Result<Self, LoadError> {
-        Ok(Self(LoaderImpl::Paths(PathsLoader {
+        Ok(Self(LoaderImpl::Paths(PathLoader {
             loader: SupplementedTsLoader::new()?,
             paths,
             scope,
@@ -97,9 +97,9 @@ impl Loader {
         tsg_paths: Vec<LoadPath>,
         builtins_paths: Vec<LoadPath>,
     ) -> Result<Self, LoadError> {
-        Ok(Self(LoaderImpl::Paths(PathsLoader {
+        Ok(Self(LoaderImpl::Paths(PathLoader {
             loader: SupplementedTsLoader::new()?,
-            paths: PathsLoader::config_paths(config)?,
+            paths: PathLoader::config_paths(config)?,
             scope,
             tsg_paths,
             builtins_paths,
@@ -109,8 +109,13 @@ impl Loader {
 
     pub fn from_language_configurations(
         configurations: Vec<LanguageConfiguration>,
+        scope: Option<String>,
     ) -> Result<Self, LoadError> {
-        Ok(Self(LoaderImpl::Provided(ProvidedLoader {
+        let configurations = configurations
+            .into_iter()
+            .filter(|lc| scope.is_none() || lc.scope == scope)
+            .collect();
+        Ok(Self(LoaderImpl::Provided(LanguageConfigurationsLoader {
             configurations,
             cache: Vec::new(),
         })))
@@ -237,6 +242,8 @@ impl From<crate::LoadError> for LoadError {
 
 pub struct LanguageConfiguration {
     pub language: Language,
+    pub scope: Option<String>,
+    pub content_regex: Option<Regex>,
     pub file_types: Vec<String>,
     pub tsg_source: String,
     pub builtins_source: String,
@@ -244,31 +251,36 @@ pub struct LanguageConfiguration {
 }
 
 impl LanguageConfiguration {
-    fn supports_path(&self, path: &Path) -> bool {
-        let file_type = match path.extension() {
-            Some(file_type) => file_type,
-            None => return false,
-        };
-        self.file_types
-            .contains(&file_type.to_string_lossy().to_string())
+    fn to_supplemented_language(&self) -> SupplementedLanguage {
+        SupplementedLanguage {
+            language: self.language,
+            scope: self.scope.clone(),
+            content_regex: self.content_regex.clone(),
+            file_types: self.file_types.clone(),
+            root_path: PathBuf::new(),
+        }
     }
 }
 
-struct ProvidedLoader {
+struct LanguageConfigurationsLoader {
     configurations: Vec<LanguageConfiguration>,
     cache: Vec<(Language, StackGraphLanguage)>,
 }
 
-impl ProvidedLoader {
+impl LanguageConfigurationsLoader {
     /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
     /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
     /// is necessary, as it will not attempt to load the TSG file.
     pub fn load_tree_sitter_language_for_file(
         &mut self,
         path: &Path,
-        _content: Option<&str>,
+        content: Option<&str>,
     ) -> Result<Option<tree_sitter::Language>, LoadError> {
-        let configuration = match self.configurations.iter().find(|l| l.supports_path(path)) {
+        let configuration = match self.configurations.iter().find(|l| {
+            l.to_supplemented_language()
+                .matches_file(path, content)
+                .is_some()
+        }) {
             Some(language) => language,
             None => return Ok(None),
         };
@@ -279,10 +291,14 @@ impl ProvidedLoader {
     pub fn load_for_file(
         &mut self,
         path: &Path,
-        _content: Option<&str>,
+        content: Option<&str>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
-        let configuration = match self.configurations.iter().find(|l| l.supports_path(path)) {
+        let configuration = match self.configurations.iter().find(|l| {
+            l.to_supplemented_language()
+                .matches_file(path, content)
+                .is_some()
+        }) {
             Some(language) => language,
             None => return Ok(None),
         };
@@ -316,7 +332,7 @@ impl ProvidedLoader {
 // ------------------------------------------------------------------------------------------------
 // path based loader
 
-struct PathsLoader {
+struct PathLoader {
     loader: SupplementedTsLoader,
     paths: Vec<PathBuf>,
     scope: Option<String>,
@@ -325,7 +341,7 @@ struct PathsLoader {
     cache: Vec<(Language, StackGraphLanguage)>,
 }
 
-impl PathsLoader {
+impl PathLoader {
     // Adopted from tree_sitter_loader::Loader::load
     fn config_paths(config: &TsConfig) -> Result<Vec<PathBuf>, LoadError> {
         if config.parser_directories.is_empty() {

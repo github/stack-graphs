@@ -9,6 +9,7 @@ use clap::Args;
 use std::path::PathBuf;
 use tree_sitter_config::Config as TsConfig;
 
+use crate::loader::LanguageConfiguration;
 use crate::loader::LoadError;
 use crate::loader::LoadPath;
 use crate::loader::Loader;
@@ -68,6 +69,25 @@ impl PathLoadArgs {
                 builtins_paths,
             )?
         };
+        Ok(loader)
+    }
+}
+
+/// CLI arguments for creating a path based loader.
+#[derive(Args)]
+pub struct LanguageConfigurationsLoadArgs {
+    /// The scope of the tree-sitter grammar.
+    /// See https://tree-sitter.github.io/tree-sitter/syntax-highlighting#basics for details.
+    #[clap(long, value_name = "SCOPE")]
+    scope: Option<String>,
+}
+
+impl LanguageConfigurationsLoadArgs {
+    pub fn new_loader(
+        &self,
+        configurations: Vec<LanguageConfiguration>,
+    ) -> Result<Loader, LoadError> {
+        let loader = Loader::from_language_configurations(configurations, self.scope.clone())?;
         Ok(loader)
     }
 }
