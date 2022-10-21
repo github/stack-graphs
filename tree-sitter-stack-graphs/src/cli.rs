@@ -16,7 +16,7 @@ pub mod test;
 mod util;
 
 pub use path_loading::Cli as PathLoadingCli;
-pub use provided_languages::Cli as ProvidedLanguagesCli;
+pub use provided_languages::Cli as LanguageConfigurationsCli;
 
 mod path_loading {
     use anyhow::Result;
