@@ -6,8 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::Result;
-use tree_sitter_stack_graphs::cli::Cli;
+use tree_sitter_stack_graphs::cli::PathLoadingCli;
 
 fn main() -> Result<()> {
-    Cli::main()
+    PathLoadingCli::main()
 }

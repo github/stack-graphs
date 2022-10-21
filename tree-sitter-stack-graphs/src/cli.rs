@@ -7,10 +7,6 @@
 
 //! Defines CLI
 
-use anyhow::Result;
-use clap::Parser;
-use clap::Subcommand;
-
 pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
 pub mod init;
@@ -19,75 +15,149 @@ pub mod parse;
 pub mod test;
 mod util;
 
-/// CLI implementation that loads grammars and stack graph definitions from paths.
-#[derive(Parser)]
-#[clap(about, version)]
-pub struct Cli {
-    #[clap(subcommand)]
-    command: Commands,
-}
+pub use path_loading::Cli as PathLoadingCli;
+pub use provided_languages::Cli as ProvidedLanguagesCli;
 
-impl Cli {
-    pub fn main() -> Result<()> {
-        let cli = Cli::parse();
-        match &cli.command {
-            Commands::Init(cmd) => cmd.run(),
-            Commands::Parse(cmd) => cmd.run(),
-            Commands::Test(cmd) => cmd.run(),
+mod path_loading {
+    use anyhow::Result;
+    use clap::Parser;
+    use clap::Subcommand;
+
+    use crate::cli::init::InitArgs;
+    use crate::cli::load::PathLoadArgs;
+    use crate::cli::parse::ParseArgs;
+    use crate::cli::test::TestArgs;
+
+    /// CLI implementation that loads grammars and stack graph definitions from paths.
+    #[derive(Parser)]
+    #[clap(about, version)]
+    pub struct Cli {
+        #[clap(subcommand)]
+        command: Commands,
+    }
+
+    impl Cli {
+        pub fn main() -> Result<()> {
+            let cli = Cli::parse();
+            match &cli.command {
+                Commands::Init(cmd) => cmd.run(),
+                Commands::Parse(cmd) => cmd.run(),
+                Commands::Test(cmd) => cmd.run(),
+            }
+        }
+    }
+
+    #[derive(Subcommand)]
+    enum Commands {
+        Init(Init),
+        Parse(Parse),
+        Test(Test),
+    }
+
+    /// Init command
+    #[derive(clap::Parser)]
+    pub struct Init {
+        #[clap(flatten)]
+        init_args: InitArgs,
+    }
+
+    impl Init {
+        pub fn run(&self) -> anyhow::Result<()> {
+            self.init_args.run()
+        }
+    }
+
+    /// Parse command
+    #[derive(clap::Parser)]
+    pub struct Parse {
+        #[clap(flatten)]
+        load_args: PathLoadArgs,
+        #[clap(flatten)]
+        parse_args: ParseArgs,
+    }
+
+    impl Parse {
+        pub fn run(&self) -> anyhow::Result<()> {
+            let mut loader = self.load_args.new_loader()?;
+            self.parse_args.run(&mut loader)
+        }
+    }
+
+    /// Test command
+    #[derive(clap::Parser)]
+    pub struct Test {
+        #[clap(flatten)]
+        load_args: PathLoadArgs,
+        #[clap(flatten)]
+        test_args: TestArgs,
+    }
+
+    impl Test {
+        pub fn run(&self) -> anyhow::Result<()> {
+            let mut loader = self.load_args.new_loader()?;
+            self.test_args.run(&mut loader)
         }
     }
 }
 
-#[derive(Subcommand)]
-enum Commands {
-    Init(Init),
-    Parse(Parse),
-    Test(Test),
-}
+mod provided_languages {
+    use anyhow::Result;
+    use clap::Parser;
+    use clap::Subcommand;
 
-/// Init command
-#[derive(clap::Parser)]
-pub struct Init {
-    #[clap(flatten)]
-    init_args: self::init::InitArgs,
-}
+    use crate::cli::parse::ParseArgs;
+    use crate::cli::test::TestArgs;
+    use crate::loader::LanguageConfiguration;
+    use crate::loader::Loader;
 
-impl Init {
-    pub fn run(&self) -> anyhow::Result<()> {
-        self.init_args.run()
+    /// CLI implementation that loads from provided grammars and stack graph definitions.
+    #[derive(Parser)]
+    #[clap(about, version)]
+    pub struct Cli {
+        #[clap(subcommand)]
+        command: Commands,
     }
-}
 
-/// Parse command
-#[derive(clap::Parser)]
-pub struct Parse {
-    #[clap(flatten)]
-    load_args: self::load::PathsLoadArgs,
-
-    #[clap(flatten)]
-    parse_args: self::parse::ParseArgs,
-}
-
-impl Parse {
-    pub fn run(&self) -> anyhow::Result<()> {
-        let mut loader = self.load_args.new_loader()?;
-        self.parse_args.run(&mut loader)
+    impl Cli {
+        pub fn main(configurations: Vec<LanguageConfiguration>) -> Result<()> {
+            let cli = Cli::parse();
+            let mut loader = Loader::from_language_configurations(configurations)?;
+            match &cli.command {
+                Commands::Parse(cmd) => cmd.run(&mut loader),
+                Commands::Test(cmd) => cmd.run(&mut loader),
+            }
+        }
     }
-}
 
-/// Test command
-#[derive(clap::Parser)]
-pub struct Test {
-    #[clap(flatten)]
-    load_args: self::load::PathsLoadArgs,
+    #[derive(Subcommand)]
+    enum Commands {
+        Parse(Parse),
+        Test(Test),
+    }
 
-    #[clap(flatten)]
-    test_args: self::test::TestArgs,
-}
+    /// Parse command
+    #[derive(clap::Parser)]
+    pub struct Parse {
+        #[clap(flatten)]
+        parse_args: ParseArgs,
+    }
 
-impl Test {
-    pub fn run(&self) -> anyhow::Result<()> {
-        let mut loader = self.load_args.new_loader()?;
-        self.test_args.run(&mut loader)
+    impl Parse {
+        pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+            self.parse_args.run(loader)
+        }
+    }
+
+    /// Test command
+    #[derive(clap::Parser)]
+    pub struct Test {
+        #[clap(flatten)]
+        test_args: TestArgs,
+    }
+
+    impl Test {
+        pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+            self.test_args.run(loader)
+        }
     }
 }
