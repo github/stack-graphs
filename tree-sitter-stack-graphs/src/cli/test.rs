@@ -150,7 +150,7 @@ impl TestArgs {
         for test_path in &self.test_paths {
             if test_path.is_dir() {
                 let test_root = test_path;
-                for test_entry in WalkDir::new(test_path)
+                for test_entry in WalkDir::new(test_root)
                     .follow_links(true)
                     .into_iter()
                     .filter_map(|e| e.ok())
