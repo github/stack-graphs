@@ -15,6 +15,7 @@ pub mod parse;
 pub mod test;
 mod util;
 
+pub use ci::Tester as CiTester;
 pub use path_loading::Cli as PathLoadingCli;
 pub use provided_languages::Cli as LanguageConfigurationsCli;
 
@@ -164,6 +165,50 @@ mod provided_languages {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
             let mut loader = self.load_args.get(configurations)?;
             self.test_args.run(&mut loader)
+        }
+    }
+}
+
+mod ci {
+    use std::path::PathBuf;
+
+    use crate::cli::test::TestArgs;
+    use crate::loader::{LanguageConfiguration, Loader};
+
+    /// Run tests for the given languages. Test locations are reported relative to the current directory, which
+    /// results in better readable output when build tools only provides absolute test paths.
+    pub struct Tester {
+        configurations: Vec<LanguageConfiguration>,
+        test_paths: Vec<PathBuf>,
+    }
+
+    impl Tester {
+        pub fn new(configurations: Vec<LanguageConfiguration>, test_paths: Vec<PathBuf>) -> Self {
+            Self {
+                configurations,
+                test_paths,
+            }
+        }
+
+        pub fn run(self) -> anyhow::Result<()> {
+            let test_paths = self
+                .test_paths
+                .into_iter()
+                .map(|test_path| {
+                    std::env::current_dir()
+                        .ok()
+                        .and_then(|cwd| pathdiff::diff_paths(&test_path, &cwd))
+                        .unwrap_or(test_path)
+                })
+                .collect::<Vec<_>>();
+            for test_path in &test_paths {
+                if !test_path.exists() {
+                    panic!("Test path {} does not exist", test_path.display());
+                }
+            }
+            let mut loader = Loader::from_language_configurations(self.configurations, None)
+                .expect("Expected loader");
+            TestArgs::new(test_paths).run(&mut loader)
         }
     }
 }

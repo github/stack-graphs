@@ -240,6 +240,7 @@ impl From<crate::LoadError> for LoadError {
 // ------------------------------------------------------------------------------------------------
 // provided languages loader
 
+#[derive(Clone)]
 pub struct LanguageConfiguration {
     pub language: Language,
     pub scope: Option<String>,
