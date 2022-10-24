@@ -46,23 +46,36 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (program)@prog {
   node @prog.defs
-  node @prog.lexical_scope
+  node @prog.before_scope
+  node @prog.after_scope
+  edge @prog.before_scope -> ROOT_NODE
 }
 
 (program (_)@declaration)@prog {
-  print @declaration
-
-  edge @declaration.lexical_scope -> @prog.lexical_scope
-  edge @prog.lexical_scope -> @declaration.lexical_defs
+  ; edge @declaration.lexical_scope -> @prog.lexical_scope
+  ; edge @prog.lexical_scope -> @declaration.lexical_defs
 }
 
-;; Declarations
-[
-  (class_declaration)
-]@declaration {
-  node @declaration.lexical_scope
-  node @declaration.lexical_defs
+(program
+  .
+  (_)@first_stmt)@prog {
+    edge @first_stmt.before_scope -> @prog.before_scope
 }
+
+(program
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+  edge @right_stmt.before_scope -> @left_stmt.after_scope
+}
+
+(program
+   (_)@last_stmt
+   .)@prog {
+   ; last_stmt is class_declaration
+   edge @prog.after_scope -> @last_stmt.after_scope
+ }
+
 
 ;; Class Expressions
 
@@ -74,9 +87,122 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; }
 
 (class_declaration
-  name: (identifier) @name) @class
-{
+  name: (identifier) @name
+  superclass: (superclass) @superclass
+  body: (class_body) @class_body) @class {
+
+  node @name.pop
+  attr (@name.pop) node_definition = @name
+
+  node @superclass.push
+  attr (@superclass.push) node_reference = @superclass
+  edge @class.before_scope -> @superclass.push
+
+  edge @class_body.before_scope -> @class.before_scope
+  edge @class.after_scope -> @class.before_scope
+  edge @class.after_scope -> @name.pop
 }
+
+(class_declaration
+  (_)@last_stmt
+  .) @class {
+  edge @last_stmt.before_scope -> @class.after_scope
+}
+
+(class_body) @class_body {
+  node @class_body.before_scope
+  node @class_body.after_scope
+}
+
+(field_declaration
+  declarator: (variable_declarator
+    name: (_) @name
+  )
+) @field_decl
+{
+  node @field_decl.scope
+  node @name.pop
+  attr (@name.pop) node_definition = @name
+  ; TODO: which one
+  ; edge @name.pop -> @field_decl.scope
+  edge @field_decl.scope -> @name.pop
+}
+
+(field_declaration
+  .
+  (_)@first_stmt) @field_decl {
+    node @first_stmt.before_scope
+    ; TODO which one
+    edge @field_decl.scope -> @first_stmt.before_scope
+    ; edge @first_stmt.before_scope -> @field_decl.scope
+}
+
+(field_declaration
+  (_)@last_stmt
+  .
+  ) @field_decl {
+
+  ; edge @field_decl.scope -> @last_declaration.after_scope
+  ; edge @last_stmt.after_scope -> @field_decl.scope
+}
+
+
+(method_declaration
+  name: (identifier) @name) @method
+{
+  node @method.def
+
+  ;node @method.before_scope
+  ;node @method.after_scope
+  node @method.scope
+
+  ; edge @method.before_scope -> @method.after_scope
+  node pop
+  attr (pop) node_definition = @name
+  edge @method.scope -> pop
+
+  ; need an edge from class_body to method.def?
+  edge @method.def -> @method.scope
+}
+
+(method_declaration
+  .
+  (_)@last_stmt) @method {
+    node @last_stmt.before_scope
+    edge @last_stmt.before_scope -> @method.scope
+}
+
+(method_declaration
+  (_)@first_stmt
+  .) @method {
+    edge @first_stmt.before_scope -> @method.scope
+}
+
+(class_body
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+  edge @right_stmt.scope -> @left_stmt.scope
+}
+
+(class_body
+  .
+  (_)@first_decl)@class_body {
+
+  ; first_decl is sometimes field_declaration and sometimes method_declaration
+  edge @first_decl.scope -> @class_body.before_scope
+  ; edge @class_body.after_scope -> @class_body.before_scope
+}
+
+(class_body
+  (_)@last_stmt
+  .) @class_body {
+    ; node @first_stmt.before_scope
+    ; edge @class_body.after_scope -> @last_stmt.scope
+    edge @class_body.after_scope -> @last_stmt.def
+    ; edge @class_body.after_scope -> @last_stmt.before_scope
+}
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Expressions and Statements
