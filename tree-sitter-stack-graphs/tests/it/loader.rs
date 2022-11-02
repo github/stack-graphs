@@ -30,8 +30,7 @@ fn can_load_from_provided_language_configuration() {
             content_regex: None,
             file_types: vec!["py".into()],
             tsg_source: TSG.to_string(),
-            builtins_source: "".into(),
-            builtins_config: "".into(),
+            builtins: None,
         }],
         None,
     )

@@ -247,13 +247,46 @@ pub struct LanguageConfiguration {
     pub content_regex: Option<Regex>,
     pub file_types: Vec<String>,
     pub tsg_source: String,
-    pub builtins_source: String,
-    pub builtins_config: String,
+    pub builtins: Option<BuiltinsConfiguration>,
+}
+
+#[derive(Clone)]
+pub struct BuiltinsConfiguration {
+    pub source: String,
+    pub config: String,
 }
 
 impl LanguageConfiguration {
-    fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
+    pub fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
         matches_file(&self.file_types, &self.content_regex, path, content).is_some()
+    }
+
+    pub fn to_stack_graph_language(
+        &self,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<StackGraphLanguage, LoadError> {
+        let tsg = Loader::load_tsg(self.language, &self.tsg_source)?;
+        let mut sgl = StackGraphLanguage::new(self.language, tsg)?;
+        if let Some(builtins) = &self.builtins {
+            builtins.load_into_stack_graph_language(&mut sgl, cancellation_flag)?;
+        }
+        Ok(sgl)
+    }
+}
+
+impl BuiltinsConfiguration {
+    pub fn load_into_stack_graph_language(
+        &self,
+        sgl: &mut StackGraphLanguage,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), LoadError> {
+        Loader::load_builtins(
+            sgl,
+            &Path::new("<builtins>"),
+            &self.source,
+            &self.config,
+            cancellation_flag,
+        )
     }
 }
 
@@ -305,17 +338,8 @@ impl LanguageConfigurationsLoader {
         let index = match index {
             Some(index) => index,
             None => {
-                let tsg = Loader::load_tsg(configuration.language, &configuration.tsg_source)?;
-                let mut sgl = StackGraphLanguage::new(configuration.language, tsg)?;
-                Loader::load_builtins(
-                    &mut sgl,
-                    path,
-                    &configuration.builtins_source,
-                    &configuration.builtins_config,
-                    cancellation_flag,
-                )?;
+                let sgl = configuration.to_stack_graph_language(cancellation_flag)?;
                 self.cache.push((configuration.language, sgl));
-
                 self.cache.len() - 1
             }
         };
