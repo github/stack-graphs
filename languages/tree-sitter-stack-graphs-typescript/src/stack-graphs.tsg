@@ -21,8 +21,10 @@
 ; ^^^^^^^^^^^^^^^^
 
 global FILE_PATH
-global ROOT_NODE
+global PACKAGE_NAME = ""
+
 global JUMP_TO_SCOPE_NODE
+global ROOT_NODE
 
 ; Attribute Shorthands
 ; ^^^^^^^^^^^^^^^^^^^^
@@ -162,12 +164,32 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; expose definitions
   edge @prog.lexical_scope -> @prog.defs
+}
+
+(program)@prog {
+  ; package definition nodes
+  var pkg_scope = ROOT_NODE
+  scan PACKAGE_NAME {
+    "([^/]+)" {
+      node pkg_def
+      node pkg_def__ns
+      ;
+      edge pkg_scope -> pkg_def__ns
+      ;
+      attr (pkg_def__ns) pop_symbol = "%M"
+      edge pkg_def__ns -> pkg_def
+      ;
+      attr (pkg_def) pop_symbol = $1
+      ;
+      set pkg_scope = pkg_def
+    }
+  }
 
   ; module definition nodes
   let mod_name = (path-filestem FILE_PATH)
   let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
-
-  var mod_scope = ROOT_NODE
+  ;
+  var mod_scope = pkg_scope
   scan mod_path {
     "([^/]+)/" {
       node mod_def
@@ -198,6 +220,31 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       edge @prog.mod_def -> @prog.exports
     }
   }
+}
+
+(program)@prog {
+  ; package reference nodes
+  var pkg_scope = ROOT_NODE
+  scan PACKAGE_NAME {
+    "([^/]+)" {
+      node pkg_ref
+      node pkg_ref__ns
+      ;
+      attr (pkg_ref) push_symbol = $1
+      edge pkg_ref -> pkg_ref__ns
+      ;
+      attr (pkg_ref__ns) push_symbol = "%M"
+      edge pkg_ref__ns -> pkg_scope
+      ;
+      set pkg_scope = pkg_ref
+    }
+  }
+  node self_def
+  ;
+  attr (self_def) pop_symbol = "%P"
+  edge self_def -> pkg_scope
+  ;
+  edge @prog.lexical_scope -> self_def
 }
 
 (program
@@ -383,8 +430,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   let mod_path = (replace (source-text @from) "[\"\']" "")
   scan mod_path {
     "^(\.|\..)/.*$" { ; relative imports
+      node self_ref
+      ;
+      attr (self_ref) push_symbol = "%P"
+      edge self_ref -> @import_stmt.lexical_scope
+
       let mod_path = (path-normalize (path-join (path-dir FILE_PATH) $0))
-      var mod_scope = ROOT_NODE
+      var mod_scope = self_ref
       scan mod_path {
         "([^/]+)/" {
           node mod_ref
