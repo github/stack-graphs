@@ -163,26 +163,39 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; expose definitions
   edge @prog.lexical_scope -> @prog.defs
 
-  ; module definition in ROOT_NODE scope
-  edge ROOT_NODE -> @prog.mod_def__ns
-  ;
-  attr (@prog.mod_def__ns) pop_symbol = "%M"
-  edge @prog.mod_def__ns -> @prog.mod_def
-  ;
+  ; module definition nodes
   let mod_name = (path-filestem FILE_PATH)
   let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
-  attr (@prog.mod_def) symbol_definition = mod_path, source_node = @prog
-  ; expose exports via module definition
-  edge @prog.mod_def -> @prog.exports
 
-  ; if this is an index.ts, also add a definition for the directory of this file
-  scan mod_name {
-    "index" {
-      node mod_index_def
-      edge @prog.mod_def__ns -> mod_index_def
-      let mod_dir = (path-normalize (path-dir FILE_PATH))
-      attr (mod_index_def) symbol_definition = mod_dir, source_node = @prog
-      edge mod_index_def -> @prog.exports
+  var mod_scope = ROOT_NODE
+  scan mod_path {
+    "([^/]+)/" {
+      node mod_def
+      node mod_def__ns
+      ;
+      edge mod_scope -> mod_def__ns
+      ;
+      attr (mod_def__ns) pop_symbol = "%M"
+      edge mod_def__ns -> mod_def
+      ;
+      attr (mod_def) pop_symbol = $1
+      ;
+      set mod_scope = mod_def
+    }
+    "index$" {
+      attr (mod_scope) is_definition, source_node = @prog
+      ; expose exports via module parent
+      edge mod_scope -> @prog.exports
+    }
+    "([^/]+)$" {
+      edge mod_scope -> @prog.mod_def__ns
+      ;
+      attr (@prog.mod_def__ns) pop_symbol = "%M"
+      edge @prog.mod_def__ns -> @prog.mod_def
+      ;
+      attr (@prog.mod_def) symbol_definition = $1, source_node = @prog
+      ; expose exports via module definition
+      edge @prog.mod_def -> @prog.exports
     }
   }
 }
@@ -367,12 +380,37 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @from.mod_ref__ns
 
   ; module reference
-  let mod_name = (path-normalize (path-join (path-dir FILE_PATH) (replace (source-text @from) "[\"\']" "")))
-  attr (@from.mod_ref) symbol_reference = mod_name, source_node = @import_stmt
-  edge @from.mod_ref -> @from.mod_ref__ns
-  ;
-  attr (@from.mod_ref__ns) push_symbol = "%M"
-  edge @from.mod_ref__ns -> ROOT_NODE
+  let mod_path = (replace (source-text @from) "[\"\']" "")
+  scan mod_path {
+    "^(\.|\..)/.*$" { ; relative imports
+      let mod_path = (path-normalize (path-join (path-dir FILE_PATH) $0))
+      var mod_scope = ROOT_NODE
+      scan mod_path {
+        "([^/]+)/" {
+          node mod_ref
+          node mod_ref__ns
+          ;
+          attr (mod_ref) push_symbol = $1
+          edge mod_ref -> mod_ref__ns
+          ;
+          attr (mod_ref__ns) push_symbol = "%M"
+          edge mod_ref__ns -> mod_scope
+          ;
+          set mod_scope = mod_ref
+        }
+        "([^/]+)$" {
+          attr (@from.mod_ref) symbol_reference = $1, source_node = @from
+          edge @from.mod_ref -> @from.mod_ref__ns
+          ;
+          attr (@from.mod_ref__ns) push_symbol = "%M"
+          edge @from.mod_ref__ns -> mod_scope
+        }
+      }
+    }
+    "^.+$" { ; non-relative imports
+      ; TODO
+    }
+  }
 }
 
 ;; Named Clauses
