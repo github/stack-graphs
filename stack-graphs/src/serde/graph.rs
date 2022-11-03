@@ -146,7 +146,7 @@ impl StackGraph {
 
                 // load debug-info of each node
                 if let Some(debug_info) = node.debug_info() {
-                    *graph.debug_info_mut(handle) = debug_info.data.iter().fold(
+                    *graph.node_debug_info_mut(handle) = debug_info.data.iter().fold(
                         crate::graph::DebugInfo::default(),
                         |mut info, entry| {
                             let key = graph.add_string(&entry.key);
@@ -435,7 +435,7 @@ impl crate::graph::StackGraph {
         _filter: &'a dyn Filter,
         handle: Handle<crate::graph::Node>,
     ) -> Option<DebugInfo> {
-        self.debug_info(handle).map(|info| DebugInfo {
+        self.node_debug_info(handle).map(|info| DebugInfo {
             data: info
                 .iter()
                 .map(|entry| DebugEntry {

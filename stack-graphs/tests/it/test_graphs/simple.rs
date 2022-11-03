@@ -113,16 +113,16 @@ pub fn new() -> StackGraph {
     let str_pos_one = graph.add_string("line 31 column 20");
     let str_pos_two = graph.add_string("line 8 column 11");
     graph
-        .debug_info_mut(scope_x)
+        .node_debug_info_mut(scope_x)
         .add(str_dsl_var, str_arg_scope);
     graph
-        .debug_info_mut(scope_x)
+        .node_debug_info_mut(scope_x)
         .add(str_dsl_position, str_pos_one);
     graph
-        .debug_info_mut(scope)
+        .node_debug_info_mut(scope)
         .add(str_dsl_var, str_lexical_scope);
     graph
-        .debug_info_mut(scope)
+        .node_debug_info_mut(scope)
         .add(str_dsl_position, str_pos_two);
 
     graph

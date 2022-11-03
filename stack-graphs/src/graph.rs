@@ -1387,13 +1387,13 @@ pub struct DebugEntry {
 
 impl StackGraph {
     /// Returns debug information about the stack graph node.
-    pub fn debug_info(&self, node: Handle<Node>) -> Option<&DebugInfo> {
-        self.debug_info.get(node)
+    pub fn node_debug_info(&self, node: Handle<Node>) -> Option<&DebugInfo> {
+        self.node_debug_info.get(node)
     }
 
     /// Returns a mutable reference to the debug info about the stack graph node.
-    pub fn debug_info_mut(&mut self, node: Handle<Node>) -> &mut DebugInfo {
-        &mut self.debug_info[node]
+    pub fn node_debug_info_mut(&mut self, node: Handle<Node>) -> &mut DebugInfo {
+        &mut self.node_debug_info[node]
     }
 }
 
@@ -1413,7 +1413,7 @@ pub struct StackGraph {
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
-    pub(crate) debug_info: SupplementalArena<Node, DebugInfo>,
+    pub(crate) node_debug_info: SupplementalArena<Node, DebugInfo>,
 }
 
 impl StackGraph {
@@ -1546,8 +1546,8 @@ impl StackGraph {
                         definiens_span: source_info.definiens_span.clone(),
                     };
                 }
-                if let Some(debug_info) = other.debug_info(other_node) {
-                    *self.debug_info_mut(node) = DebugInfo {
+                if let Some(debug_info) = other.node_debug_info(other_node) {
+                    *self.node_debug_info_mut(node) = DebugInfo {
                         entries: debug_info
                             .entries
                             .iter()
@@ -1591,7 +1591,7 @@ impl Default for StackGraph {
             source_info: SupplementalArena::new(),
             node_id_handles: NodeIDHandles::new(),
             outgoing_edges: SupplementalArena::new(),
-            debug_info: SupplementalArena::new(),
+            node_debug_info: SupplementalArena::new(),
         }
     }
 }

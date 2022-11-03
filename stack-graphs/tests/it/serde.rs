@@ -320,7 +320,7 @@ fn can_load_serialized_stack_graph() {
         .find(|handle| matches!(sg[*handle], graph::Node::Scope(..)))
         .unwrap();
     assert!(sg.source_info(handle).is_some());
-    assert!(sg.debug_info(handle).is_some());
+    assert!(sg.node_debug_info(handle).is_some());
 }
 
 #[test]
