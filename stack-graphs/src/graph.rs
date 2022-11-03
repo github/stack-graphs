@@ -1414,6 +1414,7 @@ pub struct StackGraph {
     node_id_handles: NodeIDHandles,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
     pub(crate) node_debug_info: SupplementalArena<Node, DebugInfo>,
+    pub(crate) edge_debug_info: SupplementalArena<Node, DebugInfo>,
 }
 
 impl StackGraph {
@@ -1592,6 +1593,7 @@ impl Default for StackGraph {
             node_id_handles: NodeIDHandles::new(),
             outgoing_edges: SupplementalArena::new(),
             node_debug_info: SupplementalArena::new(),
+            edge_debug_info: SupplementalArena::new(),
         }
     }
 }
