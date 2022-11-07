@@ -1,0 +1,28 @@
+[package]
+name = "tree-sitter-stack-graphs-typescript"
+version = "0.1.0"
+description = "Stack graphs definition for TypeScript using tree-sitter-typescript"
+readme = "README.md"
+keywords = ["tree-sitter", "stack-graphs", "typescript"]
+authors = ["Hendrik van Antwerpen <hendrikvanantwerpen@github.com>"]
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[[bin]]
+name = "tree-sitter-stack-graphs-typescript"
+path = "rust/bin.rs"
+
+[lib]
+path = "rust/lib.rs"
+test = false
+
+[[test]]
+name = "test"
+path = "rust/test.rs"
+harness = false
+
+[dependencies]
+anyhow = "1.0"
+clap = "3"
+tree-sitter-stack-graphs = { version = "~0.4.0", path = "../../tree-sitter-stack-graphs", features=["cli"] }
+tree-sitter-typescript = { git = "https://github.com/tree-sitter/tree-sitter-typescript", rev="082da44a5263599186dadafd2c974c19f3a73d28" }

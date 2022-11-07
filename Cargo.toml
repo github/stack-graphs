@@ -1,5 +1,12 @@
 [workspace]
 members = [
+  # library projects
+  "lsp-positions",
+  "stack-graphs",
+  "tree-sitter-stack-graphs",
+  "languages/*",
+]
+default-members = [
   "lsp-positions",
   "stack-graphs",
   "tree-sitter-stack-graphs",

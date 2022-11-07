@@ -20,11 +20,11 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Cache dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo
@@ -54,3 +54,46 @@ jobs:
         run: cargo test --all-features
       - name: Run test suite with all optimizations
         run: cargo test --release
+
+  list-languages:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: languages
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: List languages
+        id: language-list
+        run: echo "languages=$(find -mindepth 1 -maxdepth 1 -type d -printf '%P\n' | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+    outputs:
+      languages: ${{ steps.language-list.outputs.languages }}
+
+  test-languages:
+    needs: [list-languages, test-rust]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language: ${{ fromJson(needs.list-languages.outputs.languages) }}
+        rust: [stable]
+
+    steps:
+      - name: Install Rust environment
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: ${{ matrix.rust }}
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.OS }}-cargo-
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Build
+        run: cargo build -p ${{ matrix.language }}
+      - name: Test
+        run: cargo test -p ${{ matrix.language }}
