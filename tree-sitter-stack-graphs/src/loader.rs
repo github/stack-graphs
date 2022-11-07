@@ -21,7 +21,7 @@ use tree_sitter::Language;
 use tree_sitter_graph::ast::File as TsgFile;
 use tree_sitter_graph::Variables;
 use tree_sitter_loader::Config as TsConfig;
-use tree_sitter_loader::LanguageConfiguration;
+use tree_sitter_loader::LanguageConfiguration as TSLanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
 
 use crate::CancellationFlag;
@@ -50,8 +50,9 @@ impl LoadPath {
     }
 }
 
-/// The loader is created from a tree-sitter configuration or list of search paths, an optional scope,
-/// and search paths for stack graphs definitions and builtins.
+/// The loader is created from either a tree-sitter configuration or a list of search paths, and an
+/// optional scope and search paths for stack graphs definitions and builtins; or a list of language
+/// configurations.
 ///
 /// The loader is called with a file path and optional file content and tries to find the language for
 /// that file. The loader will search for tree-sitter languages in the given search paths, or in current
@@ -66,13 +67,11 @@ impl LoadPath {
 /// are always optional.
 ///
 /// Previously loaded languages are cached in the loader, so subsequent loads are fast.
-pub struct Loader {
-    loader: SupplementedTsLoader,
-    paths: Vec<PathBuf>,
-    scope: Option<String>,
-    tsg_paths: Vec<LoadPath>,
-    builtins_paths: Vec<LoadPath>,
-    cache: Vec<(Language, StackGraphLanguage)>,
+pub struct Loader(LoaderImpl);
+
+enum LoaderImpl {
+    Paths(PathLoader),
+    Provided(LanguageConfigurationsLoader),
 }
 
 impl Loader {
@@ -82,32 +81,286 @@ impl Loader {
         tsg_paths: Vec<LoadPath>,
         builtins_paths: Vec<LoadPath>,
     ) -> Result<Self, LoadError> {
-        Ok(Self {
+        Ok(Self(LoaderImpl::Paths(PathLoader {
             loader: SupplementedTsLoader::new()?,
             paths,
             scope,
             tsg_paths,
             builtins_paths,
             cache: Vec::new(),
-        })
+        })))
     }
 
-    pub fn from_config(
+    pub fn from_tree_sitter_configuration(
         config: &TsConfig,
         scope: Option<String>,
         tsg_paths: Vec<LoadPath>,
         builtins_paths: Vec<LoadPath>,
     ) -> Result<Self, LoadError> {
-        Ok(Self {
+        Ok(Self(LoaderImpl::Paths(PathLoader {
             loader: SupplementedTsLoader::new()?,
-            paths: Self::config_paths(config)?,
+            paths: PathLoader::config_paths(config)?,
             scope,
             tsg_paths,
             builtins_paths,
             cache: Vec::new(),
-        })
+        })))
     }
 
+    pub fn from_language_configurations(
+        configurations: Vec<LanguageConfiguration>,
+        scope: Option<String>,
+    ) -> Result<Self, LoadError> {
+        let configurations = configurations
+            .into_iter()
+            .filter(|lc| scope.is_none() || lc.scope == scope)
+            .collect();
+        Ok(Self(LoaderImpl::Provided(LanguageConfigurationsLoader {
+            configurations,
+            cache: Vec::new(),
+        })))
+    }
+
+    /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
+    /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
+    /// is necessary, as it will not attempt to load the TSG file.
+    pub fn load_tree_sitter_language_for_file(
+        &mut self,
+        path: &Path,
+        content: Option<&str>,
+    ) -> Result<Option<tree_sitter::Language>, LoadError> {
+        match &mut self.0 {
+            LoaderImpl::Paths(loader) => loader.load_tree_sitter_language_for_file(path, content),
+            LoaderImpl::Provided(loader) => {
+                loader.load_tree_sitter_language_for_file(path, content)
+            }
+        }
+    }
+
+    /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
+    pub fn load_for_file(
+        &mut self,
+        path: &Path,
+        content: Option<&str>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
+        match &mut self.0 {
+            LoaderImpl::Paths(loader) => loader.load_for_file(path, content, cancellation_flag),
+            LoaderImpl::Provided(loader) => loader.load_for_file(path, content, cancellation_flag),
+        }
+    }
+
+    pub fn load_globals_from_config_path(
+        path: &Path,
+        globals: &mut Variables,
+    ) -> Result<(), LoadError> {
+        let conf = Ini::load_from_file(path)?;
+        Self::load_globals_from_config(&conf, globals)
+    }
+
+    pub fn load_globals_from_config_str(
+        config: &str,
+        globals: &mut Variables,
+    ) -> Result<(), LoadError> {
+        if config.is_empty() {
+            return Ok(());
+        }
+        let conf = Ini::load_from_str(config).map_err(ini::Error::Parse)?;
+        Self::load_globals_from_config(&conf, globals)
+    }
+
+    fn load_tsg(language: Language, tsg_source: &str) -> Result<TsgFile, LoadError> {
+        let tsg = TsgFile::from_str(language, &tsg_source)?;
+        Ok(tsg)
+    }
+
+    fn load_builtins(
+        sgl: &mut StackGraphLanguage,
+        path: &Path,
+        source: &str,
+        config: &str,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), LoadError> {
+        let mut graph = StackGraph::new();
+        let file = graph.add_file(&path.to_string_lossy()).unwrap();
+        let mut globals = Variables::new();
+        Self::load_globals_from_config_str(&config, &mut globals)?;
+        sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)?;
+        sgl.builtins_mut().add_from_graph(&graph).unwrap();
+        return Ok(());
+    }
+
+    fn load_globals_from_config(conf: &Ini, globals: &mut Variables) -> Result<(), LoadError> {
+        if let Some(globals_section) = conf.section(Some("globals")) {
+            for (name, value) in globals_section.iter() {
+                globals.add(name.into(), value.into()).map_err(|_| {
+                    LoadError::Reader(
+                        format!("Duplicate global variable {} in config", name).into(),
+                    )
+                })?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum LoadError {
+    #[error("{0}")]
+    Cancelled(&'static str),
+    #[error(transparent)]
+    Config(#[from] ini::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Language(#[from] crate::LanguageError),
+    #[error("No languages found {0}")]
+    NoLanguagesFound(String),
+    #[error("No TSG file found")]
+    NoTsgFound,
+    #[error(transparent)]
+    Reader(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    StackGraph(crate::LoadError),
+    #[error(transparent)]
+    TsgParse(#[from] tree_sitter_graph::ParseError),
+    #[error(transparent)]
+    TreeSitter(anyhow::Error),
+}
+
+impl From<crate::LoadError> for LoadError {
+    fn from(value: crate::LoadError) -> Self {
+        match value {
+            crate::LoadError::Cancelled(at) => Self::Cancelled(at),
+            other => Self::StackGraph(other),
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// provided languages loader
+
+#[derive(Clone)]
+pub struct LanguageConfiguration {
+    pub language: Language,
+    pub scope: Option<String>,
+    pub content_regex: Option<Regex>,
+    pub file_types: Vec<String>,
+    pub tsg_source: String,
+    pub builtins: Option<BuiltinsConfiguration>,
+}
+
+#[derive(Clone)]
+pub struct BuiltinsConfiguration {
+    pub source: String,
+    pub config: String,
+}
+
+impl LanguageConfiguration {
+    pub fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
+        matches_file(&self.file_types, &self.content_regex, path, content).is_some()
+    }
+
+    pub fn to_stack_graph_language(
+        &self,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<StackGraphLanguage, LoadError> {
+        let tsg = Loader::load_tsg(self.language, &self.tsg_source)?;
+        let mut sgl = StackGraphLanguage::new(self.language, tsg)?;
+        if let Some(builtins) = &self.builtins {
+            builtins.load_into_stack_graph_language(&mut sgl, cancellation_flag)?;
+        }
+        Ok(sgl)
+    }
+}
+
+impl BuiltinsConfiguration {
+    pub fn load_into_stack_graph_language(
+        &self,
+        sgl: &mut StackGraphLanguage,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), LoadError> {
+        Loader::load_builtins(
+            sgl,
+            &Path::new("<builtins>"),
+            &self.source,
+            &self.config,
+            cancellation_flag,
+        )
+    }
+}
+
+struct LanguageConfigurationsLoader {
+    configurations: Vec<LanguageConfiguration>,
+    cache: Vec<(Language, StackGraphLanguage)>,
+}
+
+impl LanguageConfigurationsLoader {
+    /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
+    /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
+    /// is necessary, as it will not attempt to load the TSG file.
+    pub fn load_tree_sitter_language_for_file(
+        &mut self,
+        path: &Path,
+        content: Option<&str>,
+    ) -> Result<Option<tree_sitter::Language>, LoadError> {
+        let configuration = match self
+            .configurations
+            .iter()
+            .find(|l| l.matches_file(path, content))
+        {
+            Some(language) => language,
+            None => return Ok(None),
+        };
+        Ok(Some(configuration.language))
+    }
+
+    /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
+    pub fn load_for_file(
+        &mut self,
+        path: &Path,
+        content: Option<&str>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Option<&mut StackGraphLanguage>, LoadError> {
+        let configuration = match self
+            .configurations
+            .iter()
+            .find(|l| l.matches_file(path, content))
+        {
+            Some(language) => language,
+            None => return Ok(None),
+        };
+        // the borrow checker is a hard master...
+        let index = self
+            .cache
+            .iter()
+            .position(|e| &e.0 == &configuration.language);
+        let index = match index {
+            Some(index) => index,
+            None => {
+                let sgl = configuration.to_stack_graph_language(cancellation_flag)?;
+                self.cache.push((configuration.language, sgl));
+                self.cache.len() - 1
+            }
+        };
+        let sgl = &mut self.cache[index].1;
+        Ok(Some(sgl))
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// path based loader
+
+struct PathLoader {
+    loader: SupplementedTsLoader,
+    paths: Vec<PathBuf>,
+    scope: Option<String>,
+    tsg_paths: Vec<LoadPath>,
+    builtins_paths: Vec<LoadPath>,
+    cache: Vec<(Language, StackGraphLanguage)>,
+}
+
+impl PathLoader {
     // Adopted from tree_sitter_loader::Loader::load
     fn config_paths(config: &TsConfig) -> Result<Vec<PathBuf>, LoadError> {
         if config.parser_directories.is_empty() {
@@ -133,9 +386,6 @@ impl Loader {
         Ok(paths)
     }
 
-    /// Load a Tree-sitter language for the given file. Loading is based on the loader configuration and the given file path.
-    /// Most users should use [`Self::load_for_file`], but this method can be useful if only the underlying Tree-sitter language
-    /// is necessary, as it will not attempt to load the TSG file.
     pub fn load_tree_sitter_language_for_file(
         &mut self,
         path: &Path,
@@ -147,7 +397,6 @@ impl Loader {
         Ok(None)
     }
 
-    /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
     pub fn load_for_file(
         &mut self,
         path: &Path,
@@ -244,16 +493,11 @@ impl Loader {
                 tsg_path.set_extension("tsg");
             }
             if tsg_path.exists() {
-                return self.load_tsg(language.language, &tsg_path);
+                let tsg_source = std::fs::read_to_string(tsg_path)?;
+                return Loader::load_tsg(language.language, &tsg_source);
             }
         }
         return Err(LoadError::NoTsgFound);
-    }
-
-    fn load_tsg(&self, language: Language, tsg_path: &Path) -> Result<TsgFile, LoadError> {
-        let tsg_source = std::fs::read_to_string(tsg_path)?;
-        let tsg = TsgFile::from_str(language, &tsg_source)?;
-        Ok(tsg)
     }
 
     // Builtins are loaded from queries/builtins.EXT and an optional queries/builtins.cfg configuration.
@@ -268,98 +512,32 @@ impl Loader {
         for builtins_path in &self.builtins_paths {
             let mut builtins_path = builtins_path.get_for_grammar(&language.root_path);
             if builtins_path.exists() && !builtins_path.is_dir() {
-                return self.load_builtins(sgl, &builtins_path, cancellation_flag);
+                return Self::load_builtins_from_path(sgl, &builtins_path, cancellation_flag);
             }
             for extension in &language.file_types {
                 builtins_path.set_extension(extension);
                 if builtins_path.exists() && !builtins_path.is_dir() {
-                    return self.load_builtins(sgl, &builtins_path, cancellation_flag);
+                    return Self::load_builtins_from_path(sgl, &builtins_path, cancellation_flag);
                 }
             }
         }
         Ok(())
     }
 
-    fn load_builtins(
-        &self,
+    fn load_builtins_from_path(
         sgl: &mut StackGraphLanguage,
         builtins_path: &Path,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError> {
-        let mut graph = StackGraph::new();
-        let file = graph.add_file(&builtins_path.to_string_lossy()).unwrap();
         let source = std::fs::read_to_string(builtins_path.clone())?;
-        let mut globals = Variables::new();
         let mut config_path = builtins_path.to_path_buf();
         config_path.set_extension("cfg");
-        if config_path.exists() {
-            Self::load_globals_from_config_path(&config_path, &mut globals)?;
-        }
-        sgl.build_stack_graph_into(&mut graph, file, &source, &globals, cancellation_flag)?;
-        sgl.builtins_mut().add_from_graph(&graph).unwrap();
-        return Ok(());
-    }
-
-    pub fn load_globals_from_config_path(
-        path: &Path,
-        globals: &mut Variables,
-    ) -> Result<(), LoadError> {
-        let conf = Ini::load_from_file(path)?;
-        Self::load_globals_from_config(&conf, globals)
-    }
-
-    pub fn load_globals_from_config_str(
-        config: &str,
-        globals: &mut Variables,
-    ) -> Result<(), LoadError> {
-        let conf = Ini::load_from_str(config).map_err(ini::Error::Parse)?;
-        Self::load_globals_from_config(&conf, globals)
-    }
-
-    fn load_globals_from_config(conf: &Ini, globals: &mut Variables) -> Result<(), LoadError> {
-        if let Some(globals_section) = conf.section(Some("globals")) {
-            for (name, value) in globals_section.iter() {
-                globals.add(name.into(), value.into()).map_err(|_| {
-                    LoadError::Reader(
-                        format!("Duplicate global variable {} in config", name).into(),
-                    )
-                })?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum LoadError {
-    #[error("{0}")]
-    Cancelled(&'static str),
-    #[error(transparent)]
-    Config(#[from] ini::Error),
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Language(#[from] crate::LanguageError),
-    #[error("No languages found {0}")]
-    NoLanguagesFound(String),
-    #[error("No TSG file found")]
-    NoTsgFound,
-    #[error(transparent)]
-    Reader(Box<dyn std::error::Error + Send + Sync>),
-    #[error(transparent)]
-    StackGraph(crate::LoadError),
-    #[error(transparent)]
-    TsgParse(#[from] tree_sitter_graph::ParseError),
-    #[error(transparent)]
-    TreeSitter(anyhow::Error),
-}
-
-impl From<crate::LoadError> for LoadError {
-    fn from(value: crate::LoadError) -> Self {
-        match value {
-            crate::LoadError::Cancelled(at) => Self::Cancelled(at),
-            other => Self::StackGraph(other),
-        }
+        let config = if config_path.exists() {
+            std::fs::read_to_string(builtins_path.clone())?
+        } else {
+            "".into()
+        };
+        Loader::load_builtins(sgl, builtins_path, &source, &config, cancellation_flag)
     }
 }
 
@@ -417,28 +595,7 @@ impl SupplementedLanguage {
 
     // Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
     pub fn matches_file(&self, path: &Path, content: Option<&str>) -> Option<isize> {
-        // Check path extension
-        if !path
-            .extension()
-            .and_then(OsStr::to_str)
-            .map_or(false, |ext| self.file_types.iter().any(|ft| ft == ext))
-        {
-            return None;
-        }
-
-        // Apply content regex
-        if let (Some(file_content), Some(content_regex)) = (content, &self.content_regex) {
-            // If the language configuration has a content regex, assign
-            // a score based on the length of the first match.
-            if let Some(mat) = content_regex.find(&file_content) {
-                let score = (mat.end() - mat.start()) as isize;
-                return Some(score);
-            } else {
-                return None;
-            }
-        }
-
-        Some(0isize)
+        matches_file(&self.file_types, &self.content_regex, path, content)
     }
 
     // Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
@@ -461,8 +618,8 @@ impl SupplementedLanguage {
     }
 }
 
-impl From<(Language, &LanguageConfiguration<'_>)> for SupplementedLanguage {
-    fn from((language, config): (Language, &LanguageConfiguration)) -> Self {
+impl From<(Language, &TSLanguageConfiguration<'_>)> for SupplementedLanguage {
+    fn from((language, config): (Language, &TSLanguageConfiguration)) -> Self {
         Self {
             scope: config.scope.clone(),
             content_regex: config.content_regex.clone(),
@@ -471,4 +628,35 @@ impl From<(Language, &LanguageConfiguration<'_>)> for SupplementedLanguage {
             language,
         }
     }
+}
+
+// Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
+pub fn matches_file(
+    file_types: &Vec<String>,
+    content_regex: &Option<Regex>,
+    path: &Path,
+    content: Option<&str>,
+) -> Option<isize> {
+    // Check path extension
+    if !path
+        .extension()
+        .and_then(OsStr::to_str)
+        .map_or(false, |ext| file_types.iter().any(|ft| ft == ext))
+    {
+        return None;
+    }
+
+    // Apply content regex
+    if let (Some(file_content), Some(content_regex)) = (content, &content_regex) {
+        // If the language configuration has a content regex, assign
+        // a score based on the length of the first match.
+        if let Some(mat) = content_regex.find(&file_content) {
+            let score = (mat.end() - mat.start()) as isize;
+            return Some(score);
+        } else {
+            return None;
+        }
+    }
+
+    Some(0isize)
 }

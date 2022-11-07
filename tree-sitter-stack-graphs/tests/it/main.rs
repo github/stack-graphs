@@ -15,6 +15,7 @@ use tree_sitter_stack_graphs::StackGraphLanguage;
 
 mod builder;
 mod edges;
+mod loader;
 mod nodes;
 mod test;
 

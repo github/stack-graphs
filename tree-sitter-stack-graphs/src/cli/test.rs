@@ -8,6 +8,7 @@
 use anyhow::anyhow;
 use anyhow::Context as _;
 use clap::ArgEnum;
+use clap::Args;
 use clap::ValueHint;
 use colored::Colorize as _;
 use stack_graphs::arena::Handle;
@@ -18,18 +19,17 @@ use stack_graphs::paths::Paths;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
-use tree_sitter_stack_graphs::loader::Loader;
-use tree_sitter_stack_graphs::test::Test;
-use tree_sitter_stack_graphs::test::TestResult;
-use tree_sitter_stack_graphs::LoadError;
-use tree_sitter_stack_graphs::NoCancellation;
-use tree_sitter_stack_graphs::StackGraphLanguage;
 use walkdir::WalkDir;
 
-use crate::loader::LoaderArgs;
-use crate::util::map_parse_errors;
-use crate::util::path_exists;
-use crate::util::PathSpec;
+use crate::cli::util::map_parse_errors;
+use crate::cli::util::path_exists;
+use crate::cli::util::PathSpec;
+use crate::loader::Loader;
+use crate::test::Test;
+use crate::test::TestResult;
+use crate::LoadError;
+use crate::NoCancellation;
+use crate::StackGraphLanguage;
 
 /// Flag to control output
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -48,7 +48,7 @@ impl OutputMode {
 }
 
 /// Run tests
-#[derive(clap::Parser)]
+#[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
     Output filenames can be specified using placeholders based on the input file.
     The following placeholders are supported:
@@ -67,25 +67,22 @@ impl OutputMode {
     paths (including ones that are not valid Unicode) are accepted as arguments, and
     placeholders are correctly subtituted for all paths.
 "#)]
-pub struct Command {
-    #[clap(flatten)]
-    loader: LoaderArgs,
-
+pub struct TestArgs {
     /// Test file or directory paths.
     #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
-    tests: Vec<PathBuf>,
+    pub test_paths: Vec<PathBuf>,
 
     /// Hide passing tests.
     #[clap(long)]
-    hide_passing: bool,
+    pub hide_passing: bool,
 
     /// Hide failure error details.
     #[clap(long)]
-    hide_failure_errors: bool,
+    pub hide_failure_errors: bool,
 
     /// Show ignored files in output.
     #[clap(long)]
-    show_ignored: bool,
+    pub show_ignored: bool,
 
     /// Save graph for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -99,7 +96,7 @@ pub struct Command {
         require_equals = true,
         default_missing_value = "%n.graph.json"
     )]
-    save_graph: Option<PathSpec>,
+    pub save_graph: Option<PathSpec>,
 
     /// Save paths for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -113,7 +110,7 @@ pub struct Command {
         require_equals = true,
         default_missing_value = "%n.paths.json"
     )]
-    save_paths: Option<PathSpec>,
+    pub save_paths: Option<PathSpec>,
 
     /// Save visualization for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -127,43 +124,51 @@ pub struct Command {
         require_equals = true,
         default_missing_value = "%n.html"
     )]
-    save_visualization: Option<PathSpec>,
+    pub save_visualization: Option<PathSpec>,
 
     /// Controls when graphs, paths, or visualization are saved.
     #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
-    output_mode: OutputMode,
+    pub output_mode: OutputMode,
 }
 
-impl Command {
-    pub fn run(&self) -> anyhow::Result<()> {
-        let mut loader = self.loader.new_loader()?;
-        let mut total_failure_count = 0;
-        for test_path in &self.tests {
+impl TestArgs {
+    pub fn new(test_paths: Vec<PathBuf>) -> Self {
+        Self {
+            test_paths,
+            hide_passing: false,
+            hide_failure_errors: false,
+            show_ignored: false,
+            save_graph: None,
+            save_paths: None,
+            save_visualization: None,
+            output_mode: OutputMode::OnFailure,
+        }
+    }
+
+    pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+        let mut total_result = TestResult::new();
+        for test_path in &self.test_paths {
             if test_path.is_dir() {
                 let test_root = test_path;
-                for test_entry in WalkDir::new(test_path)
+                for test_entry in WalkDir::new(test_root)
                     .follow_links(true)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
                 {
                     let test_path = test_entry.path();
-                    total_failure_count +=
-                        self.run_test_with_context(test_root, test_path, &mut loader)?;
+                    let test_result = self.run_test_with_context(test_root, test_path, loader)?;
+                    total_result.absorb(test_result);
                 }
             } else {
                 let test_root = test_path.parent().unwrap();
-                total_failure_count +=
-                    self.run_test_with_context(test_root, test_path, &mut loader)?;
+                let test_result = self.run_test_with_context(test_root, test_path, loader)?;
+                total_result.absorb(test_result);
             }
         }
 
-        if total_failure_count > 0 {
-            return Err(anyhow!(
-                "{} assertion{} failed",
-                total_failure_count,
-                if total_failure_count == 1 { "" } else { "s" }
-            ));
+        if total_result.failure_count() > 0 {
+            return Err(anyhow!(total_result.to_string()));
         }
 
         Ok(())
@@ -175,7 +180,7 @@ impl Command {
         test_root: &Path,
         test_path: &Path,
         loader: &mut Loader,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<TestResult> {
         self.run_test(test_root, test_path, loader)
             .with_context(|| format!("Error running test {}", test_path.display()))
     }
@@ -186,7 +191,7 @@ impl Command {
         test_root: &Path,
         test_path: &Path,
         loader: &mut Loader,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<TestResult> {
         let source = std::fs::read_to_string(test_path)?;
         let sgl = match loader.load_for_file(test_path, Some(&source), &NoCancellation)? {
             Some(sgl) => sgl,
@@ -194,7 +199,7 @@ impl Command {
                 if self.show_ignored {
                     println!("{} {}", "⦵".dimmed(), test_path.display());
                 }
-                return Ok(0);
+                return Ok(TestResult::new());
             }
         };
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
@@ -235,7 +240,7 @@ impl Command {
                 success,
             )?;
         }
-        Ok(result.failure_count())
+        Ok(result)
     }
 
     fn load_builtins_into(

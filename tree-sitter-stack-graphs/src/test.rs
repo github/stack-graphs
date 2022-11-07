@@ -323,7 +323,7 @@ pub struct TestResult {
 }
 
 impl TestResult {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             failures: Vec::new(),
             success_count: 0,
@@ -359,6 +359,24 @@ impl TestResult {
     /// Total number of assertions that were run.
     pub fn count(&self) -> usize {
         self.success_count() + self.failure_count()
+    }
+
+    pub fn absorb(&mut self, other: TestResult) {
+        self.success_count += other.success_count;
+        let mut failures = other.failures;
+        self.failures.append(&mut failures);
+    }
+}
+
+impl std::fmt::Display for TestResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} tests: {} passed, {} failed",
+            self.count(),
+            self.success_count(),
+            self.failure_count()
+        )
     }
 }
 

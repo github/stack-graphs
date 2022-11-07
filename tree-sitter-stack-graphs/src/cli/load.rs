@@ -8,37 +8,49 @@
 use clap::Args;
 use std::path::PathBuf;
 use tree_sitter_config::Config as TsConfig;
-use tree_sitter_stack_graphs::loader::LoadError;
-use tree_sitter_stack_graphs::loader::LoadPath;
-use tree_sitter_stack_graphs::loader::Loader;
-use tree_sitter_stack_graphs::loader::DEFAULT_BUILTINS_PATHS;
-use tree_sitter_stack_graphs::loader::DEFAULT_TSG_PATHS;
 
+use crate::loader::LanguageConfiguration;
+use crate::loader::LoadError;
+use crate::loader::LoadPath;
+use crate::loader::Loader;
+use crate::loader::DEFAULT_BUILTINS_PATHS;
+use crate::loader::DEFAULT_TSG_PATHS;
+
+/// CLI arguments for creating a path based loader.
 #[derive(Args)]
-pub struct LoaderArgs {
+pub struct PathLoaderArgs {
     /// The TSG file to use for stack graph construction.
     /// If the file extension is omitted, `.tsg` is implicitly added.
     #[clap(long, value_name = "TSG_PATH")]
-    tsg: Option<PathBuf>,
+    pub tsg: Option<PathBuf>,
 
     /// The builtins file to use for stack graph construction.
     /// If the file extension is omitted, the file extension of the language is implicitly added.
     #[clap(long, value_name = "BUILTINS_PATH")]
-    builtins: Option<PathBuf>,
+    pub builtins: Option<PathBuf>,
 
     /// The path to look for tree-sitter grammars.
     /// Can be specified multiple times.
     #[clap(long, value_name = "GRAMMAR_PATH")]
-    grammar: Vec<PathBuf>,
+    pub grammar: Vec<PathBuf>,
 
     /// The scope of the tree-sitter grammar.
     /// See https://tree-sitter.github.io/tree-sitter/syntax-highlighting#basics for details.
     #[clap(long, value_name = "SCOPE")]
-    scope: Option<String>,
+    pub scope: Option<String>,
 }
 
-impl LoaderArgs {
-    pub fn new_loader(&self) -> Result<Loader, LoadError> {
+impl PathLoaderArgs {
+    pub fn new() -> Self {
+        Self {
+            tsg: None,
+            builtins: None,
+            grammar: Vec::new(),
+            scope: None,
+        }
+    }
+
+    pub fn get(&self) -> Result<Loader, LoadError> {
         let tsg_paths = match &self.tsg {
             Some(tsg_path) => vec![LoadPath::Regular(tsg_path.clone())],
             None => DEFAULT_TSG_PATHS.clone(),
@@ -59,13 +71,33 @@ impl LoaderArgs {
             let loader_config = TsConfig::load()
                 .and_then(|v| v.get())
                 .map_err(LoadError::TreeSitter)?;
-            Loader::from_config(
+            Loader::from_tree_sitter_configuration(
                 &loader_config,
                 self.scope.clone(),
                 tsg_paths,
                 builtins_paths,
             )?
         };
+        Ok(loader)
+    }
+}
+
+/// CLI arguments for creating a path based loader.
+#[derive(Args)]
+pub struct LanguageConfigurationsLoaderArgs {
+    /// The scope of the tree-sitter grammar.
+    /// See https://tree-sitter.github.io/tree-sitter/syntax-highlighting#basics for details.
+    #[clap(long, value_name = "SCOPE")]
+    scope: Option<String>,
+}
+
+impl LanguageConfigurationsLoaderArgs {
+    pub fn new() -> Self {
+        Self { scope: None }
+    }
+
+    pub fn get(&self, configurations: Vec<LanguageConfiguration>) -> Result<Loader, LoadError> {
+        let loader = Loader::from_language_configurations(configurations, self.scope.clone())?;
         Ok(loader)
     }
 }

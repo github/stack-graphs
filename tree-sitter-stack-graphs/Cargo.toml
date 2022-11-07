@@ -22,7 +22,7 @@ name = "tree-sitter-stack-graphs"
 required-features = ["cli"]
 
 [features]
-cli = ["clap", "colored", "dialoguer", "env_logger", "indoc", "stack-graphs/json", "tree-sitter-config", "walkdir"]
+cli = ["clap", "colored", "dialoguer", "env_logger", "indoc", "pathdiff", "stack-graphs/json", "tree-sitter-config", "walkdir"]
 
 [dependencies]
 anyhow = "1.0"
@@ -36,6 +36,7 @@ itertools = "0.10"
 lazy_static = "1.4"
 log = "0.4"
 lsp-positions = { version="0.3", path="../lsp-positions" }
+pathdiff = { version = "0.2.1", optional = true }
 regex = "1"
 rust-ini = "0.18"
 stack-graphs = { version="0.10", path="../stack-graphs" }

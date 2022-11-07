@@ -6,36 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::Result;
-use clap::Parser;
-use clap::Subcommand;
-
-pub(crate) const MAX_PARSE_ERRORS: usize = 5;
-
-#[derive(Parser)]
-#[clap(about, version)]
-struct Cli {
-    #[clap(subcommand)]
-    command: Commands,
-}
-
-mod init;
-mod loader;
-mod parse;
-mod test;
-mod util;
-
-#[derive(Subcommand)]
-enum Commands {
-    Init(init::Command),
-    Parse(parse::Command),
-    Test(test::Command),
-}
+use tree_sitter_stack_graphs::cli::PathLoadingCli;
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-    match &cli.command {
-        Commands::Init(cmd) => cmd.run(),
-        Commands::Parse(cmd) => cmd.run(),
-        Commands::Test(cmd) => cmd.run(),
-    }
+    PathLoadingCli::main()
 }
