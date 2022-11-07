@@ -1,0 +1,10 @@
+export {};
+
+namespace N {
+  export let x = 42;
+}
+
+namespace N {
+  export let y = x;
+  //             ^ defined: 4
+}

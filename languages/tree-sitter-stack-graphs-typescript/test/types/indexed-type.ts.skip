@@ -1,0 +1,13 @@
+type T = "T";
+
+type U = { T: { f: number } };
+
+let x: U[T];
+//     ^ defined: 3
+//       ^ defined: 1
+
+  x.f;
+//^ defined: 5
+//  ^ defined: 3
+
+export {};

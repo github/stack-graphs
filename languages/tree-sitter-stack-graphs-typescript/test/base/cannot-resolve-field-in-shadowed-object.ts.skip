@@ -1,0 +1,14 @@
+let x = {
+    f: 11
+};
+
+{
+    let x = {
+    };
+
+    x.f;
+  //^ defined: 6
+  //  ^ defined:
+}
+
+export {};
