@@ -1,2 +1,3 @@
 /Cargo.lock
 *.html
+.tree-sitter-java*

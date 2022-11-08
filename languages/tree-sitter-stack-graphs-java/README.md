@@ -10,8 +10,7 @@ The project is organized as follows:
 - Tests are put into the `tests` directory.
 
 Make sure all development dependencies are installed by running:
-
-    cargo install --path .
+    ./bootstrap
 
 Run all tests in the project by executing the following:
 
@@ -23,7 +22,7 @@ Parse and test a single file by executing the following commands:
 
 Additional flags can be passed to these commands as well. For example, to generate a visualization for the test, execute:
 
-    <!-- TODO: allow this option via cargo -->
+    ./run -V
 
 To generate the visualization regardless of test outcome, execute:
 
