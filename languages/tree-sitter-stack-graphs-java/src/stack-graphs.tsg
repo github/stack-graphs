@@ -1,0 +1,277 @@
+;;;;;;;;;;;;;;;;;;;
+;; Global Variables
+
+global FILE_PATH
+global ROOT_NODE
+global JUMP_TO_SCOPE_NODE
+
+;;;;;;;;;;;;;;;;;;;;;;;
+;; Attribute Shorthands
+
+attribute node_definition = node        => type = "pop_symbol", node_symbol = node, is_definition
+attribute node_reference = node         => type = "push_symbol", node_symbol = node, is_reference
+attribute pop_node = node               => type = "pop_symbol", node_symbol = node
+attribute pop_scoped_node = node        => type = "pop_scoped_symbol", node_symbol = node
+attribute pop_scoped_symbol = symbol    => type = "pop_scoped_symbol", symbol = symbol
+attribute pop_symbol = symbol           => type = "pop_symbol", symbol = symbol
+attribute push_node = node              => type = "push_symbol", node_symbol = node
+attribute push_scoped_node = node       => type = "push_scoped_symbol", node_symbol = node
+attribute push_scoped_symbol = symbol   => type = "push_scoped_symbol", symbol = symbol
+attribute push_symbol = symbol          => type = "push_symbol", symbol = symbol
+attribute scoped_node_definition = node => type = "pop_scoped_symbol", node_symbol = node, is_definition
+attribute scoped_node_reference = node  => type = "push_scoped_symbol", node_symbol = node, is_reference
+attribute symbol_definition = symbol    => type = "pop_symbol", symbol = symbol, is_definition
+attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol, is_reference
+
+attribute node_symbol = node            => symbol = (source-text node), source_node = node
+
+; ######                                                   
+; #     # #####   ####   ####  #####    ##   #    #  ####  
+; #     # #    # #    # #    # #    #  #  #  ##  ## #      
+; ######  #    # #    # #      #    # #    # # ## #  ####  
+; #       #####  #    # #  ### #####  ###### #    #      # 
+; #       #   #  #    # #    # #   #  #    # #    # #    # 
+; #       #    #  ####   ####  #    # #    # #    #  ####  
+;
+; ########################################################
+
+(program)@prog {
+  node @prog.defs
+  node @prog.before_scope
+  node @prog.after_scope
+  edge @prog.before_scope -> ROOT_NODE
+}
+
+(program (_)@declaration)@prog {
+  let @declaration.defs = @prog.defs
+}
+
+
+;; Class Expressions
+
+; class Bar extends Foo {
+;   baz() {}
+; }
+
+; class Foo {
+; }
+
+(class_declaration
+  name: (identifier) @name
+  body: (class_body) @class_body) @class {
+
+  node @name.pop
+  attr (@name.pop) node_definition = @name
+
+  edge @class.after_scope -> @class_body.before_scope
+  edge @class.defs -> @name.pop
+}
+
+(class_declaration
+  superclass: (superclass
+    (type_identifier) @identifier) @superclass) @class {
+
+    node @identifier.value
+    attr (@identifier.value) node_reference = @identifier
+
+    node @superclass.after_scope
+    node @superclass.before_scope
+
+    edge @class.after_scope -> @class.before_scope
+    edge @identifier.value -> @class.defs
+}
+
+(class_declaration
+  .
+  (_)@last_stmt) @class {
+  ; @class.before_scope resolves to stmt.before_scope
+  ; last_stmt is syntax node identifier
+  ; edge @class.before_scope -> @last_stmt.after_scope
+}
+
+(class_body) @class_body {
+  node @class_body.before_scope
+  node @class_body.after_scope
+}
+
+(field_declaration
+  declarator: (variable_declarator
+    name: (_) @name
+  )
+) @field_decl
+{
+  node @field_decl.scope
+  node @name.pop
+  attr (@name.pop) node_definition = @name
+  edge @field_decl.scope -> @name.pop
+}
+
+(field_declaration
+  .
+  (_)@first_stmt) @field_decl {
+    node @first_stmt.before_scope
+    edge @field_decl.scope -> @first_stmt.before_scope
+    ; edge @first_stmt.before_scope -> @field_decl.scope
+}
+
+(field_declaration
+  (_)@last_stmt
+  .
+  ) @field_decl {
+
+  ; edge @field_decl.scope -> @last_declaration.after_scope
+  ; edge @last_stmt.after_scope -> @field_decl.scope
+}
+
+
+(method_declaration
+  name: (identifier) @name) @method
+{
+  node @method.def
+
+  ;node @method.before_scope
+  ;node @method.after_scope
+  node @method.scope
+
+  ; edge @method.before_scope -> @method.after_scope
+  node pop
+  attr (pop) node_definition = @name
+  edge @method.scope -> pop
+
+  ; need an edge from class_body to method.def?
+  edge @method.def -> @method.scope
+}
+
+(method_declaration
+  .
+  (_)@last_stmt) @method {
+    node @last_stmt.before_scope
+    ; edge @last_stmt.before_scope -> @method.scope
+    edge @method.scope -> @last_stmt.before_scope
+}
+
+(method_declaration
+  (_)@first_stmt
+  .) @method {
+    edge @first_stmt.before_scope -> @method.scope
+}
+
+(class_body
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+  edge @right_stmt.scope -> @left_stmt.scope
+}
+
+(class_body
+  .
+  (_)@first_decl)@class_body {
+
+  ; first_decl is sometimes field_declaration and sometimes method_declaration
+  ; TODO: commented out line 194, update
+  ; edge @first_decl.scope -> @class_body.before_scope
+  ; edge @class_body.after_scope -> @class_body.before_scope
+}
+
+(class_body
+  (_)@last_stmt
+  .) @class_body {
+    ; node @first_stmt.before_scope
+    ; edge @class_body.after_scope -> @last_stmt.scope
+    ; edge @class_body.after_scope -> @last_stmt.def
+    ; edge @class_body.after_scope -> @last_stmt.before_scope
+}
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Expressions and Statements
+
+(block) @block {
+  node @block.before_scope
+  node @block.after_scope
+}
+
+(block
+  (_) @left
+  .
+  (_) @right
+)
+{
+  edge @right.before_scope -> @left.after_scope
+}
+
+(block
+  .
+  (_) @first) @block {
+  edge @first.before_scope -> @block.before_scope
+}
+
+(block
+  (_) @last
+  . ) @block {
+  edge @block.after_scope -> @last.after_scope
+}
+
+;;;;;;;;;;;;;
+;; Statements
+
+(statement) @stmt
+{
+  node @stmt.before_scope
+  node @stmt.after_scope
+}
+
+(local_variable_declaration
+  declarator: (variable_declarator
+    name: (_) @name
+  )
+) @local_var
+{
+  node pop
+  attr (pop) node_definition = @name
+  edge @local_var.after_scope -> pop
+  edge @local_var.after_scope -> @local_var.before_scope
+}
+
+(local_variable_declaration
+  declarator: (variable_declarator
+    value: (_) @value
+  )
+) @local_var
+{
+  node @value.before_scope
+  edge @value.before_scope -> @local_var.before_scope
+}
+
+(expression_statement (_) @expr) @expr_stmt
+{
+  edge @expr.before_scope -> @expr_stmt.before_scope
+}
+
+(primary_expression/identifier) @ident
+{
+  node @ident.value
+  attr (@ident.value) node_reference = @ident
+  node @ident.before_scope
+  node @ident.after_scope
+
+  ; edge @ident.after_scope -> @ident.before_scope
+  edge @ident.value -> @ident.before_scope
+}
+
+;;;;;;;;;;;
+;; Comments
+
+(line_comment)@line_comment {
+  node @line_comment.before_scope
+  node @line_comment.after_scope
+
+  edge @line_comment.after_scope -> @line_comment.before_scope
+}
+
+(block_comment)@block_comment {
+  node @block_comment.before_scope
+  node @block_comment.after_scope
+
+  edge @block_comment.after_scope -> @block_comment.before_scope
+}
