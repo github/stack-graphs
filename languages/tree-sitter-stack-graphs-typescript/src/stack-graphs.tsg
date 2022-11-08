@@ -170,7 +170,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;
 ; For example, assuming a node CONFIG_SCOPE in project `MyProject`, configure `./src` as rootDir as follows:
 ;
-;     CONFIG_SCOPE -> ↑"%M" -> ↑"src" -> CONFIG_SCOPE
+;     CONFIG_SCOPE -> ↓"src" -> ↓"%M" -> CONFIG_SCOPE
 ;
 ; For example, assuming a node CONFIG_SCOPE in project `MyProject`, map package `core` to `./src/app_core` as follows:
 ;
