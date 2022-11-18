@@ -361,7 +361,7 @@ where
 /// Contains a set of handles, encoded efficiently using a bit set.
 #[repr(C)]
 pub struct HandleSet<T> {
-    elements: BitVec<bitvec::order::Lsb0, u32>,
+    elements: BitVec<u32, bitvec::order::Lsb0>,
     _phantom: PhantomData<T>,
 }
 
@@ -409,7 +409,7 @@ impl<T> HandleSet<T> {
 
     /// Returns a pointer to this set's storage.
     pub(crate) fn as_ptr(&self) -> *const u32 {
-        self.elements.as_raw_ptr()
+        self.elements.as_bitptr().pointer()
     }
 
     /// Returns the number of instances stored in this arena.

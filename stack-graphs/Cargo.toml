@@ -21,7 +21,7 @@ json = ["serde", "serde_json"]
 test = false
 
 [dependencies]
-bitvec = "0.22"
+bitvec = "1.0"
 controlled-option = "0.4"
 either = "1.6"
 fxhash = "0.2"
