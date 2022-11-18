@@ -67,6 +67,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @class.defs -> @name.pop
 }
 
+(method_invocation
+  object: (super) @super
+  name: (identifier) @method_name) @method_invocation {
+
+  node @method_name.value
+  attr (@method_name.value) node_reference = @method_name
+  ; TODO: this is wrong, it points to the call in the method rather than the one in the class that's being extended
+  edge @method_name.value -> @method_invocation.before_scope
+}
+
 (class_declaration
   superclass: (superclass
     (type_identifier) @identifier) @superclass) @class {
@@ -86,7 +96,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (_)@last_stmt) @class {
   ; @class.before_scope resolves to stmt.before_scope
   ; last_stmt is syntax node identifier
-  ; edge @class.before_scope -> @last_stmt.after_scope
+  ; edge @class.before_scope -> @last_stmt.before_scope
 }
 
 (class_body) @class_body {
@@ -123,13 +133,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; edge @last_stmt.after_scope -> @field_decl.scope
 }
 
+(method_invocation) @method_invocation
+{
+  node @method_invocation.before_scope
+  node @method_invocation.after_scope
+}
 
 (method_declaration
   name: (identifier) @name) @method
 {
   node @method.def
 
-  ;node @method.before_scope
+  node @method.before_scope
   ;node @method.after_scope
   node @method.scope
 
@@ -169,7 +184,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; first_decl is sometimes field_declaration and sometimes method_declaration
   ; TODO: commented out line 194, update
-  ; edge @first_decl.scope -> @class_body.before_scope
+  ; edge @first_decl.scope -> @class_body.after_scope
   ; edge @class_body.after_scope -> @class_body.before_scope
 }
 
@@ -265,6 +280,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (line_comment)@line_comment {
   node @line_comment.before_scope
   node @line_comment.after_scope
+  node @line_comment.scope
 
   edge @line_comment.after_scope -> @line_comment.before_scope
 }

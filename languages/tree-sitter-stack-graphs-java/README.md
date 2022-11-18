@@ -24,12 +24,4 @@ Additional flags can be passed to these commands as well. For example, to genera
 
     ./run -V
 
-To generate the visualization regardless of test outcome, execute:
-
-    <!-- TODO -->
-
-These commands should be enough for regular development. If necessary, the `tree-sitter-stack-graphs` command can be invoked directly as well, by executing:
-
-    npx tree-sitter-stack-graphs
-
 Go to https://crates.io/crates/tree-sitter-stack-graphs for links to examples and documentation.
