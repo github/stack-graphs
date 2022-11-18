@@ -264,7 +264,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     }
     "index$" {
       ; do not add a component, simply make the last one a definition
-      attr (mod_scope) is_definition, source_node = @prog
+      attr (mod_scope) is_definition, source_node = @prog, empty_source_span
       ; expose exports via module parent
       edge mod_scope -> @prog.exports
     }
@@ -274,7 +274,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       attr (@prog.mod_def__ns) pop_symbol = "%M"
       edge @prog.mod_def__ns -> @prog.mod_def
       ;
-      attr (@prog.mod_def) symbol_definition = $1, source_node = @prog
+      attr (@prog.mod_def) symbol_definition = $1, source_node = @prog, empty_source_span
       ; expose exports via module definition
       edge @prog.mod_def -> @prog.exports
     }
