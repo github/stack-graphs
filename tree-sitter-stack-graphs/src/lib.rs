@@ -145,6 +145,21 @@
 //! (the entirety of the function definition) and for the _name_ of the definition (the content of
 //! the function's `name`).
 //!
+//! Adding the `empty_source_span` attribute will use an empty source span located at the start of the
+//! span of the `source_node`. This can be useful when a proper reference or definition is desired,
+//! and thus `source_node` is required, but the span of the available source node is too large. For
+//! example, a module definition which is located at the start of the program, but does span the
+//! whole program:
+//!
+//! ``` skip
+//! (program)@prog {
+//!   ; ...
+//!   node mod_def
+//!   attr mod_def type = "pop_symbol", symbol = mod_name, is_definition, source_node = @prog, empty_source_span
+//!   ; ...
+//! }
+//! ```
+//!
 //! ### Connecting stack graph nodes with edges
 //!
 //! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
@@ -334,9 +349,10 @@ static SCOPE_TYPE: &'static str = "scope";
 
 // Node attribute names
 static DEBUG_ATTR_PREFIX: &'static str = "debug_";
+static EMPTY_SOURCE_SPAN_ATTR: &'static str = "empty_source_span";
 static IS_DEFINITION_ATTR: &'static str = "is_definition";
-static IS_EXPORTED_ATTR: &'static str = "is_exported";
 static IS_ENDPOINT_ATTR: &'static str = "is_endpoint";
+static IS_EXPORTED_ATTR: &'static str = "is_exported";
 static IS_REFERENCE_ATTR: &'static str = "is_reference";
 static SCOPE_ATTR: &'static str = "scope";
 static SOURCE_NODE_ATTR: &'static str = "source_node";
@@ -870,7 +886,13 @@ impl<'a> Builder<'a> {
             Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };
-        let span = self.span_calculator.for_node(source_node);
+        let mut span = self.span_calculator.for_node(source_node);
+        if match node.attributes.get(EMPTY_SOURCE_SPAN_ATTR) {
+            Some(empty_source_span) => empty_source_span.as_boolean()?,
+            None => false,
+        } {
+            span.end = span.start.clone();
+        }
         let containing_line = &self.source[span.start.containing_line.clone()];
         let containing_line = self.stack_graph.add_string(containing_line);
         let source_info = self.stack_graph.source_info_mut(node_handle);
@@ -912,6 +934,7 @@ impl<'a> Builder<'a> {
             let id = id.as_str();
             if !allowed_attributes.contains(id)
                 && id != SOURCE_NODE_ATTR
+                && id != EMPTY_SOURCE_SPAN_ATTR
                 && !id.starts_with(DEBUG_ATTR_PREFIX)
             {
                 eprintln!("Unexpected attribute {} on node of type {}", id, node_type);
