@@ -5,8 +5,21 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use tree_sitter_stack_graphs::loader::FileAnalyzer;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::File;
+use stack_graphs::graph::StackGraph;
+use tree_sitter_stack_graphs::FileAnalyzer;
 
 pub struct TsConfigAnalyzer {}
 
-impl FileAnalyzer for TsConfigAnalyzer {}
+impl FileAnalyzer for TsConfigAnalyzer {
+    fn build_stack_graph_into<'a>(
+        &'a self,
+        _stack_graph: &'a mut StackGraph,
+        _file: Handle<File>,
+        _source: &'a str,
+        _cancellation_flag: &'a dyn tree_sitter_stack_graphs::CancellationFlag,
+    ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
+        todo!()
+    }
+}

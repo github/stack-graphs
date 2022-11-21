@@ -578,6 +578,7 @@ impl<'a> Builder<'a> {
 pub trait CancellationFlag {
     fn flag(&self) -> Option<&AtomicUsize>;
 }
+
 impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), stack_graphs::CancellationError> {
         if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
@@ -586,6 +587,7 @@ impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
         Ok(())
     }
 }
+
 impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
         if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
@@ -596,6 +598,7 @@ impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
 }
 
 pub struct NoCancellation;
+
 impl CancellationFlag for NoCancellation {
     fn flag(&self) -> Option<&AtomicUsize> {
         None
@@ -932,4 +935,14 @@ impl<'a> Builder<'a> {
             }
         }
     }
+}
+
+pub trait FileAnalyzer {
+    fn build_stack_graph_into<'a>(
+        &'a self,
+        stack_graph: &'a mut StackGraph,
+        file: Handle<File>,
+        source: &'a str,
+        cancellation_flag: &'a dyn CancellationFlag,
+    ) -> Result<(), LoadError>;
 }

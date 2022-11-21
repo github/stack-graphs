@@ -26,6 +26,7 @@ use tree_sitter_loader::LanguageConfiguration as TSLanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
 
 use crate::CancellationFlag;
+use crate::FileAnalyzer;
 use crate::StackGraphLanguage;
 
 lazy_static! {
@@ -89,8 +90,6 @@ impl LanguageConfiguration {
         matches_file(&self.file_types, &self.content_regex, path, content).is_some()
     }
 }
-
-pub trait FileAnalyzer {}
 
 #[derive(Clone)]
 pub struct FileAnalyzers {
