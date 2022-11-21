@@ -9,6 +9,7 @@ use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use std::path::PathBuf;
+use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::NoCancellation;
@@ -33,6 +34,7 @@ fn can_load_from_provided_language_configuration() {
         file_types: vec!["py".into()],
         sgl,
         builtins: StackGraph::new(),
+        special_files: FileAnalyzers::new(),
     };
     let mut loader =
         Loader::from_language_configurations(vec![lc], None).expect("Expected loader to succeed");
