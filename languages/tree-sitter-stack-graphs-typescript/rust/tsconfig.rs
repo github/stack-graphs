@@ -6,6 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use glob::Pattern;
+use stack_graphs::graph::Node;
+use stack_graphs::graph::NodeID;
 use std::collections::HashMap;
 use std::path::Component;
 use std::path::Path;
@@ -22,16 +24,196 @@ pub struct TsConfigAnalyzer {}
 impl FileAnalyzer for TsConfigAnalyzer {
     fn build_stack_graph_into<'a>(
         &self,
-        _graph: &mut StackGraph,
-        _file: Handle<File>,
+        graph: &mut StackGraph,
+        file: Handle<File>,
         path: &Path,
         source: &str,
-        _all_paths: &mut dyn Iterator<Item = &'a Path>,
+        all_paths: &mut dyn Iterator<Item = &'a Path>,
         _globals: &HashMap<String, String>,
         _cancellation_flag: &dyn tree_sitter_stack_graphs::CancellationFlag,
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
-        let _tsc = TsConfig::parse_str(path, source).map_err(|_| LoadError::ParseError);
+        let tsc = TsConfig::parse_str(path, source).map_err(|_| LoadError::ParseError)?;
+
+        // local id generator
+        let mut ids = (1..).map(|id| NodeID::new_in_file(file, id));
+
+        // root node
+        let root = graph.node_for_id(NodeID::root()).unwrap();
+
+        // project scope
+        let proj_scope = graph.add_scope_node(ids.next().unwrap(), false).unwrap();
+        self.add_debug_name(graph, proj_scope, "proj_scope");
+
+        // project definition
+        let proj_def = self.add_pop(graph, root, "%Proj", &mut ids);
+        self.add_debug_name(graph, proj_def, "proj_def");
+        // TODO: add actual project name
+        self.add_edge(graph, proj_def, proj_scope, 0);
+
+        // project reference
+        let proj_ref = self.add_push(graph, root, "%Proj", &mut ids);
+        self.add_debug_name(graph, proj_ref, "proj_ref");
+        // TODO: add actual project name
+        self.add_edge(graph, proj_scope, proj_ref, 0);
+
+        // root directory
+        let root_dir_ref =
+            self.add_module_pushes(graph, &tsc.root_dir(all_paths), proj_scope, &mut ids);
+        self.add_debug_name(graph, root_dir_ref, "root_dir.ref");
+        self.add_edge(graph, root_dir_ref, proj_scope, 0);
+
+        // base URL
+        let base_url = tsc.base_url();
+        let base_url_pkg = self.add_pop(graph, proj_scope, "%Pkg", &mut ids);
+        self.add_debug_name(graph, base_url_pkg, "base_url.pkg_def");
+        let base_url_ref = self.add_module_pushes(graph, &base_url, proj_scope, &mut ids);
+        self.add_debug_name(graph, base_url_ref, "base_url.ref");
+        self.add_edge(graph, base_url_pkg, base_url_ref, 0);
+
+        // path mappings
+        for (from_idx, (from, tos)) in tsc.paths().iter().enumerate() {
+            let is_prefix = from.file_name().map_or(true, |n| n == "*");
+            let from = if is_prefix {
+                from.parent().unwrap()
+            } else {
+                &from
+            };
+            let mut from_def = self.add_pop(graph, proj_scope, "%Pkg", &mut ids);
+            self.add_debug_name(graph, from_def, &format!("paths[{}].pkg_def", from_idx));
+            from_def = self.add_module_pops(graph, from, from_def, &mut ids);
+            self.add_debug_name(graph, from_def, &format!("paths[{}].from_def", from_idx));
+            for (to_idx, to) in tos.iter().enumerate() {
+                let to = if is_prefix { to.parent().unwrap() } else { &to };
+                let to_ref = self.add_module_pushes(graph, to, proj_scope, &mut ids);
+                self.add_debug_name(
+                    graph,
+                    to_ref,
+                    &format!("paths[{}][{}].to_ref", from_idx, to_idx),
+                );
+                self.add_edge(graph, from_def, to_ref, 0);
+            }
+        }
+
         Ok(())
+    }
+}
+
+impl TsConfigAnalyzer {
+    fn add_debug_name<'a>(&'a self, graph: &'a mut StackGraph, node: Handle<Node>, name: &str) {
+        let key = graph.add_string("name");
+        let value = graph.add_string(&["tsconfig", name].join("."));
+        graph.debug_info_mut(node).add(key, value);
+    }
+
+    fn add_pop<'a>(
+        &'a self,
+        graph: &'a mut StackGraph,
+        from: Handle<Node>,
+        name: &str,
+        ids: &mut dyn Iterator<Item = NodeID>,
+    ) -> Handle<Node> {
+        let sym = graph.add_symbol(name);
+        let node = graph
+            .add_pop_symbol_node(ids.next().unwrap(), sym, false)
+            .unwrap();
+        graph.add_edge(from, node, 0);
+        node
+    }
+
+    fn add_push<'a>(
+        &'a self,
+        graph: &'a mut StackGraph,
+        to: Handle<Node>,
+        name: &str,
+        ids: &mut dyn Iterator<Item = NodeID>,
+    ) -> Handle<Node> {
+        let sym = graph.add_symbol(name);
+        let node = graph
+            .add_push_symbol_node(ids.next().unwrap(), sym, false)
+            .unwrap();
+        graph.add_edge(node, to, 0);
+        node
+    }
+
+    fn add_ns_pop<'a>(
+        &'a self,
+        graph: &'a mut StackGraph,
+        from: Handle<Node>,
+        ns: &str,
+        name: &str,
+        ids: &mut dyn Iterator<Item = NodeID>,
+    ) -> Handle<Node> {
+        let ns_node = self.add_pop(graph, from, ns, ids);
+        let pop_node = self.add_pop(graph, ns_node, name, ids);
+        pop_node
+    }
+
+    fn add_ns_push<'a>(
+        &'a self,
+        graph: &'a mut StackGraph,
+        to: Handle<Node>,
+        ns: &str,
+        name: &str,
+        ids: &mut dyn Iterator<Item = NodeID>,
+    ) -> Handle<Node> {
+        let ns_node = self.add_push(graph, to, ns, ids);
+        let push_node = self.add_push(graph, ns_node, name, ids);
+        push_node
+    }
+
+    fn add_edge<'a>(
+        &'a self,
+        graph: &'a mut StackGraph,
+        from: Handle<Node>,
+        to: Handle<Node>,
+        precedence: i32,
+    ) {
+        if from == to {
+            return;
+        }
+        graph.add_edge(from, to, precedence);
+    }
+
+    fn add_module_pops<'a>(
+        &'a self,
+        graph: &'a mut StackGraph,
+        path: &Path,
+        from: Handle<Node>,
+        ids: &mut dyn Iterator<Item = NodeID>,
+    ) -> Handle<Node> {
+        let mut node = from;
+        for c in path.components() {
+            match c {
+                Component::Normal(name) => {
+                    node = self.add_ns_pop(graph, node, "%M", &name.to_string_lossy(), ids);
+                }
+                _ => {
+                    eprintln!("add_module_definition: expecting normalized, non-escaping, relative paths, got {}", path.display())
+                }
+            }
+        }
+        node
+    }
+
+    fn add_module_pushes<'a>(
+        &'a self,
+        graph: &'a mut StackGraph,
+        path: &Path,
+        to: Handle<Node>,
+        ids: &mut dyn Iterator<Item = NodeID>,
+    ) -> Handle<Node> {
+        let mut node = to;
+        for c in path.components() {
+            match c {
+                Component::Normal(name) => {
+                    node = self.add_ns_push(graph, node, "%M", &name.to_string_lossy(), ids);
+                }
+                _ => {
+                    eprintln!("add_module_reference: expecting normalized, non-escaping, relative paths, got {}", path.display())
+                }
+            }
+        }
+        node
     }
 }
 
@@ -245,7 +427,7 @@ impl TsConfig {
         }
 
         if self.composite() {
-            return self.project_dir.clone();
+            return PathBuf::default();
         }
 
         let mut root_dir: Option<PathBuf> = None;
@@ -270,7 +452,7 @@ impl TsConfig {
             });
         }
 
-        root_dir.unwrap_or_else(|| self.project_dir.clone())
+        root_dir.unwrap_or(PathBuf::default())
     }
 
     // Get additional relative root directories. Non relative paths are ignored.
@@ -280,8 +462,9 @@ impl TsConfig {
         self.tsc.compiler_options.as_ref().map_or(vec![], |co| {
             co.root_dirs.as_ref().map_or(vec![], |rs| {
                 rs.iter()
-                    .map(PathBuf::from)
-                    .filter(|r| r.is_relative())
+                    .flat_map(|r| NormalizedRelativePath::from_str(r))
+                    .filter(|r| !r.escapes())
+                    .map(|r| r.into_path_buf())
                     .collect()
             })
         })
