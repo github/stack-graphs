@@ -37,13 +37,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (program)@prog {
   node @prog.defs
-  node @prog.before_scope
-  node @prog.after_scope
-  edge @prog.before_scope -> ROOT_NODE
+  node @prog.lexical_scope
+  edge @prog.lexical_scope -> ROOT_NODE
+  edge ROOT_NODE -> @prog.defs
 }
 
 (program (_)@declaration)@prog {
-  let @declaration.defs = @prog.defs
+  edge @prog.defs -> @declaration.defs
+  edge @declaration.lexical_scope -> @prog.lexical_scope
 }
 
 
@@ -61,47 +62,51 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   body: (class_body) @class_body) @class {
 
   node @name.pop
+  node @class.lexical_scope
+  node @class.defs
   attr (@name.pop) node_definition = @name
 
-  edge @class.after_scope -> @class_body.before_scope
+  edge @class_body.lexical_scope -> @class.lexical_scope
+  edge @class.lexical_scope -> @class.defs
   edge @class.defs -> @name.pop
-}
-
-(method_invocation
-  object: (super) @super
-  name: (identifier) @method_name) @method_invocation {
-
-  node @method_name.value
-  attr (@method_name.value) node_reference = @method_name
-  ; TODO: this is wrong, it points to the call in the method rather than the one in the class that's being extended
-  edge @method_name.value -> @method_invocation.before_scope
+  edge @name.pop -> @class_body.defs
 }
 
 (class_declaration
   superclass: (superclass
     (type_identifier) @identifier) @superclass) @class {
 
-    node @identifier.value
-    attr (@identifier.value) node_reference = @identifier
+    node @identifier.ref
+    attr (@identifier.ref) node_reference = @identifier
 
-    node @superclass.after_scope
-    node @superclass.before_scope
-
-    edge @class.after_scope -> @class.before_scope
-    edge @identifier.value -> @class.defs
+    edge @identifier.ref -> @class.lexical_scope
 }
 
-(class_declaration
-  .
-  (_)@last_stmt) @class {
-  ; @class.before_scope resolves to stmt.before_scope
-  ; last_stmt is syntax node identifier
-  ; edge @class.before_scope -> @last_stmt.before_scope
+(method_invocation
+  name: (identifier) @method_name) @method_invocation {
+
+  node @method_name.value
+  attr (@method_name.value) node_reference = @method_name
+  edge @method_name.value -> @method_invocation.before_scope
+  node @method_invocation.defs
+  edge @method_invocation.defs -> @method_name.value
 }
+
+
+(method_invocation
+  object: (super) @super
+  name: (identifier) @method_name) @method_invocation {
+}
+
 
 (class_body) @class_body {
-  node @class_body.before_scope
-  node @class_body.after_scope
+  node @class_body.lexical_scope
+  node @class_body.defs
+}
+
+(class_body (_)@declaration)@class_body {
+  edge @class_body.defs -> @declaration.defs
+  edge @declaration.lexical_scope -> @class_body.lexical_scope
 }
 
 (field_declaration
@@ -110,18 +115,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   )
 ) @field_decl
 {
-  node @field_decl.scope
+  node @field_decl.lexical_scope
+  node @field_decl.defs
   node @name.pop
   attr (@name.pop) node_definition = @name
-  edge @field_decl.scope -> @name.pop
+  edge @field_decl.lexical_scope -> @name.pop
 }
 
 (field_declaration
   .
   (_)@first_stmt) @field_decl {
     node @first_stmt.before_scope
-    edge @field_decl.scope -> @first_stmt.before_scope
-    ; edge @first_stmt.before_scope -> @field_decl.scope
+    edge @field_decl.lexical_scope -> @first_stmt.before_scope
+    ; edge @first_stmt.before_scope -> @field_decl.lexical_scope
 }
 
 (field_declaration
@@ -129,8 +135,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   .
   ) @field_decl {
 
-  ; edge @field_decl.scope -> @last_declaration.after_scope
-  ; edge @last_stmt.after_scope -> @field_decl.scope
+  ; edge @field_decl.lexical_scope -> @last_declaration.after_scope
+  ; edge @last_stmt.after_scope -> @field_decl.lexical_scope
 }
 
 (method_invocation) @method_invocation
@@ -142,40 +148,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (method_declaration
   name: (identifier) @name) @method
 {
-  node @method.def
+  node @method.defs
+  node @method.lexical_scope
 
-  node @method.before_scope
-  ;node @method.after_scope
-  node @method.scope
-
-  ; edge @method.before_scope -> @method.after_scope
   node pop
   attr (pop) node_definition = @name
-  edge @method.scope -> pop
 
-  ; need an edge from class_body to method.def?
-  edge @method.def -> @method.scope
-}
+  edge @method.defs -> pop
 
-(method_declaration
-  .
-  (_)@last_stmt) @method {
-    node @last_stmt.before_scope
-    ; edge @last_stmt.before_scope -> @method.scope
-    edge @method.scope -> @last_stmt.before_scope
-}
-
-(method_declaration
-  (_)@first_stmt
-  .) @method {
-    edge @first_stmt.before_scope -> @method.scope
-}
-
-(class_body
-  (_)@left_stmt
-  .
-  (_)@right_stmt) {
-  edge @right_stmt.scope -> @left_stmt.scope
+  ; edge @method.lexical_scope -> @method.defs
 }
 
 (class_body
@@ -184,7 +165,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; first_decl is sometimes field_declaration and sometimes method_declaration
   ; TODO: commented out line 194, update
-  ; edge @first_decl.scope -> @class_body.after_scope
+  ; edge @first_decl.lexical_scope -> @class_body.after_scope
   ; edge @class_body.after_scope -> @class_body.before_scope
 }
 
@@ -192,9 +173,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (_)@last_stmt
   .) @class_body {
     ; node @first_stmt.before_scope
-    ; edge @class_body.after_scope -> @last_stmt.scope
+    ; edge @class_body.after_scope -> @last_stmt.lexical_scope
     ; edge @class_body.after_scope -> @last_stmt.def
     ; edge @class_body.after_scope -> @last_stmt.before_scope
+    ; edge @class_body.after_scope -> @last_stmt.defs
 }
 
 
@@ -230,11 +212,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;;;;;;;;;;;;
 ;; Statements
 
-(statement) @stmt
-{
-  node @stmt.before_scope
-  node @stmt.after_scope
-}
+;(statement) @stmt
+;{
+;  node @stmt.before_scope
+;  node @stmt.after_scope
+;}
 
 (local_variable_declaration
   declarator: (variable_declarator
@@ -255,11 +237,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ) @local_var
 {
   node @value.before_scope
+  node @local_var.after_scope
+  node @local_var.before_scope
   edge @value.before_scope -> @local_var.before_scope
 }
 
 (expression_statement (_) @expr) @expr_stmt
 {
+  node @expr_stmt.before_scope
+  node @expr_stmt.after_scope
   edge @expr.before_scope -> @expr_stmt.before_scope
 }
 
@@ -280,7 +266,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (line_comment)@line_comment {
   node @line_comment.before_scope
   node @line_comment.after_scope
-  node @line_comment.scope
+  node @line_comment.lexical_defs
+  node @line_comment.lexical_scope
+  node @line_comment.defs
 
   edge @line_comment.after_scope -> @line_comment.before_scope
 }
