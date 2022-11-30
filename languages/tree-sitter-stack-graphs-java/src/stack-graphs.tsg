@@ -50,13 +50,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; Class Expressions
 
-; class Bar extends Foo {
-;   baz() {}
-; }
-
-; class Foo {
-; }
-
 (class_declaration
   name: (identifier) @name
   body: (class_body) @class_body) @class {
@@ -68,20 +61,22 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @class_body.lexical_scope -> @class.lexical_scope
 
-  edge @class.lexical_scope -> @class_body.defs
-  attr (@class.lexical_scope -> @class_body.defs) precedence = 1
+  edge @class_body.lexical_scope -> @class_body.defs
+  attr (@class_body.lexical_scope -> @class_body.defs) precedence = 1
   edge @class.defs -> @name.pop
   edge @name.pop -> @class_body.defs
 }
 
 (class_declaration
   superclass: (superclass
-    (type_identifier) @identifier) @superclass) @class {
+    (type_identifier) @identifier) @superclass
+    body: (class_body) @class_body) @class {
 
     node @identifier.ref
     attr (@identifier.ref) node_reference = @identifier
 
     edge @identifier.ref -> @class.lexical_scope
+    edge @class_body.lexical_scope -> @identifier.ref
 }
 
 (method_invocation
@@ -124,23 +119,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @field_decl.defs -> @name.pop
 }
 
-(field_declaration
-  .
-  (_)@first_stmt) @field_decl {
-    node @first_stmt.before_scope
-    ; edge @field_decl.lexical_scope -> @first_stmt.before_scope
-    ; edge @first_stmt.before_scope -> @field_decl.lexical_scope
-}
-
-(field_declaration
-  (_)@last_stmt
-  .
-  ) @field_decl {
-
-  ; edge @field_decl.lexical_scope -> @last_declaration.after_scope
-  ; edge @last_stmt.after_scope -> @field_decl.lexical_scope
-}
-
 (method_invocation) @method_invocation
 {
   node @method_invocation.before_scope
@@ -159,7 +137,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (pop) node_definition = @name
 
   edge @method.defs -> pop
-  edge pop -> @block.after_scope
 }
 
 (method_declaration
@@ -189,15 +166,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   .
   (_) @first) @block {
   edge @first.before_scope -> @block.before_scope
-  edge @block.after_scope -> @first.after_scope
 }
 
 (block
   (_) @last
   . ) @block {
-  ; this is where the comment comes in
-  ; there needs to be a way to get the local var dec in here
-  ; edge @block.after_scope -> @last.after_scope
+  edge @block.after_scope -> @last.after_scope
 }
 
 ;;;;;;;;;;;;;
@@ -231,16 +205,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @value.before_scope
   node @local_var.after_scope
   node @local_var.before_scope
-  ; need to wire this up so that the block can go to it
-  ; edge @value.before_scope -> @local_var.before_scope
 }
 
 (expression_statement (_) @expr) @expr_stmt
 {
   node @expr_stmt.before_scope
   node @expr_stmt.after_scope
-  ; expr.lexical_scope is the identifier, need to point to method instead
   edge @expr.lexical_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
 }
 
 (primary_expression/identifier) @ident
@@ -264,7 +236,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @line_comment.lexical_scope
   node @line_comment.defs
 
-  ; edge @line_comment.after_scope -> @line_comment.before_scope
+  edge @line_comment.after_scope -> @line_comment.before_scope
 }
 
 (block_comment)@block_comment {
