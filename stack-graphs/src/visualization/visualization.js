@@ -37,7 +37,7 @@ class StackGraph {
     compute_node_data() {
         for (let i in graph.nodes) {
             const node = graph.nodes[i];
-            node.paths = [];
+            node.paths = []
             this.ID[this.node_to_id_str(node)] = i;
             this.N.push(node);
         }
@@ -135,7 +135,7 @@ class StackGraph {
         // render UI
         this.render_help();
         this.render_tooltip();
-        this.render_graph();
+        this.render_graph()
 
         // pan & zoom
         let zoom = d3.zoom()
@@ -153,7 +153,7 @@ class StackGraph {
             this.paths_keypress(e);
             this.tooltip_keypress(e);
             this.help_keypress(e);
-        });
+        })
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -220,7 +220,7 @@ class StackGraph {
             .attr("id", (d) => this.edge_to_id_str(d.data));
         edges.append("path")
             .attr("id", (d) => this.edge_to_id_str(d.data) + ":path")
-            .attr("d", ({ points }) => line(points));
+            .attr("d", ({ points }) => line(points))
         let edge_labels = edges.append("text")
             .append("textPath")
             .attr("xlink:href", (d) => `#${this.edge_to_id_str(d.data)}:path`)
