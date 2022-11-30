@@ -3,5 +3,22 @@ class TestClass {
     int x = 5;
     x;
  // ^ defined: 3
+    y;
+//  ^ defined:
+  }
+
+  public static void foo() {
+    int y = 4;
+    int x = 5;
+    y;
+//  ^ defined: 11
+    x;
+//  ^ defined: 12
+  }
+
+  public static void invalid() {
+    z;
+//  ^ defined:
+    int z = 8;
   }
 }
