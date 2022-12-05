@@ -54,4 +54,4 @@ if [ ! -e "$tests_dir" ]; then
     exit 1
 fi
 
-cargo -q run --manifest-path ../../tree-sitter-stack-graphs/Cargo.toml --features=cli -- test $tssg_opts --grammar "$java_dir" --tsg "$tsg_file" "$tests_dir"
+cargo -q run --features=cli -- test $tssg_opts "$tests_dir"
