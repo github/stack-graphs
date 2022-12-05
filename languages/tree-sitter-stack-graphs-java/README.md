@@ -2,26 +2,29 @@
 
 This project defines tree-sitter-stack-graphs rules for Java using the [tree-sitter-java](https://www.npmjs.com/package/tree-sitter-java) grammar.
 
-## Development
+## Local Development
 
 The project is organized as follows:
 
 - The stack graph rules are defined in `src/stack-graphs.tsg`.
 - Tests are put into the `tests` directory.
 
-Make sure all development dependencies are installed by running:
-    ./bootstrap
+The following commands are intended to be run from the repo root.
 
 Run all tests in the project by executing the following:
 
-    cargo test
+    cargo test -p tree-sitter-stack-graphs-java
 
-Parse and test a single file by executing the following commands:
+Parse a single test file:
+  `cargo run -p tree-sitter-stack-graphs-java --features=cli -- parse OPTIONS FILENAME`
 
-    <!-- TODO: allow this option via cargo -->
+Test a single file:
+  `cargo run -p tree-sitter-stack-graphs-java --features=cli -- test OPTIONS FILENAME`
 
-Additional flags can be passed to these commands as well. For example, to generate a visualization for the test, execute:
+For debugging purposes, it is useful to run the visualization tool to generate graphs for the tests being run.
 
-    ./run -V
+To run a test and generate the visualization:
+
+`cargo run -p tree-sitter-stack-graphs-java -- test --output-mode=always -V=%r/%d/%n.html FILENAME`
 
 Go to https://crates.io/crates/tree-sitter-stack-graphs for links to examples and documentation.
