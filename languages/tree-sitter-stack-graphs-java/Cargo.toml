@@ -1,7 +1,7 @@
 [package]
 name = "tree-sitter-stack-graphs-java"
 version = "0.1.0"
-description = "Stack graphs for precise code navigation for the Java programming language"
+description = "Stack graphs for the Java programming language"
 
 homepage = "https://github.com/github/stack-graphs/tree/main/stack-graphs/languages/tree-sitter-stack-graphs-java"
 repository = "https://github.com/github/stack-graphs"
