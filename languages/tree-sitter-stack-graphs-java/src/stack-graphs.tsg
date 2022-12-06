@@ -54,17 +54,17 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   name: (identifier) @name
   body: (class_body) @class_body) @class {
 
-  node @name.pop
+  node def
   node @class.lexical_scope
   node @class.defs
-  attr (@name.pop) node_definition = @name
+  attr (def) node_definition = @name
 
   edge @class_body.lexical_scope -> @class.lexical_scope
 
   edge @class_body.lexical_scope -> @class_body.defs
   attr (@class_body.lexical_scope -> @class_body.defs) precedence = 1
-  edge @class.defs -> @name.pop
-  edge @name.pop -> @class_body.defs
+  edge @class.defs -> def
+  edge def -> @class_body.defs
 }
 
 (class_declaration
@@ -72,11 +72,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (type_identifier) @identifier) @superclass
     body: (class_body) @class_body) @class {
 
-    node @identifier.ref
-    attr (@identifier.ref) node_reference = @identifier
+    node ref
+    attr (ref) node_reference = @identifier
 
-    edge @identifier.ref -> @class.lexical_scope
-    edge @class_body.lexical_scope -> @identifier.ref
+    edge ref -> @class.lexical_scope
+    edge @class_body.lexical_scope -> ref
 }
 
 (class_body) @class_body {
@@ -118,10 +118,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @method.defs
   node @method.lexical_scope
 
-  node pop
-  attr (pop) node_definition = @name
+  node def
+  attr (def) node_definition = @name
 
-  edge @method.defs -> pop
+  edge @method.defs -> def
 }
 
 (method_declaration
@@ -176,9 +176,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   node @field_decl.lexical_scope
   node @field_decl.defs
-  node @name.pop
-  attr (@name.pop) node_definition = @name
-  edge @field_decl.defs -> @name.pop
+  node def
+  attr (def) node_definition = @name
+  edge @field_decl.defs -> def
 }
 
 (local_variable_declaration
@@ -187,10 +187,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   )
 ) @local_var
 {
-  node pop
-  attr (pop) node_definition = @name
-  edge @local_var.after_scope -> pop
-  attr (@local_var.after_scope -> pop) precedence = 1
+  node def
+  attr (def) node_definition = @name
+  edge @local_var.after_scope -> def
+  attr (@local_var.after_scope -> def) precedence = 1
   edge @local_var.after_scope -> @local_var.before_scope
 }
 
