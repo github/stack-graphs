@@ -210,7 +210,17 @@ impl TestArgs {
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
             let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
-            if lc.matches_file(&fragment_path, Some(&test_fragment.source)) {
+            if let Some(fa) = fragment_path
+                .file_name()
+                .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
+            {
+                fa.build_stack_graph_into(
+                    &mut test.graph,
+                    test_fragment.file,
+                    &test_fragment.source,
+                    &NoCancellation,
+                )?;
+            } else if lc.matches_file(&fragment_path, Some(&test_fragment.source)) {
                 globals.clear();
                 test_fragment.add_globals_to(&mut globals);
                 self.build_fragment_stack_graph_into(
