@@ -5,10 +5,10 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use crate::tsconfig::TsConfigAnalyzer;
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::CancellationFlag;
-use tsconfig::TsConfigAnalyzer;
 
 pub mod tsconfig;
 
