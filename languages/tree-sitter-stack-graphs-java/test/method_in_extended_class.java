@@ -1,15 +1,13 @@
 class TestClass extends SecondTestClass {
-                        // ^ defined: 16
+                        // ^ defined: 14
   public static void main(String[] args){
     foo();
  // ^ defined: 10
     bar();
-//  ^ defined: 17
+//  ^ defined: 15
   }
 
   public void foo() {
-    super.bar();
-        // ^ defined: 17
   }
 }
 
@@ -17,7 +15,7 @@ class SecondTestClass {
   public void bar() {
     System.out.println("Hello");
     foo();
-//  ^ defined: 23
+//  ^ defined: 21
   }
 
   public void foo() {

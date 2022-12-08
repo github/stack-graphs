@@ -190,8 +190,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node def
   attr (def) node_definition = @name
   edge @local_var.after_scope -> def
-  attr (@local_var.after_scope -> def) precedence = 1
   edge @local_var.after_scope -> @local_var.before_scope
+  attr (@local_var.after_scope -> @local_var.before_scope) precedence = 1
 }
 
 (local_variable_declaration
@@ -211,6 +211,31 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @expr.lexical_scope -> @expr_stmt.before_scope
   edge @expr_stmt.after_scope -> @expr_stmt.before_scope
 }
+
+(field_access) @field_access {
+  node @field_access.lexical_scope
+  node @field_access.before_scope
+}
+
+(field_access
+  object: (super)
+  field: (identifier) @identifier) @field_access {
+  node ref
+  attr (ref) node_reference = @identifier
+  edge ref -> @field_access.lexical_scope
+}
+
+(assignment_expression) @assign_expr
+{
+  node @assign_expr.lexical_scope
+}
+
+(return_statement) @return_stmt
+{
+  node @return_stmt.before_scope
+  node @return_stmt.after_scope
+}
+
 
 (primary_expression/identifier) @ident
 {
