@@ -319,6 +319,7 @@ use stack_graphs::graph::StackGraph;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::mem::transmute;
+use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use thiserror::Error;
@@ -942,6 +943,7 @@ pub trait FileAnalyzer {
         &'a self,
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
+        path: &Path,
         source: &'a str,
         cancellation_flag: &'a dyn CancellationFlag,
     ) -> Result<(), LoadError>;

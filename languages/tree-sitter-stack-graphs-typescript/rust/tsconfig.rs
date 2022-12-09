@@ -5,6 +5,8 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use std::path::Path;
+
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
@@ -17,6 +19,7 @@ impl FileAnalyzer for TsConfigAnalyzer {
         &'a self,
         _stack_graph: &'a mut StackGraph,
         _file: Handle<File>,
+        _path: &Path,
         _source: &'a str,
         _cancellation_flag: &'a dyn tree_sitter_stack_graphs::CancellationFlag,
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {

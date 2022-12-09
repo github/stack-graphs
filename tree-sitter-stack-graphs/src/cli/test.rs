@@ -217,6 +217,7 @@ impl TestArgs {
                 fa.build_stack_graph_into(
                     &mut test.graph,
                     test_fragment.file,
+                    &fragment_path,
                     &test_fragment.source,
                     &NoCancellation,
                 )?;
