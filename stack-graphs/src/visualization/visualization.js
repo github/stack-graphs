@@ -174,13 +174,6 @@ class StackGraph {
             .targetId((edge) => this.ID[this.node_id_to_str(edge.sink)])
             .decycle(true);
         const dag = connect(this.graph.edges);
-        // restore reversed edges
-        for (let link of dag.links()) {
-            if (link.reversed) {
-                delete link.reversed;
-                link.points.reverse();
-            }
-        }
 
         // plot nodes
         const nodes = node_group
@@ -220,7 +213,7 @@ class StackGraph {
             .attr("id", (d) => this.edge_to_id_str(d.data));
         edges.append("path")
             .attr("id", (d) => this.edge_to_id_str(d.data) + ":path")
-            .attr("d", ({ points }) => line(points))
+            .attr("d", (d) => line(d.reversed ? d3.reverse(d.points) : d.points))
         let edge_labels = edges.append("text")
             .append("textPath")
             .attr("xlink:href", (d) => `#${this.edge_to_id_str(d.data)}:path`)
