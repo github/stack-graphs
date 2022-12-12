@@ -945,6 +945,7 @@ pub trait FileAnalyzer {
         file: Handle<File>,
         path: &Path,
         source: &'a str,
+        paths: Vec<&Path>,
         cancellation_flag: &'a dyn CancellationFlag,
     ) -> Result<(), LoadError>;
 }

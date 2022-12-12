@@ -21,6 +21,7 @@ impl FileAnalyzer for TsConfigAnalyzer {
         _file: Handle<File>,
         _path: &Path,
         _source: &'a str,
+        _paths: Vec<&Path>,
         _cancellation_flag: &'a dyn tree_sitter_stack_graphs::CancellationFlag,
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
         todo!()
