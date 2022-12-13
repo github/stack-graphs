@@ -13,6 +13,10 @@ class StackGraph {
     static distx = 15;
     static disty = 15;
 
+    static arrow_stem_w = 2;
+    static arrow_head_w = 16;
+    static arrow_head_h = 8;
+
     constructor(container, graph, paths, metadata) {
         this.metadata = metadata;
 
@@ -280,27 +284,27 @@ class StackGraph {
                 this.render_scope(g);
                 break;
             case "pop_symbol":
-                this.render_symbol_node(g, "↑" + node.symbol);
+                this.render_symbol_node(g, node.symbol, null, "pop");
                 if (node.is_definition) {
                     g.classed('definition', true);
                 }
                 break;
             case "pop_scoped_symbol":
                 let pop_scope = { class: "pop_scope" };
-                this.render_symbol_node(g, "↑" + node.symbol, pop_scope);
+                this.render_symbol_node(g, node.symbol, pop_scope, "pop");
                 if (node.is_definition) {
                     g.classed('definition', true);
                 }
                 break;
             case "push_symbol":
-                this.render_symbol_node(g, "↓" + node.symbol);
+                this.render_symbol_node(g, node.symbol, null, "push");
                 if (node.is_reference) {
                     g.classed('reference', true);
                 }
                 break;
             case "push_scoped_symbol":
                 let push_scope = { class: "push_scope" };
-                this.render_symbol_node(g, "↓" + node.symbol, push_scope);
+                this.render_symbol_node(g, node.symbol, push_scope, "push");
                 if (node.is_reference) {
                     g.classed('reference', true);
                 }
@@ -331,12 +335,11 @@ class StackGraph {
                 break;
         }
     }
-
-    render_symbol_node(g, text, scope) {
+    render_symbol_node(g, text, scope, shape) {
         let content = g.append("g");
         content.append('text').text(text);
         let text_bbox = content.node().getBBox();
-        if (scope !== undefined) {
+        if (scope !== undefined && scope !== null) {
             content.append("circle")
                 .attr("class", scope.class)
                 .attr("transform", `translate(${text_bbox.width + StackGraph.margin}, ${6 - text_bbox.height / 2})`);
@@ -345,18 +348,71 @@ class StackGraph {
                 .attr("transform", `translate(${text_bbox.width + StackGraph.margin}, ${6 - text_bbox.height / 2})`);
         }
         let bbox = content.node().getBBox();
-        g.append('rect').lower()
+        let l = bbox.x - StackGraph.margin,
+            r = bbox.x + bbox.width + StackGraph.margin,
+            t = bbox.y - StackGraph.margin,
+            b = bbox.y + bbox.height + StackGraph.margin;
+        var box_points;
+        var arrow_points = null;
+        switch (shape) {
+            case "pop":
+                box_points = `
+                    ${l},${t}
+                    ${r},${t}
+                    ${r},${b}
+                    ${l - StackGraph.arrow_stem_w},${b}
+                    ${l - StackGraph.arrow_stem_w},${t + StackGraph.arrow_head_h}
+                    ${l - StackGraph.arrow_head_w/2},${t + StackGraph.arrow_head_h}
+                `;
+                arrow_points = `
+                    ${l},${t}
+                    ${l + StackGraph.arrow_head_w/2},${t + StackGraph.arrow_head_h}
+                    ${l + StackGraph.arrow_stem_w},${t + StackGraph.arrow_head_h}
+                    ${l + StackGraph.arrow_stem_w},${b}
+                    ${l - StackGraph.arrow_stem_w},${b}
+                    ${l - StackGraph.arrow_stem_w},${t + StackGraph.arrow_head_h}
+                    ${l - StackGraph.arrow_head_w/2},${t + StackGraph.arrow_head_h}
+                `;
+                break;
+            case "push":
+                box_points = `
+                    ${l - StackGraph.arrow_stem_w},${t}
+                    ${r},${t}
+                    ${r},${b}
+                    ${l},${b}
+                    ${l - StackGraph.arrow_head_w/2},${b - StackGraph.arrow_head_h}
+                    ${l - StackGraph.arrow_stem_w},${b - StackGraph.arrow_head_h}
+                `;
+                arrow_points = `
+                    ${l - StackGraph.arrow_stem_w},${t}
+                    ${l + StackGraph.arrow_stem_w},${t}
+                    ${l + StackGraph.arrow_stem_w},${b - StackGraph.arrow_head_h}
+                    ${l + StackGraph.arrow_head_w/2},${b - StackGraph.arrow_head_h}
+                    ${l},${b}
+                    ${l - StackGraph.arrow_head_w/2},${b - StackGraph.arrow_head_h}
+                    ${l - StackGraph.arrow_stem_w},${b - StackGraph.arrow_head_h}
+                `;
+                break;
+            default:
+                box_points = `
+                    ${l},${t}
+                    ${r},${t}
+                    ${r},${b}
+                    ${l},${b}
+                `;
+                break;
+        }
+        if (arrow_points !== null) {
+            g.append('polygon').lower()
+                .attr("class", "arrow")
+                .attr('points', arrow_points);
+        }
+        g.append('polygon').lower()
             .attr("class", "background")
-            .attr('x', bbox.x - StackGraph.margin)
-            .attr('y', bbox.y - StackGraph.margin)
-            .attr('width', bbox.width + 2 * StackGraph.margin)
-            .attr('height', bbox.height + 2 * StackGraph.margin);
-        g.append('rect').lower().lower()
+            .attr('points', box_points);
+        g.append('polygon').lower()
             .attr("class", "border")
-            .attr('x', bbox.x - StackGraph.margin)
-            .attr('y', bbox.y - StackGraph.margin)
-            .attr('width', bbox.width + 2 * StackGraph.margin)
-            .attr('height', bbox.height + 2 * StackGraph.margin);
+            .attr('points', box_points);
     }
 
     render_scope(g) {

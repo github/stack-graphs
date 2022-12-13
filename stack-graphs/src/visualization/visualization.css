@@ -49,14 +49,14 @@
 
 /* --- drop scopes --- */
 
-.sg .node.drop_scopes circle.background {
+.sg .node.drop_scopes .background {
     fill: #cc3311;
     r: 6px;
 }
 
 /* --- jump to scope --- */
 
-.sg .node.jump_to_scope circle.background {
+.sg .node.jump_to_scope .background {
     fill: #ee7733;
     r: 6px;
     stroke: black;
@@ -64,56 +64,60 @@
 
 /* --- pop symbol --- */
 
-.sg .node.pop_symbol rect.background {
+.sg .node.pop_symbol .background,
+.sg .node.pop_scoped_symbol .background {
     fill: #009988;
 }
 
-.sg .node.pop_scoped_symbol rect.background {
-    fill: #009988;
+.sg .node.pop_symbol .arrow,
+.sg .node.pop_scoped_symbol .arrow {
+    fill: #005b51;
 }
 
-.sg .node.pop_scoped_symbol circle.pop_scope {
+.sg .node.pop_scoped_symbol .pop_scope {
     fill: #ee7733;
     r: 6px;
     stroke: black;
 }
 
-.sg .node.definition rect.background {
+.sg .node.definition .background {
     stroke: black;
 }
 
 /* --- push symbol --- */
 
-.sg .node.push_symbol rect.background {
+.sg .node.push_symbol .background,
+.sg .node.push_scoped_symbol .background {
     fill: #33bbee;
 }
 
-.sg .node.push_scoped_symbol rect.background {
-    fill: #33bbee;
+.sg .node.push_symbol .arrow,
+.sg .node.push_scoped_symbol .arrow {
+    fill: #006e96;
 }
 
-.sg .node.push_scoped_symbol circle.push_scope {
+.sg .node.push_scoped_symbol .push_scope {
     fill: #bbbbbb;
     r: 6px;
     stroke: black;
 }
 
-.sg .node.push_scoped_symbol circle.push_scope-focus-point {
+.sg .node.push_scoped_symbol .push_scope-focus-point {
     fill: none;
     r: 3px;
 }
 
-.sg .node.push_scoped_symbol.focus circle.push_scope-focus-point {
+.sg .node.push_scoped_symbol.focus .push_scope-focus-point {
     fill: black;
 }
 
-.sg .node.reference rect.background {
+.sg .node.reference .background {
     stroke: black;
 }
 
 /* --- root --- */
 
-.sg .node.root circle.background {
+.sg .node.root .background {
     fill: #0077bb;
     r: 6px;
     stroke: black;
@@ -121,42 +125,42 @@
 
 /* --- scope --- */
 
-.sg .node.scope circle.border {
+.sg .node.scope .border {
     fill: #0077bb;
     r: 6px;
 }
 
-.sg .node.scope circle.background {
+.sg .node.scope .background {
     fill: #bbbbbb;
     r: 6px;
 }
 
-.sg .node.scope.exported circle.background {
+.sg .node.scope.exported .background {
     stroke: black;
 }
 
-.sg .node.scope circle.focus-point {
+.sg .node.scope .focus-point {
     r: 3px;
     fill: none;
 }
 
-.sg .node.scope.ref-focus circle.focus-point {
+.sg .node.scope.ref-focus .focus-point {
     fill: black;
 }
 
 /* --- plain labeled node --- */
 
-.sg .node.scope.plain_labeled_node rect.border {
+.sg .node.scope.plain_labeled_node .border {
     fill: #0077bb;
     rx: 6px;
 }
 
-.sg .node.scope.plain_labeled_node rect.background {
+.sg .node.scope.plain_labeled_node .background {
     fill: #bbbbbb;
     rx: 6px;
 }
 
-.sg .node.scope.plain_labeled_node.exported rect.background {
+.sg .node.scope.plain_labeled_node.exported .background {
     stroke: black;
 }
 
