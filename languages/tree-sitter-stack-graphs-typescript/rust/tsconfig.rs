@@ -19,6 +19,14 @@ use stack_graphs::graph::StackGraph;
 use tree_sitter_stack_graphs::FileAnalyzer;
 use tree_sitter_stack_graphs::LoadError;
 
+const PACKAGE_NAME: &str = ""; // FIXME should be a parameter to TsConfigAnalyzer
+const PROJECT_NAME: &str = ""; // FIXME should be a parameter to TsConfigAnalyzer
+
+const M_NS: &str = "%M";
+const NON_REL_M_NS: &str = "%NonRelM";
+const PROJ_NS: &str = "%Proj";
+const REL_M_NS: &str = "%RelM";
+
 pub struct TsConfigAnalyzer {}
 
 impl FileAnalyzer for TsConfigAnalyzer {
@@ -45,37 +53,42 @@ impl FileAnalyzer for TsConfigAnalyzer {
         self.add_debug_name(graph, proj_scope, "proj_scope");
 
         // project definition
-        let proj_def = self.add_pop(graph, root, "%Proj", &mut ids);
+        let proj_def = self.add_ns_pop(graph, root, PROJ_NS, PROJECT_NAME, &mut ids);
         self.add_debug_name(graph, proj_def, "proj_def");
-        // TODO: add actual project name
         self.add_edge(graph, proj_def, proj_scope, 0);
 
         // project reference
-        let proj_ref = self.add_push(graph, root, "%Proj", &mut ids);
+        let proj_ref = self.add_ns_push(graph, root, PROJ_NS, PROJECT_NAME, &mut ids);
         self.add_debug_name(graph, proj_ref, "proj_ref");
-        // TODO: add actual project name
         self.add_edge(graph, proj_scope, proj_ref, 0);
 
         // root directory
         let root_dir_ref =
-            self.add_module_pushes(graph, &tsc.root_dir(all_paths), proj_scope, &mut ids);
+            self.add_module_pushes(graph, M_NS, &tsc.root_dir(all_paths), proj_scope, &mut ids);
         self.add_debug_name(graph, root_dir_ref, "root_dir.ref");
-        self.add_edge(graph, root_dir_ref, proj_scope, 0);
 
-        // auxiliary root directories
+        // package definition
+        let pkg_def =
+            self.add_module_pops(graph, NON_REL_M_NS, Path::new(PACKAGE_NAME), root, &mut ids);
+        self.add_debug_name(graph, pkg_def, "pkg_def");
+        self.add_edge(graph, pkg_def, root_dir_ref, 0);
+
+        // auxiliary root directories, map relative imports to module paths
         for (idx, root_dir) in tsc.root_dirs().iter().enumerate() {
-            let root_dir_ref = self.add_module_pushes(graph, root_dir, proj_scope, &mut ids);
+            let root_dir_def = self.add_pop(graph, proj_scope, REL_M_NS, &mut ids);
+            self.add_debug_name(graph, root_dir_def, &format!("root_dirs[{}].def", idx));
+            let root_dir_ref = self.add_module_pushes(graph, M_NS, root_dir, proj_scope, &mut ids);
             self.add_debug_name(graph, root_dir_ref, &format!("root_dirs[{}].ref", idx));
-            self.add_edge(graph, proj_scope, root_dir_ref, 0);
+            self.add_edge(graph, root_dir_def, root_dir_ref, 0);
         }
 
         // base URL
         let base_url = tsc.base_url();
-        let base_url_pkg = self.add_pop(graph, proj_scope, "%Pkg", &mut ids);
-        self.add_debug_name(graph, base_url_pkg, "base_url.pkg_def");
-        let base_url_ref = self.add_module_pushes(graph, &base_url, proj_scope, &mut ids);
+        let base_url_def = self.add_pop(graph, proj_scope, NON_REL_M_NS, &mut ids);
+        self.add_debug_name(graph, base_url_def, "base_url.def");
+        let base_url_ref = self.add_module_pushes(graph, M_NS, &base_url, proj_scope, &mut ids);
         self.add_debug_name(graph, base_url_ref, "base_url.ref");
-        self.add_edge(graph, base_url_pkg, base_url_ref, 0);
+        self.add_edge(graph, base_url_def, base_url_ref, 0);
 
         // path mappings
         for (from_idx, (from, tos)) in tsc.paths().iter().enumerate() {
@@ -85,13 +98,11 @@ impl FileAnalyzer for TsConfigAnalyzer {
             } else {
                 &from
             };
-            let mut from_def = self.add_pop(graph, proj_scope, "%Pkg", &mut ids);
-            self.add_debug_name(graph, from_def, &format!("paths[{}].pkg_def", from_idx));
-            from_def = self.add_module_pops(graph, from, from_def, &mut ids);
+            let from_def = self.add_module_pops(graph, NON_REL_M_NS, from, proj_scope, &mut ids);
             self.add_debug_name(graph, from_def, &format!("paths[{}].from_def", from_idx));
             for (to_idx, to) in tos.iter().enumerate() {
                 let to = if is_prefix { to.parent().unwrap() } else { &to };
-                let to_ref = self.add_module_pushes(graph, to, proj_scope, &mut ids);
+                let to_ref = self.add_module_pushes(graph, M_NS, to, proj_scope, &mut ids);
                 self.add_debug_name(
                     graph,
                     to_ref,
@@ -184,18 +195,20 @@ impl TsConfigAnalyzer {
     fn add_module_pops<'a>(
         &'a self,
         graph: &'a mut StackGraph,
+        ns: &str,
         path: &Path,
         from: Handle<Node>,
         ids: &mut dyn Iterator<Item = NodeID>,
     ) -> Handle<Node> {
-        let mut node = from;
+        let ns_node = self.add_pop(graph, from, ns, ids);
+        let mut node = ns_node;
         for c in path.components() {
             match c {
                 Component::Normal(name) => {
-                    node = self.add_ns_pop(graph, node, "%M", &name.to_string_lossy(), ids);
+                    node = self.add_pop(graph, node, &name.to_string_lossy(), ids);
                 }
                 _ => {
-                    eprintln!("add_module_definition: expecting normalized, non-escaping, relative paths, got {}", path.display())
+                    eprintln!("add_module_pops: expecting normalized, non-escaping, relative paths, got {}", path.display())
                 }
             }
         }
@@ -205,18 +218,20 @@ impl TsConfigAnalyzer {
     fn add_module_pushes<'a>(
         &'a self,
         graph: &'a mut StackGraph,
+        ns: &str,
         path: &Path,
         to: Handle<Node>,
         ids: &mut dyn Iterator<Item = NodeID>,
     ) -> Handle<Node> {
-        let mut node = to;
+        let ns_node = self.add_push(graph, to, ns, ids);
+        let mut node = ns_node;
         for c in path.components() {
             match c {
                 Component::Normal(name) => {
-                    node = self.add_ns_push(graph, node, "%M", &name.to_string_lossy(), ids);
+                    node = self.add_push(graph, node, &name.to_string_lossy(), ids);
                 }
                 _ => {
-                    eprintln!("add_module_reference: expecting normalized, non-escaping, relative paths, got {}", path.display())
+                    eprintln!("add_module_pushes: expecting normalized, non-escaping, relative paths, got {}", path.display())
                 }
             }
         }

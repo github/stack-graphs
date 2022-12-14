@@ -20,8 +20,8 @@
 ; Global Variables
 ; ^^^^^^^^^^^^^^^^
 
-global FILE_PATH
-global PACKAGE_NAME = ""
+global FILE_PATH           ; project relative path of this file
+global PROJECT_NAME = ""   ; project name, used to isolate different projects in the same stack graph
 
 global JUMP_TO_SCOPE_NODE
 global ROOT_NODE
@@ -110,7 +110,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @comment.mod_def
   node @comment.mod_def__ns
   node @comment.mod_ref
-  node @comment.mod_ref__ns
   node @comment.param
   node @comment.params
   node @comment.return_type
@@ -135,47 +134,61 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;
 ; #################################################
 
-; Module definitions are encoded as sequences of `%M` NAME pairs, prefixed by their project
-; definition. Projects are defined in the root as `%Proj` and a sequence `%M` NAME pairs, based
-; on PACKAGE_NAME, which is assumed to hold the project identifier.
+; Projects are defined using a "%Proj" PROJECT_NAME definition in the root scope. Each module defines
+; its own project scope, which is joined with all other project scopes by both exposing a project
+; definition and importing a project reference. The module itself is defined with a "%M" NAME* definition,
+; based in its FILE_PATH.
 ;
-; For example, a module `src/MyModule.ts` in a project `MyProject`:
+; For example, a module `src/core/MyModule.ts` in a project `MyProject` is defined as follows:
 ;
-;     ROOT_NODE -> ↑"%Proj" -> ↑"%M" -> ↑"MyProject" -> ↑"%M" -> ↑"src" -> ↑"%M" -> ↑"MyModule" -> @prog.defs
+;     ROOT_NODE -> ↑"%Proj" -> ↑"MyProject" -> proj_scope
+;     proj_scope -> ↑"%M" -> ↑"src" -> ↑"core" -> ↑"MyModule" -> @prog.defs
 ;
-; All modules in a project are composed by importing a reference to their own project, which allows
-; them to access modules from their own project without making those visible to other projects.
+; For any module in the project `MyProject` ensures the composition with other modules in the same project:
 ;
-; For any module in the project `MyProject`:
+;     proj_scope -> ↓"MyProject" -> -> ↓"%Proj" -> ROOT_NODE
+;     @prog.lexical_scope -> proj_scope
 ;
-;     @prog.lexical_scope -> ↓"MyProject" -> ↓"%M" -> ↓"%Proj" -> ROOT_NODE
+; Module imports are either relative or non-relative. Relative imports are relative either to the current file,
+; or to the `rootDirs` in `tsconfig.json`. Relative imports use a NAME* "%RelM" reference (which may include `..`
+; components!). Each module defines a "%RelM" definition, which is linked to a NAME* references based on its own
+; path, as well as ".." definitions that can skip components. (References are normalized to ensure `..` components
+; only appear at the beginning of the path.)
 ;
-; Relative imports are normalized relative to the file and directly reference in the lexical scope.
+; For example, an import of `../OtherModule`:
 ;
-; For example, importing `./OtherModule`:
+;     importing_scope -> ↓"OtherModule" -> ↓"%RelM" -> @node.lexical_scope
 ;
-;     importing_scope -> ↓"OtherModule" -> ↓"%M" -> @node.lexical_scope
+; And, the module `src/core/MyModule.ts` would have the following definition to convert it to a proper module reference:
 ;
-; Non-relative imports are turned into references directly, but prefixed with a `%Pkg` reference
-; to indicate they should resolve in a package. This prevents them from being resolved as project
-; relative paths.
+;     @prog.lexical_scope -> ↑"%RelM" -> ↓"core" -> ↓"src" -> ↓"%M" -> proj_scope
+;                               \            \        /          /
+;                                 --- ↑".." --\----->           /
+;                                               --- ↑".." ---->
 ;
-; For example, importing `that_library`:
+; The root dirs defined in `tsconfig.json` introduce definitions to convert relative imports to proper module paths.
 ;
-;     importing_scope -> ↓"OtherModule" -> ↓"%M" -> ↓"%Pkg" -> @node.lexical_scope
+; For example, `rootDirs: ["./src/util"]` would give:
 ;
-; These rules do not add `%Pkg` definitions. It is the responsibility of the user to make sure package
-; definitions, as well as path mappings etc are setup correctly. Mappings can be set up in any node that
-; takes part in the project composition.
+;     proj_scope -> ↑"%RelM" -> ↓"util" -> ↓"src" -> ↓"%M" -> proj_scope
 ;
-; For example, assuming a node CONFIG_SCOPE in project `MyProject`, configure `./src` as rootDir as follows:
+; Non-relative imports appear as "%NonRelM" NAME* definitions in either a project scope, or the global scope. The global
+; definition rewrites the package name to a projects root dir.
 ;
-;     CONFIG_SCOPE -> ↓"src" -> ↓"%M" -> CONFIG_SCOPE
+; For example, a package `@my/pkg` with source directory `src` would appear as:
 ;
-; For example, assuming a node CONFIG_SCOPE in project `MyProject`, map package `core` to `./src/app_core` as follows:
+;     ROOT_NODE -> ↑"%NonRelM" -> ↑"@my" -> ↑"pkg" -> ↓"src" -> ↓"%M"
 ;
-;     CONFIG_SCOPE -> ↑"%Pkg" -> ↑"%M" -> ↑"core" -> ↓"app_core" -> ↓"%M" -> ↓"src" -> ↓"%M" -> CONFIG_SCOPE
+; Non-relative definitions in a project scope are the result of path mappings in `tsconfig.json`.
 ;
+; For example, given `paths: { "util": ["./my_util"] }` with base URL `./src`, we get:
+;
+;     proj_scope -> ↑"%NonRelM" -> ↑"%util" -> ↓"my_util" -> ↓"src" -> ↓"%M"
+;
+; The various references and definitions for `tsconfig.json` are not created by this TSG file, but
+; by the `TsConfigAnalyzer` defined in `rust/tsconfig.rs`.
+
+
 
 ; ######
 ; #     # #####   ####   ####  #####    ##   #    #  ####
@@ -206,8 +219,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @prog.defs
   node @prog.exports
   node @prog.lexical_scope
-  node @prog.mod_def
-  node @prog.mod_def__ns
 }
 
 (program)@prog {
@@ -221,160 +232,88 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; Project and module definitions
 (program)@prog {
   ; project definition
-  node proj__ns
-  attr (proj__ns) pop_symbol = "%Proj"
-  edge ROOT_NODE -> proj__ns
+  node proj_def__ns
+  attr (proj_def__ns) pop_symbol = "%Proj"
+  edge ROOT_NODE -> proj_def__ns
+  ;
+  node proj_def
+  attr (proj_def) pop_symbol = PROJECT_NAME
+  edge proj_def__ns -> proj_def
 
-  ; project definition nodes
-  var proj_scope = proj__ns
-  scan PACKAGE_NAME {
-    "([^/]+)" {
-      node proj_def
-      node proj_def__ns
-      ;
-      edge proj_scope -> proj_def__ns
-      ;
-      attr (proj_def__ns) pop_symbol = "%M"
-      edge proj_def__ns -> proj_def
-      ;
-      attr (proj_def) pop_symbol = $1
-      ;
-      set proj_scope = proj_def
-    }
-  }
-
-  ; module definition nodes
+  ; module definition
   let mod_name = (path-filestem FILE_PATH)
   let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
   ;
-  var mod_scope = proj_scope
+  node mod_def__ns
+  attr (mod_def__ns) pop_symbol = "%M"
+  edge proj_def -> mod_def__ns
+  ;
+  var mod_scope = mod_def__ns
   scan mod_path {
-    "([^/]+)/" {
+    "index$" {
+      ; skip last component for index files
+    }
+    "([^/]+)/?" {
       node mod_def
-      node mod_def__ns
-      ;
-      edge mod_scope -> mod_def__ns
-      ;
-      attr (mod_def__ns) pop_symbol = "%M"
-      edge mod_def__ns -> mod_def
-      ;
       attr (mod_def) pop_symbol = $1
+      edge mod_scope -> mod_def
       ;
       set mod_scope = mod_def
     }
-    "index$" {
-      ; do not add a component, simply make the last one a definition
-      attr (mod_scope) is_definition, source_node = @prog, empty_source_span
-      ; expose exports via module parent
-      edge mod_scope -> @prog.exports
-    }
-    "([^/]+)$" {
-      edge mod_scope -> @prog.mod_def__ns
-      ;
-      attr (@prog.mod_def__ns) pop_symbol = "%M"
-      edge @prog.mod_def__ns -> @prog.mod_def
-      ;
-      attr (@prog.mod_def) symbol_definition = $1, source_node = @prog, empty_source_span
-      ; expose exports via module definition
-      edge @prog.mod_def -> @prog.exports
-    }
   }
+  ; make the last one a definition
+  attr (mod_scope) is_definition, source_node = @prog, empty_source_span
+  ; expose exports via module definition
+  edge mod_scope -> @prog.exports
 }
 
 ;; Project and module reference
 (program)@prog {
   ; project reference
-  node proj__ns
-  attr (proj__ns) push_symbol = "%Proj"
-  edge proj__ns -> ROOT_NODE
-
-  ; project reference nodes
-  var proj_scope = proj__ns
-  scan PACKAGE_NAME {
-    "([^/]+)" {
-      node proj_ref
-      node proj_ref__ns
-      ;
-      attr (proj_ref) push_symbol = $1
-      edge proj_ref -> proj_ref__ns
-      ;
-      attr (proj_ref__ns) push_symbol = "%M"
-      edge proj_ref__ns -> proj_scope
-      ;
-      set proj_scope = proj_ref
-    }
-  }
-
-  ; module reference nodes
-  let mod_path = (path-normalize (path-dir FILE_PATH))
+  node proj_ref__ns
+  attr (proj_ref__ns) push_symbol = "%Proj"
+  edge proj_ref__ns -> ROOT_NODE
   ;
-  var mod_scope = proj_scope
-  scan mod_path {
-    "([^/]+)/" {
+  node proj_ref
+  attr (proj_ref) push_symbol = PROJECT_NAME
+  edge proj_ref -> proj_ref__ns
+  ; compose all packages files by adding edge to the package reference
+  edge @prog.lexical_scope -> proj_ref
+
+  ; module reference
+  ;
+  node mod_ref__ns
+  attr (mod_ref__ns) push_symbol = "%M"
+  edge mod_ref__ns -> proj_ref
+  ;
+  let mod_dir = (path-normalize (path-dir FILE_PATH))
+  var mod_scope = mod_ref__ns
+  scan mod_dir {
+    "([^/]+)/?" {
       node mod_ref
-      node mod_ref__ns
-      ;
-      edge mod_ref__ns -> mod_scope
-      ;
-      attr (mod_ref__ns) push_symbol = "%M"
-      ;
       attr (mod_ref) push_symbol = $1
-      edge mod_ref -> mod_ref__ns
+      edge mod_ref -> mod_scope
 
       node mod_node
       edge mod_node -> mod_ref
 
       node parent_def
-      node parent_def__ns
-      ;
       attr (parent_def) pop_symbol = ".."
       edge parent_def -> mod_scope
-      ;
-      attr (parent_def__ns) pop_symbol = "%M"
-      edge parent_def__ns -> parent_def
-      ;
-      edge mod_node -> parent_def__ns
+      edge mod_node -> parent_def
+      attr (mod_node -> parent_def) precedence = 1 ; consume dots eagerly
 
       set mod_scope = mod_node
-    }
-    "index$" {
-      ; expose reference in lexical scope
-      edge @prog.lexical_scope -> mod_scope
-    }
-    "([^/]+)$" {
-      node mod_ref
-      node mod_ref__ns
-      ;
-      edge mod_ref__ns -> mod_scope
-      ;
-      attr (mod_ref__ns) push_symbol = "%M"
-      ;
-      attr (mod_ref) push_symbol = $1
-      edge mod_ref -> mod_ref__ns
-
-      node mod_node
-      edge mod_node -> mod_ref
-
-      node parent_def
-      node parent_def__ns
-      ;
-      attr (parent_def) pop_symbol = ".."
-      edge parent_def -> mod_scope
-      ;
-      attr (parent_def__ns) pop_symbol = "%M"
-      edge parent_def__ns -> parent_def
-      ;
-      edge mod_node -> parent_def__ns
-
-      set mod_scope = mod_node
-
-      ; expose reference in lexical scope
-      edge @prog.lexical_scope -> mod_scope
     }
   }
 
-  ; compose all packages files by adding edge to the package reference
-  edge @prog.lexical_scope -> proj_scope
+  ; relative import definition
+  node rel_def
+  attr (rel_def) pop_symbol = "%RelM"
+  edge rel_def -> mod_scope
+
+  ; expose reference in lexical scope
+  edge @prog.lexical_scope -> rel_def
 }
 
 (program
@@ -553,75 +492,35 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (import_statement                        source:(_)@from )
   (import_statement (import_require_clause source:(_)@from))
 ]@import_stmt {
-  node @from.mod_ref
-  node @from.mod_ref__ns
+  let mod_path = (replace (source-text @from) "[\"\']" "")
 
   ; relative or non-relative import specific
-  let mod_path = (replace (source-text @from) "[\"\']" "")
+  node mod_ref__ns
+  edge mod_ref__ns -> @import_stmt.lexical_scope
   scan mod_path {
     "^\\..*$" { ; relative imports
-      ; normalized module path
-      let mod_path = (path-normalize $0)
-
-      ; module references
-      var mod_scope = @import_stmt.lexical_scope
-      scan mod_path {
-        "([^/]+)/" {
-          node mod_ref
-          node mod_ref__ns
-          ;
-          attr (mod_ref) push_symbol = $1
-          edge mod_ref -> mod_ref__ns
-          ;
-          attr (mod_ref__ns) push_symbol = "%M"
-          edge mod_ref__ns -> mod_scope
-          ;
-          set mod_scope = mod_ref
-        }
-        "([^/]+)$" {
-          attr (@from.mod_ref) symbol_reference = $1, source_node = @from
-          edge @from.mod_ref -> @from.mod_ref__ns
-          ;
-          attr (@from.mod_ref__ns) push_symbol = "%M"
-          edge @from.mod_ref__ns -> mod_scope
-        }
-      }
+      attr (mod_ref__ns) push_symbol = "%RelM"
     }
     "^.+$" { ; non-relative imports
-      ; self package reference
-      node pkg_ref
-      attr (pkg_ref) push_symbol = "%Pkg"
-      edge pkg_ref -> @import_stmt.lexical_scope
-
-      ; normalized module path
-      let mod_path = (path-normalize $0)
-
-      ; module references
-      var mod_scope = pkg_ref
-      scan mod_path {
-        "([^/]+)/" {
-          node mod_ref
-          node mod_ref__ns
-          ;
-          attr (mod_ref) push_symbol = $1
-          edge mod_ref -> mod_ref__ns
-          ;
-          attr (mod_ref__ns) push_symbol = "%M"
-          edge mod_ref__ns -> mod_scope
-          ;
-          set mod_scope = mod_ref
-        }
-        "([^/]+)$" {
-          attr (@from.mod_ref) symbol_reference = $1, source_node = @from
-          edge @from.mod_ref -> @from.mod_ref__ns
-          ;
-          attr (@from.mod_ref__ns) push_symbol = "%M"
-          edge @from.mod_ref__ns -> mod_scope
-        }
-      }
+      attr (mod_ref__ns) push_symbol = "%NonRelM"
     }
   }
 
+  ; module reference
+  var mod_scope = mod_ref__ns
+  scan (path-normalize mod_path) {
+    "([^/]+)/?" {
+      node mod_ref
+      attr (mod_ref) push_symbol = $1
+      edge mod_ref -> mod_scope
+      ;
+      set mod_scope = mod_ref
+    }
+  }
+  ; make the last one a reference
+  attr (mod_scope) is_reference, source_node = @from
+  ; expose mod_ref
+  let @from.mod_ref = mod_scope
 }
 
 ;; Named Clauses

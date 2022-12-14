@@ -1,12 +1,12 @@
 /*--- path: ./A/ModA.ts ---*/
-/*--- global: PACKAGE_NAME=foo/bar ---*/
+/*--- global: PROJECT_NAME=foo/bar ---*/
 
 export let a = {
     v: 42
 };
 
 /*--- path: ./ModB.ts ---*/
-/*--- global: PACKAGE_NAME=foo/bar ---*/
+/*--- global: PROJECT_NAME=foo/bar ---*/
 
 import { a } from "./A/ModA";
 //       ^ defined: 4
