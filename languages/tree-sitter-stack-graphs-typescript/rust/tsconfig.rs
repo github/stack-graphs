@@ -62,6 +62,13 @@ impl FileAnalyzer for TsConfigAnalyzer {
         self.add_debug_name(graph, root_dir_ref, "root_dir.ref");
         self.add_edge(graph, root_dir_ref, proj_scope, 0);
 
+        // auxiliary root directories
+        for (idx, root_dir) in tsc.root_dirs().iter().enumerate() {
+            let root_dir_ref = self.add_module_pushes(graph, root_dir, proj_scope, &mut ids);
+            self.add_debug_name(graph, root_dir_ref, &format!("root_dirs[{}].ref", idx));
+            self.add_edge(graph, proj_scope, root_dir_ref, 0);
+        }
+
         // base URL
         let base_url = tsc.base_url();
         let base_url_pkg = self.add_pop(graph, proj_scope, "%Pkg", &mut ids);
