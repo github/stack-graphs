@@ -40,7 +40,7 @@ pub mod path {
         functions.add("path-join".into(), PathJoin);
         functions.add(
             "path-normalize".into(),
-            path_fn(|p| Some(normalize(p).as_os_str().to_os_string())),
+            path_fn(|p| normalize(p).map(|p| p.as_os_str().to_os_string())),
         );
         functions.add("path-split".into(), PathSplit);
     }
@@ -118,18 +118,11 @@ pub mod path {
         }
     }
 
-    /// Normalize a path, removing things like `.` and `..`.
-    ///
-    /// CAUTION: This does not resolve symlinks (unlike
-    /// [`std::fs::canonicalize`]). This may cause incorrect or surprising
-    /// behavior at times. This should be used carefully. Unfortunately,
-    /// [`std::fs::canonicalize`] can be hard to use correctly, since it can often
-    /// fail, or on Windows returns annoying device paths. This is a problem Cargo
-    /// needs to improve on.
-    // Copied from Cargo
+    /// Normalize a path, removing things like `.` and `..` wherever possible.
+    // Based on the following code from Cargo:
     // https://github.com/rust-lang/cargo/blob/e515c3277bf0681bfc79a9e763861bfe26bb05db/crates/cargo-util/src/paths.rs#L73-L106
     // Licensed under MIT license & Apache License (Version 2.0)
-    pub fn normalize(path: &Path) -> PathBuf {
+    pub fn normalize(path: &Path) -> Option<PathBuf> {
         let mut components = path.components().peekable();
         let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
             components.next();
@@ -138,21 +131,32 @@ pub mod path {
             PathBuf::new()
         };
 
+        let mut has_root = false;
+        let mut normal_components = 0usize;
         for component in components {
             match component {
                 Component::Prefix(..) => unreachable!(),
                 Component::RootDir => {
+                    has_root = true;
                     ret.push(component.as_os_str());
                 }
                 Component::CurDir => {}
                 Component::ParentDir => {
-                    ret.pop();
+                    if normal_components > 0 {
+                        normal_components -= 1;
+                        ret.pop();
+                    } else if has_root {
+                        return None;
+                    } else {
+                        ret.push(component.as_os_str());
+                    }
                 }
                 Component::Normal(c) => {
+                    normal_components += 1;
                     ret.push(c);
                 }
             }
         }
-        ret
+        Some(ret)
     }
 }

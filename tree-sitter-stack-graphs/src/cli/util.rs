@@ -102,7 +102,10 @@ impl PathSpec {
             panic!("Unsupported '%' at end");
         }
         let path = Path::new(&path);
-        crate::functions::path::normalize(&path)
+        match crate::functions::path::normalize(&path) {
+            Some(path) => path,
+            None => panic!("Cannot normalize '{}'", path.display()),
+        }
     }
 }
 
