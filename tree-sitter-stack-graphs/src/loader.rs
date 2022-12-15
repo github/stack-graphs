@@ -108,8 +108,8 @@ impl FileAnalyzers {
         self
     }
 
-    pub fn get(&self, file_name: &str) -> Option<Arc<dyn FileAnalyzer>> {
-        self.file_analyzers.get(file_name).cloned()
+    pub fn get(&self, file_name: &str) -> Option<&Arc<dyn FileAnalyzer>> {
+        self.file_analyzers.get(file_name)
     }
 }
 
