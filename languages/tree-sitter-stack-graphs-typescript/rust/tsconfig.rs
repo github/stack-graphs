@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use stack_graphs::arena::Handle;
@@ -16,13 +17,14 @@ pub struct TsConfigAnalyzer {}
 
 impl FileAnalyzer for TsConfigAnalyzer {
     fn build_stack_graph_into<'a>(
-        &'a self,
-        _stack_graph: &'a mut StackGraph,
+        &self,
+        _graph: &mut StackGraph,
         _file: Handle<File>,
         _path: &Path,
-        _source: &'a str,
-        _paths: Vec<&Path>,
-        _cancellation_flag: &'a dyn tree_sitter_stack_graphs::CancellationFlag,
+        _source: &str,
+        _all_paths: &mut dyn Iterator<Item = &'a Path>,
+        _globals: &HashMap<String, String>,
+        _cancellation_flag: &dyn tree_sitter_stack_graphs::CancellationFlag,
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
         todo!()
     }

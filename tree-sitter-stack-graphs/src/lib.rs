@@ -940,12 +940,13 @@ impl<'a> Builder<'a> {
 
 pub trait FileAnalyzer {
     fn build_stack_graph_into<'a>(
-        &'a self,
-        stack_graph: &'a mut StackGraph,
+        &self,
+        stack_graph: &mut StackGraph,
         file: Handle<File>,
         path: &Path,
-        source: &'a str,
-        paths: Vec<&Path>,
-        cancellation_flag: &'a dyn CancellationFlag,
+        source: &str,
+        all_paths: &mut dyn Iterator<Item = &'a Path>,
+        globals: &HashMap<String, String>,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError>;
 }

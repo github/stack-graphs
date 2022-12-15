@@ -209,7 +209,7 @@ impl TestArgs {
             .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
-            let all_paths = test.fragments.iter().map(|f| f.path.as_path()).collect();
+            let mut all_paths = test.fragments.iter().map(|f| f.path.as_path());
             if let Some(fa) = test_fragment
                 .path
                 .file_name()
@@ -220,7 +220,8 @@ impl TestArgs {
                     test_fragment.file,
                     &test_fragment.path,
                     &test_fragment.source,
-                    all_paths,
+                    &mut all_paths,
+                    &test_fragment.globals,
                     &NoCancellation,
                 )?;
             } else if lc.matches_file(&test_fragment.path, Some(&test_fragment.source)) {
