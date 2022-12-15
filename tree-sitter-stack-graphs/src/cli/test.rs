@@ -209,12 +209,12 @@ impl TestArgs {
             .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
-            let mut all_paths = test.fragments.iter().map(|f| f.path.as_path());
             if let Some(fa) = test_fragment
                 .path
                 .file_name()
                 .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
             {
+                let mut all_paths = test.fragments.iter().map(|f| f.path.as_path());
                 fa.build_stack_graph_into(
                     &mut test.graph,
                     test_fragment.file,
