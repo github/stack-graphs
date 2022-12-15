@@ -91,7 +91,7 @@ impl LanguageConfiguration {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct FileAnalyzers {
     file_analyzers: HashMap<String, Arc<dyn FileAnalyzer>>,
 }
