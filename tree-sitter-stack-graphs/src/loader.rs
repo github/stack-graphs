@@ -34,6 +34,22 @@ lazy_static! {
         vec![LoadPath::Grammar("queries/builtins".into())];
 }
 
+/// Data type that holds all information to recognize and analyze files for a language
+pub struct LanguageConfiguration {
+    pub language: Language,
+    pub scope: Option<String>,
+    pub content_regex: Option<Regex>,
+    pub file_types: Vec<String>,
+    pub sgl: StackGraphLanguage,
+    pub builtins: StackGraph,
+}
+
+impl LanguageConfiguration {
+    pub fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
+        matches_file(&self.file_types, &self.content_regex, path, content).is_some()
+    }
+}
+
 /// A load path specifies a file to load from, either as a regular path or relative to the grammar location.
 #[derive(Clone, Debug)]
 pub enum LoadPath {
@@ -237,21 +253,6 @@ impl From<crate::LoadError> for LoadError {
 
 // ------------------------------------------------------------------------------------------------
 // provided languages loader
-
-pub struct LanguageConfiguration {
-    pub language: Language,
-    pub scope: Option<String>,
-    pub content_regex: Option<Regex>,
-    pub file_types: Vec<String>,
-    pub sgl: StackGraphLanguage,
-    pub builtins: StackGraph,
-}
-
-impl LanguageConfiguration {
-    pub fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
-        matches_file(&self.file_types, &self.content_regex, path, content).is_some()
-    }
-}
 
 struct LanguageConfigurationsLoader {
     configurations: Vec<LanguageConfiguration>,
