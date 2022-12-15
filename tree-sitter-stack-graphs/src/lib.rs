@@ -319,6 +319,7 @@ use stack_graphs::graph::StackGraph;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::mem::transmute;
+use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use thiserror::Error;
@@ -578,6 +579,7 @@ impl<'a> Builder<'a> {
 pub trait CancellationFlag {
     fn flag(&self) -> Option<&AtomicUsize>;
 }
+
 impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), stack_graphs::CancellationError> {
         if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
@@ -586,6 +588,7 @@ impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
         Ok(())
     }
 }
+
 impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
         if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
@@ -596,6 +599,7 @@ impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
 }
 
 pub struct NoCancellation;
+
 impl CancellationFlag for NoCancellation {
     fn flag(&self) -> Option<&AtomicUsize> {
         None
@@ -932,4 +936,17 @@ impl<'a> Builder<'a> {
             }
         }
     }
+}
+
+pub trait FileAnalyzer {
+    fn build_stack_graph_into<'a>(
+        &self,
+        stack_graph: &mut StackGraph,
+        file: Handle<File>,
+        path: &Path,
+        source: &str,
+        all_paths: &mut dyn Iterator<Item = &'a Path>,
+        globals: &HashMap<String, String>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), LoadError>;
 }

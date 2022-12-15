@@ -209,12 +209,26 @@ impl TestArgs {
             .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
-            let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
-            if lc.matches_file(&fragment_path, Some(&test_fragment.source)) {
+            if let Some(fa) = test_fragment
+                .path
+                .file_name()
+                .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
+            {
+                let mut all_paths = test.fragments.iter().map(|f| f.path.as_path());
+                fa.build_stack_graph_into(
+                    &mut test.graph,
+                    test_fragment.file,
+                    &test_fragment.path,
+                    &test_fragment.source,
+                    &mut all_paths,
+                    &test_fragment.globals,
+                    &NoCancellation,
+                )?;
+            } else if lc.matches_file(&test_fragment.path, Some(&test_fragment.source)) {
                 globals.clear();
                 test_fragment.add_globals_to(&mut globals);
                 self.build_fragment_stack_graph_into(
-                    &fragment_path,
+                    &test_fragment.path,
                     &lc.sgl,
                     test_fragment.file,
                     &test_fragment.source,
@@ -224,8 +238,8 @@ impl TestArgs {
             } else {
                 return Err(anyhow!(
                     "Test fragment {} not supported by language of test file {}",
-                    fragment_path.display(),
-                    test_path.display()
+                    test_fragment.path.display(),
+                    test.path.display()
                 ));
             }
         }

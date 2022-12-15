@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use thiserror::Error;
 use tree_sitter::Language;
 use tree_sitter_graph::ast::File as TsgFile;
@@ -25,6 +26,7 @@ use tree_sitter_loader::LanguageConfiguration as TSLanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
 
 use crate::CancellationFlag;
+use crate::FileAnalyzer;
 use crate::StackGraphLanguage;
 
 lazy_static! {
@@ -42,6 +44,7 @@ pub struct LanguageConfiguration {
     pub file_types: Vec<String>,
     pub sgl: StackGraphLanguage,
     pub builtins: StackGraph,
+    pub special_files: FileAnalyzers,
 }
 
 impl LanguageConfiguration {
@@ -53,6 +56,7 @@ impl LanguageConfiguration {
         tsg_source: &str,
         builtins_source: Option<&str>,
         builtins_config: Option<&str>,
+        special_files: FileAnalyzers,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Self, LoadError> {
         let sgl = StackGraphLanguage::from_str(language, tsg_source)?;
@@ -78,11 +82,34 @@ impl LanguageConfiguration {
             file_types,
             sgl,
             builtins,
+            special_files,
         })
     }
 
     pub fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
         matches_file(&self.file_types, &self.content_regex, path, content).is_some()
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct FileAnalyzers {
+    file_analyzers: HashMap<String, Arc<dyn FileAnalyzer>>,
+}
+
+impl FileAnalyzers {
+    pub fn new() -> Self {
+        FileAnalyzers {
+            file_analyzers: HashMap::new(),
+        }
+    }
+
+    pub fn add(mut self, file_name: String, analyzer: impl FileAnalyzer + 'static) -> Self {
+        self.file_analyzers.insert(file_name, Arc::new(analyzer));
+        self
+    }
+
+    pub fn get(&self, file_name: &str) -> Option<&Arc<dyn FileAnalyzer>> {
+        self.file_analyzers.get(file_name)
     }
 }
 
@@ -415,6 +442,7 @@ impl PathLoader {
                     file_types: language.file_types,
                     sgl,
                     builtins,
+                    special_files: FileAnalyzers::new(),
                 };
                 self.cache.push((language.language, lc));
 

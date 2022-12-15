@@ -126,6 +126,7 @@ pub struct Test {
 #[derive(Debug, Clone)]
 pub struct TestFragment {
     pub file: Handle<File>,
+    pub path: PathBuf,
     pub source: String,
     pub assertions: Vec<Assertion>,
     pub globals: HashMap<String, String>,
@@ -167,6 +168,7 @@ impl Test {
                         .for_each(|_| line_files.push(Some(file)));
                     fragments.push(TestFragment {
                         file,
+                        path: current_path,
                         source: current_source,
                         assertions: Vec::new(),
                         globals: current_globals,
@@ -206,6 +208,7 @@ impl Test {
             (line_files.len()..line_count).for_each(|_| line_files.push(Some(file)));
             fragments.push(TestFragment {
                 file,
+                path: current_path,
                 source: current_source,
                 assertions: Vec::new(),
                 globals: current_globals,

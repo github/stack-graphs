@@ -5,8 +5,12 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::CancellationFlag;
+use tsconfig::TsConfigAnalyzer;
+
+pub mod tsconfig;
 
 /// The stack graphs tsg source for this language
 const STACK_GRAPHS_TSG_SOURCE: &str = include_str!("../src/stack-graphs.tsg");
@@ -25,6 +29,7 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
         STACK_GRAPHS_TSG_SOURCE,
         Some(STACK_GRAPHS_BUILTINS_SOURCE),
         Some(STACK_GRAPHS_BUILTINS_CONFIG),
+        FileAnalyzers::new().add("tsconfig.json".to_string(), TsConfigAnalyzer {}),
         cancellation_flag,
     )
     .unwrap()
