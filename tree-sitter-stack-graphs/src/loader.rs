@@ -197,7 +197,7 @@ impl Loader {
     ) -> Result<Option<&LanguageConfiguration>, LoadError> {
         match &mut self.0 {
             LoaderImpl::Paths(loader) => loader.load_for_file(path, content, cancellation_flag),
-            LoaderImpl::Provided(loader) => loader.load_for_file(path, content, cancellation_flag),
+            LoaderImpl::Provided(loader) => loader.load_for_file(path, content),
         }
     }
 
@@ -319,7 +319,6 @@ impl LanguageConfigurationsLoader {
         &mut self,
         path: &Path,
         content: Option<&str>,
-        _cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Option<&LanguageConfiguration>, LoadError> {
         let language = match self
             .configurations
