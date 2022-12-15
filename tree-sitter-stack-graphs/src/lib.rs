@@ -331,13 +331,15 @@ use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::parse_error::ParseError;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
-use tree_sitter_graph::Variables;
 
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod functions;
 pub mod loader;
 pub mod test;
+
+pub use tree_sitter_graph::VariableError;
+pub use tree_sitter_graph::Variables;
 
 // Node type values
 static DROP_SCOPES_TYPE: &'static str = "drop_scopes";
@@ -387,7 +389,6 @@ pub struct StackGraphLanguage {
     language: tree_sitter::Language,
     tsg: tree_sitter_graph::ast::File,
     functions: Functions,
-    builtins: StackGraph,
 }
 
 impl StackGraphLanguage {
@@ -402,7 +403,6 @@ impl StackGraphLanguage {
             language,
             tsg,
             functions: Self::default_functions(),
-            builtins: StackGraph::new(),
         })
     }
 
@@ -417,7 +417,6 @@ impl StackGraphLanguage {
             language,
             tsg,
             functions: Self::default_functions(),
-            builtins: StackGraph::new(),
         })
     }
 
@@ -429,14 +428,6 @@ impl StackGraphLanguage {
 
     pub fn functions_mut(&mut self) -> &mut tree_sitter_graph::functions::Functions {
         &mut self.functions
-    }
-
-    pub fn builtins(&self) -> &StackGraph {
-        &self.builtins
-    }
-
-    pub fn builtins_mut(&mut self) -> &mut StackGraph {
-        &mut self.builtins
     }
 
     pub fn language(&self) -> tree_sitter::Language {

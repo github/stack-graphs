@@ -24,5 +24,6 @@ harness = false
 [dependencies]
 anyhow = "1.0"
 clap = "3"
+stack-graphs = { version = "~0.10.1", path = "../../stack-graphs" }
 tree-sitter-stack-graphs = { version = "~0.4.0", path = "../../tree-sitter-stack-graphs", features=["cli"] }
 tree-sitter-typescript = { git = "https://github.com/tree-sitter/tree-sitter-typescript", rev="082da44a5263599186dadafd2c974c19f3a73d28" }
