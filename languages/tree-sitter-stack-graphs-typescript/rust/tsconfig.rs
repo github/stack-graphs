@@ -19,9 +19,6 @@ use stack_graphs::graph::StackGraph;
 use tree_sitter_stack_graphs::FileAnalyzer;
 use tree_sitter_stack_graphs::LoadError;
 
-const PACKAGE_NAME: &str = ""; // FIXME should be a parameter to TsConfigAnalyzer
-const PROJECT_NAME: &str = ""; // FIXME should be a parameter to TsConfigAnalyzer
-
 const M_NS: &str = "%M";
 const NON_REL_M_NS: &str = "%NonRelM";
 const PROJ_NS: &str = "%Proj";
@@ -37,9 +34,20 @@ impl FileAnalyzer for TsConfigAnalyzer {
         path: &Path,
         source: &str,
         all_paths: &mut dyn Iterator<Item = &'a Path>,
-        _globals: &HashMap<String, String>,
+        globals: &HashMap<String, String>,
         _cancellation_flag: &dyn tree_sitter_stack_graphs::CancellationFlag,
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
+        // read globals
+        let pkg_name = globals
+            .get("PACKAGE_NAME")
+            .map(String::as_str)
+            .unwrap_or("");
+        let proj_name = globals
+            .get("PROJECT_NAME")
+            .map(String::as_str)
+            .unwrap_or("");
+
+        // parse source
         let tsc = TsConfig::parse_str(path, source).map_err(|_| LoadError::ParseError)?;
 
         // root node
@@ -51,12 +59,12 @@ impl FileAnalyzer for TsConfigAnalyzer {
         self.add_debug_name(graph, proj_scope, "proj_scope");
 
         // project definition
-        let proj_def = self.add_ns_pop(graph, file, root, PROJ_NS, PROJECT_NAME);
+        let proj_def = self.add_ns_pop(graph, file, root, PROJ_NS, proj_name);
         self.add_debug_name(graph, proj_def, "proj_def");
         self.add_edge(graph, proj_def, proj_scope, 0);
 
         // project reference
-        let proj_ref = self.add_ns_push(graph, file, root, PROJ_NS, PROJECT_NAME);
+        let proj_ref = self.add_ns_push(graph, file, root, PROJ_NS, proj_name);
         self.add_debug_name(graph, proj_ref, "proj_ref");
         self.add_edge(graph, proj_scope, proj_ref, 0);
 
@@ -66,8 +74,7 @@ impl FileAnalyzer for TsConfigAnalyzer {
         self.add_debug_name(graph, root_dir_ref, "root_dir.ref");
 
         // package definition
-        let pkg_def =
-            self.add_module_pops(graph, file, NON_REL_M_NS, Path::new(PACKAGE_NAME), root);
+        let pkg_def = self.add_module_pops(graph, file, NON_REL_M_NS, Path::new(pkg_name), root);
         self.add_debug_name(graph, pkg_def, "pkg_def");
         self.add_edge(graph, pkg_def, root_dir_ref, 0);
 
