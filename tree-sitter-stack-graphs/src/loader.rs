@@ -45,6 +45,42 @@ pub struct LanguageConfiguration {
 }
 
 impl LanguageConfiguration {
+    pub fn from_tsg_str(
+        language: Language,
+        scope: Option<String>,
+        content_regex: Option<Regex>,
+        file_types: Vec<String>,
+        tsg_source: &str,
+        builtins_source: Option<&str>,
+        builtins_config: Option<&str>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Self, LoadError> {
+        let sgl = StackGraphLanguage::from_str(language, tsg_source)?;
+        let mut builtins = StackGraph::new();
+        if let Some(builtins_source) = builtins_source {
+            let mut builtins_globals = Variables::new();
+            if let Some(builtins_config) = builtins_config {
+                Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
+            }
+            let file = builtins.add_file("<builtins>").unwrap();
+            sgl.build_stack_graph_into(
+                &mut builtins,
+                file,
+                builtins_source,
+                &builtins_globals,
+                cancellation_flag,
+            )?;
+        }
+        Ok(LanguageConfiguration {
+            language,
+            scope,
+            content_regex,
+            file_types,
+            sgl,
+            builtins,
+        })
+    }
+
     pub fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
         matches_file(&self.file_types, &self.content_regex, path, content).is_some()
     }
