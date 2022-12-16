@@ -48,6 +48,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 
+;; =======================
+;;  Top level declarations
+;; =======================
+
+;;;;;;;;;;;;;;;;;;;;
 ;; Class Expressions
 
 (class_declaration
@@ -89,26 +94,21 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @declaration.lexical_scope -> @class_body.lexical_scope
 }
 
-(method_invocation
-  name: (identifier) @method_name) @method_invocation {
+;; =====================
+;;  Member Declarations 
+;; =====================
 
-  node @method_name.value
-  attr (@method_name.value) node_reference = @method_name
-  edge @method_name.value -> @method_invocation.before_scope
-  node @method_invocation.defs
-  edge @method_name.value -> @method_invocation.lexical_scope
-}
-
-(method_invocation
-  object: (super) @super
-  name: (identifier) @method_name) @method_invocation {
-}
-
-(method_invocation) @method_invocation
+(field_declaration
+  declarator: (variable_declarator
+    name: (_) @name
+  )
+) @field_decl
 {
-  node @method_invocation.before_scope
-  node @method_invocation.after_scope
-  node @method_invocation.lexical_scope
+  node @field_decl.lexical_scope
+  node @field_decl.defs
+  node def
+  attr (def) node_definition = @name
+  edge @field_decl.defs -> def
 }
 
 (method_declaration
@@ -130,8 +130,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.before_scope -> @method.lexical_scope
 }
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Expressions and Statements
+
+;; ============
+;;  Statements
+;; ============
+
+(expression_statement (_) @expr) @expr_stmt
+{
+  node @expr_stmt.before_scope
+  node @expr_stmt.after_scope
+  edge @expr.lexical_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
+}
 
 (block) @block {
   node @block.before_scope
@@ -159,26 +169,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
-;;;;;;;;;;;;;
-;; Statements
-
-;(statement) @stmt
-;{
-;  node @stmt.before_scope
-;  node @stmt.after_scope
-;}
-
-(field_declaration
-  declarator: (variable_declarator
-    name: (_) @name
-  )
-) @field_decl
+(return_statement) @return_stmt
 {
-  node @field_decl.lexical_scope
-  node @field_decl.defs
-  node def
-  attr (def) node_definition = @name
-  edge @field_decl.defs -> def
+  node @return_stmt.before_scope
+  node @return_stmt.after_scope
 }
 
 (local_variable_declaration
@@ -204,12 +198,28 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @local_var.before_scope
 }
 
-(expression_statement (_) @expr) @expr_stmt
+;; =============
+;;  Expressions
+;; =============
+
+(assignment_expression) @assign_expr
 {
-  node @expr_stmt.before_scope
-  node @expr_stmt.after_scope
-  edge @expr.lexical_scope -> @expr_stmt.before_scope
-  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
+  node @assign_expr.lexical_scope
+}
+
+;; =====================
+;;  Primary Expressions
+;; =====================
+
+(primary_expression/identifier) @ident
+{
+  node @ident.value
+  attr (@ident.value) node_reference = @ident
+  node @ident.before_scope
+  node @ident.after_scope
+  node @ident.lexical_scope
+
+  edge @ident.value -> @ident.lexical_scope
 }
 
 (field_access) @field_access {
@@ -225,31 +235,41 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge ref -> @field_access.lexical_scope
 }
 
-(assignment_expression) @assign_expr
-{
-  node @assign_expr.lexical_scope
+(method_invocation
+  name: (identifier) @method_name) @method_invocation {
+
+  node @method_name.value
+  attr (@method_name.value) node_reference = @method_name
+  edge @method_name.value -> @method_invocation.before_scope
+  node @method_invocation.defs
+  edge @method_name.value -> @method_invocation.lexical_scope
 }
 
-(return_statement) @return_stmt
-{
-  node @return_stmt.before_scope
-  node @return_stmt.after_scope
+(method_invocation
+  object:
+    object:
+    field: (identifier) @identifier
+  name: (identifier) @method_name) @method_invocation {
+
+  node @identifier.ref
+  attr (@identifier.ref) node_reference = @identifier
+
+  edge @method_name.value -> @identifier.ref
+
+  edge @identifier.ref -> @method_invocation.after_scope
+  edge @method_invocation.after_scope -> @method_invocation.lexical_scope
 }
 
-
-(primary_expression/identifier) @ident
+(method_invocation) @method_invocation
 {
-  node @ident.value
-  attr (@ident.value) node_reference = @ident
-  node @ident.before_scope
-  node @ident.after_scope
-  node @ident.lexical_scope
-
-  edge @ident.value -> @ident.lexical_scope
+  node @method_invocation.before_scope
+  node @method_invocation.after_scope
+  node @method_invocation.lexical_scope
 }
 
-;;;;;;;;;;;
-;; Comments
+;; ==========
+;;  Comments
+;; ==========
 
 (line_comment)@line_comment {
   node @line_comment.before_scope
