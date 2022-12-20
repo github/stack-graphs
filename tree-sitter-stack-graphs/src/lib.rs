@@ -145,6 +145,21 @@
 //! (the entirety of the function definition) and for the _name_ of the definition (the content of
 //! the function's `name`).
 //!
+//! Adding the `empty_source_span` attribute will use an empty source span located at the start of the
+//! span of the `source_node`. This can be useful when a proper reference or definition is desired,
+//! and thus `source_node` is required, but the span of the available source node is too large. For
+//! example, a module definition which is located at the start of the program, but does span the
+//! whole program:
+//!
+//! ``` skip
+//! (program)@prog {
+//!   ; ...
+//!   node mod_def
+//!   attr mod_def type = "pop_symbol", symbol = mod_name, is_definition, source_node = @prog, empty_source_span
+//!   ; ...
+//! }
+//! ```
+//!
 //! ### Connecting stack graph nodes with edges
 //!
 //! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
@@ -304,6 +319,7 @@ use stack_graphs::graph::StackGraph;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::mem::transmute;
+use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use thiserror::Error;
@@ -316,13 +332,15 @@ use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::parse_error::ParseError;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
-use tree_sitter_graph::Variables;
 
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod functions;
 pub mod loader;
 pub mod test;
+
+pub use tree_sitter_graph::VariableError;
+pub use tree_sitter_graph::Variables;
 
 // Node type values
 static DROP_SCOPES_TYPE: &'static str = "drop_scopes";
@@ -334,9 +352,10 @@ static SCOPE_TYPE: &'static str = "scope";
 
 // Node attribute names
 static DEBUG_ATTR_PREFIX: &'static str = "debug_";
+static EMPTY_SOURCE_SPAN_ATTR: &'static str = "empty_source_span";
 static IS_DEFINITION_ATTR: &'static str = "is_definition";
-static IS_EXPORTED_ATTR: &'static str = "is_exported";
 static IS_ENDPOINT_ATTR: &'static str = "is_endpoint";
+static IS_EXPORTED_ATTR: &'static str = "is_exported";
 static IS_REFERENCE_ATTR: &'static str = "is_reference";
 static SCOPE_ATTR: &'static str = "scope";
 static SOURCE_NODE_ATTR: &'static str = "source_node";
@@ -371,7 +390,6 @@ pub struct StackGraphLanguage {
     language: tree_sitter::Language,
     tsg: tree_sitter_graph::ast::File,
     functions: Functions,
-    builtins: StackGraph,
 }
 
 impl StackGraphLanguage {
@@ -386,7 +404,6 @@ impl StackGraphLanguage {
             language,
             tsg,
             functions: Self::default_functions(),
-            builtins: StackGraph::new(),
         })
     }
 
@@ -401,7 +418,6 @@ impl StackGraphLanguage {
             language,
             tsg,
             functions: Self::default_functions(),
-            builtins: StackGraph::new(),
         })
     }
 
@@ -413,14 +429,6 @@ impl StackGraphLanguage {
 
     pub fn functions_mut(&mut self) -> &mut tree_sitter_graph::functions::Functions {
         &mut self.functions
-    }
-
-    pub fn builtins(&self) -> &StackGraph {
-        &self.builtins
-    }
-
-    pub fn builtins_mut(&mut self) -> &mut StackGraph {
-        &mut self.builtins
     }
 
     pub fn language(&self) -> tree_sitter::Language {
@@ -571,6 +579,7 @@ impl<'a> Builder<'a> {
 pub trait CancellationFlag {
     fn flag(&self) -> Option<&AtomicUsize>;
 }
+
 impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), stack_graphs::CancellationError> {
         if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
@@ -579,6 +588,7 @@ impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
         Ok(())
     }
 }
+
 impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
         if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
@@ -589,6 +599,7 @@ impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
 }
 
 pub struct NoCancellation;
+
 impl CancellationFlag for NoCancellation {
     fn flag(&self) -> Option<&AtomicUsize> {
         None
@@ -870,7 +881,13 @@ impl<'a> Builder<'a> {
             Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };
-        let span = self.span_calculator.for_node(source_node);
+        let mut span = self.span_calculator.for_node(source_node);
+        if match node.attributes.get(EMPTY_SOURCE_SPAN_ATTR) {
+            Some(empty_source_span) => empty_source_span.as_boolean()?,
+            None => false,
+        } {
+            span.end = span.start.clone();
+        }
         let containing_line = &self.source[span.start.containing_line.clone()];
         let containing_line = self.stack_graph.add_string(containing_line);
         let source_info = self.stack_graph.source_info_mut(node_handle);
@@ -912,10 +929,24 @@ impl<'a> Builder<'a> {
             let id = id.as_str();
             if !allowed_attributes.contains(id)
                 && id != SOURCE_NODE_ATTR
+                && id != EMPTY_SOURCE_SPAN_ATTR
                 && !id.starts_with(DEBUG_ATTR_PREFIX)
             {
                 eprintln!("Unexpected attribute {} on node of type {}", id, node_type);
             }
         }
     }
+}
+
+pub trait FileAnalyzer {
+    fn build_stack_graph_into<'a>(
+        &self,
+        stack_graph: &mut StackGraph,
+        file: Handle<File>,
+        path: &Path,
+        source: &str,
+        all_paths: &mut dyn Iterator<Item = &'a Path>,
+        globals: &HashMap<String, String>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<(), LoadError>;
 }

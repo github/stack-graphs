@@ -24,6 +24,7 @@ use walkdir::WalkDir;
 use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
 use crate::cli::util::PathSpec;
+use crate::loader::LanguageConfiguration;
 use crate::loader::Loader;
 use crate::test::Test;
 use crate::test::TestResult;
@@ -193,7 +194,7 @@ impl TestArgs {
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
         let source = std::fs::read_to_string(test_path)?;
-        let sgl = match loader.load_for_file(test_path, Some(&source), &NoCancellation)? {
+        let lc = match loader.load_for_file(test_path, Some(&source), &NoCancellation)? {
             Some(sgl) => sgl,
             None => {
                 if self.show_ignored {
@@ -204,28 +205,43 @@ impl TestArgs {
         };
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
-        self.load_builtins_into(sgl, &mut test.graph)
+        self.load_builtins_into(&lc, &mut test.graph)
             .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
-            let fragment_path = Path::new(test.graph[test_fragment.file].name()).to_path_buf();
-            if test_path.extension() != fragment_path.extension() {
+            if let Some(fa) = test_fragment
+                .path
+                .file_name()
+                .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
+            {
+                let mut all_paths = test.fragments.iter().map(|f| f.path.as_path());
+                fa.build_stack_graph_into(
+                    &mut test.graph,
+                    test_fragment.file,
+                    &test_fragment.path,
+                    &test_fragment.source,
+                    &mut all_paths,
+                    &test_fragment.globals,
+                    &NoCancellation,
+                )?;
+            } else if lc.matches_file(&test_fragment.path, Some(&test_fragment.source)) {
+                globals.clear();
+                test_fragment.add_globals_to(&mut globals);
+                self.build_fragment_stack_graph_into(
+                    &test_fragment.path,
+                    &lc.sgl,
+                    test_fragment.file,
+                    &test_fragment.source,
+                    &globals,
+                    &mut test.graph,
+                )?;
+            } else {
                 return Err(anyhow!(
-                    "Test fragment {} has different file extension than test file {}",
-                    fragment_path.display(),
-                    test_path.display()
+                    "Test fragment {} not supported by language of test file {}",
+                    test_fragment.path.display(),
+                    test.path.display()
                 ));
             }
-            globals.clear();
-            test_fragment.add_globals_to(&mut globals);
-            self.build_fragment_stack_graph_into(
-                &fragment_path,
-                sgl,
-                test_fragment.file,
-                &test_fragment.source,
-                &globals,
-                &mut test.graph,
-            )?;
         }
         let result = test.run(&NoCancellation)?;
         let success = self.handle_result(test_path, &result)?;
@@ -245,10 +261,10 @@ impl TestArgs {
 
     fn load_builtins_into(
         &self,
-        sgl: &mut StackGraphLanguage,
+        lc: &LanguageConfiguration,
         graph: &mut StackGraph,
     ) -> anyhow::Result<()> {
-        if let Err(h) = graph.add_from_graph(sgl.builtins()) {
+        if let Err(h) = graph.add_from_graph(&lc.builtins) {
             return Err(anyhow!("Duplicate builtin file {}", &graph[h]));
         }
         Ok(())
@@ -257,7 +273,7 @@ impl TestArgs {
     fn build_fragment_stack_graph_into(
         &self,
         test_path: &Path,
-        sgl: &mut StackGraphLanguage,
+        sgl: &StackGraphLanguage,
         file: Handle<File>,
         source: &str,
         globals: &Variables,

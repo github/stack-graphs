@@ -1,0 +1,8 @@
+/*--- path: ./ModA.ts ---*/
+
+export const a = 42;
+
+/*--- path: ./B/ModB.ts ---*/
+
+import { a } from "./ModA";
+//       ^ defined:
