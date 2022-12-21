@@ -38,10 +38,6 @@ impl FileAnalyzer for TsConfigAnalyzer {
         _cancellation_flag: &dyn tree_sitter_stack_graphs::CancellationFlag,
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
         // read globals
-        let pkg_name = globals
-            .get("PACKAGE_NAME")
-            .map(String::as_str)
-            .unwrap_or("");
         let proj_name = globals
             .get("PROJECT_NAME")
             .map(String::as_str)
@@ -72,11 +68,7 @@ impl FileAnalyzer for TsConfigAnalyzer {
         let root_dir_ref =
             self.add_module_pushes(graph, file, M_NS, &tsc.root_dir(all_paths), proj_scope);
         self.add_debug_name(graph, root_dir_ref, "root_dir.ref");
-
-        // package definition
-        let pkg_def = self.add_module_pops(graph, file, NON_REL_M_NS, Path::new(pkg_name), root);
-        self.add_debug_name(graph, pkg_def, "pkg_def");
-        self.add_edge(graph, pkg_def, root_dir_ref, 0);
+        // TODO: Edge ??? -> root_dir_ref
 
         // auxiliary root directories, map relative imports to module paths
         for (idx, root_dir) in tsc.root_dirs().iter().enumerate() {
