@@ -389,7 +389,7 @@ impl TsConfig {
             }
 
             // reject files not in the include patterns
-            if include.iter().any(|i| i.matches_path(p)) {
+            if !include.iter().any(|i| i.matches_path(p)) {
                 return None;
             }
 
