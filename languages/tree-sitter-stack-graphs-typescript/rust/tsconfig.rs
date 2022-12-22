@@ -35,7 +35,7 @@ impl FileAnalyzer for TsConfigAnalyzer {
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
         // read globals
         let proj_name = globals
-            .get("PROJECT_NAME")
+            .get(crate::PROJECT_NAME_VAR)
             .map(String::as_str)
             .unwrap_or("");
 
@@ -48,41 +48,49 @@ impl FileAnalyzer for TsConfigAnalyzer {
         // project scope
         let proj_scope_id = graph.new_node_id(file);
         let proj_scope = graph.add_scope_node(proj_scope_id, false).unwrap();
-        add_debug_name(graph, proj_scope, "proj_scope");
+        add_debug_name(graph, proj_scope, "tsconfig.proj_scope");
 
         // project definition
         let proj_def = add_ns_pop(graph, file, root, PROJ_NS, proj_name);
-        add_debug_name(graph, proj_def, "proj_def");
+        add_debug_name(graph, proj_def, "tsconfig.proj_def");
         add_edge(graph, proj_def, proj_scope, 0);
 
         // project reference
         let proj_ref = add_ns_push(graph, file, root, PROJ_NS, proj_name);
-        add_debug_name(graph, proj_ref, "proj_ref");
+        add_debug_name(graph, proj_ref, "tsconfig.proj_ref");
         add_edge(graph, proj_scope, proj_ref, 0);
 
         // root directory
         let pkg_def = add_pop(graph, file, proj_scope, PKG_M_NS);
-        add_debug_name(graph, pkg_def, "pkg_def");
+        add_debug_name(graph, pkg_def, "tsconfig.pkg_def");
         let root_dir_ref =
             add_module_pushes(graph, file, M_NS, &tsc.root_dir(all_paths), proj_scope);
-        add_debug_name(graph, root_dir_ref, "root_dir.ref");
+        add_debug_name(graph, root_dir_ref, "tsconfig.root_dir.ref");
         add_edge(graph, pkg_def, root_dir_ref, 0);
 
         // auxiliary root directories, map relative imports to module paths
         for (idx, root_dir) in tsc.root_dirs().iter().enumerate() {
             let root_dir_def = add_pop(graph, file, proj_scope, REL_M_NS);
-            add_debug_name(graph, root_dir_def, &format!("root_dirs[{}].def", idx));
+            add_debug_name(
+                graph,
+                root_dir_def,
+                &format!("tsconfig.root_dirs[{}].def", idx),
+            );
             let root_dir_ref = add_module_pushes(graph, file, M_NS, root_dir, proj_scope);
-            add_debug_name(graph, root_dir_ref, &format!("root_dirs[{}].ref", idx));
+            add_debug_name(
+                graph,
+                root_dir_ref,
+                &format!("tsconfig.root_dirs[{}].ref", idx),
+            );
             add_edge(graph, root_dir_def, root_dir_ref, 0);
         }
 
         // base URL
         let base_url = tsc.base_url();
         let base_url_def = add_pop(graph, file, proj_scope, NON_REL_M_NS);
-        add_debug_name(graph, base_url_def, "base_url.def");
+        add_debug_name(graph, base_url_def, "tsconfig.base_url.def");
         let base_url_ref = add_module_pushes(graph, file, M_NS, &base_url, proj_scope);
-        add_debug_name(graph, base_url_ref, "base_url.ref");
+        add_debug_name(graph, base_url_ref, "tsconfig.base_url.ref");
         add_edge(graph, base_url_def, base_url_ref, 0);
 
         // path mappings
@@ -94,14 +102,18 @@ impl FileAnalyzer for TsConfigAnalyzer {
                 &from
             };
             let from_def = add_module_pops(graph, file, NON_REL_M_NS, from, proj_scope);
-            add_debug_name(graph, from_def, &format!("paths[{}].from_def", from_idx));
+            add_debug_name(
+                graph,
+                from_def,
+                &format!("tsconfig.paths[{}].from_def", from_idx),
+            );
             for (to_idx, to) in tos.iter().enumerate() {
                 let to = if is_prefix { to.parent().unwrap() } else { &to };
                 let to_ref = add_module_pushes(graph, file, M_NS, to, proj_scope);
                 add_debug_name(
                     graph,
                     to_ref,
-                    &format!("paths[{}][{}].to_ref", from_idx, to_idx),
+                    &format!("tsconfig.paths[{}][{}].to_ref", from_idx, to_idx),
                 );
                 add_edge(graph, from_def, to_ref, 0);
             }

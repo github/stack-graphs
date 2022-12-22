@@ -21,7 +21,7 @@ pub const PKG_M_NS: &str = "%PkgM";
 
 pub fn add_debug_name(graph: &mut StackGraph, node: Handle<Node>, name: &str) {
     let key = graph.add_string("name");
-    let value = graph.add_string(&["tsconfig", name].join("."));
+    let value = graph.add_string(name);
     graph.debug_info_mut(node).add(key, value);
 }
 

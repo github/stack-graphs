@@ -190,7 +190,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;     proj_scope -> ↑"%PkgM" -> ↓"src" -> ↓"%M"
 ;
 ; The various references and definitions for `tsconfig.json` are not created by this TSG file, but
-; by the `TsConfigAnalyzer` defined in `rust/tsconfig.rs`.
+; by the `TsConfigAnalyzer` defined in `rust/tsconfig.rs`. The global package definition is created
+; by the `NpmPackageAnalyzer` in `rust/npm_package.rs`.
 
 
 

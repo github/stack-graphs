@@ -5,11 +5,14 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use crate::tsconfig::TsConfigAnalyzer;
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::CancellationFlag;
 
+use crate::npm_package::NpmPackageAnalyzer;
+use crate::tsconfig::TsConfigAnalyzer;
+
+pub mod npm_package;
 pub mod tsconfig;
 pub mod util;
 
@@ -35,7 +38,9 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
         STACK_GRAPHS_TSG_SOURCE,
         Some(STACK_GRAPHS_BUILTINS_SOURCE),
         Some(STACK_GRAPHS_BUILTINS_CONFIG),
-        FileAnalyzers::new().add("tsconfig.json".to_string(), TsConfigAnalyzer {}),
+        FileAnalyzers::new()
+            .add("tsconfig.json".to_string(), TsConfigAnalyzer {})
+            .add("package.json".to_string(), NpmPackageAnalyzer {}),
         cancellation_flag,
     )
     .unwrap()
