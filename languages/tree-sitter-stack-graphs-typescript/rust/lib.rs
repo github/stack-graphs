@@ -11,6 +11,7 @@ use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::CancellationFlag;
 
 pub mod tsconfig;
+pub mod util;
 
 /// The stack graphs tsg source for this language
 pub const STACK_GRAPHS_TSG_SOURCE: &str = include_str!("../src/stack-graphs.tsg");
