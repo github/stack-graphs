@@ -61,9 +61,12 @@ impl FileAnalyzer for TsConfigAnalyzer {
         add_edge(graph, proj_scope, proj_ref, 0);
 
         // root directory
+        let pkg_def = add_pop(graph, file, proj_scope, PKG_M_NS);
+        add_debug_name(graph, pkg_def, "pkg_def");
         let root_dir_ref =
             add_module_pushes(graph, file, M_NS, &tsc.root_dir(all_paths), proj_scope);
         add_debug_name(graph, root_dir_ref, "root_dir.ref");
+        add_edge(graph, pkg_def, root_dir_ref, 0);
 
         // auxiliary root directories, map relative imports to module paths
         for (idx, root_dir) in tsc.root_dirs().iter().enumerate() {

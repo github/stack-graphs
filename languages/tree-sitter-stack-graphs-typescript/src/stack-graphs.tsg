@@ -172,18 +172,22 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;
 ;     proj_scope -> ↑"%RelM" -> ↓"util" -> ↓"src" -> ↓"%M" -> proj_scope
 ;
-; Non-relative imports appear as "%NonRelM" NAME* definitions in either a project scope, or the global scope. The global
-; definition rewrites the package name to a projects root dir.
-;
-; For example, a package `@my/pkg` with source directory `src` would appear as:
-;
-;     ROOT_NODE -> ↑"%NonRelM" -> ↑"@my" -> ↑"pkg" -> ↓"src" -> ↓"%M"
+; Non-relative imports appear as "%NonRelM" NAME* definitions in either a project scope, or the global scope.
 ;
 ; Non-relative definitions in a project scope are the result of path mappings in `tsconfig.json`.
 ;
 ; For example, given `paths: { "util": ["./my_util"] }` with base URL `./src`, we get:
 ;
 ;     proj_scope -> ↑"%NonRelM" -> ↑"%util" -> ↓"my_util" -> ↓"src" -> ↓"%M"
+;
+; The global definition rewrites the package name to a projects root dir, via a "%PkgM" node.
+; The "%PkgM" node maps to source files in the root directory. A "%NonRelM" NAME* definition in
+; the global scope maps non-relative module paths starting with the package name to the "%PkgM" node.
+;
+; For example, a package `@my/pkg` defined in project `MyProject` with source directory `src` would appear as:
+;
+;     ROOT_NODE -> ↑"%NonRelM" -> ↑"@my" -> ↑"pkg" -> ↓"%PkgM" -> proj_scope
+;     proj_scope -> ↑"%PkgM" -> ↓"src" -> ↓"%M"
 ;
 ; The various references and definitions for `tsconfig.json` are not created by this TSG file, but
 ; by the `TsConfigAnalyzer` defined in `rust/tsconfig.rs`.
