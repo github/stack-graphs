@@ -16,10 +16,10 @@ Run all tests in the project by executing the following:
     cargo test -p tree-sitter-stack-graphs-java
 
 Parse a single test file:
-  `cargo run -p tree-sitter-stack-graphs-java --features=cli -- parse OPTIONS FILENAME`
+  `cargo run -p tree-sitter-stack-graphs-java -- parse OPTIONS FILENAME`
 
 Test a single file:
-  `cargo run -p tree-sitter-stack-graphs-java --features=cli -- test OPTIONS FILENAME`
+  `cargo run -p tree-sitter-stack-graphs-java -- test OPTIONS FILENAME`
 
 For debugging purposes, it is useful to run the visualization tool to generate graphs for the tests being run.
 
