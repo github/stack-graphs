@@ -25,13 +25,13 @@ attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol
 
 attribute node_symbol = node            => symbol = (source-text node), source_node = node
 
-; ######                                                   
-; #     # #####   ####   ####  #####    ##   #    #  ####  
-; #     # #    # #    # #    # #    #  #  #  ##  ## #      
-; ######  #    # #    # #      #    # #    # # ## #  ####  
-; #       #####  #    # #  ### #####  ###### #    #      # 
-; #       #   #  #    # #    # #   #  #    # #    # #    # 
-; #       #    #  ####   ####  #    # #    # #    #  ####  
+; ######
+; #     # #####   ####   ####  #####    ##   #    #  ####
+; #     # #    # #    # #    # #    #  #  #  ##  ## #
+; ######  #    # #    # #      #    # #    # # ## #  ####
+; #       #####  #    # #  ### #####  ###### #    #      #
+; #       #   #  #    # #    # #   #  #    # #    # #    #
+; #       #    #  ####   ####  #    # #    # #    #  ####
 ;
 ; ########################################################
 
@@ -99,7 +99,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 ;; =====================
-;;  Member Declarations 
+;;  Member Declarations
 ;; =====================
 
 (field_declaration
