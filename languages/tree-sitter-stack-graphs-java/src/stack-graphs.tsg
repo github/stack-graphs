@@ -249,6 +249,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge ref -> @field_access.lexical_scope
 }
 
+(method_invocation) @method_invocation
+{
+  node @method_invocation.before_scope
+  node @method_invocation.after_scope
+  node @method_invocation.lexical_scope
+}
+
 (method_invocation
   name: (identifier) @method_name) @method_invocation {
 
@@ -284,13 +291,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @method_name.value -> @method_name.expr_ref__ns
     attr(@method_name.value -> @method_name.expr_ref__ns) precedence = 1
     edge @method_name.expr_ref__ns -> @method_invocation.lexical_scope
-}
-
-(method_invocation) @method_invocation
-{
-  node @method_invocation.before_scope
-  node @method_invocation.after_scope
-  node @method_invocation.lexical_scope
 }
 
 ;; ==========
