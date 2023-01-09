@@ -77,11 +77,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (type_identifier) @identifier) @superclass
     body: (class_body) @class_body) @class {
 
+    node @class.expr_def__ns
+    attr (@class.expr_def__ns) push_symbol = "%E"
+
     node ref
     attr (ref) node_reference = @identifier
 
     edge ref -> @class.lexical_scope
     edge @class_body.lexical_scope -> ref
+    edge @class_body.lexical_scope -> @class.expr_def__ns
 }
 
 (class_body) @class_body {
@@ -118,9 +122,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @method.defs
   node @method.lexical_scope
 
+  node @name.expr_ref
+  attr (@name.expr_ref) node_reference = @name
+
+  node @name.expr_ref__ns
+  attr(@name.expr_ref__ns) pop_symbol = "%E"
+
   node def
   attr (def) node_definition = @name
 
+  edge @method.defs -> @name.expr_ref__ns
+  attr(@method.defs -> @name.expr_ref__ns) precedence = 1
+  edge @name.expr_ref__ns -> def
+  attr(@name.expr_ref__ns -> def) precedence = 1
   edge @method.defs -> def
 }
 
@@ -258,6 +272,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @identifier.ref -> @method_invocation.after_scope
   edge @method_invocation.after_scope -> @method_invocation.lexical_scope
+}
+
+(method_invocation
+  object: (super)
+  name: (identifier) @method_name) @method_invocation {
+    node @method_name.expr_ref
+    attr (@method_name.expr_ref) node_reference = @method_name
+    node @method_name.expr_ref__ns
+    attr (@method_name.expr_ref__ns) push_symbol = "%E"
+    edge @method_name.value -> @method_name.expr_ref__ns
+    attr(@method_name.value -> @method_name.expr_ref__ns) precedence = 1
+    edge @method_name.expr_ref__ns -> @method_invocation.lexical_scope
 }
 
 (method_invocation) @method_invocation
