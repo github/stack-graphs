@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.10.2 -- 2023-01-10
+
+### Changed
+
+- The up and down text arrows in the labels of push and pop nodes in the visualization have been replaced by bigger arrows that are part of the node shape. This makes it easier to quickly identify push and pop nodes in the graph.
+
+### Fixed
+
+- The `bitvec` dependency was updated to fix installation problems.
+
 ## 0.10.1 -- 2022-09-07
 
 ### Changed
