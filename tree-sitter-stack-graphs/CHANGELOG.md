@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.5.0 -- 2023-01-10
+
+### Library
+
+#### Added
+
+- A new `cli` module contains the CLI implementation. It can be reused to create language-specific CLIs that do not rely on loading from the file system.
+- An `empty_source_span` attribute can be used in TSG rules to collapse the source span to its start, instead of covering the whole source node.
+- A new `FileAnalyzer` trait can be implemented to implement custom analysis of special project files such as package manifests or project configurations.
+
+#### Changed
+
+- Language loading has been redesigned to have clearer responsiilities for the various types involved. Loaders now return instances of `LanguageConfiguration`, which holds not just the `StackGraphLanguage` necessary to execute the TSG, but also other data about the language, such as file types, special file analyzers, and the builtins stack graph. The `StackGraphLanguage` is now only responsible for executing TSGs, and does not contain the language's `builtins` anymore.
+
+#### Fixed
+
+- A bug in path normalization that would lose `..` prefixes for paths whose normal form starts with `..` components.
+
+### CLI
+
 ## 0.4.1 -- 2022-10-19
 
 ### CLI
