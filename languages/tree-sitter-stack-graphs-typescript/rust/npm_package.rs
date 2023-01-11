@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use serde::Deserialize;
-use stack_graphs::graph::NodeID;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -42,7 +41,7 @@ impl FileAnalyzer for NpmPackageAnalyzer {
             serde_json::from_str(source).map_err(|_| LoadError::ParseError)?;
 
         // root node
-        let root = graph.node_for_id(NodeID::root()).unwrap();
+        let root = StackGraph::root_node();
 
         // project scope
         let proj_scope_id = graph.new_node_id(file);
