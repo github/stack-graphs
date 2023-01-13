@@ -5,9 +5,17 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use anyhow::Result;
-use tree_sitter_stack_graphs::cli::PathLoadingCli;
+use clap::Parser;
+use tree_sitter_stack_graphs::cli::path_loading::Subcommands;
 
-fn main() -> Result<()> {
-    PathLoadingCli::main()
+#[derive(Parser)]
+#[clap(about, version)]
+pub struct Cli {
+    #[clap(subcommand)]
+    subcommand: Subcommands,
+}
+
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+    cli.subcommand.run()
 }
