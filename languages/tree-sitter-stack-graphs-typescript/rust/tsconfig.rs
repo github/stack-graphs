@@ -50,35 +50,40 @@ impl FileAnalyzer for TsConfigAnalyzer {
         add_debug_name(graph, proj_scope, "tsconfig.proj_scope");
 
         // project definition
-        let proj_def = add_ns_pop(graph, file, root, PROJ_NS, proj_name);
-        add_debug_name(graph, proj_def, "tsconfig.proj_def");
+        let proj_def = add_ns_pop(graph, file, root, PROJ_NS, proj_name, "tsconfig.proj_def");
         add_edge(graph, proj_def, proj_scope, 0);
 
         // project reference
-        let proj_ref = add_ns_push(graph, file, root, PROJ_NS, proj_name);
-        add_debug_name(graph, proj_ref, "tsconfig.proj_ref");
+        let proj_ref = add_ns_push(graph, file, root, PROJ_NS, proj_name, "tsconfig.proj_ref");
         add_edge(graph, proj_scope, proj_ref, 0);
 
         // root directory
-        let pkg_def = add_pop(graph, file, proj_scope, PKG_M_NS);
-        add_debug_name(graph, pkg_def, "tsconfig.pkg_def");
-        let root_dir_ref =
-            add_module_pushes(graph, file, M_NS, &tsc.root_dir(all_paths), proj_scope);
-        add_debug_name(graph, root_dir_ref, "tsconfig.root_dir.ref");
+        let pkg_def = add_pop(graph, file, proj_scope, PKG_M_NS, "tsconfig.pkg_def");
+        let root_dir_ref = add_module_pushes(
+            graph,
+            file,
+            M_NS,
+            &tsc.root_dir(all_paths),
+            proj_scope,
+            "tsconfig.root_dir.ref",
+        );
         add_edge(graph, pkg_def, root_dir_ref, 0);
 
         // auxiliary root directories, map relative imports to module paths
         for (idx, root_dir) in tsc.root_dirs().iter().enumerate() {
-            let root_dir_def = add_pop(graph, file, proj_scope, REL_M_NS);
-            add_debug_name(
+            let root_dir_def = add_pop(
                 graph,
-                root_dir_def,
+                file,
+                proj_scope,
+                REL_M_NS,
                 &format!("tsconfig.root_dirs[{}].def", idx),
             );
-            let root_dir_ref = add_module_pushes(graph, file, M_NS, root_dir, proj_scope);
-            add_debug_name(
+            let root_dir_ref = add_module_pushes(
                 graph,
-                root_dir_ref,
+                file,
+                M_NS,
+                root_dir,
+                proj_scope,
                 &format!("tsconfig.root_dirs[{}].ref", idx),
             );
             add_edge(graph, root_dir_def, root_dir_ref, 0);
@@ -86,10 +91,21 @@ impl FileAnalyzer for TsConfigAnalyzer {
 
         // base URL
         let base_url = tsc.base_url();
-        let base_url_def = add_pop(graph, file, proj_scope, NON_REL_M_NS);
-        add_debug_name(graph, base_url_def, "tsconfig.base_url.def");
-        let base_url_ref = add_module_pushes(graph, file, M_NS, &base_url, proj_scope);
-        add_debug_name(graph, base_url_ref, "tsconfig.base_url.ref");
+        let base_url_def = add_pop(
+            graph,
+            file,
+            proj_scope,
+            NON_REL_M_NS,
+            "tsconfig.base_url.def",
+        );
+        let base_url_ref = add_module_pushes(
+            graph,
+            file,
+            M_NS,
+            &base_url,
+            proj_scope,
+            "tsconfig.base_url.ref",
+        );
         add_edge(graph, base_url_def, base_url_ref, 0);
 
         // path mappings
@@ -100,18 +116,22 @@ impl FileAnalyzer for TsConfigAnalyzer {
             } else {
                 &from
             };
-            let from_def = add_module_pops(graph, file, NON_REL_M_NS, from, proj_scope);
-            add_debug_name(
+            let from_def = add_module_pops(
                 graph,
-                from_def,
+                file,
+                NON_REL_M_NS,
+                from,
+                proj_scope,
                 &format!("tsconfig.paths[{}].from_def", from_idx),
             );
             for (to_idx, to) in tos.iter().enumerate() {
                 let to = if is_prefix { to.parent().unwrap() } else { &to };
-                let to_ref = add_module_pushes(graph, file, M_NS, to, proj_scope);
-                add_debug_name(
+                let to_ref = add_module_pushes(
                     graph,
-                    to_ref,
+                    file,
+                    M_NS,
+                    to,
+                    proj_scope,
                     &format!("tsconfig.paths[{}][{}].to_ref", from_idx, to_idx),
                 );
                 add_edge(graph, from_def, to_ref, 0);

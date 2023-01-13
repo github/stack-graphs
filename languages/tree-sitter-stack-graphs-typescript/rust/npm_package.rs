@@ -49,20 +49,37 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         add_debug_name(graph, proj_scope, "npm_package.proj_scope");
 
         // project definition
-        let proj_def = add_ns_pop(graph, file, root, PROJ_NS, proj_name);
-        add_debug_name(graph, proj_def, "npm_package.proj_def");
+        let proj_def = add_ns_pop(
+            graph,
+            file,
+            root,
+            PROJ_NS,
+            proj_name,
+            "npm_package.proj_def",
+        );
         add_edge(graph, proj_def, proj_scope, 0);
 
         // project reference
-        let proj_ref = add_ns_push(graph, file, root, PROJ_NS, proj_name);
-        add_debug_name(graph, proj_ref, "npm_package.proj_ref");
+        let proj_ref = add_ns_push(
+            graph,
+            file,
+            root,
+            PROJ_NS,
+            proj_name,
+            "npm_package.proj_ref",
+        );
         add_edge(graph, proj_scope, proj_ref, 0);
 
         // package definition
-        let pkg_def = add_module_pops(graph, file, NON_REL_M_NS, Path::new(&npm_pkg.name), root);
-        add_debug_name(graph, pkg_def, "npm_package.pkg_def");
-        let pkg_ref = add_push(graph, file, proj_scope, PKG_M_NS);
-        add_debug_name(graph, pkg_ref, "npm_package.pkg_ref");
+        let pkg_def = add_module_pops(
+            graph,
+            file,
+            NON_REL_M_NS,
+            Path::new(&npm_pkg.name),
+            root,
+            "npm_package.pkg_def",
+        );
+        let pkg_ref = add_push(graph, file, proj_scope, PKG_M_NS, "npm_package.pkg_ref");
         add_edge(graph, pkg_def, pkg_ref, 0);
 
         Ok(())
