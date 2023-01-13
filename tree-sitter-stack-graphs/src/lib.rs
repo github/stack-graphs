@@ -334,6 +334,8 @@ use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
 
 #[cfg(feature = "cli")]
+pub mod ci;
+#[cfg(feature = "cli")]
 pub mod cli;
 pub mod functions;
 pub mod loader;
