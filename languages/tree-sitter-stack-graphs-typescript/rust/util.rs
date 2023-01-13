@@ -30,11 +30,13 @@ pub fn add_pop(
     file: Handle<File>,
     from: Handle<Node>,
     name: &str,
+    debug_name: &str,
 ) -> Handle<Node> {
     let id = graph.new_node_id(file);
     let sym = graph.add_symbol(name);
     let node = graph.add_pop_symbol_node(id, sym, false).unwrap();
     graph.add_edge(from, node, 0);
+    add_debug_name(graph, node, debug_name);
     node
 }
 
@@ -43,11 +45,13 @@ pub fn add_push(
     file: Handle<File>,
     to: Handle<Node>,
     name: &str,
+    debug_name: &str,
 ) -> Handle<Node> {
     let id = graph.new_node_id(file);
     let sym = graph.add_symbol(name);
     let node = graph.add_push_symbol_node(id, sym, false).unwrap();
     graph.add_edge(node, to, 0);
+    add_debug_name(graph, node, debug_name);
     node
 }
 
@@ -57,9 +61,10 @@ pub fn add_ns_pop(
     from: Handle<Node>,
     ns: &str,
     name: &str,
+    debug_prefix: &str,
 ) -> Handle<Node> {
-    let ns_node = add_pop(graph, file, from, ns);
-    let pop_node = add_pop(graph, file, ns_node, name);
+    let ns_node = add_pop(graph, file, from, ns, &format!("{}.ns", debug_prefix));
+    let pop_node = add_pop(graph, file, ns_node, name, debug_prefix);
     pop_node
 }
 
@@ -69,9 +74,10 @@ pub fn add_ns_push(
     to: Handle<Node>,
     ns: &str,
     name: &str,
+    debug_prefix: &str,
 ) -> Handle<Node> {
-    let ns_node = add_push(graph, file, to, ns);
-    let push_node = add_push(graph, file, ns_node, name);
+    let ns_node = add_push(graph, file, to, ns, &format!("{}.ns", debug_prefix));
+    let push_node = add_push(graph, file, ns_node, name, debug_prefix);
     push_node
 }
 
@@ -88,13 +94,20 @@ pub fn add_module_pops(
     ns: &str,
     path: &Path,
     from: Handle<Node>,
+    debug_prefix: &str,
 ) -> Handle<Node> {
-    let ns_node = add_pop(graph, file, from, ns);
+    let ns_node = add_pop(graph, file, from, ns, &format!("{}.ns", debug_prefix));
     let mut node = ns_node;
-    for c in path.components() {
+    for (i, c) in path.components().enumerate() {
         match c {
             Component::Normal(name) => {
-                node = add_pop(graph, file, node, &name.to_string_lossy());
+                node = add_pop(
+                    graph,
+                    file,
+                    node,
+                    &name.to_string_lossy(),
+                    &format!("{}[{}]", debug_prefix, i),
+                );
             }
             _ => {
                 eprintln!(
@@ -113,13 +126,20 @@ pub fn add_module_pushes(
     ns: &str,
     path: &Path,
     to: Handle<Node>,
+    debug_prefix: &str,
 ) -> Handle<Node> {
-    let ns_node = add_push(graph, file, to, ns);
+    let ns_node = add_push(graph, file, to, ns, &format!("{}.ns", debug_prefix));
     let mut node = ns_node;
-    for c in path.components() {
+    for (i, c) in path.components().enumerate() {
         match c {
             Component::Normal(name) => {
-                node = add_push(graph, file, node, &name.to_string_lossy());
+                node = add_push(
+                    graph,
+                    file,
+                    node,
+                    &name.to_string_lossy(),
+                    &format!("{}[{}]", debug_prefix, i),
+                );
             }
             _ => {
                 eprintln!(
