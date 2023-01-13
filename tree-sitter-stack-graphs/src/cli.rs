@@ -30,7 +30,7 @@
 //! }
 //! ```
 //!
-//! ## Provided langauges CLIs
+//! ## Provided languages CLIs
 //!
 //! Provided languages CLIs use directly provided language configuration instances.
 //! Derive a language configuration CLI as follows:
