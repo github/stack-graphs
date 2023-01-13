@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.6.0 -- 2023-01-13
 
 ### Library
 
@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `cli` module has been reorganized. Instead of providing a fully derived CLI type, the subcommands are now exposed, while deriving the CLI type is left to the user. This makes sure that the name and version reported by the version command are ones from the user crate, and not from this crate. Instead of using `cli::LanguageConfigurationsCli` and `cli::PathLoadingCli`, users should using from `cli::provided_languages::Subcommands` and `cli::path_loading::Subcommands` respectively. The `cli` module documentation shows complete examples of how to do this.
 - The `cli::CiTester` type has been moved to `ci::Tester`. Because it uses `cli` code internally, it is still hidden behind the `cli` feature flag.
+
+#### Fixed
+
+- Fix issue with test directives in languages that do not support comments.
 
 ## v0.5.1 -- 2023-01-10
 
