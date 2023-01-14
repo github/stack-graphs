@@ -258,27 +258,36 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (method_invocation
   name: (identifier) @method_name) @method_invocation {
-
   node @method_name.value
   attr (@method_name.value) node_reference = @method_name
+  ; TODO: remove this if not needed for super
   edge @method_name.value -> @method_invocation.before_scope
   node @method_invocation.defs
   edge @method_name.value -> @method_invocation.lexical_scope
 }
 
-(method_invocation
-  object:
-    object:
-    field: (identifier) @identifier
-  name: (identifier) @method_name) @method_invocation {
+(local_variable_declaration
+  declarator: (variable_declarator
+    name: (identifier) @identifier
+    value: (object_creation_expression
+      type: (type_identifier) @object)
+  )) @local_variable {
+  node @object.value
+  attr (@object.value) node_reference = @object
+  edge @local_variable.after_scope -> @object.value
+  edge @object.value -> @local_variable.after_scope
+}
+
+(expression_statement
+  (method_invocation
+    object: (identifier) @identifier
+    name: (identifier) @method_name) @method_invocation) @expr_stmt {
 
   node @identifier.ref
   attr (@identifier.ref) node_reference = @identifier
 
-  edge @method_name.value -> @identifier.ref
-
-  edge @identifier.ref -> @method_invocation.after_scope
-  edge @method_invocation.after_scope -> @method_invocation.lexical_scope
+  edge @identifier.ref -> @method_invocation.lexical_scope
+  edge @expr_stmt.after_scope -> @method_invocation.lexical_scope
 }
 
 (method_invocation
