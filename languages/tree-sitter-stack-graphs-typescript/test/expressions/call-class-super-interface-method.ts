@@ -15,7 +15,7 @@ let foo: C;
 
   foo.m(null).value;
 //^ defined: 13
-//    ^ defined: 4, 10
+//    ^ defined: 10
 //            ^ defined: 1
 
 export {};
