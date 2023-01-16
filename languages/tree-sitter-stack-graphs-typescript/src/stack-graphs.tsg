@@ -2154,16 +2154,23 @@ if none @is_async {
 
 ;; Ambient Declaration
 
+;; We expose the ambient declarations via the statement's .lexical_defs and .var_defs.
+;; Technically this means that the declarations could be scoped in an enclosing block,
+;; or hidden behind a module name.
+;; However, ambient declarations are only allowed at the top-level of script files, so
+;; these cases cannot occur. Therefore, we have not introduced a separate .global_defs
+;; that propagates all the way to the top.
+
 (ambient_declaration
   (declaration)@decl
 )@amb_decl {
   ; propagate lexical scope
   edge @decl.lexical_scope -> @amb_decl.lexical_scope
 
-  ; lexical definitions are for ROOT_NODE
+  ; expose lexical definitions
   edge @amb_decl.lexical_defs -> @decl.lexical_defs
 
-  ; variable definitions are for ROOT_NODE
+  ; expose variable definitions
   edge @amb_decl.var_defs -> @decl.var_defs
 }
 
@@ -2174,11 +2181,11 @@ if none @is_async {
   ; propagate lexical scope
   edge @stmt_blk.lexical_scope -> @amb_decl.lexical_scope
 
-  ; lexical definitions are for ROOT_NODE
-  edge ROOT_NODE -> @stmt_blk.lexical_defs
+  ; expose lexical definitions
+  edge @amb_decl.lexical_defs -> @stmt_blk.lexical_defs
 
-  ; variable definitions are for ROOT_NODE
-  edge ROOT_NODE -> @stmt_blk.var_defs
+  ; expose variable definitions
+  edge @amb_decl.var_defs -> @stmt_blk.var_defs
 }
 
 ; FIXME what is this? tsc doesn't recognize this syntax
@@ -2369,22 +2376,30 @@ if none @is_async {
 (ambient_declaration
   (module name:(string)@name body:(_)@body)
 )@amb_decl {
-  node @name.mod_def
-  node @name.mod_def__ns
-
   ; propagate lexical scope
   edge @body.lexical_scope -> @amb_decl.lexical_scope
 
-  ; global definition
-  edge ROOT_NODE -> @name.mod_def__ns
+  ; module definition
+  let mod_path = (replace (source-text @name) "[\"\']" "")
   ;
-  attr (@name.mod_def__ns) pop_symbol = "%M"
-  edge @name.mod_def__ns -> @name.mod_def
+  node mod_def__ns
+  attr (mod_def__ns) pop_symbol = "%NonRelM"
+  edge @amb_decl.lexical_defs -> mod_def__ns
   ;
-  attr (@name.mod_def) symbol_definition = (replace (source-text @name) "[\"\']" ""), source_node = @name
-
-  ; exports are reachable via module definition
-  edge @name.mod_def -> @body.exports
+  var mod_scope = mod_def__ns
+  scan mod_path {
+    "([^/]+)/?" {
+      node mod_def
+      attr (mod_def) pop_symbol = $1
+      edge mod_scope -> mod_def
+      ;
+      set mod_scope = mod_def
+    }
+  }
+  ; make the last one a definition
+  attr (mod_scope) is_definition, source_node = @name
+  ; expose exports via module definition
+  edge mod_scope -> @body.exports
 }
 
 
