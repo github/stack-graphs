@@ -10,11 +10,12 @@ readme = "languages/tree-sitter-stack-graphs-java/README.md"
 edition = "2021"
 
 authors = [
-  "GitHub <opensource+stack-graphs@github.com>",
   "Beka Valentine <bekavalentine@github.com>",
   "Douglas Creager <dcreager@dcreager.net>",
+  "GitHub <opensource+stack-graphs@github.com>",
   "Hendrik van Antwerpen <hendrikvanantwerpen@github.com>",
   "Nina Kaufman <rnkaufman@github.com>",
+  "Rob Rix <robrix@github.com>",
 ]
 
 keywords = ["tree-sitter", "stack-graphs", "java"]
@@ -35,5 +36,5 @@ harness = false # need to provide own main function to handle running tests
 [dependencies]
 anyhow = "1.0"
 clap = "3"
-tree-sitter-stack-graphs = { version = "~0.4.0", path = "../../tree-sitter-stack-graphs", features=["cli"] }
+tree-sitter-stack-graphs = { version = "~0.6.0", path = "../../tree-sitter-stack-graphs", features=["cli"] }
 tree-sitter-java = { git = "http://github.com/tree-sitter/tree-sitter-java", rev="09d650def6cdf7f479f4b78f595e9ef5b58ce31e" }
