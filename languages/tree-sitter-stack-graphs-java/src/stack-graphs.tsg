@@ -52,6 +52,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;  Top level declarations
 ;; =======================
 
+(import_declaration
+  (scoped_identifier
+  scope: (scoped_identifier)
+  name: (identifier) @name)) @import {
+  node @name.value
+  attr (@name.value) node_definition = @name
+
+  node @import.defs
+  node @import.lexical_scope
+  edge @import.defs -> @name.value
+}
+
 ;;;;;;;;;;;;;;;;;;;;
 ;; Class Expressions
 
@@ -267,6 +279,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (local_variable_declaration
+  type: (type_identifier) @type
   declarator: (variable_declarator
     name: (identifier) @identifier
     value: (object_creation_expression
@@ -274,6 +287,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   )) @local_variable {
   node @object.value
   attr (@object.value) node_reference = @object
+  node @type.value
+  attr(@type.value) node_reference = @type
+  edge @type.value -> @local_variable.after_scope
   edge @local_variable.after_scope -> @object.value
   edge @object.value -> @local_variable.after_scope
 }
