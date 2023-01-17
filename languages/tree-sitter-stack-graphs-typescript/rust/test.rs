@@ -6,12 +6,12 @@
 // ------------------------------------------------------------------------------------------------
 
 use std::path::PathBuf;
-use tree_sitter_stack_graphs::cli::CiTester;
+use tree_sitter_stack_graphs::ci::Tester;
 use tree_sitter_stack_graphs::NoCancellation;
 
 fn main() -> anyhow::Result<()> {
     let test_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test");
-    CiTester::new(
+    Tester::new(
         vec![tree_sitter_stack_graphs_typescript::language_configuration(
             &NoCancellation,
         )],

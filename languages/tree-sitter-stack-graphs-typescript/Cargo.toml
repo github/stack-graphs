@@ -25,7 +25,9 @@ harness = false
 anyhow = "1.0"
 clap = "3"
 glob = "0.3"
-stack-graphs = { version = "~0.10.1", path = "../../stack-graphs" }
-tree-sitter-stack-graphs = { version = "~0.4.0", path = "../../tree-sitter-stack-graphs", features=["cli"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+stack-graphs = { version = "0.10", path = "../../stack-graphs" }
+tree-sitter-stack-graphs = { version = "0.6", path = "../../tree-sitter-stack-graphs", features=["cli"] }
 tree-sitter-typescript = { git = "https://github.com/tree-sitter/tree-sitter-typescript", rev="082da44a5263599186dadafd2c974c19f3a73d28" }
 tsconfig = "0.1.0"

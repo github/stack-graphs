@@ -183,6 +183,8 @@ impl Test {
                 current_path = m.get(1).unwrap().as_str().into();
                 current_source = prev_source.clone();
                 current_globals = HashMap::new();
+
+                Self::push_whitespace_for(&current_line, &mut current_source);
             } else if let Some(m) = GLOBAL_REGEX.captures_iter(current_line.content).next() {
                 have_globals = true;
                 let global_name = m.get(1).unwrap().as_str();
@@ -193,9 +195,11 @@ impl Test {
                 {
                     return Err(TestError::DuplicateGlobalVariable(global_name.to_string()));
                 }
-            }
 
-            current_source.push_str(current_line.content);
+                Self::push_whitespace_for(&current_line, &mut current_source);
+            } else {
+                current_source.push_str(current_line.content);
+            }
             current_source.push_str("\n");
 
             Self::push_whitespace_for(&current_line, &mut prev_source);

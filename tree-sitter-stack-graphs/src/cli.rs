@@ -5,7 +5,53 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-//! Defines CLI
+//! This crate defines reusable subcommands for clap-based CLI implementations.
+//!
+//! ## Path loading CLIs
+//!
+//! Path loading CLIs load language configurations from the file system, based on
+//! tree-sitter configuration files and provided arguments. Derive a path loading
+//! CLI from as follows:
+//!
+//! ``` no_run
+//! use clap::Parser;
+//! use tree_sitter_stack_graphs::cli::path_loading::Subcommands;
+//!
+//! #[derive(Parser)]
+//! #[clap(about, version)]
+//! pub struct Cli {
+//!     #[clap(subcommand)]
+//!     subcommand: Subcommands,
+//! }
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let cli = Cli::parse();
+//!     cli.subcommand.run()
+//! }
+//! ```
+//!
+//! ## Provided languages CLIs
+//!
+//! Provided languages CLIs use directly provided language configuration instances.
+//! Derive a language configuration CLI as follows:
+//!
+//! ``` no_run
+//! use clap::Parser;
+//! use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
+//!
+//! #[derive(Parser)]
+//! #[clap(about, version)]
+//! pub struct Cli {
+//!     #[clap(subcommand)]
+//!     subcommand: Subcommands,
+//! }
+//!
+//! fn main() -> anyhow::Result<()> {
+//!     let language_configurations = vec![/* add your language configurations here */];
+//!     let cli = Cli::parse();
+//!     cli.subcommand.run(language_configurations)
+//! }
+//! ```
 
 pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
@@ -15,13 +61,7 @@ pub mod parse;
 pub mod test;
 mod util;
 
-pub use ci::Tester as CiTester;
-pub use path_loading::Cli as PathLoadingCli;
-pub use provided_languages::Cli as LanguageConfigurationsCli;
-
-mod path_loading {
-    use anyhow::Result;
-    use clap::Parser;
+pub mod path_loading {
     use clap::Subcommand;
 
     use crate::cli::init::InitArgs;
@@ -29,30 +69,21 @@ mod path_loading {
     use crate::cli::parse::ParseArgs;
     use crate::cli::test::TestArgs;
 
-    /// CLI implementation that loads grammars and stack graph definitions from paths.
-    #[derive(Parser)]
-    #[clap(about, version)]
-    pub struct Cli {
-        #[clap(subcommand)]
-        command: Commands,
-    }
-
-    impl Cli {
-        pub fn main() -> Result<()> {
-            let cli = Cli::parse();
-            match &cli.command {
-                Commands::Init(cmd) => cmd.run(),
-                Commands::Parse(cmd) => cmd.run(),
-                Commands::Test(cmd) => cmd.run(),
-            }
-        }
-    }
-
     #[derive(Subcommand)]
-    enum Commands {
+    pub enum Subcommands {
         Init(Init),
         Parse(Parse),
         Test(Test),
+    }
+
+    impl Subcommands {
+        pub fn run(&self) -> anyhow::Result<()> {
+            match self {
+                Self::Init(cmd) => cmd.run(),
+                Self::Parse(cmd) => cmd.run(),
+                Self::Test(cmd) => cmd.run(),
+            }
+        }
     }
 
     /// Init command
@@ -101,9 +132,7 @@ mod path_loading {
     }
 }
 
-mod provided_languages {
-    use anyhow::Result;
-    use clap::Parser;
+pub mod provided_languages {
     use clap::Subcommand;
 
     use crate::cli::parse::ParseArgs;
@@ -112,28 +141,19 @@ mod provided_languages {
 
     use super::load::LanguageConfigurationsLoaderArgs;
 
-    /// CLI implementation that loads from provided grammars and stack graph definitions.
-    #[derive(Parser)]
-    #[clap(about, version)]
-    pub struct Cli {
-        #[clap(subcommand)]
-        command: Commands,
-    }
-
-    impl Cli {
-        pub fn main(configurations: Vec<LanguageConfiguration>) -> Result<()> {
-            let cli = Cli::parse();
-            match &cli.command {
-                Commands::Parse(cmd) => cmd.run(configurations),
-                Commands::Test(cmd) => cmd.run(configurations),
-            }
-        }
-    }
-
     #[derive(Subcommand)]
-    enum Commands {
+    pub enum Subcommands {
         Parse(Parse),
         Test(Test),
+    }
+
+    impl Subcommands {
+        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            match self {
+                Self::Parse(cmd) => cmd.run(configurations),
+                Self::Test(cmd) => cmd.run(configurations),
+            }
+        }
     }
 
     /// Parse command
@@ -165,50 +185,6 @@ mod provided_languages {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
             let mut loader = self.load_args.get(configurations)?;
             self.test_args.run(&mut loader)
-        }
-    }
-}
-
-mod ci {
-    use std::path::PathBuf;
-
-    use crate::cli::test::TestArgs;
-    use crate::loader::{LanguageConfiguration, Loader};
-
-    /// Run tests for the given languages. Test locations are reported relative to the current directory, which
-    /// results in better readable output when build tools only provides absolute test paths.
-    pub struct Tester {
-        configurations: Vec<LanguageConfiguration>,
-        test_paths: Vec<PathBuf>,
-    }
-
-    impl Tester {
-        pub fn new(configurations: Vec<LanguageConfiguration>, test_paths: Vec<PathBuf>) -> Self {
-            Self {
-                configurations,
-                test_paths,
-            }
-        }
-
-        pub fn run(self) -> anyhow::Result<()> {
-            let test_paths = self
-                .test_paths
-                .into_iter()
-                .map(|test_path| {
-                    std::env::current_dir()
-                        .ok()
-                        .and_then(|cwd| pathdiff::diff_paths(&test_path, &cwd))
-                        .unwrap_or(test_path)
-                })
-                .collect::<Vec<_>>();
-            for test_path in &test_paths {
-                if !test_path.exists() {
-                    panic!("Test path {} does not exist", test_path.display());
-                }
-            }
-            let mut loader = Loader::from_language_configurations(self.configurations, None)
-                .expect("Expected loader");
-            TestArgs::new(test_paths).run(&mut loader)
         }
     }
 }

@@ -15,7 +15,7 @@ To use this library, add the following to your `Cargo.toml`:
 
 ``` toml
 [dependencies]
-tree-sitter-stack-graphs = "0.4"
+tree-sitter-stack-graphs = "0.6"
 ```
 
 Check out our [documentation](https://docs.rs/tree-sitter-stack-graphs/*/) for
