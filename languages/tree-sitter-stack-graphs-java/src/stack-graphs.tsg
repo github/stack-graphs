@@ -368,15 +368,24 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (method_invocation
-  object: (super)
+  object: (_) @object
   name: (identifier) @method_name) @method_invocation {
+    node member
+
+    edge @object.lexical_scope -> @method_invocation.lexical_scope
+
     node expr_ref
     attr (expr_ref) node_reference = @method_name
-    node expr_ref__ns
-    attr (expr_ref__ns) push_symbol = "%E"
-    edge @method_name.value -> expr_ref__ns
-    attr(@method_name.value -> expr_ref__ns) precedence = 1
-    edge expr_ref__ns -> @method_invocation.lexical_scope
+    edge expr_ref -> member
+
+    attr (member) push_symbol = "."
+    edge member -> @object.type
+
+    node expr_ref__typeof
+    edge @method_invocation.type -> expr_ref__typeof
+
+    attr (expr_ref__typeof) push_symbol = ":"
+    edge expr_ref__typeof -> expr_ref
 }
 
 ;; ==========
