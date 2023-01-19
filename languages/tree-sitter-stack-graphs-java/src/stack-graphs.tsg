@@ -98,13 +98,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge def -> @class_body.defs
 
   node this__expr_def
-  node this__expr_def__ns
   node this__expr_def__typeof
 
-  edge @class.lexical_scope -> this__expr_def__ns
-
-  attr (this__expr_def__ns) pop_symbol = "%E"
-  edge this__expr_def__ns -> this__expr_def
+  edge @class.lexical_scope -> this__expr_def
 
   attr (this__expr_def) pop_symbol = "this", source_node = @class, empty_source_span
   edge this__expr_def -> this__expr_def__typeof
@@ -119,24 +115,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (type_identifier) @identifier) @superclass
     body: (class_body) @class_body) @class {
 
-    node @class.expr_def__ns
-    attr (@class.expr_def__ns) push_symbol = "%E"
-
     node ref
     attr (ref) node_reference = @identifier
 
     edge ref -> @class.lexical_scope
     edge @class_body.lexical_scope -> ref
-    edge @class_body.lexical_scope -> @class.expr_def__ns
 
     node super__expr_def
-    node super__expr_def__ns
     node super__expr_def__typeof
 
-    edge @class.lexical_scope -> super__expr_def__ns
-
-    attr (super__expr_def__ns) pop_symbol = "%E"
-    edge super__expr_def__ns -> super__expr_def
+    edge @class.lexical_scope -> super__expr_def
 
     attr (super__expr_def) pop_symbol = "super", source_node = @superclass, empty_source_span
     edge super__expr_def -> super__expr_def__typeof
@@ -329,7 +317,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   name: (identifier) @method_name) @method_invocation {
   node member
   node implicit_this
-  node implicit_this__ns
   node implicit_this__typeof
 
   ; attr (implicit_this) node_reference = @method_invocation
@@ -338,9 +325,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; receiver is implicitly "this"
   edge implicit_this__typeof -> implicit_this
   attr (implicit_this__typeof) push_symbol = ":"
-  edge implicit_this -> implicit_this__ns
-  attr (implicit_this__ns) push_symbol = "%E"
-  edge implicit_this__ns -> @method_invocation.lexical_scope
+  edge implicit_this -> @method_invocation.lexical_scope
 
   node expr_ref
   attr (expr_ref) node_reference = @method_name
@@ -406,14 +391,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @expr.lexical_scope ; FIXME: move to the all-expressions rule
 
   node expr_ref
-  node expr_ref__ns
   node expr_ref__typeof
 
   attr (expr_ref) node_reference = @expr
-  edge expr_ref -> expr_ref__ns
-
-  attr (expr_ref__ns) push_symbol = "%E"
-  edge expr_ref__ns -> @expr.lexical_scope
+  edge expr_ref -> @expr.lexical_scope
 
   edge @expr.type -> expr_ref__typeof
 
