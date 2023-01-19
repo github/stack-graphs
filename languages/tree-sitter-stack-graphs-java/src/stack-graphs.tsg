@@ -325,9 +325,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; method calls with implicit receiver
 (method_invocation
+  !object
   name: (identifier) @method_name) @method_invocation {
   node member
   node implicit_this
+  node implicit_this__ns
   node implicit_this__typeof
 
   ; attr (implicit_this) node_reference = @method_invocation
@@ -336,7 +338,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; receiver is implicitly "this"
   edge implicit_this__typeof -> implicit_this
   attr (implicit_this__typeof) push_symbol = ":"
-  edge implicit_this -> @method_invocation.lexical_scope
+  edge implicit_this -> implicit_this__ns
+  attr (implicit_this__ns) push_symbol = "%E"
+  edge implicit_this__ns -> @method_invocation.lexical_scope
 
   node expr_ref
   attr (expr_ref) node_reference = @method_name
