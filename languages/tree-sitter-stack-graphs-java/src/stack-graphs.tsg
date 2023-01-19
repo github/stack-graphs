@@ -284,15 +284,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type_identifier.value -> @local_var.after_scope
 }
 
-;; =============
-;;  Expressions
-;; =============
-
-(assignment_expression) @assign_expr
-{
-  node @assign_expr.lexical_scope
-}
-
 ;; =====================
 ;;  Primary Expressions
 ;; =====================
@@ -380,8 +371,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @object.value -> @local_variable.after_scope
 }
 
+;; =============
+;;  Expressions
+;; =============
+
 [
   ; FIXME: all expressions should be here
+  (assignment_expression)
   (field_access)
   (identifier)
   (method_invocation)
