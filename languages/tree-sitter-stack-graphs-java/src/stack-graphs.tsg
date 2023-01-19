@@ -249,6 +249,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @local_var.after_scope -> @local_var.before_scope
   attr (@local_var.after_scope -> @local_var.before_scope) precedence = 1
 
+  edge @type.lexical_scope -> @local_var.before_scope
+
   node def__typeof
   attr (def__typeof) pop_symbol = ":"
 
@@ -445,7 +447,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (void_type)
 ] @type
 {
+  node @type.lexical_scope
   node @type.type
+}
+
+(type_identifier) @this
+{
+  attr (@this.type) node_reference = @this
+  edge @this.type -> @this.lexical_scope
 }
 
 ;; ==========
