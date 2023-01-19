@@ -323,14 +323,34 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @method_invocation.lexical_scope
 }
 
+; method calls with implicit receiver
 (method_invocation
   name: (identifier) @method_name) @method_invocation {
-  node @method_name.value
-  attr (@method_name.value) node_reference = @method_name
-  ; TODO: remove this if not needed for super
-  edge @method_name.value -> @method_invocation.before_scope
-  node @method_invocation.defs
-  edge @method_name.value -> @method_invocation.lexical_scope
+  node member
+  node implicit_this
+  node implicit_this__typeof
+
+  ; attr (implicit_this) node_reference = @method_invocation
+  attr (implicit_this) push_symbol = "this", empty_source_span
+
+  ; receiver is implicitly "this"
+  edge implicit_this__typeof -> implicit_this
+  attr (implicit_this__typeof) push_symbol = ":"
+  edge implicit_this -> @method_invocation.lexical_scope
+
+  node expr_ref
+  attr (expr_ref) node_reference = @method_name
+  edge expr_ref -> member
+
+  attr (member) push_symbol = "."
+
+  edge member -> implicit_this__typeof
+
+  node expr_ref__typeof
+  edge @method_invocation.type -> expr_ref__typeof
+
+  attr (expr_ref__typeof) push_symbol = ":"
+  edge expr_ref__typeof -> expr_ref
 }
 
 (local_variable_declaration
