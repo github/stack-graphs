@@ -1,7 +1,9 @@
 class TestClass extends SecondTestClass {
   public static void main(String[] args){
     super.bar();
-       // ^ defined: 12
+       // ^ defined: 14
+    this.bar();
+      // ^ defined: 9
   }
 
   public void bar() {

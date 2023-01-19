@@ -304,7 +304,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   attr (ref) node_reference = @ident
 
-  node @ident.lexical_scope
   edge ref -> @ident.lexical_scope
 
   edge @ident.type -> ref__typeof
@@ -314,7 +313,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (field_access) @field_access {
-  node @field_access.lexical_scope
   node @field_access.before_scope
 }
 
@@ -330,7 +328,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   node @method_invocation.before_scope
   node @method_invocation.after_scope
-  node @method_invocation.lexical_scope
 }
 
 ; method calls with implicit receiver
@@ -393,7 +390,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ] @expr
 {
   node @expr.type
-  ; node @expr.lexical_scope
+  node @expr.lexical_scope
 }
 
 [
@@ -401,7 +398,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (this)
 ] @expr
 {
-  node @expr.lexical_scope ; FIXME: move to the all-expressions rule
 
   node expr_ref
   node expr_ref__typeof
