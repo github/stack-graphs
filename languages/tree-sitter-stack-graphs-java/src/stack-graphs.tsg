@@ -96,6 +96,22 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@class_body.lexical_scope -> @class_body.defs) precedence = 1
   edge @class.defs -> def
   edge def -> @class_body.defs
+
+  node this__expr_def
+  node this__expr_def__ns
+  node this__expr_def__typeof
+
+  edge @class.lexical_scope -> this__expr_def__ns
+
+  attr (this__expr_def__ns) pop_symbol = "%E"
+  edge this__expr_def__ns -> this__expr_def
+
+  attr (this__expr_def) pop_symbol = "this", source_node = @class, empty_source_span
+  edge this__expr_def -> this__expr_def__typeof
+
+  attr (this__expr_def__typeof) pop_symbol = ":"
+
+  edge this__expr_def__typeof -> def
 }
 
 (class_declaration
