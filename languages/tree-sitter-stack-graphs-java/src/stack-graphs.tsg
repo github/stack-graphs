@@ -319,8 +319,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node implicit_this
   node implicit_this__typeof
 
+  node object__typeof
+
   ; attr (implicit_this) node_reference = @method_invocation
-  attr (implicit_this) push_symbol = "this", empty_source_span
+  attr (implicit_this) symbol_reference = "this", empty_source_span
 
   ; receiver is implicitly "this"
   edge implicit_this__typeof -> implicit_this
@@ -333,7 +335,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   attr (member) push_symbol = "."
 
-  edge member -> implicit_this__typeof
+  edge member -> object__typeof
+  edge object__typeof -> implicit_this__typeof
 
   node expr_ref__typeof
   edge @method_invocation.type -> expr_ref__typeof
