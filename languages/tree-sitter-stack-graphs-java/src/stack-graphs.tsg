@@ -368,18 +368,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @object.value -> @local_variable.after_scope
 }
 
-(expression_statement
-  (method_invocation
-    object: (identifier) @identifier
-    name: (identifier) @method_name) @method_invocation) @expr_stmt {
-
-  node @identifier.ref
-  attr (@identifier.ref) node_reference = @identifier
-
-  edge @identifier.ref -> @method_invocation.lexical_scope
-  edge @expr_stmt.after_scope -> @method_invocation.lexical_scope
-}
-
 [
   ; FIXME: all expressions should be here
   (field_access)
