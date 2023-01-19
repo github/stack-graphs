@@ -227,15 +227,23 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (program)@prog {
-  ; propagate lexical scope
-  edge @prog.lexical_scope -> ROOT_NODE
-
   ; expose definitions
   edge @prog.lexical_scope -> @prog.defs
+
+  ; import builtins
+  node builtins_ref__ns
+  attr (builtins_ref__ns) symbol_reference = "%Proj"
+  edge builtins_ref__ns -> ROOT_NODE
+  ;
+  node builtins_ref
+  attr (builtins_ref) symbol_reference = "<builtins>"
+  edge builtins_ref -> builtins_ref__ns
+  ;
+  edge @prog.lexical_scope -> builtins_ref
 }
 
 ;; Project and module definitions
-(program)@prog {
+(program [(import_statement) (export_statement)]* @imexs)@prog {
   var proj_scope = ROOT_NODE
   if (not (eq PROJECT_NAME "")) {
     ; project definition
@@ -250,35 +258,39 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     set proj_scope = proj_def
   }
 
-  ; module definition
-  let mod_name = (path-filestem FILE_PATH)
-  let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
-  ;
-  node mod_def__ns
-  attr (mod_def__ns) pop_symbol = "%M"
-  edge proj_scope -> mod_def__ns
-  ;
-  var mod_scope = mod_def__ns
-  scan mod_path {
-    "index$" {
-      ; skip last component for index files
+  var mod_scope = proj_scope
+  if (not (is-empty @imexs)) {
+    ; module definition
+    let mod_name = (path-filestem FILE_PATH)
+    let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
+    ;
+    node mod_def__ns
+    attr (mod_def__ns) pop_symbol = "%M"
+    edge mod_scope -> mod_def__ns
+    set mod_scope = mod_def__ns
+    ;
+    scan mod_path {
+      "index$" {
+        ; skip last component for index files
+      }
+      "([^/]+)/?" {
+        node mod_def
+        attr (mod_def) pop_symbol = $1
+        edge mod_scope -> mod_def
+        set mod_scope = mod_def
+      }
     }
-    "([^/]+)/?" {
-      node mod_def
-      attr (mod_def) pop_symbol = $1
-      edge mod_scope -> mod_def
-      ;
-      set mod_scope = mod_def
-    }
+    ; make the last one a definition
+    attr (mod_scope) is_definition, source_node = @prog, empty_source_span
+    ; expose exports via module definition
+    edge mod_scope -> @prog.exports
+  } else {
+    edge mod_scope -> @prog.defs
   }
-  ; make the last one a definition
-  attr (mod_scope) is_definition, source_node = @prog, empty_source_span
-  ; expose exports via module definition
-  edge mod_scope -> @prog.exports
 }
 
 ;; Project and module reference
-(program)@prog {
+(program [(import_statement) (export_statement)]* @imexs)@prog {
   var proj_scope = ROOT_NODE
   if (not (eq PROJECT_NAME "")) {
     ; project reference
@@ -291,44 +303,47 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge proj_ref -> proj_ref__ns
     ;
     set proj_scope = proj_ref
-    ; compose all project files by adding edge to the project reference
-    edge @prog.lexical_scope -> proj_scope
   }
 
-  ; module reference
-  ;
-  node mod_ref__ns
-  attr (mod_ref__ns) push_symbol = "%M"
-  edge mod_ref__ns -> proj_scope
-  ;
-  let mod_dir = (path-normalize (path-dir FILE_PATH))
-  var mod_scope = mod_ref__ns
-  scan mod_dir {
-    "([^/]+)/?" {
-      node mod_ref
-      attr (mod_ref) push_symbol = $1
-      edge mod_ref -> mod_scope
+  ; compose all project files by adding edge to the project reference
+  edge @prog.lexical_scope -> proj_scope
 
-      node mod_node
-      edge mod_node -> mod_ref
+  var mod_scope = proj_scope
+  if (not (is-empty @imexs)) {
+    ; module reference
+    node mod_ref__ns
+    attr (mod_ref__ns) push_symbol = "%M"
+    edge mod_ref__ns -> mod_scope
+    set mod_scope = mod_ref__ns
+    ;
+    let mod_dir = (path-normalize (path-dir FILE_PATH))
+    scan mod_dir {
+      "([^/]+)/?" {
+        node mod_ref
+        attr (mod_ref) push_symbol = $1
+        edge mod_ref -> mod_scope
 
-      node parent_def
-      attr (parent_def) pop_symbol = ".."
-      edge parent_def -> mod_scope
-      edge mod_node -> parent_def
-      attr (mod_node -> parent_def) precedence = 1 ; consume dots eagerly
+        node mod_node
+        edge mod_node -> mod_ref
 
-      set mod_scope = mod_node
+        node parent_def
+        attr (parent_def) pop_symbol = ".."
+        edge parent_def -> mod_scope
+        edge mod_node -> parent_def
+        attr (mod_node -> parent_def) precedence = 1 ; consume dots eagerly
+
+        set mod_scope = mod_node
+      }
     }
+
+    ; relative import definition
+    node rel_def
+    attr (rel_def) pop_symbol = "%RelM"
+    edge rel_def -> mod_scope
+
+    ; expose reference in lexical scope
+    edge @prog.lexical_scope -> rel_def
   }
-
-  ; relative import definition
-  node rel_def
-  attr (rel_def) pop_symbol = "%RelM"
-  edge rel_def -> mod_scope
-
-  ; expose reference in lexical scope
-  edge @prog.lexical_scope -> rel_def
 }
 
 (program
@@ -343,13 +358,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; exports are visible via module definition
   edge @prog.exports -> @stmt.exports
-}
-
-(program [(import_statement) (export_statement)]* @imexs)@prog {
-  if (is-empty @imexs) {
-    ; expose global definitions in ROOT_NODE
-    edge ROOT_NODE -> @prog.defs
-  }
 }
 
 
@@ -6129,5 +6137,5 @@ if none @is_acc {
   edge @async.async_type__promise_ref -> @async.async_type__promise_ref__ns
   ;
   attr (@async.async_type__promise_ref__ns) push_symbol = "%T"
-  edge @async.async_type__promise_ref__ns -> ROOT_NODE
+  edge @async.async_type__promise_ref__ns -> @async.lexical_scope
 }
