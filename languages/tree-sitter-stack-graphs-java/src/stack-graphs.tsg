@@ -358,21 +358,24 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; node @expr.lexical_scope
 }
 
-(super) @super
+[
+  (super)
+  (this)
+] @expr
 {
-  node @super.lexical_scope ; FIXME: move to the all-expressions rule
+  node @expr.lexical_scope ; FIXME: move to the all-expressions rule
 
   node expr_ref
   node expr_ref__ns
   node expr_ref__typeof
 
-  attr (expr_ref) node_reference = @super
+  attr (expr_ref) node_reference = @expr
   edge expr_ref -> expr_ref__ns
 
   attr (expr_ref__ns) push_symbol = "%E"
-  edge expr_ref__ns -> @super.lexical_scope
+  edge expr_ref__ns -> @expr.lexical_scope
 
-  edge @super.type -> expr_ref__typeof
+  edge @expr.type -> expr_ref__typeof
 
   attr (expr_ref__typeof) push_symbol = ":"
   edge expr_ref__typeof -> expr_ref
