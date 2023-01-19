@@ -90,6 +90,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @class.defs
   attr (def) node_definition = @name
 
+  node ref
+  attr (ref) node_reference = @name
+  edge ref -> @class.lexical_scope
+  edge @class_body.lexical_scope -> ref
+
   edge @class_body.lexical_scope -> @class.lexical_scope
 
   edge @class_body.lexical_scope -> @class_body.defs
@@ -107,7 +112,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   attr (this__expr_def__typeof) pop_symbol = ":"
 
-  edge this__expr_def__typeof -> def
+  edge this__expr_def__typeof -> ref
 }
 
 (class_declaration
