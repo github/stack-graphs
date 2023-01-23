@@ -196,17 +196,36 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;  Statements
 ;; ============
 
-(expression_statement (_) @expr) @expr_stmt
+[
+  (assert_statement)
+  (block)
+  (break_statement)
+  (continue_statement)
+  (declaration)
+  (do_statement)
+  (expression_statement)
+  (enhanced_for_statement)
+  (for_statement)
+  (if_statement)
+  (labeled_statement)
+  (local_variable_declaration)
+  (return_statement)
+  (switch_expression)
+  (synchronized_statement)
+  (try_statement)
+  (try_with_resources_statement)
+  (while_statement)
+  (yield_statement)
+] @stmt
 {
-  node @expr_stmt.before_scope
-  node @expr_stmt.after_scope
-  edge @expr.lexical_scope -> @expr_stmt.before_scope
-  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
+  node @stmt.before_scope
+  node @stmt.after_scope
 }
 
-(block) @block {
-  node @block.before_scope
-  node @block.after_scope
+(expression_statement (_) @expr) @expr_stmt
+{
+  edge @expr.lexical_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
 }
 
 (block
@@ -230,12 +249,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
-(return_statement) @return_stmt
-{
-  node @return_stmt.before_scope
-  node @return_stmt.after_scope
-}
-
 (local_variable_declaration
   type: (_) @type
   declarator: (variable_declarator
@@ -257,16 +270,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge def -> def__typeof
 
   edge def__typeof -> @type.type
-}
-
-(local_variable_declaration
-  declarator: (variable_declarator
-    value: (_) @value
-  )
-) @local_var
-{
-  node @local_var.after_scope
-  node @local_var.before_scope
 }
 
 (local_variable_declaration
