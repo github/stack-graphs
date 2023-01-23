@@ -429,8 +429,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ==========
 
 [
+  (annotated_type)
+  (boolean_type)
+  (floating_point_type)
   (generic_type)
   (integral_type)
+  (scoped_type_identifier)
   (type_identifier)
   (void_type)
 ] @type
