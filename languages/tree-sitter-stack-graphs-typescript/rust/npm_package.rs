@@ -31,10 +31,7 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         _cancellation_flag: &dyn tree_sitter_stack_graphs::CancellationFlag,
     ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
         // read globals
-        let proj_name = globals
-            .get(crate::PROJECT_NAME_VAR)
-            .map(String::as_str)
-            .unwrap_or("");
+        let proj_name = globals.get(crate::PROJECT_NAME_VAR).map(String::as_str);
 
         // parse source
         let npm_pkg: NpmPackage =
@@ -44,31 +41,37 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         let root = StackGraph::root_node();
 
         // project scope
-        let proj_scope_id = graph.new_node_id(file);
-        let proj_scope = graph.add_scope_node(proj_scope_id, false).unwrap();
-        add_debug_name(graph, proj_scope, "npm_package.proj_scope");
+        let proj_scope = if let Some(proj_name) = proj_name {
+            let proj_scope_id = graph.new_node_id(file);
+            let proj_scope = graph.add_scope_node(proj_scope_id, false).unwrap();
+            add_debug_name(graph, proj_scope, "npm_package.proj_scope");
 
-        // project definition
-        let proj_def = add_ns_pop(
-            graph,
-            file,
-            root,
-            PROJ_NS,
-            proj_name,
-            "npm_package.proj_def",
-        );
-        add_edge(graph, proj_def, proj_scope, 0);
+            // project definition
+            let proj_def = add_ns_pop(
+                graph,
+                file,
+                root,
+                PROJ_NS,
+                proj_name,
+                "npm_package.proj_def",
+            );
+            add_edge(graph, proj_def, proj_scope, 0);
 
-        // project reference
-        let proj_ref = add_ns_push(
-            graph,
-            file,
-            root,
-            PROJ_NS,
-            proj_name,
-            "npm_package.proj_ref",
-        );
-        add_edge(graph, proj_scope, proj_ref, 0);
+            // project reference
+            let proj_ref = add_ns_push(
+                graph,
+                file,
+                root,
+                PROJ_NS,
+                proj_name,
+                "npm_package.proj_ref",
+            );
+            add_edge(graph, proj_scope, proj_ref, 0);
+
+            proj_scope
+        } else {
+            root
+        };
 
         // package definition
         let pkg_def = add_module_pops(
