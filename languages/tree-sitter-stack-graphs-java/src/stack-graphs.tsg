@@ -446,6 +446,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @type.type
 }
 
+(boolean_type) @type
+{
+  attr (@type.type) node_reference = @type
+}
+
 (type_identifier) @this
 {
   attr (@this.type) node_reference = @this
