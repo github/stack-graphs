@@ -409,10 +409,11 @@ impl TsConfig {
 
         source_paths
             .into_iter()
-            .filter_map(move |p| {
-                if !p.starts_with(&self.project_dir) {
-                    return None;
-                }
+            .filter_map(|p| {
+                let p = match p.strip_prefix(&self.project_dir) {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
 
                 // normalize path
                 let p = match NormalizedRelativePath::from_path(p) {
