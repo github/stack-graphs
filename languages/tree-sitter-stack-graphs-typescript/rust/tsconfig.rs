@@ -399,7 +399,7 @@ impl TsConfig {
     }
 
     /// Returns an iterator over the input files of the project, taking `files`, `include`, and `exclude` into account.
-    fn input_files<'a, PI>(&self, source_paths: PI) -> impl Iterator<Item = &'a Path>
+    fn input_files<'a, PI>(&self, source_paths: PI) -> Vec<PathBuf>
     where
         PI: IntoIterator<Item = &'a Path>,
     {
@@ -407,34 +407,41 @@ impl TsConfig {
         let include = self.include();
         let exclude = self.exclude();
 
-        let project_dir = self.project_dir.clone();
-        source_paths.into_iter().filter_map(move |p| {
-            // compute relative path in this project
-            let p = match p.strip_prefix(&project_dir) {
-                Ok(p) => p,
-                Err(_) => return None,
-            };
+        source_paths
+            .into_iter()
+            .filter_map(|p| {
+                let p = match p.strip_prefix(&self.project_dir) {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
 
-            // accept files in the file list
-            for file in &files {
-                if p == file {
-                    return Some(p);
+                // normalize path
+                let p = match NormalizedRelativePath::from_path(p) {
+                    Some(p) => p.into_path_buf(),
+                    None => return None,
+                };
+
+                // accept files in the file list
+                for file in &files {
+                    if &p == file {
+                        return Some(p);
+                    }
                 }
-            }
 
-            // reject files not in the include patterns
-            if !include.iter().any(|i| i.matches_path(p)) {
-                return None;
-            }
+                // reject files not in the include patterns
+                if !include.iter().any(|i| i.matches_path(&p)) {
+                    return None;
+                }
 
-            // reject files matching exclude patterns
-            if exclude.iter().any(|e| e.matches_path(p)) {
-                return None;
-            }
+                // reject files matching exclude patterns
+                if exclude.iter().any(|e| e.matches_path(&p)) {
+                    return None;
+                }
 
-            // file was included, and not excluded, so accept
-            Some(p)
-        })
+                // file was included, and not excluded, so accept
+                Some(p)
+            })
+            .collect()
     }
 }
 

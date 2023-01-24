@@ -85,6 +85,27 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         let pkg_ref = add_push(graph, file, proj_scope, PKG_M_NS, "npm_package.pkg_ref");
         add_edge(graph, pkg_def, pkg_ref, 0);
 
+        // dependencies (package references)
+        for (i, (pkg_name, _)) in npm_pkg.dependencies.iter().enumerate() {
+            let pkg_def = add_module_pops(
+                graph,
+                file,
+                NON_REL_M_NS,
+                Path::new(&pkg_name),
+                proj_scope,
+                &format!("npm_package.dep[{}]", i),
+            );
+            let pkg_ref = add_module_pushes(
+                graph,
+                file,
+                NON_REL_M_NS,
+                Path::new(&pkg_name),
+                root,
+                &format!("npm_package.dep[{}]", i),
+            );
+            add_edge(graph, pkg_def, pkg_ref, 0);
+        }
+
         Ok(())
     }
 }
@@ -93,4 +114,6 @@ impl FileAnalyzer for NpmPackageAnalyzer {
 #[serde(rename_all = "camelCase")]
 pub struct NpmPackage {
     pub name: String,
+    #[serde(default)]
+    pub dependencies: HashMap<String, serde_json::Value>,
 }
