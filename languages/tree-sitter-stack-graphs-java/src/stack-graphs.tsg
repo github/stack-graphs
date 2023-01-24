@@ -274,6 +274,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
+(break_statement) @stmt {
+  ; FIXME: labels
+}
+
+(continue_statement) @stmt {
+  ; FIXME: labels
+}
+
 (expression_statement (_) @expr) @expr_stmt
 {
   edge @expr.lexical_scope -> @expr_stmt.before_scope
