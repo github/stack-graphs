@@ -284,6 +284,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (declaration) @decl {}
 
+(do_statement body: (_) @body condition: (_) @cond) @stmt {
+  edge @body.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+  edge @cond.lexical_scope -> @stmt.before_scope
+}
+
 (expression_statement (_) @expr) @expr_stmt
 {
   edge @expr.lexical_scope -> @expr_stmt.before_scope
