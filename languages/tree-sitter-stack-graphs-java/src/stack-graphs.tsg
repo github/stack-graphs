@@ -253,12 +253,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @expr.lexical_scope -> @stmt.before_scope
 }
 
-(expression_statement (_) @expr) @expr_stmt
-{
-  edge @expr.lexical_scope -> @expr_stmt.before_scope
-  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
-}
-
 (block
   (_) @left
   .
@@ -278,6 +272,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (_) @last
   . ) @block {
   edge @block.after_scope -> @last.after_scope
+}
+
+(expression_statement (_) @expr) @expr_stmt
+{
+  edge @expr.lexical_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
 }
 
 (local_variable_declaration
