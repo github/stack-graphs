@@ -474,19 +474,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @type.type
 }
 
-(boolean_type) @type
-{
-  attr (@type.type) node_reference = @type
-}
-
-(integral_type) @type
+[
+  (boolean_type)
+  (floating_point_type)
+  (integral_type)
+  (type_identifier)
+  (void_type)
+] @type
 {
   attr (@type.type) node_reference = @type
 }
 
 (type_identifier) @this
 {
-  attr (@this.type) node_reference = @this
   edge @this.type -> @this.lexical_scope
 }
 
