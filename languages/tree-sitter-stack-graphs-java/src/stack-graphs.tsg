@@ -478,6 +478,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge expr_ref__typeof -> expr_ref
 }
 
+(parenthesized_expression (_) @child) @expr {
+  edge @child.lexical_scope -> @expr.lexical_scope
+}
+
 ;; ==========
 ;;  Types
 ;; ==========
