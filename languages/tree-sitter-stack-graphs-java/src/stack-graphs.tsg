@@ -310,6 +310,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type_identifier.value -> @local_var.after_scope
 }
 
+(return_statement (_) @expr) @stmt
+{
+  edge @expr.lexical_scope -> @stmt.before_scope
+}
+
 ;; =====================
 ;;  Primary Expressions
 ;; =====================
