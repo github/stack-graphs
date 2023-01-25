@@ -403,7 +403,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (switch_block (switch_rule (switch_label) @label (_) @body)) @this {
+  edge @label.lexical_scope -> @this.lexical_scope
   edge @body.before_scope -> @this.lexical_scope
+}
+
+(switch_label) @label {
+  node @label.lexical_scope
+}
+
+(switch_label (expression) @expr) @label {
+  edge @expr.lexical_scope -> @label.lexical_scope
 }
 
 ;; =====================
