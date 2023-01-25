@@ -161,11 +161,17 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   )
 ) @field_decl
 {
-  node @field_decl.lexical_scope
   node @field_decl.defs
+  node @field_decl.lexical_scope
+
+  node member
+  edge @field_decl.defs -> member
+
+  attr (member) pop_symbol = "."
+
   node def
   attr (def) node_definition = @name
-  edge @field_decl.defs -> def
+  edge member -> def
 }
 
 (method_declaration
