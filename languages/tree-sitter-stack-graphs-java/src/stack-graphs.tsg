@@ -462,6 +462,92 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @finally.before_scope -> @stmt.before_scope
 }
 
+(try_with_resources_statement) @stmt {
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(try_with_resources_statement resources: (resource_specification . (resource) @first)) @stmt {
+  edge @first.before_scope -> @stmt.before_scope
+}
+
+(try_with_resources_statement resources: (resource_specification (resource) @a . (resource) @b)) @stmt {
+  edge @b.before_scope -> @a.after_scope
+}
+
+(try_with_resources_statement resources: (resource_specification (resource) @last .) body: (_) @body) @stmt {
+  edge @body.before_scope -> @last.after_scope
+}
+
+(resource) @this {
+  node @this.before_scope
+  node @this.after_scope
+}
+
+(resource type: (_) @type (_) @id value: (_) @value) @this {
+  edge @type.lexical_scope -> @this.before_scope
+  edge @value.lexical_scope -> @this.before_scope
+
+  node def
+  attr (def) node_definition = @id
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+
+  edge def -> def__typeof
+
+  edge def__typeof -> @type.type
+
+  edge @this.after_scope -> def
+  edge @this.after_scope -> @this.before_scope
+}
+
+(resource . (identifier) @id .) @this {
+  node @id.lexical_scope
+  node @id.type
+
+  node ref
+  node ref__typeof
+
+  attr (ref) node_reference = @id
+
+  edge ref -> @id.lexical_scope
+  edge @id.lexical_scope -> @this.before_scope
+
+  edge @id.type -> ref__typeof
+
+  attr (ref__typeof) push_symbol = ":"
+  edge ref__typeof -> ref
+
+  edge @this.after_scope -> @this.before_scope
+}
+
+(resource (field_access) @field_access) @this {
+  edge @field_access.lexical_scope -> @this.before_scope
+  edge @this.after_scope -> @this.before_scope
+}
+
+(try_with_resources_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @id) body: (_) @body)) @stmt {
+  node def
+  node defs
+  attr (def) node_definition = @id
+  edge defs -> def
+  edge @body.before_scope -> defs
+  edge defs -> @stmt.before_scope
+
+  edge @type.lexical_scope -> @stmt.before_scope
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+
+  edge def -> def__typeof
+
+  edge def__typeof -> @type.type
+}
+
+(try_with_resources_statement (finally_clause (_) @finally)) @stmt {
+  edge @finally.before_scope -> @stmt.before_scope
+}
+
 ;; =====================
 ;;  Primary Expressions
 ;; =====================
@@ -481,16 +567,25 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge ref__typeof -> ref
 }
 
-(field_access) @field_access {
-  node @field_access.before_scope
-}
-
 (field_access
-  object: (super)
+  object: (_) @object
   field: (identifier) @identifier) @field_access {
+  node member
+
+  edge @object.lexical_scope -> @field_access.lexical_scope
+
   node ref
   attr (ref) node_reference = @identifier
-  edge ref -> @field_access.lexical_scope
+  edge ref -> member
+
+  attr (member) push_symbol = "."
+  edge member -> @object.type
+
+  node ref__typeof
+  edge @field_access.type -> ref__typeof
+
+  attr (ref__typeof) push_symbol = ":"
+  edge ref__typeof -> ref
 }
 
 (method_invocation) @method_invocation
@@ -559,6 +654,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 [
   (expression)
+  (field_access)
   (parenthesized_expression)
   (primary_expression)
   (super)
