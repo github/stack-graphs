@@ -29,6 +29,7 @@ use crate::loader::LanguageConfiguration;
 use crate::loader::Loader;
 use crate::test::Test;
 use crate::test::TestResult;
+use crate::CancellationFlag;
 use crate::LoadError;
 use crate::NoCancellation;
 use crate::StackGraphLanguage;
@@ -205,8 +206,10 @@ impl TestArgs {
         test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
+        let cancellation_flag = &NoCancellation;
+
         let mut file_reader = FileReader::new();
-        let lc = match loader.load_for_file(test_path, &mut file_reader, &NoCancellation)? {
+        let lc = match loader.load_for_file(test_path, &mut file_reader, cancellation_flag)? {
             Some(sgl) => sgl,
             None => {
                 if self.show_ignored {
@@ -235,7 +238,7 @@ impl TestArgs {
                     &test_fragment.source,
                     &mut all_paths,
                     &test_fragment.globals,
-                    &NoCancellation,
+                    cancellation_flag,
                 )?;
             } else if lc.matches_file(
                 &test_fragment.path,
@@ -250,6 +253,7 @@ impl TestArgs {
                     &test_fragment.source,
                     &globals,
                     &mut test.graph,
+                    cancellation_flag,
                 )?;
             } else {
                 return Err(anyhow!(
@@ -259,7 +263,7 @@ impl TestArgs {
                 ));
             }
         }
-        let result = test.run(&NoCancellation)?;
+        let result = test.run(cancellation_flag)?;
         let success = self.handle_result(test_path, &result)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
@@ -294,8 +298,9 @@ impl TestArgs {
         source: &str,
         globals: &Variables,
         graph: &mut StackGraph,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> anyhow::Result<()> {
-        match sgl.build_stack_graph_into(graph, file, source, globals, &NoCancellation) {
+        match sgl.build_stack_graph_into(graph, file, source, globals, cancellation_flag) {
             Err(LoadError::ParseErrors(parse_errors)) => {
                 Err(map_parse_errors(test_path, &parse_errors, source, "  "))
             }
