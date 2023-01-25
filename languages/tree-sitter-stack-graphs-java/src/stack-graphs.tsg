@@ -384,6 +384,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
+(switch_expression condition: (_) @condition body: (_) @body) @stmt {
+  edge @condition.lexical_scope -> @stmt.before_scope
+  edge @body.lexical_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(switch_block) @this {
+  node @this.lexical_scope
+}
+
 ;; =====================
 ;;  Primary Expressions
 ;; =====================
