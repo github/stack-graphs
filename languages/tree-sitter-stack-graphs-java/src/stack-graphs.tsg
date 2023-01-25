@@ -324,6 +324,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
+(if_statement condition: (_) @condition consequence: (_) @consequence) @stmt {
+  edge @condition.lexical_scope -> @stmt.before_scope
+  edge @consequence.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(if_statement alternative: (_) @alternative) @stmt {
+  edge @alternative.before_scope -> @stmt.before_scope
+}
+
 (local_variable_declaration
   type: (_) @type
   declarator: (variable_declarator
