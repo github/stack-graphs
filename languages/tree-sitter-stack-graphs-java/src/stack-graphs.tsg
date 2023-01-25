@@ -560,13 +560,28 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (primary_expression/identifier) @ident
 {
+  node member
+  node implicit_this
+  node implicit_this__typeof
+
+  node object__typeof
+
+  attr (implicit_this) symbol_reference = "this", empty_source_span
+  edge implicit_this__typeof -> implicit_this
+  attr (implicit_this__typeof) push_symbol = ":"
+  edge implicit_this -> @ident.lexical_scope
+
   node ref
-  node ref__typeof
-
   attr (ref) node_reference = @ident
-
   edge ref -> @ident.lexical_scope
+  edge ref -> member
 
+  attr (member) push_symbol = "."
+
+  edge member -> object__typeof
+  edge object__typeof -> implicit_this__typeof
+
+  node ref__typeof
   edge @ident.type -> ref__typeof
 
   attr (ref__typeof) push_symbol = ":"
