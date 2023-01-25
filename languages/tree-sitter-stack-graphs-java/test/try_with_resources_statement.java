@@ -3,8 +3,8 @@ class A {
     A a;
     try (A a = f(); a; a.x) {
       //       ^ defined: 2
-      //            ^ defined: 3
-      //               ^ defined: 3
+      //            ^ defined: 4
+      //               ^ defined: 4
         f(a);
       //^ defined: 2
       //  ^ defined: 4
