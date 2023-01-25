@@ -9,5 +9,13 @@ class A {
         f();
       //^ defined: 2
     }
+    switch (x) {
+      //    ^ defined: 3
+      case x -> {
+        // ^ defined: 3
+          f();
+        //^ defined: 2
+      }
+    }
   }
 }
