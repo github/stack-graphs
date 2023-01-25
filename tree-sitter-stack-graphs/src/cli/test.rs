@@ -71,7 +71,13 @@ impl OutputMode {
 "#)]
 pub struct TestArgs {
     /// Test file or directory paths.
-    #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
+    #[clap(
+        value_name = "TEST_PATH",
+        required = true,
+        value_hint = ValueHint::AnyPath,
+        parse(from_os_str),
+        validator_os = path_exists
+    )]
     pub test_paths: Vec<PathBuf>,
 
     /// Hide passing tests.
@@ -129,7 +135,12 @@ pub struct TestArgs {
     pub save_visualization: Option<PathSpec>,
 
     /// Controls when graphs, paths, or visualization are saved.
-    #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
+    #[clap(
+        long,
+        arg_enum,
+        default_value_t = OutputMode::OnFailure,
+        require_equals = true,
+    )]
     pub output_mode: OutputMode,
 }
 
