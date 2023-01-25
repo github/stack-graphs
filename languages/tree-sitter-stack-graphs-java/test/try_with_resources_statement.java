@@ -1,10 +1,10 @@
 class A {
   void f() {
-    A a;
-    try (A a = f(); a; a.x) {
+    A b;
+    try (A a = f(); a; b.x) {
       //       ^ defined: 2
       //            ^ defined: 4
-      //               ^ defined: 4
+      //               ^ defined: 3
         f(a);
       //^ defined: 2
       //  ^ defined: 4
