@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A new `analyze` command that computes stack graphs and partial paths for all given source files and directories. The command does not produce any output at the moment. Analysis per file can be limited using the `--max-file-time` flag.
 
+#### Changed
+
+- The `--show-ignored` flag of the `test` command has been renamed to `--show-skipped`. Only explicitly skipped test files (with a `.skip` extension) will be shown. Other unsupported files are, such as generated HTML files, are never shown.
+- The output of the `test` command has changed to print the test name before the test result, so that it clear which test is currently running.
+- The `--hide-passing` flag of the `test` command has been renamed to the more common `--quiet`/`-q`.
+
 ## v0.6.0 -- 2023-01-13
 
 ### Library

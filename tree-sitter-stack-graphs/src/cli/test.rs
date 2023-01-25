@@ -81,9 +81,9 @@ pub struct TestArgs {
     )]
     pub test_paths: Vec<PathBuf>,
 
-    /// Hide passing tests.
-    #[clap(long)]
-    pub hide_passing: bool,
+    /// Hide passing tests in output.
+    #[clap(long, short = 'q')]
+    pub quiet: bool,
 
     /// Hide failure error details.
     #[clap(long)]
@@ -149,7 +149,7 @@ impl TestArgs {
     pub fn new(test_paths: Vec<PathBuf>) -> Self {
         Self {
             test_paths,
-            hide_passing: false,
+            quiet: false,
             hide_failure_errors: false,
             show_skipped: false,
             save_graph: None,
@@ -220,7 +220,7 @@ impl TestArgs {
         };
         let source = file_reader.get(test_path)?;
 
-        if !self.hide_passing {
+        if !self.quiet {
             print!("{}: ", test_path.display());
         }
 
@@ -317,11 +317,11 @@ impl TestArgs {
     fn handle_result(&self, test_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
         let success = result.failure_count() == 0;
         if success {
-            if !self.hide_passing {
+            if !self.quiet {
                 println!("{}", "success".green());
             }
         } else {
-            if self.hide_passing {
+            if self.quiet {
                 print!("{}: ", test_path.display());
             }
             println!(
@@ -357,7 +357,7 @@ impl TestArgs {
             .map(|spec| spec.format(test_root, test_path))
         {
             self.save_graph(&path, &graph, filter)?;
-            if !success || !self.hide_passing {
+            if !success || !self.quiet {
                 println!("{}: graph at {}", test_path.display(), path.display());
             }
         }
@@ -367,7 +367,7 @@ impl TestArgs {
             .map(|spec| spec.format(test_root, test_path))
         {
             self.save_paths(&path, paths, graph, filter)?;
-            if !success || !self.hide_passing {
+            if !success || !self.quiet {
                 println!("{}: paths at {}", test_path.display(), path.display());
             }
         }
@@ -377,7 +377,7 @@ impl TestArgs {
             .map(|spec| spec.format(test_root, test_path))
         {
             self.save_visualization(&path, paths, graph, filter, &test_path)?;
-            if !success || !self.hide_passing {
+            if !success || !self.quiet {
                 println!(
                     "{}: visualization at {}",
                     test_path.display(),
