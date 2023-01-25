@@ -89,9 +89,9 @@ pub struct TestArgs {
     #[clap(long)]
     pub hide_failure_errors: bool,
 
-    /// Show ignored files in output.
+    /// Show skipped files in output.
     #[clap(long)]
-    pub show_ignored: bool,
+    pub show_skipped: bool,
 
     /// Save graph for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -151,7 +151,7 @@ impl TestArgs {
             test_paths,
             hide_passing: false,
             hide_failure_errors: false,
-            show_ignored: false,
+            show_skipped: false,
             save_graph: None,
             save_paths: None,
             save_visualization: None,
@@ -208,15 +208,15 @@ impl TestArgs {
     ) -> anyhow::Result<TestResult> {
         let cancellation_flag = &NoCancellation;
 
+        if self.show_skipped && test_path.extension().map_or(false, |e| e == "skip") {
+            println!("{} {}", "⦵".dimmed(), test_path.display());
+            return Ok(TestResult::new());
+        }
+
         let mut file_reader = FileReader::new();
         let lc = match loader.load_for_file(test_path, &mut file_reader, cancellation_flag)? {
             Some(sgl) => sgl,
-            None => {
-                if self.show_ignored {
-                    println!("{} {}", "⦵".dimmed(), test_path.display());
-                }
-                return Ok(TestResult::new());
-            }
+            None => return Ok(TestResult::new()),
         };
         let source = file_reader.get(test_path)?;
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
