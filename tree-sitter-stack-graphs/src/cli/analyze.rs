@@ -103,10 +103,6 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<()> {
-        if self.verbose {
-            eprint!("{}: ", source_path.display());
-        }
-
         let mut cancellation_flag: Arc<dyn CancellationFlag> = Arc::new(NoCancellation);
         if let Some(max_file_time) = self.max_file_time {
             cancellation_flag = CancelAfterDuration::new(max_file_time);
@@ -118,14 +114,19 @@ impl AnalyzeArgs {
             Ok(Some(sgl)) => sgl,
             Ok(None) => return Ok(()),
             Err(crate::loader::LoadError::Cancelled(_)) => {
-                if !self.verbose {
-                    eprint!("{}: ", source_path.display());
-                }
-                eprintln!("{}", "language loading timed out".yellow());
+                eprintln!(
+                    "{}: {}",
+                    source_path.display(),
+                    "language loading timed out".yellow()
+                );
                 return Ok(());
             }
             Err(e) => return Err(e.into()),
         };
+
+        if self.verbose {
+            eprint!("{}: ", source_path.display());
+        }
 
         let mut graph = StackGraph::new();
         let file = graph
