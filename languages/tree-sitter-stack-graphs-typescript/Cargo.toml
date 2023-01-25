@@ -21,11 +21,12 @@ test = false
 name = "test"
 path = "rust/test.rs"
 harness = false
-required-features = ["tree-sitter-stack-graphs/cli"] # this should be *forced* for tests, but cargo does not support that
+required-features = ["test"] # should be a forced feature, but Cargo does not support those
 
 [features]
-default = ["cli"] # as long as the required features for test cannot be forced, we enable cli by default, to make sure tests are always run
+default = ["test"] # test is enabled by default because we cannot specify it as a forced featured for [[test]] above
 cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
+test = ["anyhow", "tree-sitter-stack-graphs/cli"]
 
 [dependencies]
 anyhow = { version = "1.0", optional = true }
