@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Library
+
+#### Added
+
+- A new `CancelAfterDuration` implementation of `CancellationFlag` that cancels the computation after a certain amount of time.
+
+### CLI
+
+#### Added
+
+- A new `analyze` command that computes stack graphs and partial paths for all given source files and directories. The command does not produce any output at the moment. Analysis per file can be limited using the `--max-file-time` flag.
+
 ## v0.6.0 -- 2023-01-13
 
 ### Library

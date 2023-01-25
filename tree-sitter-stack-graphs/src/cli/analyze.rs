@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use anyhow::Context as _;
 use clap::Args;
 use clap::ValueHint;
 use colored::Colorize as _;
@@ -93,8 +92,14 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<()> {
-        self.analyze_file(source_root, source_path, loader)
-            .with_context(|| format!("Error analyzing file {}", source_path.display()))
+        let result = self.analyze_file(source_root, source_path, loader);
+        if result.is_err() {
+            if !self.verbose {
+                eprint!("{}: ", source_path.display());
+            }
+            eprintln!("{}", "error".red());
+        }
+        result
     }
 
     fn analyze_file(
@@ -121,7 +126,10 @@ impl AnalyzeArgs {
                 );
                 return Ok(());
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => {
+                eprint!("{}: ", source_path.display());
+                return Err(e.into());
+            }
         };
 
         if self.verbose {
