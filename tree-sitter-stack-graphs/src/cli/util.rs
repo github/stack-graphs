@@ -10,6 +10,7 @@ use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 
 use crate::cli::MAX_PARSE_ERRORS;
@@ -126,6 +127,7 @@ pub fn map_parse_errors(
     test_path: &Path,
     parse_errors: &TreeWithParseErrorVec,
     source: &str,
+    prefix: &str,
 ) -> anyhow::Error {
     let mut error = String::new();
     let parse_errors = parse_errors.errors();
@@ -133,7 +135,8 @@ pub fn map_parse_errors(
         let line = parse_error.node().start_position().row;
         let column = parse_error.node().start_position().column;
         error.push_str(&format!(
-            "  {}:{}:{}: {}\n",
+            "{}{}:{}:{}: {}\n",
+            prefix,
             test_path.display(),
             line + 1,
             column + 1,
@@ -149,4 +152,8 @@ pub fn map_parse_errors(
         ));
     }
     anyhow!(error)
+}
+
+pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
+    Ok(Duration::new(s.parse()?, 0))
 }

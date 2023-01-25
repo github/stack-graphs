@@ -322,6 +322,9 @@ use std::mem::transmute;
 use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 use thiserror::Error;
 use tree_sitter::Parser;
 use tree_sitter_graph::functions::Functions;
@@ -609,6 +612,43 @@ pub struct NoCancellation;
 impl CancellationFlag for NoCancellation {
     fn flag(&self) -> Option<&AtomicUsize> {
         None
+    }
+}
+
+pub struct CancelAfterDuration {
+    flag: AtomicUsize,
+}
+
+impl CancelAfterDuration {
+    pub fn new(limit: Duration) -> Arc<Self> {
+        let result = Arc::new(Self {
+            flag: AtomicUsize::new(0),
+        });
+        let start = Instant::now();
+        let timer = Arc::downgrade(&result);
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_millis(10));
+                if let Some(timer) = timer.upgrade() {
+                    // the flag is still in use
+                    if start.elapsed().ge(&limit) {
+                        // set flag and stop polling
+                        timer.flag.store(1, Ordering::Relaxed);
+                        return;
+                    }
+                } else {
+                    // the flag is not in use anymore, stop polling
+                    return;
+                }
+            }
+        });
+        result
+    }
+}
+
+impl CancellationFlag for CancelAfterDuration {
+    fn flag(&self) -> Option<&AtomicUsize> {
+        Some(&self.flag)
     }
 }
 

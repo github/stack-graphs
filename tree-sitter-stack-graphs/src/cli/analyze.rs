@@ -16,12 +16,17 @@ use stack_graphs::stitching::Database;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use tree_sitter_graph::Variables;
 use walkdir::WalkDir;
 
+use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
 use crate::loader::Loader;
+use crate::CancelAfterDuration;
+use crate::CancellationFlag;
 use crate::LoadError;
 use crate::NoCancellation;
 
@@ -29,11 +34,26 @@ use crate::NoCancellation;
 #[derive(Args)]
 pub struct AnalyzeArgs {
     /// Source file or directory paths.
-    #[clap(value_name = "SOURCE_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
+    #[clap(
+        value_name = "SOURCE_PATH",
+        required = true,
+        value_hint = ValueHint::AnyPath,
+        parse(from_os_str),
+        validator_os = path_exists,
+    )]
     pub source_paths: Vec<PathBuf>,
 
-    #[clap(short = 'v')]
+    #[clap(long, short = 'v')]
     pub verbose: bool,
+
+    /// Maximum runtime per file in seconds.
+    #[clap(
+        long,
+        value_name = "SECONDS",
+        parse(try_from_str = duration_from_seconds_str),
+        require_equals = true,
+    )]
+    pub max_file_time: Option<Duration>,
 }
 
 impl AnalyzeArgs {
@@ -41,6 +61,7 @@ impl AnalyzeArgs {
         Self {
             source_paths,
             verbose: false,
+            max_file_time: None,
         }
     }
 
@@ -76,7 +97,6 @@ impl AnalyzeArgs {
             .with_context(|| format!("Error analyzing file {}", source_path.display()))
     }
 
-    /// Run test file.
     fn analyze_file(
         &self,
         source_root: &Path,
@@ -84,18 +104,27 @@ impl AnalyzeArgs {
         loader: &mut Loader,
     ) -> anyhow::Result<()> {
         if self.verbose {
-            eprint!("{} ", source_path.display());
+            eprint!("{}: ", source_path.display());
+        }
+
+        let mut cancellation_flag: Arc<dyn CancellationFlag> = Arc::new(NoCancellation);
+        if let Some(max_file_time) = self.max_file_time {
+            cancellation_flag = CancelAfterDuration::new(max_file_time);
         }
 
         let source = std::fs::read_to_string(source_path)?;
-        let lc = match loader.load_for_file(source_path, Some(&source), &NoCancellation)? {
-            Some(sgl) => sgl,
-            None => {
-                if self.verbose {
-                    eprintln!("{}", "⦵".dimmed());
+        let lc = match loader.load_for_file(source_path, Some(&source), cancellation_flag.as_ref())
+        {
+            Ok(Some(sgl)) => sgl,
+            Ok(None) => return Ok(()),
+            Err(crate::loader::LoadError::Cancelled(_)) => {
+                if !self.verbose {
+                    eprint!("{}: ", source_path.display());
                 }
+                eprintln!("{}", "language loading timed out".yellow());
                 return Ok(());
             }
+            Err(e) => return Err(e.into()),
         };
 
         let mut graph = StackGraph::new();
@@ -103,9 +132,6 @@ impl AnalyzeArgs {
             .add_file(&source_path.to_string_lossy())
             .map_err(|_| anyhow!("Duplicate file {}", source_path.display()))?;
 
-        if self.verbose {
-            eprint!("{} ", "🕸".yellow());
-        }
         let relative_source_path = source_path.strip_prefix(source_root).unwrap();
         let result = if let Some(fa) = source_path
             .file_name()
@@ -118,45 +144,63 @@ impl AnalyzeArgs {
                 &source,
                 &mut std::iter::empty(),
                 &HashMap::new(),
-                &NoCancellation,
+                cancellation_flag.as_ref(),
             )
         } else {
             let globals = Variables::new();
-            lc.sgl
-                .build_stack_graph_into(&mut graph, file, &source, &globals, &NoCancellation)
+            lc.sgl.build_stack_graph_into(
+                &mut graph,
+                file,
+                &source,
+                &globals,
+                cancellation_flag.as_ref(),
+            )
         };
         match result {
             Err(LoadError::ParseErrors(parse_errors)) => {
-                let parse_error = map_parse_errors(source_path, &parse_errors, &source);
+                let parse_error = map_parse_errors(source_path, &parse_errors, &source, "");
                 if !self.verbose {
-                    eprint!("{}", source_path.display());
+                    eprint!("{}: ", source_path.display());
                 }
-                eprintln!("{}", "✗".red());
+                eprintln!("{}", "parsing failed".red());
                 eprintln!("{}", parse_error);
+                return Ok(());
+            }
+            Err(LoadError::Cancelled(_)) => {
+                if !self.verbose {
+                    eprint!("{}: ", source_path.display());
+                }
+                eprintln!("{}", "parsing timed out".yellow());
                 return Ok(());
             }
             Err(e) => return Err(e.into()),
             Ok(_) => {}
         };
 
-        if self.verbose {
-            eprint!("{} ", "🦶".yellow());
-        }
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
-        partials.find_all_partial_paths_in_file(
+        match partials.find_all_partial_paths_in_file(
             &graph,
             file,
-            &stack_graphs::NoCancellation,
+            &cancellation_flag.as_ref(),
             |g, ps, p| {
                 if p.is_complete_as_possible(g) {
                     db.add_partial_path(g, ps, p);
                 }
             },
-        )?;
+        ) {
+            Ok(_) => {}
+            Err(_) => {
+                if !self.verbose {
+                    eprint!("{}: ", source_path.display());
+                }
+                eprintln!("{}", "path computation timed out".yellow());
+                return Ok(());
+            }
+        }
 
         if self.verbose {
-            eprintln!("{}", "✓".green());
+            eprintln!("{}", "success".green());
         }
         Ok(())
     }

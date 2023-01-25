@@ -281,7 +281,7 @@ impl TestArgs {
     ) -> anyhow::Result<()> {
         match sgl.build_stack_graph_into(graph, file, source, globals, &NoCancellation) {
             Err(LoadError::ParseErrors(parse_errors)) => {
-                Err(map_parse_errors(test_path, &parse_errors, source))
+                Err(map_parse_errors(test_path, &parse_errors, source, "  "))
             }
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
