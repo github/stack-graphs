@@ -334,6 +334,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @alternative.before_scope -> @stmt.before_scope
 }
 
+(labeled_statement (identifier) @id (statement) @child) @stmt {
+  edge @child.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @child.after_scope
+  ; FIXME: labels
+}
+
 (local_variable_declaration
   type: (_) @type
   declarator: (variable_declarator
