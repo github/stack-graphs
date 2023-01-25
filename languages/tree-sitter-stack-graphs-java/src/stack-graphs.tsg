@@ -425,6 +425,46 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
+(try_statement body: (_) @body) @stmt {
+  edge @body.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(try_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @id) body: (_) @body)) @stmt {
+  node def
+  node defs
+  attr (def) node_definition = @id
+  edge defs -> def
+  edge @body.before_scope -> defs
+  edge defs -> @stmt.before_scope
+  ; edge @local_var.after_scope -> def
+  ; edge @local_var.after_scope -> @local_var.before_scope
+  ; attr (@local_var.after_scope -> @local_var.before_scope) precedence = 1
+
+  edge @type.lexical_scope -> @stmt.before_scope
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+
+  edge def -> def__typeof
+
+  edge def__typeof -> @type.type
+}
+
+(catch_type) @catch_type {
+  node @catch_type.type
+  node @catch_type.lexical_scope
+}
+
+(catch_type (_) @type) @catch_type {
+  edge @catch_type.type -> @type.type
+  edge @type.lexical_scope -> @catch_type.lexical_scope
+}
+
+(try_statement (finally_clause (_) @finally)) @stmt {
+  edge @finally.before_scope -> @stmt.before_scope
+}
+
 ;; =====================
 ;;  Primary Expressions
 ;; =====================
