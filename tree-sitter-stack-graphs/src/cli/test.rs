@@ -206,12 +206,12 @@ impl TestArgs {
         test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
-        let cancellation_flag = &NoCancellation;
-
         if self.show_skipped && test_path.extension().map_or(false, |e| e == "skip") {
-            println!("{} {}", "⦵".dimmed(), test_path.display());
+            println!("{}: {}", test_path.display(), "skipped".yellow());
             return Ok(TestResult::new());
         }
+
+        let cancellation_flag = &NoCancellation;
 
         let mut file_reader = FileReader::new();
         let lc = match loader.load_for_file(test_path, &mut file_reader, cancellation_flag)? {
@@ -219,6 +219,11 @@ impl TestArgs {
             None => return Ok(TestResult::new()),
         };
         let source = file_reader.get(test_path)?;
+
+        if !self.hide_passing {
+            print!("{}: ", test_path.display());
+        }
+
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         self.load_builtins_into(&lc, &mut test.graph)
@@ -311,18 +316,27 @@ impl TestArgs {
 
     fn handle_result(&self, test_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
         let success = result.failure_count() == 0;
-        if !success || !self.hide_passing {
+        if success {
+            if !self.hide_passing {
+                println!("{}", "success".green());
+            }
+        } else {
+            if self.hide_passing {
+                print!("{}: ", test_path.display());
+            }
             println!(
-                "{} {}: {}/{} assertions",
-                if success { "✓".green() } else { "✗".red() },
-                test_path.display(),
-                result.success_count(),
-                result.count()
+                "{}",
+                format!(
+                    "{}/{} assertions failed",
+                    result.failure_count(),
+                    result.count(),
+                )
+                .red()
             );
         }
         if !success && !self.hide_failure_errors {
             for failure in result.failures_iter() {
-                println!("  {}", failure);
+                println!("{}", failure);
             }
         }
         Ok(success)
@@ -344,7 +358,7 @@ impl TestArgs {
         {
             self.save_graph(&path, &graph, filter)?;
             if !success || !self.hide_passing {
-                println!("  Graph: {}", path.display());
+                println!("{}: graph at {}", test_path.display(), path.display());
             }
         }
         if let Some(path) = self
@@ -354,7 +368,7 @@ impl TestArgs {
         {
             self.save_paths(&path, paths, graph, filter)?;
             if !success || !self.hide_passing {
-                println!("  Paths: {}", path.display());
+                println!("{}: paths at {}", test_path.display(), path.display());
             }
         }
         if let Some(path) = self
@@ -364,7 +378,11 @@ impl TestArgs {
         {
             self.save_visualization(&path, paths, graph, filter, &test_path)?;
             if !success || !self.hide_passing {
-                println!("  Visualization: {}", path.display());
+                println!(
+                    "{}: visualization at {}",
+                    test_path.display(),
+                    path.display()
+                );
             }
         }
         Ok(())
