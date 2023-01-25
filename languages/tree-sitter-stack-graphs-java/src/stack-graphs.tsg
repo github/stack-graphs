@@ -437,9 +437,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge defs -> def
   edge @body.before_scope -> defs
   edge defs -> @stmt.before_scope
-  ; edge @local_var.after_scope -> def
-  ; edge @local_var.after_scope -> @local_var.before_scope
-  ; attr (@local_var.after_scope -> @local_var.before_scope) precedence = 1
 
   edge @type.lexical_scope -> @stmt.before_scope
 
