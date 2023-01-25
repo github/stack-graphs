@@ -394,6 +394,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @this.lexical_scope
 }
 
+(switch_block (switch_block_statement_group (switch_label) @label)) @this {
+  edge @label.lexical_scope -> @this.lexical_scope
+}
+
 (switch_block (switch_block_statement_group (switch_label)+ . (statement) @first)) @this {
   edge @first.before_scope -> @this.lexical_scope
 }
