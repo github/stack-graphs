@@ -574,6 +574,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node ref
   attr (ref) node_reference = @ident
   edge ref -> @ident.lexical_scope
+  attr (ref -> @ident.lexical_scope) precedence = 1
   edge ref -> member
 
   attr (member) push_symbol = "."
