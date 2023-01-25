@@ -5,7 +5,8 @@ class A {
       //^ defined: 3
         f();
       //^ defined: 2
-    } else {
+    }
+    if (true) {} else {
         f();
       //^ defined: 2
     }
