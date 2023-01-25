@@ -9,4 +9,12 @@ class A {
       //^ defined: 2
     }
   }
+  void g() {
+    for(boolean x; x; x) {
+      //           ^ defined: 13
+      //              ^ defined: 13
+        g();
+      //^ defined: 12
+    }
+  }
 }
