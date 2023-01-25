@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `LanguageConfiguration::matches_file` method takes a `ContentProvider` instead of an `Option<&str>` value. This allows lazy file reading *after* the filename is checked, instead of the unconditional loading required before. To give content readers the opportunity to cache read values, a mutable reference is required. The return type has changed to `std::io::Result` to propagate possible errors from content providers. A `FileReader` implementation that caches the last read file is provided as well.
 
+#### Fixed
+
+- Fix a panic condition when assertion refer to source lines beyond the end of the test file.
+
 ### CLI
 
 #### Added
@@ -26,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Changed
 
 - The `--show-ignored` flag of the `test` command has been renamed to `--show-skipped`. Only explicitly skipped test files (with a `.skip` extension) will be shown. Other unsupported files are, such as generated HTML files, are never shown.
-- The output of the `test` command has changed to print the test name before the test result, so that it clear which test is currently running.
 - The `--hide-passing` flag of the `test` command has been renamed to the more common `--quiet`/`-q`.
+- The output of the `test` command has changed to print the test name before the test result, so that it clear which test is currently running.
 
 ## v0.6.0 -- 2023-01-13
 
