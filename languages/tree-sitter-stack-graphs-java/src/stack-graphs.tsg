@@ -316,6 +316,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
+(for_statement init: (local_variable_declaration) @init condition: (_) @condition update: (_) @update body: (_) @body) @stmt {
+  edge @init.before_scope -> @stmt.before_scope
+  edge @condition.lexical_scope -> @init.after_scope
+  edge @update.lexical_scope -> @init.after_scope
+  edge @body.before_scope -> @init.after_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
 (local_variable_declaration
   type: (_) @type
   declarator: (variable_declarator
