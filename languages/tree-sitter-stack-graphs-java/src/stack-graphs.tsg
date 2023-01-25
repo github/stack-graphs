@@ -305,6 +305,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge defs -> @stmt.before_scope
   edge defs -> def
   edge @body.before_scope -> defs
+  edge @stmt.after_scope -> @stmt.before_scope
 }
 
 (local_variable_declaration
