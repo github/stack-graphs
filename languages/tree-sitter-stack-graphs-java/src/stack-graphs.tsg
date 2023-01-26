@@ -176,6 +176,37 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge member -> def
 }
 
+(modifiers) @this {
+  node @this.lexical_scope
+}
+
+(modifiers (_) @annotation) @this {
+  edge @annotation.ref -> @this.lexical_scope
+}
+
+(marker_annotation name: (_) @name) @this {
+  node @this.ref
+  attr (@this.ref) node_reference = @name
+}
+
+(annotation name: (_) @name) @this {
+  node @this.ref
+  attr (@this.ref) node_reference = @name
+}
+
+(modifiers (annotation arguments: (annotation_argument_list (_) @value))) @this {
+  edge @value.lexical_scope -> @this.lexical_scope
+}
+
+(element_value_pair value: (_) @value) @this {
+  node @this.lexical_scope
+  edge @value.lexical_scope -> @this.lexical_scope
+}
+
+(field_declaration (modifiers) @modifiers) @decl {
+  edge @modifiers.lexical_scope -> @decl.lexical_scope
+}
+
 (method_declaration
   type: (_) @type
   name: (identifier) @name
