@@ -177,11 +177,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (method_declaration
+  type: (_) @type
   name: (identifier) @name
   body: (block) @block) @method
 {
   node @method.defs
   node @method.lexical_scope
+
+  edge @type.lexical_scope -> @method.lexical_scope
 
   node member
   edge @method.defs -> member
