@@ -777,6 +777,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (array_type element: (_) @child) @this {
   edge @child.lexical_scope -> @this.lexical_scope
+  ; FIXME: use some sort of subscripting relation for .type
 }
 
 (type_identifier) @this
