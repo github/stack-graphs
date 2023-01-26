@@ -156,6 +156,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; =====================
 
 (field_declaration
+  type: (_) @type
   declarator: (variable_declarator
     name: (_) @name
   )
@@ -163,6 +164,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   node @field_decl.defs
   node @field_decl.lexical_scope
+  edge @type.lexical_scope -> @field_decl.lexical_scope
 
   node member
   edge @field_decl.defs -> member
