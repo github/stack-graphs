@@ -775,6 +775,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@type.type) node_reference = @type
 }
 
+(array_type element: (_) @child) @this {
+  edge @child.lexical_scope -> @this.lexical_scope
+}
+
 (type_identifier) @this
 {
   edge @this.type -> @this.lexical_scope
