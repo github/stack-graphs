@@ -11,6 +11,8 @@ use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::json::Filter;
 use crate::json::JsonError;
+use crate::partial::PartialPath;
+use crate::partial::PartialPaths;
 use crate::paths::Path;
 use crate::paths::Paths;
 
@@ -130,6 +132,40 @@ impl Filter for VisualizationFilter<'_> {
         if !match &graph[path.end_node] {
             Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
                 path.symbol_stack.is_empty() && path.scope_stack.is_empty()
+            }
+            Node::Root(_) => true,
+            Node::Scope(node) => node.is_exported,
+            _ => false,
+        } {
+            return false;
+        }
+        return true;
+    }
+
+    fn include_partial_path(
+        &self,
+        graph: &StackGraph,
+        paths: &PartialPaths,
+        path: &PartialPath,
+    ) -> bool {
+        if !self.0.include_partial_path(graph, paths, path) {
+            return false;
+        }
+        if path.start_node == path.end_node {
+            return false;
+        }
+        if !match &graph[path.start_node] {
+            Node::PushScopedSymbol(_) | Node::PushSymbol(_) => true,
+            Node::Root(_) => true,
+            Node::Scope(node) => node.is_exported,
+            _ => false,
+        } {
+            return false;
+        }
+        if !match &graph[path.end_node] {
+            Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
+                path.symbol_stack_postcondition.contains_symbols()
+                    && path.scope_stack_postcondition.contains_scopes()
             }
             Node::Root(_) => true,
             Node::Scope(node) => node.is_exported,

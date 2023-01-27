@@ -185,7 +185,7 @@ impl SymbolStackVariable {
         SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(offset_value) })
     }
 
-    fn as_u32(self) -> u32 {
+    pub(crate) fn as_u32(self) -> u32 {
         self.0.get()
     }
 
@@ -256,7 +256,7 @@ impl ScopeStackVariable {
         ScopeStackVariable(unsafe { NonZeroU32::new_unchecked(offset_value) })
     }
 
-    fn as_u32(self) -> u32 {
+    pub(crate) fn as_u32(self) -> u32 {
         self.0.get()
     }
 
@@ -597,6 +597,12 @@ impl PartialSymbolStack {
     #[inline(always)]
     pub fn contains_symbols(&self) -> bool {
         !self.symbols.is_empty()
+    }
+
+    /// Returns whether this partial symbol stack has a symbol stack variable variable.
+    #[inline(always)]
+    pub fn has_variable(&self) -> bool {
+        !self.variable.is_some()
     }
 
     #[inline(always)]
@@ -994,6 +1000,10 @@ impl PartialSymbolStack {
             .copied()
     }
 
+    pub fn variable(&self) -> Option<SymbolStackVariable> {
+        self.variable.clone().into_option()
+    }
+
     fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
         self.symbols
             .ensure_backwards(&mut partials.partial_symbol_stacks);
@@ -1094,6 +1104,12 @@ impl PartialScopeStack {
     #[inline(always)]
     pub fn contains_scopes(&self) -> bool {
         !self.scopes.is_empty()
+    }
+
+    /// Returns whether this partial scope stack has a scope stack variable.
+    #[inline(always)]
+    pub fn has_variable(&self) -> bool {
+        self.variable.is_some()
     }
 
     #[inline(always)]

@@ -9,7 +9,11 @@ use serde_json::json;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::json::NoFilter;
+use stack_graphs::partial::PartialPaths;
 use stack_graphs::paths::Paths;
+use stack_graphs::stitching::Database;
+use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
 
@@ -1801,6 +1805,312 @@ fn can_serialize_paths() {
                     "local_id" : 1
                 },
                 "symbol_stack" : []
+            }
+        ]
+    );
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn can_serialize_partial_paths() {
+    let graph: StackGraph = test_graphs::simple::new();
+    let mut partials = PartialPaths::new();
+    let mut db = Database::new();
+    for file in graph.iter_files() {
+        partials
+            .find_all_partial_paths_in_file(&graph, file, &NoCancellation, |g, ps, p| {
+                db.add_partial_path(g, ps, p);
+            })
+            .expect("Expect path finding to work");
+    }
+    let actual = db
+        .to_json(&graph, &mut partials, &NoFilter)
+        .to_value()
+        .expect("Cannot serialize paths");
+    // formatted using: json_pp -json_opt utf8,canoncical,pretty,indent_length=4
+    let expected = json!(
+        [
+            {
+                "edges" : [
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 3
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        }
+                    }
+                ],
+                "end_node" : {
+                    "file" : "test.py",
+                    "local_id" : 9
+                },
+                "scope_stack_postcondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "scope_stack_precondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "start_node" : {
+                    "file" : "test.py",
+                    "local_id" : 3
+                },
+                "symbol_stack_postcondition" : {
+                    "symbols" : [],
+                    "variable" : 1
+                },
+                "symbol_stack_precondition" : {
+                    "symbols" : [
+                        {
+                            "symbol" : "."
+                        },
+                        {
+                            "symbol" : "x"
+                        }
+                    ],
+                    "variable" : 1
+                }
+            },
+            {
+                "edges" : [
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 1
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 2
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 4
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 5
+                        }
+                    }
+                ],
+                "end_node" : {
+                    "local_id" : 1
+                },
+                "scope_stack_postcondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "scope_stack_precondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "start_node" : {
+                    "file" : "test.py",
+                    "local_id" : 1
+                },
+                "symbol_stack_postcondition" : {
+                    "symbols" : [
+                        {
+                            "scopes" : {
+                                "scopes" : [
+                                    {
+                                        "file" : "test.py",
+                                        "local_id" : 3
+                                    }
+                                ],
+                                "variable" : 1
+                            },
+                            "symbol" : "()"
+                        },
+                        {
+                            "symbol" : "."
+                        },
+                        {
+                            "symbol" : "x"
+                        }
+                    ],
+                    "variable" : 1
+                },
+                "symbol_stack_precondition" : {
+                    "symbols" : [],
+                    "variable" : 1
+                }
+            },
+            {
+                "edges" : [
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 1
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 2
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 4
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 5
+                        }
+                    },
+                    {
+                        "precedence" : 1,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 6
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "local_id" : 2
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 3
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        }
+                    }
+                ],
+                "end_node" : {
+                    "file" : "test.py",
+                    "local_id" : 9
+                },
+                "scope_stack_postcondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "scope_stack_precondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "start_node" : {
+                    "file" : "test.py",
+                    "local_id" : 1
+                },
+                "symbol_stack_postcondition" : {
+                    "symbols" : [],
+                    "variable" : 1
+                },
+                "symbol_stack_precondition" : {
+                    "symbols" : [],
+                    "variable" : 1
+                }
+            },
+            {
+                "edges" : [
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 1
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 2
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 4
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 5
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 6
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 7
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        }
+                    }
+                ],
+                "end_node" : {
+                    "file" : "test.py",
+                    "local_id" : 9
+                },
+                "scope_stack_postcondition" : {
+                    "scopes" : []
+                },
+                "scope_stack_precondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "start_node" : {
+                    "file" : "test.py",
+                    "local_id" : 1
+                },
+                "symbol_stack_postcondition" : {
+                    "symbols" : [],
+                    "variable" : 1
+                },
+                "symbol_stack_precondition" : {
+                    "symbols" : [],
+                    "variable" : 1
+                }
             }
         ]
     );
