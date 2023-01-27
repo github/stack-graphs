@@ -6,8 +6,10 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
+use colored::Colorize;
 use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -156,4 +158,57 @@ pub fn map_parse_errors(
 
 pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     Ok(Duration::new(s.parse()?, 0))
+}
+
+pub struct FileStatusLogger<'a> {
+    path: &'a Path,
+    verbose: bool,
+    path_logged: bool,
+}
+
+impl<'a> FileStatusLogger<'a> {
+    pub fn new(path: &'a Path, verbose: bool) -> Self {
+        Self {
+            path,
+            verbose,
+            path_logged: false,
+        }
+    }
+
+    pub fn processing(&mut self) -> Result<(), anyhow::Error> {
+        self.print_path(false)?;
+        Ok(())
+    }
+
+    pub fn ok(&mut self, status: &str) -> Result<(), anyhow::Error> {
+        self.print_path(false)?;
+        if self.verbose {
+            println!("{}", status.green());
+            self.path_logged = false;
+        }
+        Ok(())
+    }
+
+    pub fn warn(&mut self, status: &str) -> Result<(), anyhow::Error> {
+        self.print_path(true)?;
+        println!("{}", status.yellow());
+        self.path_logged = false;
+        Ok(())
+    }
+
+    pub fn error(&mut self, status: &str) -> Result<(), anyhow::Error> {
+        self.print_path(true)?;
+        println!("{}", status.red());
+        self.path_logged = false;
+        Ok(())
+    }
+
+    fn print_path(&mut self, force: bool) -> Result<(), anyhow::Error> {
+        if (self.verbose || force) && !self.path_logged {
+            print!("{}: ", self.path.display());
+            std::io::stdout().flush()?;
+            self.path_logged = true;
+        }
+        Ok(())
+    }
 }

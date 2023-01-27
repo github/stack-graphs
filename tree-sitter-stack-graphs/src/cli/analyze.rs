@@ -6,9 +6,9 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
+use anyhow::Context as _;
 use clap::Args;
 use clap::ValueHint;
-use colored::Colorize as _;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
@@ -28,6 +28,8 @@ use crate::CancelAfterDuration;
 use crate::CancellationFlag;
 use crate::LoadError;
 use crate::NoCancellation;
+
+use super::util::FileStatusLogger;
 
 /// Analyze sources
 #[derive(Args)]
@@ -75,31 +77,25 @@ impl AnalyzeArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path();
-                    self.run_with_context(source_root, source_path, loader)?;
+                    self.analyze_file_with_context(source_root, source_path, loader)?;
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
-                self.run_with_context(source_root, source_path, loader)?;
+                self.analyze_file_with_context(source_root, source_path, loader)?;
             }
         }
         Ok(())
     }
 
-    /// Run test file and add error context to any failures that are returned.
-    fn run_with_context(
+    /// Analyze file and add error context to any failures that are returned.
+    fn analyze_file_with_context(
         &self,
         source_root: &Path,
         source_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<()> {
-        let result = self.analyze_file(source_root, source_path, loader);
-        if result.is_err() {
-            if !self.verbose {
-                eprint!("{}: ", source_path.display());
-            }
-            eprintln!("{}", "error".red());
-        }
-        result
+        self.analyze_file(source_root, source_path, loader)
+            .with_context(|| format!("Error analyzing file {}", source_path.display()))
     }
 
     fn analyze_file(
@@ -108,38 +104,31 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<()> {
+        let mut file_status = FileStatusLogger::new(source_path, self.verbose);
+
+        let source = std::fs::read_to_string(source_path)?;
+        let lc = match loader.load_for_file(source_path, Some(&source), &NoCancellation) {
+            Ok(Some(sgl)) => sgl,
+            Ok(None) => return Ok(()),
+            Err(crate::loader::LoadError::Cancelled(_)) => {
+                file_status.warn("language loading timed out")?;
+                return Ok(());
+            }
+            Err(e) => return Err(e.into()),
+        };
+
         let mut cancellation_flag: Arc<dyn CancellationFlag> = Arc::new(NoCancellation);
         if let Some(max_file_time) = self.max_file_time {
             cancellation_flag = CancelAfterDuration::new(max_file_time);
         }
 
-        let source = std::fs::read_to_string(source_path)?;
-        let lc = match loader.load_for_file(source_path, Some(&source), cancellation_flag.as_ref())
-        {
-            Ok(Some(sgl)) => sgl,
-            Ok(None) => return Ok(()),
-            Err(crate::loader::LoadError::Cancelled(_)) => {
-                eprintln!(
-                    "{}: {}",
-                    source_path.display(),
-                    "language loading timed out".yellow()
-                );
-                return Ok(());
-            }
-            Err(e) => {
-                eprint!("{}: ", source_path.display());
-                return Err(e.into());
-            }
-        };
-
-        if self.verbose {
-            eprint!("{}: ", source_path.display());
-        }
+        file_status.processing()?;
 
         let mut graph = StackGraph::new();
-        let file = graph
-            .add_file(&source_path.to_string_lossy())
-            .map_err(|_| anyhow!("Duplicate file {}", source_path.display()))?;
+        let file = match graph.add_file(&source_path.to_string_lossy()) {
+            Ok(file) => file,
+            Err(_) => return Err(anyhow!("Duplicate file {}", source_path.display())),
+        };
 
         let relative_source_path = source_path.strip_prefix(source_root).unwrap();
         let result = if let Some(fa) = source_path
@@ -168,18 +157,12 @@ impl AnalyzeArgs {
         match result {
             Err(LoadError::ParseErrors(parse_errors)) => {
                 let parse_error = map_parse_errors(source_path, &parse_errors, &source, "");
-                if !self.verbose {
-                    eprint!("{}: ", source_path.display());
-                }
-                eprintln!("{}", "parsing failed".red());
+                file_status.error("parsing failed")?;
                 eprintln!("{}", parse_error);
                 return Ok(());
             }
             Err(LoadError::Cancelled(_)) => {
-                if !self.verbose {
-                    eprint!("{}: ", source_path.display());
-                }
-                eprintln!("{}", "parsing timed out".yellow());
+                file_status.warn("parsing timed out")?;
                 return Ok(());
             }
             Err(e) => return Err(e.into()),
@@ -200,17 +183,12 @@ impl AnalyzeArgs {
         ) {
             Ok(_) => {}
             Err(_) => {
-                if !self.verbose {
-                    eprint!("{}: ", source_path.display());
-                }
-                eprintln!("{}", "path computation timed out".yellow());
+                file_status.warn("path computation timed out")?;
                 return Ok(());
             }
         }
 
-        if self.verbose {
-            eprintln!("{}", "success".green());
-        }
+        file_status.ok("success")?;
         Ok(())
     }
 }
