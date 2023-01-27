@@ -835,6 +835,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @name.lexical_scope -> @this.lexical_scope
 }
 
+(generic_type (type_arguments (_) @type)) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
 (type_identifier) @this
 {
   edge @this.type -> @this.lexical_scope
