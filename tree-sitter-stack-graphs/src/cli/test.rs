@@ -10,7 +10,6 @@ use anyhow::Context as _;
 use clap::ArgEnum;
 use clap::Args;
 use clap::ValueHint;
-use colored::Colorize as _;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
@@ -33,6 +32,8 @@ use crate::CancellationFlag;
 use crate::LoadError;
 use crate::NoCancellation;
 use crate::StackGraphLanguage;
+
+use super::util::FileStatusLogger;
 
 /// Flag to control output
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -206,8 +207,10 @@ impl TestArgs {
         test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
+        let mut file_status = FileStatusLogger::new(test_path, !self.quiet);
+
         if self.show_skipped && test_path.extension().map_or(false, |e| e == "skip") {
-            println!("{}: {}", test_path.display(), "skipped".yellow());
+            file_status.warn("skipped")?;
             return Ok(TestResult::new());
         }
 
@@ -220,9 +223,7 @@ impl TestArgs {
         };
         let source = file_reader.get(test_path)?;
 
-        if !self.quiet {
-            print!("{}: ", test_path.display());
-        }
+        file_status.processing()?;
 
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
@@ -269,7 +270,7 @@ impl TestArgs {
             }
         }
         let result = test.run(cancellation_flag)?;
-        let success = self.handle_result(test_path, &result)?;
+        let success = self.handle_result(&result, &mut file_status)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
             self.save_output(
@@ -314,25 +315,20 @@ impl TestArgs {
         }
     }
 
-    fn handle_result(&self, test_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
+    fn handle_result(
+        &self,
+        result: &TestResult,
+        file_status: &mut FileStatusLogger,
+    ) -> anyhow::Result<bool> {
         let success = result.failure_count() == 0;
         if success {
-            if !self.quiet {
-                println!("{}", "success".green());
-            }
+            file_status.ok("success")?;
         } else {
-            if self.quiet {
-                print!("{}: ", test_path.display());
-            }
-            println!(
-                "{}",
-                format!(
-                    "{}/{} assertions failed",
-                    result.failure_count(),
-                    result.count(),
-                )
-                .red()
-            );
+            file_status.error(&format!(
+                "{}/{} assertions failed",
+                result.failure_count(),
+                result.count(),
+            ))?;
         }
         if !success && !self.hide_failure_errors {
             for failure in result.failures_iter() {
