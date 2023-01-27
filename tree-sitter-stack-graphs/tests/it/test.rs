@@ -10,6 +10,8 @@ use pretty_assertions::assert_eq;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::partial::PartialPaths;
+use stack_graphs::stitching::Database;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
@@ -99,8 +101,10 @@ fn check_test(
         )
         .expect("Could not load stack graph");
     }
+    let mut partials = PartialPaths::new();
+    let mut db = Database::new();
     let results = test
-        .run(&NoCancellation)
+        .run(&mut partials, &mut db, &NoCancellation)
         .expect("should never be cancelled");
     assert_eq!(
         expected_successes,

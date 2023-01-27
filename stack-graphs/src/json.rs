@@ -113,7 +113,7 @@ where
     }
 }
 
-/// Struct that ensures the implications of exclusions.
+/// Filter implementation that enforces all implications of another filter.
 /// For example, that nodes frome excluded files are not included, etc.
 struct ImplicationFilter<'a>(&'a dyn Filter);
 
@@ -152,18 +152,25 @@ impl Filter for ImplicationFilter<'_> {
         paths: &PartialPaths,
         path: &PartialPath,
     ) -> bool {
-        path.edges
+        let super_ok = self.0.include_partial_path(graph, paths, path);
+        if !super_ok {
+            return false;
+        }
+        let all_included_edges = path
+            .edges
             .iter_unordered(paths)
             .map(|e| graph.node_for_id(e.source_node_id).unwrap())
             .chain(std::iter::once(path.end_node))
             .tuple_windows()
-            .all(|(source, sink)| self.include_edge(graph, &source, &sink))
-            && self.0.include_partial_path(graph, paths, path)
+            .all(|(source, sink)| self.include_edge(graph, &source, &sink));
+        if !all_included_edges {
+            return false;
+        }
+        true
     }
 }
 
-/// Struct that ensures the implications of exclusions.
-/// For example, that nodes frome excluded files are not included, etc.
+// Filter implementation that includes everything.
 pub struct NoFilter;
 
 impl Filter for NoFilter {

@@ -15,6 +15,7 @@ use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::Path;
 use crate::paths::Paths;
+use crate::stitching::Database;
 
 static CSS: &'static str = include_str!("visualization/visualization.css");
 static D3: &'static str = include_str!("visualization/d3.v7.min.js");
@@ -31,12 +32,13 @@ impl StackGraph {
     pub fn to_html_string(
         &self,
         title: &str,
-        paths: &mut Paths,
+        partials: &mut PartialPaths,
+        db: &mut Database,
         filter: &dyn Filter,
     ) -> Result<String, JsonError> {
         let filter = VisualizationFilter(filter);
         let graph = self.to_json(&filter).to_string()?;
-        let paths = paths.to_json(self, &filter).to_string()?;
+        let paths = db.to_json(self, partials, &filter).to_string()?;
         let html = format!(
             r#"
 <!DOCTYPE html>
@@ -151,11 +153,14 @@ impl Filter for VisualizationFilter<'_> {
         if !self.0.include_partial_path(graph, paths, path) {
             return false;
         }
-        if path.start_node == path.end_node {
+        if path.start_node == path.end_node && path.edges.len() == 0 {
             return false;
         }
         if !match &graph[path.start_node] {
-            Node::PushScopedSymbol(_) | Node::PushSymbol(_) => true,
+            Node::PushScopedSymbol(_) | Node::PushSymbol(_) => {
+                path.symbol_stack_precondition.can_match_empty()
+                    && path.scope_stack_precondition.can_match_empty()
+            }
             Node::Root(_) => true,
             Node::Scope(node) => node.is_exported,
             _ => false,
@@ -164,8 +169,8 @@ impl Filter for VisualizationFilter<'_> {
         }
         if !match &graph[path.end_node] {
             Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
-                path.symbol_stack_postcondition.contains_symbols()
-                    && path.scope_stack_postcondition.contains_scopes()
+                path.symbol_stack_postcondition.can_match_empty()
+                    && path.scope_stack_postcondition.can_match_empty()
             }
             Node::Root(_) => true,
             Node::Scope(node) => node.is_exported,

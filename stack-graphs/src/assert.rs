@@ -15,8 +15,10 @@ use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
-use crate::paths::Path;
-use crate::paths::Paths;
+use crate::partial::PartialPath;
+use crate::partial::PartialPaths;
+use crate::stitching::Database;
+use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -100,7 +102,7 @@ pub enum AssertionError {
         source: AssertionSource,
         references: Vec<Handle<Node>>,
         missing_targets: Vec<AssertionTarget>,
-        unexpected_paths: Vec<Path>,
+        unexpected_paths: Vec<PartialPath>,
     },
     IncorrectDefinitions {
         source: AssertionSource,
@@ -126,12 +128,13 @@ impl Assertion {
     pub fn run(
         &self,
         graph: &StackGraph,
-        paths: &mut Paths,
+        partials: &mut PartialPaths,
+        db: &mut Database,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
         match self {
             Self::Defined { source, targets } => {
-                self.run_defined(graph, paths, source, targets, cancellation_flag)
+                self.run_defined(graph, partials, db, source, targets, cancellation_flag)
             }
             Self::Defines { source, symbols } => self.run_defines(graph, source, symbols),
             Self::Refers { source, symbols } => self.run_refers(graph, source, symbols),
@@ -141,7 +144,8 @@ impl Assertion {
     fn run_defined(
         &self,
         graph: &StackGraph,
-        paths: &mut Paths,
+        partials: &mut PartialPaths,
+        db: &mut Database,
         source: &AssertionSource,
         expected_targets: &Vec<AssertionTarget>,
         cancellation_flag: &dyn CancellationFlag,
@@ -154,12 +158,24 @@ impl Assertion {
         }
 
         let mut actual_paths = Vec::new();
-        paths.find_all_paths(graph, references.clone(), cancellation_flag, |g, _ps, p| {
-            if p.is_complete(g) {
-                actual_paths.push(p);
+        for reference in &references {
+            let reference_paths = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+                graph,
+                partials,
+                db,
+                vec![*reference],
+                cancellation_flag,
+            )?;
+            for reference_path in &reference_paths {
+                if reference_paths
+                    .iter()
+                    .all(|other| !other.shadows(partials, reference_path))
+                {
+                    actual_paths.push(reference_path.clone());
+                }
             }
-        })?;
-        paths.remove_shadowed_paths(&mut actual_paths, cancellation_flag)?;
+        }
+
         let missing_targets = expected_targets
             .iter()
             .filter(|t| {

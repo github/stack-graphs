@@ -72,7 +72,8 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::SourceInfo;
 use stack_graphs::graph::StackGraph;
-use stack_graphs::paths::Paths;
+use stack_graphs::partial::PartialPaths;
+use stack_graphs::stitching::Database;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -149,7 +150,6 @@ pub struct Test {
     pub path: PathBuf,
     pub fragments: Vec<TestFragment>,
     pub graph: StackGraph,
-    pub paths: Paths,
 }
 
 /// A fragment from a stack graph test
@@ -269,7 +269,6 @@ impl Test {
             path: path.to_path_buf(),
             fragments,
             graph,
-            paths: Paths::new(),
         })
     }
 
@@ -623,13 +622,28 @@ impl Test {
     /// the test.
     pub fn run(
         &mut self,
+        partials: &mut PartialPaths,
+        db: &mut Database,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<TestResult, stack_graphs::CancellationError> {
+        // build partial paths
+        for file in self.graph.iter_files() {
+            partials.find_all_partial_paths_in_file(
+                &self.graph,
+                file,
+                &cancellation_flag,
+                |g, ps, p| {
+                    db.add_partial_path(g, ps, p);
+                },
+            )?;
+        }
+
+        // test assertions
         let mut result = TestResult::new();
         for fragment in &self.fragments {
             for assertion in &fragment.assertions {
                 match assertion
-                    .run(&self.graph, &mut self.paths, &cancellation_flag)
+                    .run(&self.graph, partials, db, &cancellation_flag)
                     .map_or_else(|e| self.from_error(e), |v| Ok(v))
                 {
                     Ok(_) => result.add_success(),
