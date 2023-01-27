@@ -810,6 +810,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type.lexical_scope -> @this.lexical_scope
 }
 
+(lambda_expression body: (_) @body) @this {
+  edge @body.lexical_scope -> @this.lexical_scope
+}
+
 [
   (super)
   (this)
