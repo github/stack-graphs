@@ -11,6 +11,7 @@ edition = "2018"
 [[bin]]
 name = "tree-sitter-stack-graphs-typescript"
 path = "rust/bin.rs"
+required-features = ["cli"]
 
 [lib]
 path = "rust/lib.rs"
@@ -20,14 +21,20 @@ test = false
 name = "test"
 path = "rust/test.rs"
 harness = false
+required-features = ["test"] # should be a forced feature, but Cargo does not support those
+
+[features]
+default = ["test"] # test is enabled by default because we cannot specify it as a forced featured for [[test]] above
+cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
+test = ["anyhow", "tree-sitter-stack-graphs/cli"]
 
 [dependencies]
-anyhow = "1.0"
-clap = "3"
+anyhow = { version = "1.0", optional = true }
+clap = { version = "3", optional = true }
 glob = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 stack-graphs = { version = "0.10", path = "../../stack-graphs" }
-tree-sitter-stack-graphs = { version = "0.6", path = "../../tree-sitter-stack-graphs", features=["cli"] }
-tree-sitter-typescript = { git = "https://github.com/tree-sitter/tree-sitter-typescript", rev="082da44a5263599186dadafd2c974c19f3a73d28" }
+tree-sitter-stack-graphs = { version = "0.6", path = "../../tree-sitter-stack-graphs" }
+tree-sitter-typescript = "0.20.2"
 tsconfig = "0.1.0"
