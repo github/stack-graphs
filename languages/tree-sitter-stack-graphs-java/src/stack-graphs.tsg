@@ -792,6 +792,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @right.lexical_scope -> @this.lexical_scope
 }
 
+(binary_expression left: (_) @lhs right: (_) @rhs) @this {
+  edge @lhs.lexical_scope -> @this.lexical_scope
+  edge @rhs.lexical_scope -> @this.lexical_scope
+}
+
 [
   (super)
   (this)
