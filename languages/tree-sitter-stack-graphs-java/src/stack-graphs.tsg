@@ -141,6 +141,26 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @class.type -> ref
 }
 
+
+(class_declaration (type_parameters)) @class {
+  node @class.type_parameters
+  edge @class.lexical_scope -> @class.type_parameters
+}
+
+(class_declaration (type_parameters (type_parameter) @param)) @class {
+  edge @class.type_parameters -> @param.def
+  edge @param.lexical_scope -> @class.lexical_scope
+}
+
+(type_parameter (type_identifier) @id) @this {
+  node @this.def
+  node @this.lexical_scope
+
+  edge @id.lexical_scope -> @this.lexical_scope
+
+  attr (@this.def) node_definition = @id
+}
+
 (class_body) @class_body {
   node @class_body.lexical_scope
   node @class_body.defs
