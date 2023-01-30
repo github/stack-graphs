@@ -631,6 +631,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;  Primary Expressions
 ;; =====================
 
+(array_access (primary_expression) @array (expression) @index) @this {
+  edge @array.lexical_scope -> @this.lexical_scope
+  edge @index.lexical_scope -> @this.lexical_scope
+}
+
 (primary_expression/identifier) @ident
 {
   node member
