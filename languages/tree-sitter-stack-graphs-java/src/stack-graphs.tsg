@@ -431,6 +431,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge def__typeof -> @type.type
 }
 
+(local_variable_declaration declarator: (variable_declarator value: (_) @value)) @this {
+  edge @value.lexical_scope -> @this.before_scope
+}
+
 (local_variable_declaration
   type: (generic_type
     (type_identifier) @type
