@@ -2627,17 +2627,59 @@ impl PartialPath {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
+        // If the join node operates on the stack, the effect is present in both sides.
+        // For correct joining, we must undo the effect on one of the sides. We match
+        // the end node of the lhs, and the start node of the rhs separately, depending
+        // on whether we must manipulate the lhs postcondition or rhs precondition,
+        // respectively. The reason we cannot use only one of the lhs end or rhs start
+        // node is that the variables used in them may differ.
+        let mut lhs_symbol_stack_postcondition = lhs.symbol_stack_postcondition;
+        let lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
+        let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
+        let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
+        match &graph[lhs.end_node] {
+            Node::DropScopes(_) => {}
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {}
+            Node::PopSymbol(_) => {}
+            Node::PushScopedSymbol(_) => {
+                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
+            }
+            Node::PushSymbol(_) => {
+                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
+            }
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+        match &graph[rhs.start_node] {
+            Node::DropScopes(_) => {
+                rhs_scope_stack_precondition = PartialScopeStack::empty();
+            }
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {
+                let symbol = rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+                rhs_scope_stack_precondition = symbol.scopes.into_option().unwrap();
+            }
+            Node::PopSymbol(_) => {
+                rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+            }
+            Node::PushScopedSymbol(_) => {}
+            Node::PushSymbol(_) => {}
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+
         let mut symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
 
-        let unified_scope_stack = lhs.scope_stack_postcondition.unify(
+        let unified_scope_stack = lhs_scope_stack_postcondition.unify(
             partials,
-            rhs.scope_stack_precondition,
+            rhs_scope_stack_precondition,
             &mut scope_bindings,
         )?;
-        let unified_symbol_stack = lhs.symbol_stack_postcondition.unify(
+        let unified_symbol_stack = lhs_symbol_stack_postcondition.unify(
             partials,
-            rhs.symbol_stack_precondition,
+            rhs_symbol_stack_precondition,
             &mut symbol_bindings,
             &mut scope_bindings,
         )?;
