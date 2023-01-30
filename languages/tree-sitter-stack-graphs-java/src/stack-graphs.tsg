@@ -752,6 +752,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge expr_ref__typeof -> expr_ref
 }
 
+(method_reference . (_) @lhs) @this {
+  edge @lhs.lexical_scope -> @this.lexical_scope
+}
+
 (local_variable_declaration
   type: (type_identifier) @type
   declarator: (variable_declarator
