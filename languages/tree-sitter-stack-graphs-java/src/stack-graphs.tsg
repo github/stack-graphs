@@ -743,6 +743,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @object.value -> @local_variable.after_scope
 }
 
+(parenthesized_expression (_) @child) @expr {
+  edge @child.lexical_scope -> @expr.lexical_scope
+}
+
 ;; =============
 ;;  Expressions
 ;; =============
@@ -870,10 +874,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     attr (expr_ref__typeof) push_symbol = ":"
     edge expr_ref__typeof -> expr_ref
-}
-
-(parenthesized_expression (_) @child) @expr {
-  edge @child.lexical_scope -> @expr.lexical_scope
 }
 
 (ternary_expression (expression) @expr) @this {
