@@ -6,6 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use controlled_option::ControlledOption;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
@@ -480,4 +482,84 @@ fn can_unify_partial_scope_stacks() -> Result<(), PathResolutionError> {
     )?;
 
     Ok(())
+}
+
+#[test]
+fn can_create_partial_path_from_node() {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").expect("");
+    let foo = graph.add_symbol("foo");
+    let drop_scopes_node = graph
+        .add_drop_scopes_node(NodeID::new_in_file(file, 0))
+        .unwrap();
+    let jump_to_scope_node = StackGraph::jump_to_node();
+    let pop_symbol_node = graph
+        .add_pop_symbol_node(NodeID::new_in_file(file, 1), foo, false)
+        .unwrap();
+    let pop_scoped_symbol_node = graph
+        .add_pop_scoped_symbol_node(NodeID::new_in_file(file, 2), foo, false)
+        .unwrap();
+    let push_symbol_node = graph
+        .add_push_symbol_node(NodeID::new_in_file(file, 3), foo, false)
+        .unwrap();
+    let exported_scope_id = NodeID::new_in_file(file, 99);
+    graph.add_scope_node(exported_scope_id, true);
+    let push_scoped_symbol_node = graph
+        .add_push_scoped_symbol_node(NodeID::new_in_file(file, 4), foo, exported_scope_id, false)
+        .unwrap();
+    let root_node = StackGraph::root_node();
+    let scope_node = graph
+        .add_scope_node(NodeID::new_in_file(file, 5), false)
+        .unwrap();
+
+    fn verify(graph: &StackGraph, node: Handle<Node>, expected: &str) {
+        let mut partials = PartialPaths::new();
+        let path = PartialPath::from_node(graph, &mut partials, node);
+        let actual = path.display(&graph, &mut partials).to_string();
+        assert_eq!(actual, expected);
+    }
+
+    verify(
+        &graph,
+        drop_scopes_node,
+        "<%1> ($1) [test(0) drop scopes] -> [test(0) drop scopes] <%1> ()",
+    );
+
+    verify(
+        &graph,
+        jump_to_scope_node,
+        "<%1> ($1) [jump to scope] -> [jump to scope] <%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        pop_symbol_node,
+        "<foo,%1> ($1) [test(1) pop foo] -> [test(1) pop foo] <%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        pop_scoped_symbol_node,
+        "<foo/($2),%1> ($1) [test(2) pop scoped foo] -> [test(2) pop scoped foo] <%1> ($2)",
+    );
+
+    verify(
+        &graph,
+        push_symbol_node,
+        "<%1> ($1) [test(3) push foo] -> [test(3) push foo] <foo,%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        push_scoped_symbol_node,
+        "<%1> ($1) [test(4) push scoped foo test(99)] -> [test(4) push scoped foo test(99)] <foo/([test(99)],$1),%1> ($1)",
+    );
+
+    verify(&graph, root_node, "<%1> ($1) [root] -> [root] <%1> ($1)");
+
+    verify(
+        &graph,
+        scope_node,
+        "<%1> ($1) [test(5) scope] -> [test(5) scope] <%1> ($1)",
+    );
 }

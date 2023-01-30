@@ -44,13 +44,7 @@ fn check_local_nodes(graph: &StackGraph, file: &str, expected_local_nodes: &[&st
 fn class_field_through_function_parameter() {
     let graph = test_graphs::class_field_through_function_parameter::new();
     check_local_nodes(&graph, "main.py", &[]);
-    check_local_nodes(
-        &graph,
-        "a.py",
-        &[
-            "[a.py(8) reference x]", //
-        ],
-    );
+    check_local_nodes(&graph, "a.py", &[]);
     check_local_nodes(&graph, "b.py", &[]);
 }
 

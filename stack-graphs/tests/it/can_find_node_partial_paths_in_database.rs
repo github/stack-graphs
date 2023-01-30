@@ -55,14 +55,18 @@ fn class_field_through_function_parameter() {
         &mut graph,
         ("main.py", 10),
         &[
-            "<%1> () [main.py(10) reference bar] -> [root] <a.foo()/([main.py(7)]).bar,%1> ()",
-            "<%1> () [main.py(10) reference bar] -> [root] <b.foo()/([main.py(7)]).bar,%1> ()",
+            "<%1> ($1) [main.py(10) reference bar] -> [root] <a.foo()/([main.py(7)],$1).bar,%1> ($1)",
+            "<%1> ($1) [main.py(10) reference bar] -> [root] <b.foo()/([main.py(7)],$1).bar,%1> ($1)",
         ],
     );
     check_node_partial_paths(
         &mut graph,
         ("a.py", 8),
-        &["<%1> () [a.py(8) reference x] -> [a.py(14) definition x] <%1> ()"],
+        &[
+            "<%1> ($1) [a.py(8) reference x] -> [a.py(14) definition x] <%1> ()",
+            "<%1> ($1) [a.py(8) reference x] -> [jump to scope] <0,%1> ($1)",
+            "<%1> ($1) [a.py(8) reference x] -> [jump to scope] <x,%1> ($1)",
+        ],
     );
     // no references in b.py
 }
@@ -73,17 +77,17 @@ fn cyclic_imports_python() {
     check_node_partial_paths(
         &mut graph,
         ("main.py", 6),
-        &["<%1> () [main.py(6) reference foo] -> [root] <a.foo,%1> ()"],
+        &["<%1> ($1) [main.py(6) reference foo] -> [root] <a.foo,%1> ($1)"],
     );
     check_node_partial_paths(
         &mut graph,
         ("a.py", 6),
-        &["<%1> () [a.py(6) reference b] -> [root] <b,%1> ()"],
+        &["<%1> ($1) [a.py(6) reference b] -> [root] <b,%1> ($1)"],
     );
     check_node_partial_paths(
         &mut graph,
         ("b.py", 8),
-        &["<%1> () [b.py(8) reference a] -> [root] <a,%1> ()"],
+        &["<%1> ($1) [b.py(8) reference a] -> [root] <a,%1> ($1)"],
     );
 }
 
@@ -94,14 +98,14 @@ fn cyclic_imports_rust() {
         &mut graph,
         ("test.rs", 101),
         &[
-            "<%1> () [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <%1> ()",
-            "<%1> () [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <%1> ()",
+            "<%1> ($1) [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <%1> ($1)",
+            "<%1> ($1) [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <%1> ($1)",
         ],
     );
     check_node_partial_paths(
         &mut graph,
         ("test.rs", 305),
-        &["<%1> () [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <%1> ()"],
+        &["<%1> ($1) [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <%1> ($1)"],
     );
 }
 
@@ -111,12 +115,12 @@ fn sequenced_import_star() {
     check_node_partial_paths(
         &mut graph,
         ("main.py", 6),
-        &["<%1> () [main.py(6) reference foo] -> [root] <a.foo,%1> ()"],
+        &["<%1> ($1) [main.py(6) reference foo] -> [root] <a.foo,%1> ($1)"],
     );
     check_node_partial_paths(
         &mut graph,
         ("a.py", 6),
-        &["<%1> () [a.py(6) reference b] -> [root] <b,%1> ()"],
+        &["<%1> ($1) [a.py(6) reference b] -> [root] <b,%1> ($1)"],
     );
     // no references in b.py
 }
