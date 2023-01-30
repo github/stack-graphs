@@ -2055,9 +2055,25 @@ impl PartialPath {
         self.starts_at_reference(graph) && self.ends_at_definition(graph)
     }
 
+    pub fn starts_at_endpoint(&self, graph: &StackGraph) -> bool {
+        let node = &graph[self.start_node];
+        node.is_endpoint()
+    }
+
+    pub fn ends_at_endpoint(&self, graph: &StackGraph) -> bool {
+        let node = &graph[self.end_node];
+        node.is_endpoint() || node.is_jump_to()
+    }
+
+    #[cfg(feature = "new-partial-paths")]
+    pub fn as_complete_as_necessary(&self, graph: &StackGraph) -> bool {
+        self.starts_at_endpoint(graph) && self.ends_at_endpoint(graph)
+    }
+
     /// A partial path is _as complete as possible_ if we cannot extend it any further within the
     /// current file.  This represents the maximal amount of work that we can pre-compute at index
     /// time.
+    #[cfg(not(feature = "new-partial-paths"))]
     pub fn is_complete_as_possible(&self, graph: &StackGraph) -> bool {
         match &graph[self.start_node] {
             Node::Root(_) => (),
@@ -2489,6 +2505,7 @@ impl Node {
     }
 }
 
+#[cfg(not(feature = "new-partial-paths"))]
 impl PartialPaths {
     /// Finds all partial paths in a file, calling the `visit` closure for each one.
     ///
@@ -2540,6 +2557,72 @@ impl PartialPaths {
             }
             if path.is_complete_as_possible(graph) && path.is_productive(self) {
                 visit(graph, self, path);
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "new-partial-paths")]
+impl PartialPaths {
+    /// Finds all partial paths in a file, calling the `visit` closure for each one.
+    ///
+    /// This function ensures that the set of visited partial paths covers all complete
+    /// paths, from references to definitions, when used for path stitching. Callers are
+    /// advised _not_ to filter this set in the visitor using functions like
+    /// [`PartialPath::is_complete_as_possible`][] or [`PartialPath::is_productive`][] as
+    /// that may interfere with implementation changes of this function.
+    ///
+    /// This function will not return until all reachable partial paths have been processed, so
+    /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
+    /// stored in some other storage system, and want more control over lazily loading only the
+    /// necessary pieces, then you should code up your own loop that calls
+    /// [`PartialPath::extend`][] manually.
+    ///
+    /// [`PartialPath::extend`]: struct.PartialPath.html#method.extend
+    pub fn find_all_partial_paths_in_file<F>(
+        &mut self,
+        graph: &StackGraph,
+        file: Handle<File>,
+        cancellation_flag: &dyn CancellationFlag,
+        mut visit: F,
+    ) -> Result<(), CancellationError>
+    where
+        F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
+    {
+        copious_debugging!("Find all partial paths in {}", graph[file]);
+        let mut cycle_detector = CycleDetector::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(PartialPath::from_node(graph, self, StackGraph::root_node()));
+        queue.extend(
+            graph
+                .nodes_for_file(file)
+                .filter(|node| graph[*node].is_endpoint())
+                .map(|node| PartialPath::from_node(graph, self, node)),
+        );
+        while let Some(path) = queue.pop_front() {
+            cancellation_flag.check("finding partial paths in file")?;
+            let is_seed = path.start_node == path.end_node && path.edges.len() == 0;
+            copious_debugging!(" => {}", path.display(graph, self));
+            if !is_seed && path.as_complete_as_necessary(graph) {
+                copious_debugging!("    * as complete as necessary");
+                if !path.is_productive(self) {
+                    copious_debugging!("    * not productive");
+                } else if !cycle_detector
+                    .should_process_path(&path, |probe| probe.cmp(graph, self, &path))
+                {
+                    copious_debugging!("    * presumed a cycle");
+                } else {
+                    copious_debugging!("    * visit");
+                    visit(graph, self, path);
+                }
+            } else if !is_seed
+                && !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path))
+            {
+                copious_debugging!("    * presumed a cycle");
+            } else {
+                copious_debugging!("    * extend");
+                path.extend_from_file(graph, self, file, &mut queue);
             }
         }
         Ok(())

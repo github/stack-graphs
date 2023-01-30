@@ -221,9 +221,7 @@ impl AnalyzeArgs {
             file,
             &cancellation_flag.as_ref(),
             |g, ps, p| {
-                if p.is_complete_as_possible(g) {
-                    db.add_partial_path(g, ps, p);
-                }
+                db.add_partial_path(g, ps, p);
             },
         ) {
             Ok(_) => {}
