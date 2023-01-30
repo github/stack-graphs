@@ -788,6 +788,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @ident.lexical_scope -> @this.lexical_scope
 }
 
+(assignment_expression left: (field_access) @access) @this {
+  edge @access.lexical_scope -> @this.lexical_scope
+}
+
 (assignment_expression right: (_) @right) @this {
   edge @right.lexical_scope -> @this.lexical_scope
 }
