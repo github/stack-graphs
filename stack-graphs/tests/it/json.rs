@@ -24,7 +24,7 @@ fn can_serialize_graph() {
         .to_json(&|_: &StackGraph, _: &Handle<File>| true)
         .to_value()
         .expect("Cannot serialize graph");
-    // formatted using: json_pp -json_opt utf8,canoncical,pretty,indent_length=4
+    // formatted using: json_pp -json_opt utf8,canonical,pretty,indent_length=4
     let expected = json!(
         {
             "edges" : [
@@ -495,7 +495,7 @@ fn can_serialize_paths() {
         .to_json(&graph, &|_: &StackGraph, _: &Handle<File>| true)
         .to_value()
         .expect("Cannot serialize paths");
-    // formatted using: json_pp -json_opt utf8,canoncical,pretty,indent_length=4
+    // formatted using: json_pp -json_opt utf8,canonical,pretty,indent_length=4
     let expected = json!(
         [
             {
@@ -1827,7 +1827,7 @@ fn can_serialize_partial_paths() {
         .to_json(&graph, &mut partials, &NoFilter)
         .to_value()
         .expect("Cannot serialize paths");
-    // formatted using: json_pp -json_opt utf8,canoncical,pretty,indent_length=4
+    // formatted using: json_pp -json_opt utf8,canonical,pretty,indent_length=4
     let expected = json!(
         [
             {
@@ -1995,25 +1995,11 @@ fn can_serialize_partial_paths() {
                         "source" : {
                             "local_id" : 2
                         }
-                    },
-                    {
-                        "precedence" : 0,
-                        "source" : {
-                            "file" : "test.py",
-                            "local_id" : 3
-                        }
-                    },
-                    {
-                        "precedence" : 0,
-                        "source" : {
-                            "file" : "test.py",
-                            "local_id" : 8
-                        }
                     }
                 ],
                 "end_node" : {
                     "file" : "test.py",
-                    "local_id" : 9
+                    "local_id" : 3
                 },
                 "scope_stack_postcondition" : {
                     "scopes" : [],
@@ -2028,7 +2014,14 @@ fn can_serialize_partial_paths() {
                     "local_id" : 1
                 },
                 "symbol_stack_postcondition" : {
-                    "symbols" : [],
+                    "symbols" : [
+                        {
+                            "symbol" : "."
+                        },
+                        {
+                            "symbol" : "x"
+                        }
+                    ],
                     "variable" : 1
                 },
                 "symbol_stack_precondition" : {
