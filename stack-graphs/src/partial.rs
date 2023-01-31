@@ -55,7 +55,6 @@ use crate::graph::Symbol;
 use crate::paths::Extend;
 use crate::paths::Path;
 use crate::paths::PathEdge;
-use crate::paths::PathEdgeList;
 use crate::paths::PathResolutionError;
 use crate::paths::Paths;
 use crate::paths::ScopeStack;
@@ -2542,13 +2541,7 @@ impl Path {
         partials: &mut PartialPaths,
         partial_path: &PartialPath,
     ) -> Option<Path> {
-        let mut path = Path {
-            start_node: partial_path.start_node,
-            end_node: partial_path.start_node,
-            symbol_stack: SymbolStack::empty(),
-            scope_stack: ScopeStack::empty(),
-            edges: PathEdgeList::empty(),
-        };
+        let mut path = Path::from_node(graph, paths, partial_path.start_node)?;
         path.append_partial_path(graph, paths, partials, partial_path)
             .ok()?;
         Some(path)
@@ -2567,16 +2560,57 @@ impl Path {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
+        // If the join node operates on the stack, the effect is present in both sides.
+        // For correct joining, we must undo the effect on one of the sides. We match
+        // the end node of the lhs, and the start node of the rhs separately, depending
+        // on whether we must manipulate the lhs postcondition or rhs precondition,
+        // respectively. The reason we cannot use only one of the lhs end or rhs start
+        // node is that the variables used in them may differ.
+        let mut lhs_symbol_stack = self.symbol_stack;
+        let lhs_scope_stack = self.scope_stack;
+        let mut rhs_symbol_stack_precondition = partial_path.symbol_stack_precondition;
+        let mut rhs_scope_stack_precondition = partial_path.scope_stack_precondition;
+        match &graph[self.end_node] {
+            Node::DropScopes(_) => {}
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {}
+            Node::PopSymbol(_) => {}
+            Node::PushScopedSymbol(_) => {
+                lhs_symbol_stack.pop_front(paths).unwrap();
+            }
+            Node::PushSymbol(_) => {
+                lhs_symbol_stack.pop_front(paths).unwrap();
+            }
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+        match &graph[partial_path.start_node] {
+            Node::DropScopes(_) => {
+                rhs_scope_stack_precondition = PartialScopeStack::empty();
+            }
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {
+                let symbol = rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+                rhs_scope_stack_precondition = symbol.scopes.into_option().unwrap();
+            }
+            Node::PopSymbol(_) => {
+                rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+            }
+            Node::PushScopedSymbol(_) => {}
+            Node::PushSymbol(_) => {}
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+
         let mut symbol_bindings = SymbolStackBindings::new();
         let mut scope_bindings = ScopeStackBindings::new();
-        partial_path
-            .scope_stack_precondition
-            .match_stack(self.scope_stack, &mut scope_bindings)?;
-        partial_path.symbol_stack_precondition.match_stack(
+
+        rhs_scope_stack_precondition.match_stack(lhs_scope_stack, &mut scope_bindings)?;
+        rhs_symbol_stack_precondition.match_stack(
             graph,
             paths,
             partials,
-            self.symbol_stack,
+            lhs_symbol_stack,
             &mut symbol_bindings,
             &mut scope_bindings,
         )?;
