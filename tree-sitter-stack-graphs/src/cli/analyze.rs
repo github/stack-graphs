@@ -77,11 +77,15 @@ impl AnalyzeArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path();
-                    self.analyze_file_with_context(source_root, source_path, loader)?;
+                    if let Err(e) = self.analyze_file_with_context(source_root, source_path, loader) {
+                        eprintln!("Skipping file {} due to analysis failure {}", source_path.display(), e.to_string());
+                    }
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
-                self.analyze_file_with_context(source_root, source_path, loader)?;
+                if let Err(e) = self.analyze_file_with_context(source_root, source_path, loader) {
+                    eprintln!("Skipping file {} due to analysis failure {}", source_path.display(), e.to_string());
+                };
             }
         }
         Ok(())
