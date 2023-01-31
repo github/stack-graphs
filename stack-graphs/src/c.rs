@@ -1602,6 +1602,7 @@ fn sg_partial_path_arena_find_partial_paths_in_file_inner(
             db.add_partial_path(graph, partials, path);
         },
     )?;
+    #[allow(deprecated)]
     ForwardPartialPathStitcher::find_locally_complete_partial_paths(
         graph,
         partials,

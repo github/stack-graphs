@@ -44,6 +44,7 @@ fn check_root_partial_paths(
         )
         .expect("should never be cancelled");
     let mut db = Database::new();
+    #[allow(deprecated)]
     ForwardPartialPathStitcher::find_locally_complete_partial_paths(
         graph,
         &mut partials,

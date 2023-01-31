@@ -31,6 +31,7 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
         )
         .expect("should never be cancelled");
     let mut results = BTreeSet::new();
+    #[allow(deprecated)]
     ForwardPartialPathStitcher::find_locally_complete_partial_paths(
         graph,
         &mut partials,
