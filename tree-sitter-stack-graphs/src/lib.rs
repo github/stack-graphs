@@ -679,6 +679,8 @@ pub enum LoadError {
     ConversionError(String, String, String),
     #[error(transparent)]
     LanguageError(#[from] tree_sitter::LanguageError),
+    #[error("Expected exported symbol scope in {0}, got {1}")]
+    SymbolScopeError(String, String),
 }
 
 impl From<stack_graphs::CancellationError> for LoadError {
@@ -738,6 +740,10 @@ impl<'a> Builder<'a> {
             self.load_debug_info(node_ref, handle)?;
         }
 
+        for node in self.stack_graph.nodes_for_file(self.file) {
+            self.verify_node(node)?;
+        }
+
         // Then add stack graph edges for each TSG edge.  Note that we _don't_ skip(...) here because
         // there might be outgoing nodes from the “root” node that we need to process.
         // (Technically the caller could add outgoing nodes from “jump to scope” as well, but those
@@ -783,6 +789,19 @@ impl<'a> Builder<'a> {
         } else {
             return Err(LoadError::UnknownNodeType(format!("{}", node_type)));
         }
+    }
+
+    fn verify_node(&self, node: Handle<Node>) -> Result<(), LoadError> {
+        if let Node::PushScopedSymbol(node) = &self.stack_graph[node] {
+            let scope = &self.stack_graph[self.stack_graph.node_for_id(node.scope).unwrap()];
+            if !scope.is_exported_scope() {
+                return Err(LoadError::SymbolScopeError(
+                    format!("{}", node.display(self.stack_graph)),
+                    format!("{}", scope.display(self.stack_graph)),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
