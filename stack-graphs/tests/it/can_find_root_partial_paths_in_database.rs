@@ -17,6 +17,7 @@ use stack_graphs::paths::Paths;
 use stack_graphs::paths::ScopedSymbol;
 use stack_graphs::paths::SymbolStack;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::SymbolStackKey;
 use stack_graphs::NoCancellation;
 
@@ -31,12 +32,28 @@ fn check_root_partial_paths(
     let file = graph.get_file_unchecked(file);
     let mut paths = Paths::new();
     let mut partials = PartialPaths::new();
-    let mut database = Database::new();
+    let mut db0 = Database::new();
     partials
-        .find_all_partial_paths_in_file(graph, file, &NoCancellation, |graph, partials, path| {
-            database.add_partial_path(graph, partials, path);
-        })
+        .find_minimal_partial_paths_set_in_file(
+            graph,
+            file,
+            &NoCancellation,
+            |graph, partials, path| {
+                db0.add_partial_path(graph, partials, path);
+            },
+        )
         .expect("should never be cancelled");
+    let mut db = Database::new();
+    ForwardPartialPathStitcher::find_locally_complete_partial_paths(
+        graph,
+        &mut partials,
+        &mut db0,
+        &NoCancellation,
+        |g, ps, p| {
+            db.add_partial_path(g, ps, p.clone());
+        },
+    )
+    .expect("should never be cancelled");
 
     let mut symbol_stack = SymbolStack::empty();
     for symbol in precondition.iter().rev() {
@@ -49,18 +66,22 @@ fn check_root_partial_paths(
     }
 
     let mut results = Vec::<Handle<PartialPath>>::new();
-    let key = SymbolStackKey::from_symbol_stack(&mut paths, &mut database, symbol_stack);
-    database.find_candidate_partial_paths_from_root(graph, &mut partials, key, &mut results);
+    let key = SymbolStackKey::from_symbol_stack(&mut paths, &mut db, symbol_stack);
+    db.find_candidate_partial_paths_from_root(graph, &mut partials, Some(key), &mut results);
 
     let actual_partial_paths = results
         .into_iter()
-        .map(|path| database[path].display(graph, &mut partials).to_string())
+        .map(|path| db[path].display(graph, &mut partials).to_string())
         .collect::<BTreeSet<_>>();
     let expected_partial_paths = expected_partial_paths
         .iter()
         .map(|s| s.to_string())
         .collect::<BTreeSet<_>>();
-    assert_eq!(expected_partial_paths, actual_partial_paths);
+    assert_eq!(
+        expected_partial_paths, actual_partial_paths,
+        "failed in file {}",
+        graph[file]
+    );
 }
 
 #[test]
@@ -71,8 +92,8 @@ fn class_field_through_function_parameter() {
         "main.py",
         &["__main__", ".", "baz"],
         &[
-            "<__main__.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
-            "<__main__.,%1> ($1) [root] -> [root] <b.,%1> ($1)",
+            "<__main__.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
+            "<__main__.,%2> ($1) [root] -> [root] <b.,%2> ($1)",
             "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
         ],
     );
@@ -99,7 +120,7 @@ fn cyclic_imports_python() {
         &["__main__", ".", "baz"],
         &[
             "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
-            "<__main__.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
+            "<__main__.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
         ],
     );
     check_root_partial_paths(
@@ -108,7 +129,7 @@ fn cyclic_imports_python() {
         &["a", ".", "baz"],
         &[
             "<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)",
-            "<a.,%1> ($1) [root] -> [root] <b.,%1> ($1)",
+            "<a.,%2> ($1) [root] -> [root] <b.,%2> ($1)",
         ],
     );
     check_root_partial_paths(
@@ -117,7 +138,7 @@ fn cyclic_imports_python() {
         &["b", ".", "baz"],
         &[
             "<b,%1> ($1) [root] -> [b.py(0) definition b] <%1> ($1)",
-            "<b.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
+            "<b.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
         ],
     );
 }
@@ -144,7 +165,7 @@ fn sequenced_import_star() {
         &["__main__", ".", "baz"],
         &[
             "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
-            "<__main__.,%1> ($1) [root] -> [root] <a.,%1> ($1)",
+            "<__main__.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
         ],
     );
     check_root_partial_paths(
@@ -153,7 +174,7 @@ fn sequenced_import_star() {
         &["a", ".", "baz"],
         &[
             "<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)",
-            "<a.,%1> ($1) [root] -> [root] <b.,%1> ($1)",
+            "<a.,%2> ($1) [root] -> [root] <b.,%2> ($1)",
         ],
     );
     check_root_partial_paths(

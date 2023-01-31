@@ -15,7 +15,6 @@ edition = "2018"
 [features]
 copious-debugging = []
 json = ["serde", "serde_json"]
-partial-path-finding-v1 = []
 
 [lib]
 # All of our tests are in the tests/it "integration" test executable.

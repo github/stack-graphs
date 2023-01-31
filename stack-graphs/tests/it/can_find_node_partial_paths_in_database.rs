@@ -14,6 +14,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -27,25 +28,45 @@ fn check_node_partial_paths(
     let id = NodeID::new_in_file(file, id.1);
     let node = graph.node_for_id(id).expect("Cannot find node");
     let mut partials = PartialPaths::new();
-    let mut database = Database::new();
+    let mut db0 = Database::new();
     partials
-        .find_all_partial_paths_in_file(graph, file, &NoCancellation, |graph, partials, path| {
-            database.add_partial_path(graph, partials, path);
-        })
+        .find_minimal_partial_paths_set_in_file(
+            graph,
+            file,
+            &NoCancellation,
+            |graph, partials, path| {
+                db0.add_partial_path(graph, partials, path);
+            },
+        )
         .expect("should never be cancelled");
+    let mut db = Database::new();
+    ForwardPartialPathStitcher::find_locally_complete_partial_paths(
+        graph,
+        &mut partials,
+        &mut db0,
+        &NoCancellation,
+        |g, ps, p| {
+            db.add_partial_path(g, ps, p.clone());
+        },
+    )
+    .expect("should never be cancelled");
 
     let mut results = Vec::<Handle<PartialPath>>::new();
-    database.find_candidate_partial_paths_from_node(graph, &mut partials, node, &mut results);
+    db.find_candidate_partial_paths_from_node(graph, &mut partials, node, &mut results);
 
     let actual_partial_paths = results
         .into_iter()
-        .map(|path| database[path].display(graph, &mut partials).to_string())
+        .map(|path| db[path].display(graph, &mut partials).to_string())
         .collect::<BTreeSet<_>>();
     let expected_partial_paths = expected_partial_paths
         .iter()
         .map(|s| s.to_string())
         .collect::<BTreeSet<_>>();
-    assert_eq!(expected_partial_paths, actual_partial_paths);
+    assert_eq!(
+        expected_partial_paths, actual_partial_paths,
+        "failed in file {}",
+        graph[file]
+    );
 }
 
 #[test]

@@ -159,12 +159,16 @@ impl Assertion {
 
         let mut actual_paths = Vec::new();
         for reference in &references {
-            let reference_paths = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+            let mut reference_paths = Vec::new();
+            ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 graph,
                 partials,
                 db,
                 vec![*reference],
                 cancellation_flag,
+                |_, _, p| {
+                    reference_paths.push(p.clone());
+                },
             )?;
             for reference_path in &reference_paths {
                 if reference_paths

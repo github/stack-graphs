@@ -428,12 +428,16 @@ impl TestArgs {
             .iter_nodes()
             .filter(|n| filter.include_node(graph, n))
             .collect::<Vec<_>>();
-        let paths = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+        let mut paths = Vec::new();
+        ForwardPartialPathStitcher::find_all_complete_partial_paths(
             graph,
             partials,
             db,
             references.clone(),
             &cancellation_flag,
+            |_, _, p| {
+                paths.push(p.clone());
+            },
         )?;
         let mut db = Database::new();
         for path in paths {

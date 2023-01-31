@@ -1967,7 +1967,7 @@ impl PartialPath {
                 &mut symbol_stack_postcondition,
                 &mut scope_stack_postcondition,
             )
-            .expect("");
+            .expect("lifting single nodes to partial paths should not fail");
 
         PartialPath {
             start_node: node,
@@ -2056,56 +2056,11 @@ impl PartialPath {
     }
 
     pub fn starts_at_endpoint(&self, graph: &StackGraph) -> bool {
-        let node = &graph[self.start_node];
-        node.is_endpoint()
+        graph[self.start_node].is_endpoint()
     }
 
     pub fn ends_at_endpoint(&self, graph: &StackGraph) -> bool {
-        let node = &graph[self.end_node];
-        node.is_endpoint() || node.is_jump_to()
-    }
-
-    #[cfg(not(feature = "partial-path-finding-v1"))]
-    pub fn as_complete_as_necessary(&self, graph: &StackGraph) -> bool {
-        self.starts_at_endpoint(graph) && self.ends_at_endpoint(graph)
-    }
-
-    /// A partial path is _as complete as possible_ if we cannot extend it any further within the
-    /// current file.  This represents the maximal amount of work that we can pre-compute at index
-    /// time.
-    #[cfg(feature = "partial-path-finding-v1")]
-    pub fn is_complete_as_possible(&self, graph: &StackGraph) -> bool {
-        match &graph[self.start_node] {
-            Node::Root(_) => (),
-            node @ Node::Scope(_) => {
-                if !node.is_exported_scope() {
-                    return false;
-                }
-            }
-            node @ Node::PushScopedSymbol(_) | node @ Node::PushSymbol(_) => {
-                if !node.is_reference() {
-                    return false;
-                } else if !self.symbol_stack_precondition.can_match_empty() {
-                    return false;
-                }
-            }
-            _ => return false,
-        }
-
-        match &graph[self.end_node] {
-            Node::Root(_) => (),
-            Node::JumpTo(_) => (),
-            node @ Node::PopScopedSymbol(_) | node @ Node::PopSymbol(_) => {
-                if !node.is_definition() {
-                    return false;
-                } else if !self.symbol_stack_postcondition.can_match_empty() {
-                    return false;
-                }
-            }
-            _ => return false,
-        }
-
-        true
+        graph[self.end_node].is_endpoint()
     }
 
     /// Returns whether a partial path is "productive" — that is, whether it adds useful
@@ -2505,15 +2460,16 @@ impl Node {
     }
 }
 
-#[cfg(feature = "partial-path-finding-v1")]
 impl PartialPaths {
-    /// Finds all partial paths in a file, calling the `visit` closure for each one.
+    /// Finds a minimal set of partial paths in a file, calling the `visit` closure for each one.
     ///
-    /// This function ensures that the set of visited partial paths covers all complete
-    /// paths, from references to definitions, when used for path stitching. Callers are
-    /// advised _not_ to filter this set in the visitor using functions like
-    /// [`PartialPath::is_complete_as_possible`][] or [`PartialPath::is_productive`][] as
-    /// that may interfere with implementation changes of this function.
+    /// This function ensures that the set of visited partial paths
+    ///  (a) is minimal, no path can be constructed by stitching other paths in the set, and
+    ///  (b) covers all complete paths, from references to definitions, when used for path stitching
+    ///
+    /// Callers are advised _not_ to filter this set in the visitor using functions like
+    /// [`PartialPath::is_productive`][] as that may interfere with implementation changes of this
+    /// function.
     ///
     /// This function will not return until all reachable partial paths have been processed, so
     /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
@@ -2522,7 +2478,7 @@ impl PartialPaths {
     /// [`PartialPath::extend`][] manually.
     ///
     /// [`PartialPath::extend`]: struct.PartialPath.html#method.extend
-    pub fn find_all_partial_paths_in_file<F>(
+    pub fn find_minimal_partial_paths_set_in_file<F>(
         &mut self,
         graph: &StackGraph,
         file: Handle<File>,
@@ -2532,64 +2488,11 @@ impl PartialPaths {
     where
         F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
     {
-        let mut cycle_detector = CycleDetector::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(PartialPath::from_node(graph, self, StackGraph::root_node()));
-        queue.extend(
-            graph
-                .nodes_for_file(file)
-                .filter(|node| match &graph[*node] {
-                    node @ Node::PushScopedSymbol(_) => node.is_reference(),
-                    node @ Node::PushSymbol(_) => node.is_reference(),
-                    node @ Node::Scope(_) => node.is_exported_scope(),
-                    _ => false,
-                })
-                .map(|node| PartialPath::from_node(graph, self, node)),
-        );
-        while let Some(path) = queue.pop_front() {
-            cancellation_flag.check("finding partial paths in file")?;
-            if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
-                continue;
-            }
-            let should_extend = path.end_node == path.start_node || !graph[path.end_node].is_root();
-            if should_extend {
-                path.extend_from_file(graph, self, file, &mut queue);
-            }
-            if path.is_complete_as_possible(graph) && path.is_productive(self) {
-                visit(graph, self, path);
-            }
+        fn as_complete_as_necessary(graph: &StackGraph, path: &PartialPath) -> bool {
+            path.starts_at_endpoint(graph)
+                && (path.ends_at_endpoint(graph) || graph[path.end_node].is_jump_to())
         }
-        Ok(())
-    }
-}
 
-#[cfg(not(feature = "partial-path-finding-v1"))]
-impl PartialPaths {
-    /// Finds all partial paths in a file, calling the `visit` closure for each one.
-    ///
-    /// This function ensures that the set of visited partial paths covers all complete
-    /// paths, from references to definitions, when used for path stitching. Callers are
-    /// advised _not_ to filter this set in the visitor using functions like
-    /// [`PartialPath::is_complete_as_possible`][] or [`PartialPath::is_productive`][] as
-    /// that may interfere with implementation changes of this function.
-    ///
-    /// This function will not return until all reachable partial paths have been processed, so
-    /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
-    /// stored in some other storage system, and want more control over lazily loading only the
-    /// necessary pieces, then you should code up your own loop that calls
-    /// [`PartialPath::extend`][] manually.
-    ///
-    /// [`PartialPath::extend`]: struct.PartialPath.html#method.extend
-    pub fn find_all_partial_paths_in_file<F>(
-        &mut self,
-        graph: &StackGraph,
-        file: Handle<File>,
-        cancellation_flag: &dyn CancellationFlag,
-        mut visit: F,
-    ) -> Result<(), CancellationError>
-    where
-        F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
-    {
         copious_debugging!("Find all partial paths in {}", graph[file]);
         let mut cycle_detector = CycleDetector::new();
         let mut queue = VecDeque::new();
@@ -2604,7 +2507,7 @@ impl PartialPaths {
             cancellation_flag.check("finding partial paths in file")?;
             let is_seed = path.start_node == path.end_node && path.edges.len() == 0;
             copious_debugging!(" => {}", path.display(graph, self));
-            if !is_seed && path.as_complete_as_necessary(graph) {
+            if !is_seed && as_complete_as_necessary(graph, &path) {
                 copious_debugging!("    * as complete as necessary");
                 if !path.is_productive(self) {
                     copious_debugging!("    * not productive");
