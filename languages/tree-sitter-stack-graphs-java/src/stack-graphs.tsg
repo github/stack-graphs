@@ -759,20 +759,28 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (method_reference . (_) @lhs (identifier) @id) @this {
-  node member
+  node @this.member
 
   node expr_ref
   attr (expr_ref) node_reference = @id
-  edge expr_ref -> member
+  edge expr_ref -> @this.member
 
-  attr (member) push_symbol = "."
-  edge member -> @lhs.type
+  attr (@this.member) push_symbol = "."
+  edge @this.member -> @lhs.type
 
   node expr_ref__typeof
   ; edge @this.type -> expr_ref__typeof ; FIXME: function types
 
   attr (expr_ref__typeof) push_symbol = ":"
   edge expr_ref__typeof -> expr_ref
+}
+
+(method_reference . (identifier) @lhs (identifier) @id) @this {
+  ; @lhs could be a type name
+  node ref
+  attr (ref) node_reference = @lhs
+  edge @this.member -> ref
+  edge ref -> @this.lexical_scope
 }
 
 (local_variable_declaration
