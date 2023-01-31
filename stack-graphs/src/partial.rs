@@ -2065,7 +2065,7 @@ impl PartialPath {
         node.is_endpoint() || node.is_jump_to()
     }
 
-    #[cfg(feature = "new-partial-paths")]
+    #[cfg(not(feature = "partial-path-finding-v1"))]
     pub fn as_complete_as_necessary(&self, graph: &StackGraph) -> bool {
         self.starts_at_endpoint(graph) && self.ends_at_endpoint(graph)
     }
@@ -2073,7 +2073,7 @@ impl PartialPath {
     /// A partial path is _as complete as possible_ if we cannot extend it any further within the
     /// current file.  This represents the maximal amount of work that we can pre-compute at index
     /// time.
-    #[cfg(not(feature = "new-partial-paths"))]
+    #[cfg(feature = "partial-path-finding-v1")]
     pub fn is_complete_as_possible(&self, graph: &StackGraph) -> bool {
         match &graph[self.start_node] {
             Node::Root(_) => (),
@@ -2505,7 +2505,7 @@ impl Node {
     }
 }
 
-#[cfg(not(feature = "new-partial-paths"))]
+#[cfg(feature = "partial-path-finding-v1")]
 impl PartialPaths {
     /// Finds all partial paths in a file, calling the `visit` closure for each one.
     ///
@@ -2563,7 +2563,7 @@ impl PartialPaths {
     }
 }
 
-#[cfg(feature = "new-partial-paths")]
+#[cfg(not(feature = "partial-path-finding-v1"))]
 impl PartialPaths {
     /// Finds all partial paths in a file, calling the `visit` closure for each one.
     ///
