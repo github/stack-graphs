@@ -6,6 +6,5 @@ class B {
   void f() {
     f(A.X);
     //^ defined: 1
-    //  ^ defined: 2
   }
 }
