@@ -269,6 +269,25 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @modifiers.lexical_scope -> @decl.lexical_scope
 }
 
+(interface_declaration name: (_) @name body: (_) @body) @this {
+  node def
+  attr (def) node_definition = @name
+  edge @this.defs -> def
+
+  edge def -> @body.defs
+  edge @body.lexical_scope -> @this.lexical_scope
+}
+
+(interface_body) @this {
+  node @this.defs
+  node @this.lexical_scope
+}
+
+(interface_body (_) @child) @this {
+  edge @this.defs -> @child.defs
+  edge @child.lexical_scope -> @this.lexical_scope
+}
+
 (method_declaration
   type: (_) @type
   name: (identifier) @name
