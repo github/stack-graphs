@@ -161,6 +161,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@this.def) node_definition = @id
 }
 
+(class_declaration interfaces: (super_interfaces (type_list (_) @type))) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
 (class_body) @class_body {
   node @class_body.lexical_scope
   node @class_body.defs
