@@ -813,6 +813,9 @@ impl Path {
                 precedence: edge.precedence,
             },
         );
+
+        self.resolve(graph, paths)?;
+
         Ok(())
     }
 
@@ -858,9 +861,6 @@ impl Path {
             // If there are errors adding this edge to the path, or resolving the resulting path,
             // just skip the edge — it's not a fatal error.
             if new_path.append(graph, paths, extension).is_err() {
-                continue;
-            }
-            if new_path.resolve(graph, paths).is_err() {
                 continue;
             }
             result.push(new_path);

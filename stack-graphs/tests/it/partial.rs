@@ -571,6 +571,8 @@ fn can_concatenate_partial_paths() -> Result<(), PathResolutionError> {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").expect("");
 
+    let jump_to_scope_node = StackGraph::jump_to_node();
+
     let scope0_id = graph.new_node_id(file);
     let scope0 = graph.add_scope_node(scope0_id, false).unwrap();
 
@@ -737,6 +739,26 @@ fn can_concatenate_partial_paths() -> Result<(), PathResolutionError> {
         &[scope0, drop_scopes],
         &[drop_scopes, scope1],
         "<%1> ($1) [test(0) scope] -> [test(1) scope] <%1> ()",
+    );
+
+    verify_not(
+        &graph,
+        &[scope0, drop_scopes, scope1],
+        &[scope1, jump_to_scope_node],
+    );
+
+    verify(
+        &graph,
+        &[baz_def, scope0],
+        &[scope0, jump_to_scope_node],
+        "<baz/($2),%1> ($1) [test(8) pop scoped baz] -> [jump to scope] <%1> ($2)",
+    );
+
+    verify(
+        &graph,
+        &[baz_ref, scope0],
+        &[scope0, jump_to_scope_node],
+        "<%1> ($1) [test(7) push scoped baz test(6)] -> [jump to scope] <baz/([test(6)],$1),%1> ($1)",
     );
 
     Ok(())

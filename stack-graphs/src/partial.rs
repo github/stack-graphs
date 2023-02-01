@@ -2303,6 +2303,9 @@ impl PartialPath {
                 precedence: edge.precedence,
             },
         );
+
+        self.resolve(graph, partials)?;
+
         Ok(())
     }
 
@@ -2361,9 +2364,6 @@ impl PartialPath {
             // If there are errors adding this edge to the partial path, or resolving the resulting
             // partial path, just skip the edge — it's not a fatal error.
             if new_path.append(graph, partials, extension).is_err() {
-                continue;
-            }
-            if new_path.resolve(graph, partials).is_err() {
                 continue;
             }
             result.push(new_path);
@@ -2632,6 +2632,9 @@ impl Path {
             self.edges.push_back(paths, edge.into());
         }
         self.end_node = partial_path.end_node;
+
+        self.resolve(graph, paths)?;
+
         Ok(())
     }
 }
@@ -2755,6 +2758,9 @@ impl PartialPath {
             lhs.edges.push_back(partials, edge);
         }
         lhs.end_node = rhs.end_node;
+
+        lhs.resolve(graph, partials)?;
+
         Ok(())
     }
 }
