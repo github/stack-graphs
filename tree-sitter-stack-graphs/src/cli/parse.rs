@@ -15,6 +15,7 @@ use tree_sitter::Parser;
 use tree_sitter_graph::parse_error::ParseError;
 
 use crate::cli::util::path_exists;
+use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::LoadError;
 
@@ -34,11 +35,12 @@ impl ParseArgs {
     }
 
     fn parse_file(&self, file_path: &Path, loader: &mut Loader) -> anyhow::Result<()> {
-        let source = std::fs::read_to_string(file_path)?;
-        let lang = match loader.load_tree_sitter_language_for_file(file_path, Some(&source))? {
+        let mut file_reader = FileReader::new();
+        let lang = match loader.load_tree_sitter_language_for_file(file_path, &mut file_reader)? {
             Some(sgl) => sgl,
             None => return Err(anyhow!("No stack graph language found")),
         };
+        let source = file_reader.get(file_path)?;
 
         let mut parser = Parser::new();
         parser.set_language(lang)?;

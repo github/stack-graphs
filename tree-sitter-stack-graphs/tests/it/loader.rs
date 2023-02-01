@@ -40,12 +40,12 @@ fn can_load_from_provided_language_configuration() {
         Loader::from_language_configurations(vec![lc], None).expect("Expected loader to succeed");
 
     let tsl = loader
-        .load_tree_sitter_language_for_file(&PATH, None)
+        .load_tree_sitter_language_for_file(&PATH, &mut None)
         .expect("Expected loading tree-sitter language to succeed");
     assert_eq!(tsl, Some(language));
 
     let lc = loader
-        .load_for_file(&PATH, None, &NoCancellation)
+        .load_for_file(&PATH, &mut None, &NoCancellation)
         .expect("Expected loading stack graph language to succeed");
     assert_eq!(lc.map(|lc| lc.language), Some(language));
 }

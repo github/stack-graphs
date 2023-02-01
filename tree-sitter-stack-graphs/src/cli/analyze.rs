@@ -23,6 +23,7 @@ use walkdir::WalkDir;
 use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
+use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
@@ -77,24 +78,11 @@ impl AnalyzeArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path();
-                    if let Err(e) = self.analyze_file_with_context(source_root, source_path, loader)
-                    {
-                        eprintln!(
-                            "Skipping file {} due to analysis failure {}",
-                            source_path.display(),
-                            e.to_string()
-                        );
-                    }
+                    self.analyze_file_with_context(source_root, source_path, loader)?;
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
-                if let Err(e) = self.analyze_file_with_context(source_root, source_path, loader) {
-                    eprintln!(
-                        "Skipping file {} due to analysis failure {}",
-                        source_path.display(),
-                        e.to_string()
-                    );
-                };
+                self.analyze_file_with_context(source_root, source_path, loader)?;
             }
         }
         Ok(())
@@ -119,8 +107,8 @@ impl AnalyzeArgs {
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
 
-        let source = std::fs::read_to_string(source_path)?;
-        let lc = match loader.load_for_file(source_path, Some(&source), &NoCancellation) {
+        let mut file_reader = FileReader::new();
+        let lc = match loader.load_for_file(source_path, &mut file_reader, &NoCancellation) {
             Ok(Some(sgl)) => sgl,
             Ok(None) => return Ok(()),
             Err(crate::loader::LoadError::Cancelled(_)) => {
@@ -129,6 +117,7 @@ impl AnalyzeArgs {
             }
             Err(e) => return Err(e.into()),
         };
+        let source = file_reader.get(source_path)?;
 
         let mut cancellation_flag: Arc<dyn CancellationFlag> = Arc::new(NoCancellation);
         if let Some(max_file_time) = self.max_file_time {

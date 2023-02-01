@@ -86,8 +86,12 @@ impl LanguageConfiguration {
         })
     }
 
-    pub fn matches_file(&self, path: &Path, content: Option<&str>) -> bool {
-        matches_file(&self.file_types, &self.content_regex, path, content).is_some()
+    pub fn matches_file(
+        &self,
+        path: &Path,
+        content: &mut dyn ContentProvider,
+    ) -> std::io::Result<bool> {
+        matches_file(&self.file_types, &self.content_regex, path, content).map(|l| l.is_some())
     }
 }
 
@@ -205,7 +209,7 @@ impl Loader {
     pub fn load_tree_sitter_language_for_file(
         &mut self,
         path: &Path,
-        content: Option<&str>,
+        content: &mut dyn ContentProvider,
     ) -> Result<Option<tree_sitter::Language>, LoadError> {
         match &mut self.0 {
             LoaderImpl::Paths(loader) => loader.load_tree_sitter_language_for_file(path, content),
@@ -219,7 +223,7 @@ impl Loader {
     pub fn load_for_file(
         &mut self,
         path: &Path,
-        content: Option<&str>,
+        content: &mut dyn ContentProvider,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Option<&LanguageConfiguration>, LoadError> {
         match &mut self.0 {
@@ -328,34 +332,28 @@ impl LanguageConfigurationsLoader {
     pub fn load_tree_sitter_language_for_file(
         &mut self,
         path: &Path,
-        content: Option<&str>,
+        content: &mut dyn ContentProvider,
     ) -> Result<Option<tree_sitter::Language>, LoadError> {
-        let configuration = match self
-            .configurations
-            .iter()
-            .find(|l| l.matches_file(path, content))
-        {
-            Some(language) => language,
-            None => return Ok(None),
-        };
-        Ok(Some(configuration.language))
+        for configuration in self.configurations.iter() {
+            if configuration.matches_file(path, content)? {
+                return Ok(Some(configuration.language));
+            }
+        }
+        Ok(None)
     }
 
     /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
     pub fn load_for_file(
         &mut self,
         path: &Path,
-        content: Option<&str>,
+        content: &mut dyn ContentProvider,
     ) -> Result<Option<&LanguageConfiguration>, LoadError> {
-        let language = match self
-            .configurations
-            .iter()
-            .find(|l| l.matches_file(path, content))
-        {
-            Some(language) => language,
-            None => return Ok(None),
-        };
-        Ok(Some(language))
+        for language in self.configurations.iter() {
+            if language.matches_file(path, content)? {
+                return Ok(Some(language));
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -400,7 +398,7 @@ impl PathLoader {
     pub fn load_tree_sitter_language_for_file(
         &mut self,
         path: &Path,
-        content: Option<&str>,
+        content: &mut dyn ContentProvider,
     ) -> Result<Option<tree_sitter::Language>, LoadError> {
         if let Some(selected_language) = self.select_language_for_file(path, content)? {
             return Ok(Some(selected_language.language));
@@ -411,7 +409,7 @@ impl PathLoader {
     pub fn load_for_file(
         &mut self,
         path: &Path,
-        content: Option<&str>,
+        content: &mut dyn ContentProvider,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Option<&LanguageConfiguration>, LoadError> {
         let selected_language = self.select_language_for_file(path, content)?;
@@ -457,7 +455,7 @@ impl PathLoader {
     fn select_language_for_file(
         &mut self,
         file_path: &Path,
-        file_content: Option<&str>,
+        file_content: &mut dyn ContentProvider,
     ) -> Result<Option<&SupplementedLanguage>, LoadError> {
         // The borrow checker is not smart enough to realize that the early returns
         // ensure any references from the self.select_* call (which require a mutable
@@ -494,7 +492,7 @@ impl PathLoader {
         &mut self,
         language_path: &Path,
         file_path: &Path,
-        file_content: Option<&str>,
+        file_content: &mut dyn ContentProvider,
     ) -> Result<Option<&SupplementedLanguage>, LoadError> {
         let scope = self.scope.as_deref();
         let languages = self.loader.languages_at_path(language_path, scope)?;
@@ -506,7 +504,7 @@ impl PathLoader {
             )));
         }
         if let Some(language) =
-            SupplementedLanguage::best_for_file(languages, file_path, file_content)
+            SupplementedLanguage::best_for_file(languages, file_path, file_content)?
         {
             return Ok(Some(language));
         };
@@ -641,7 +639,11 @@ impl SupplementedLanguage {
     }
 
     // Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
-    pub fn matches_file(&self, path: &Path, content: Option<&str>) -> Option<isize> {
+    pub fn matches_file(
+        &self,
+        path: &Path,
+        content: &mut dyn ContentProvider,
+    ) -> std::io::Result<Option<isize>> {
         matches_file(&self.file_types, &self.content_regex, path, content)
     }
 
@@ -649,19 +651,19 @@ impl SupplementedLanguage {
     pub fn best_for_file<'a>(
         languages: Vec<&'a SupplementedLanguage>,
         path: &Path,
-        content: Option<&str>,
-    ) -> Option<&'a SupplementedLanguage> {
+        content: &mut dyn ContentProvider,
+    ) -> std::io::Result<Option<&'a SupplementedLanguage>> {
         let mut best_score = -1isize;
         let mut best = None;
         for language in languages {
-            if let Some(score) = language.matches_file(path, content) {
+            if let Some(score) = language.matches_file(path, content)? {
                 if score > best_score {
                     best_score = score;
                     best = Some(language);
                 }
             }
         }
-        best
+        Ok(best)
     }
 }
 
@@ -682,28 +684,64 @@ pub fn matches_file(
     file_types: &Vec<String>,
     content_regex: &Option<Regex>,
     path: &Path,
-    content: Option<&str>,
-) -> Option<isize> {
+    content: &mut dyn ContentProvider,
+) -> std::io::Result<Option<isize>> {
     // Check path extension
     if !path
         .extension()
         .and_then(OsStr::to_str)
         .map_or(false, |ext| file_types.iter().any(|ft| ft == ext))
     {
-        return None;
+        return Ok(None);
     }
 
     // Apply content regex
+    let content = content.get(path)?;
     if let (Some(file_content), Some(content_regex)) = (content, &content_regex) {
         // If the language configuration has a content regex, assign
         // a score based on the length of the first match.
         if let Some(mat) = content_regex.find(&file_content) {
             let score = (mat.end() - mat.start()) as isize;
-            return Some(score);
+            return Ok(Some(score));
         } else {
-            return None;
+            return Ok(None);
         }
     }
 
-    Some(0isize)
+    Ok(Some(0isize))
+}
+
+pub trait ContentProvider {
+    fn get(&mut self, path: &Path) -> std::io::Result<Option<&str>>;
+}
+
+/// FileReader reads files from the filesystem and caches the most recently read file.
+pub struct FileReader {
+    cache: Option<(PathBuf, String)>,
+}
+
+impl FileReader {
+    pub fn new() -> Self {
+        Self { cache: None }
+    }
+
+    pub fn get(&mut self, path: &Path) -> std::io::Result<&str> {
+        if self.cache.as_ref().map_or(true, |(p, _)| p != path) {
+            let content = std::fs::read_to_string(path)?;
+            self.cache = Some((path.to_path_buf(), content));
+        }
+        Ok(&self.cache.as_ref().unwrap().1)
+    }
+}
+
+impl ContentProvider for FileReader {
+    fn get(&mut self, path: &Path) -> std::io::Result<Option<&str>> {
+        self.get(path).map(|c| Some(c))
+    }
+}
+
+impl ContentProvider for Option<&str> {
+    fn get(&mut self, _path: &Path) -> std::io::Result<Option<&str>> {
+        Ok(self.clone())
+    }
 }
