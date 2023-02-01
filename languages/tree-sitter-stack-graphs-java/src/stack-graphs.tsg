@@ -956,6 +956,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge expr_ref__typeof -> expr_ref
 }
 
+(object_creation_expression type: (_) @type) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
 (ternary_expression (expression) @expr) @this {
   edge @expr.lexical_scope -> @this.lexical_scope
 }
