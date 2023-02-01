@@ -196,6 +196,21 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @annotation.defs -> def
 }
 
+(constructor_declaration body: (constructor_body) @body) @this {
+  edge @body.lexical_scope -> @this.lexical_scope
+}
+
+(constructor_body) @this {
+  node @this.lexical_scope
+}
+
+(constructor_body . (_) @first) @this {
+  edge @first.before_scope -> @this.lexical_scope
+}
+
+(constructor_body (_) @a . (_) @b) {
+  edge @b.before_scope -> @a.after_scope
+}
 
 (field_declaration
   type: (_) @type
