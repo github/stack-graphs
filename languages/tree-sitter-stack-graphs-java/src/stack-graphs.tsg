@@ -222,6 +222,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node def
   attr (def) node_definition = @name
   edge @this.defs -> def
+
+  node @this.constants
+  attr (@this.constants) pop_symbol = "."
+  edge def -> @this.constants
+}
+
+(enum_declaration (enum_body (enum_constant name: (_) @name))) @this {
+  node def
+  attr (def) node_definition = @name
+  edge @this.constants -> def
 }
 
 (field_declaration

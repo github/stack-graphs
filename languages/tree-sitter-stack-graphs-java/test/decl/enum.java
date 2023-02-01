@@ -3,9 +3,9 @@ enum A {
 }
 
 class B {
-    A f() {
-  //^ defined: 1
-    f(X);
-    //^ defined: 2
+  void f() {
+    f(A.X);
+    //^ defined: 1
+    //  ^ defined: 2
   }
 }
