@@ -8,7 +8,7 @@
 use anyhow::anyhow;
 use clap::Args;
 use clap::ValueHint;
-use dialoguer::Confirm;
+use dialoguer::Select;
 use dialoguer::{Input, Validator};
 use indoc::printdoc;
 use indoc::writedoc;
@@ -43,49 +43,34 @@ impl InitArgs {
 
     pub fn run(&self) -> anyhow::Result<()> {
         self.check_project_dir()?;
-        let config = ProjectSettings::read_from_console()?;
-
-        printdoc! {r##"
-            Review project settings:
-
-                Project directory          : {}
-                Language name              : {}
-                Language identifier        : {}
-                Language file extension    : {}
-                Project package name       : {}
-                Project package version    : {}
-                Project author             : {}
-                Project license            : {}
-                Grammar dependency name    : {}
-                Grammar dependency version : {}
-
-            "##,
-            self.project_path.display(),
-            config.language_name,
-            config.language_id,
-            config.language_file_extension,
-            config.project_npm_name,
-            config.project_npm_version,
-            config.project_author,
-            config.project_license,
-            config.grammar_npm_name,
-            config.grammar_npm_version,
-        };
-        let confirm = Confirm::new()
-            .with_prompt("Generate project")
-            .default(true)
-            .interact()?;
-        if !confirm {
-            println!("Project not created.")
+        let mut config = ProjectSettings::default();
+        loop {
+            config.read_from_console()?;
+            println!("Settings for new project: {}", self.project_path.display());
+            println!("{}", config);
+            let action = Select::new()
+                .items(&["Generate", "Edit", "Cancel"])
+                .default(0)
+                .interact()?;
+            match action {
+                0 => {
+                    config.generate_files_into(&self.project_path)?;
+                    println!(
+                        "Project created. See {} to get started!",
+                        self.project_path.join("README.md").display(),
+                    );
+                    break;
+                }
+                1 => {
+                    continue;
+                }
+                2 => {
+                    println!("No project created.");
+                    break;
+                }
+                _ => unreachable!(),
+            }
         }
-
-        config.generate_files_into(&self.project_path)?;
-        printdoc! {r#"
-
-            Project created. See {} to get started!
-            "#,
-            self.project_path.join("README.md").display(),
-        };
         Ok(())
     }
 
@@ -103,6 +88,7 @@ impl InitArgs {
     }
 }
 
+#[derive(Default)]
 struct ProjectSettings {
     language_name: String,
     language_id: String,
@@ -116,7 +102,7 @@ struct ProjectSettings {
 }
 
 impl ProjectSettings {
-    fn read_from_console() -> anyhow::Result<Self> {
+    fn read_from_console(&mut self) -> anyhow::Result<Self> {
         printdoc! {r#"
 
             Give the name of the programming language the stack graphs definitions in this
@@ -487,6 +473,33 @@ impl ProjectSettings {
             "#,
         }?;
         Ok(())
+    }
+}
+
+impl std::fmt::Display for ProjectSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writedoc! {f, r##"
+            Language name              : {}
+            Language identifier        : {}
+            Language file extension    : {}
+            Project package name       : {}
+            Project package version    : {}
+            Project author             : {}
+            Project license            : {}
+            Grammar dependency name    : {}
+            Grammar dependency version : {}
+
+            "##,
+            self.language_name,
+            self.language_id,
+            self.language_file_extension,
+            self.project_npm_name,
+            self.project_npm_version,
+            self.project_author,
+            self.project_license,
+            self.grammar_npm_name,
+            self.grammar_npm_version,
+        }
     }
 }
 
