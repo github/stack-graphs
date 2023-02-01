@@ -52,9 +52,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;  Top level declarations
 ;; =======================
 
-(import_declaration) @import {
-  node @import.defs
-  node @import.lexical_scope
+[
+  (module_declaration)
+  (package_declaration)
+  (import_declaration)
+] @decl
+{
+  node @decl.defs
+  node @decl.lexical_scope
 }
 
 (import_declaration
@@ -161,6 +166,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@this.def) node_definition = @id
 }
 
+(spread_parameter) @spread_param {
+  node @spread_param.lexical_scope
+  node @spread_param.def
+}
+
 (class_declaration interfaces: (super_interfaces (type_list (_) @type))) @this {
   edge @type.lexical_scope -> @this.lexical_scope
 }
@@ -262,6 +272,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (modifiers (annotation arguments: (annotation_argument_list (_) @value))) @this {
   edge @value.lexical_scope -> @this.lexical_scope
+}
+
+(element_value_array_initializer) @this {
+  node @this.def
+  node @this.lexical_scope
 }
 
 (element_value_pair value: (_) @value) @this {
