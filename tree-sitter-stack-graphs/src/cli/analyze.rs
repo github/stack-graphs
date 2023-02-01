@@ -53,7 +53,6 @@ pub struct AnalyzeArgs {
         long,
         value_name = "SECONDS",
         parse(try_from_str = duration_from_seconds_str),
-        require_equals = true,
     )]
     pub max_file_time: Option<Duration>,
 }
