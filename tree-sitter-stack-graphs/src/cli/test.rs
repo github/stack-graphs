@@ -24,6 +24,7 @@ use walkdir::WalkDir;
 use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
 use crate::cli::util::PathSpec;
+use crate::loader::FileReader;
 use crate::loader::LanguageConfiguration;
 use crate::loader::Loader;
 use crate::test::Test;
@@ -193,8 +194,8 @@ impl TestArgs {
         test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
-        let source = std::fs::read_to_string(test_path)?;
-        let lc = match loader.load_for_file(test_path, Some(&source), &NoCancellation)? {
+        let mut file_reader = FileReader::new();
+        let lc = match loader.load_for_file(test_path, &mut file_reader, &NoCancellation)? {
             Some(sgl) => sgl,
             None => {
                 if self.show_ignored {
@@ -203,6 +204,7 @@ impl TestArgs {
                 return Ok(TestResult::new());
             }
         };
+        let source = file_reader.get(test_path)?;
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         self.load_builtins_into(&lc, &mut test.graph)
@@ -224,7 +226,10 @@ impl TestArgs {
                     &test_fragment.globals,
                     &NoCancellation,
                 )?;
-            } else if lc.matches_file(&test_fragment.path, Some(&test_fragment.source)) {
+            } else if lc.matches_file(
+                &test_fragment.path,
+                &mut Some(test_fragment.source.as_ref()),
+            )? {
                 globals.clear();
                 test_fragment.add_globals_to(&mut globals);
                 self.build_fragment_stack_graph_into(
@@ -281,7 +286,7 @@ impl TestArgs {
     ) -> anyhow::Result<()> {
         match sgl.build_stack_graph_into(graph, file, source, globals, &NoCancellation) {
             Err(LoadError::ParseErrors(parse_errors)) => {
-                Err(map_parse_errors(test_path, &parse_errors, source))
+                Err(map_parse_errors(test_path, &parse_errors, source, "  "))
             }
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Library
+
+#### Added
+
+- A new `CancelAfterDuration` implementation of `CancellationFlag` that cancels the computation after a certain amount of time.
+
+#### Changed
+
+- The `LanguageConfiguration::matches_file` method takes a `ContentProvider` instead of an `Option<&str>` value. This allows lazy file reading *after* the filename is checked, instead of the unconditional loading required before. To give content readers the opportunity to cache read values, a mutable reference is required. The return type has changed to `std::io::Result` to propagate possible errors from content providers. A `FileReader` implementation that caches the last read file is provided as well.
+
+### CLI
+
+#### Added
+
+- A new `analyze` command that computes stack graphs and partial paths for all given source files and directories. The command does not produce any output at the moment. Analysis per file can be limited using the `--max-file-time` flag.
+
 ## v0.6.0 -- 2023-01-13
 
 ### Library
