@@ -10,7 +10,6 @@ use anyhow::Context as _;
 use clap::ArgEnum;
 use clap::Args;
 use clap::ValueHint;
-use colored::Colorize as _;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
@@ -29,9 +28,12 @@ use crate::loader::LanguageConfiguration;
 use crate::loader::Loader;
 use crate::test::Test;
 use crate::test::TestResult;
+use crate::CancellationFlag;
 use crate::LoadError;
 use crate::NoCancellation;
 use crate::StackGraphLanguage;
+
+use super::util::FileStatusLogger;
 
 /// Flag to control output
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -71,20 +73,26 @@ impl OutputMode {
 "#)]
 pub struct TestArgs {
     /// Test file or directory paths.
-    #[clap(value_name = "TEST_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
+    #[clap(
+        value_name = "TEST_PATH",
+        required = true,
+        value_hint = ValueHint::AnyPath,
+        parse(from_os_str),
+        validator_os = path_exists
+    )]
     pub test_paths: Vec<PathBuf>,
 
-    /// Hide passing tests.
-    #[clap(long)]
-    pub hide_passing: bool,
+    /// Hide passing tests in output.
+    #[clap(long, short = 'q')]
+    pub quiet: bool,
 
     /// Hide failure error details.
     #[clap(long)]
     pub hide_failure_errors: bool,
 
-    /// Show ignored files in output.
+    /// Show skipped files in output.
     #[clap(long)]
-    pub show_ignored: bool,
+    pub show_skipped: bool,
 
     /// Save graph for tests matching output mode.
     /// Takes an optional path specification argument for the output file.
@@ -129,7 +137,12 @@ pub struct TestArgs {
     pub save_visualization: Option<PathSpec>,
 
     /// Controls when graphs, paths, or visualization are saved.
-    #[clap(long, arg_enum, default_value_t = OutputMode::OnFailure)]
+    #[clap(
+        long,
+        arg_enum,
+        default_value_t = OutputMode::OnFailure,
+        require_equals = true,
+    )]
     pub output_mode: OutputMode,
 }
 
@@ -137,9 +150,9 @@ impl TestArgs {
     pub fn new(test_paths: Vec<PathBuf>) -> Self {
         Self {
             test_paths,
-            hide_passing: false,
+            quiet: false,
             hide_failure_errors: false,
-            show_ignored: false,
+            show_skipped: false,
             save_graph: None,
             save_paths: None,
             save_visualization: None,
@@ -194,17 +207,24 @@ impl TestArgs {
         test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
+        let mut file_status = FileStatusLogger::new(test_path, !self.quiet);
+
+        if self.show_skipped && test_path.extension().map_or(false, |e| e == "skip") {
+            file_status.warn("skipped")?;
+            return Ok(TestResult::new());
+        }
+
+        let cancellation_flag = &NoCancellation;
+
         let mut file_reader = FileReader::new();
-        let lc = match loader.load_for_file(test_path, &mut file_reader, &NoCancellation)? {
+        let lc = match loader.load_for_file(test_path, &mut file_reader, cancellation_flag)? {
             Some(sgl) => sgl,
-            None => {
-                if self.show_ignored {
-                    println!("{} {}", "⦵".dimmed(), test_path.display());
-                }
-                return Ok(TestResult::new());
-            }
+            None => return Ok(TestResult::new()),
         };
         let source = file_reader.get(test_path)?;
+
+        file_status.processing()?;
+
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         self.load_builtins_into(&lc, &mut test.graph)
@@ -224,7 +244,7 @@ impl TestArgs {
                     &test_fragment.source,
                     &mut all_paths,
                     &test_fragment.globals,
-                    &NoCancellation,
+                    cancellation_flag,
                 )?;
             } else if lc.matches_file(
                 &test_fragment.path,
@@ -239,6 +259,7 @@ impl TestArgs {
                     &test_fragment.source,
                     &globals,
                     &mut test.graph,
+                    cancellation_flag,
                 )?;
             } else {
                 return Err(anyhow!(
@@ -248,8 +269,8 @@ impl TestArgs {
                 ));
             }
         }
-        let result = test.run(&NoCancellation)?;
-        let success = self.handle_result(test_path, &result)?;
+        let result = test.run(cancellation_flag)?;
+        let success = self.handle_result(&result, &mut file_status)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
             self.save_output(
@@ -283,8 +304,9 @@ impl TestArgs {
         source: &str,
         globals: &Variables,
         graph: &mut StackGraph,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> anyhow::Result<()> {
-        match sgl.build_stack_graph_into(graph, file, source, globals, &NoCancellation) {
+        match sgl.build_stack_graph_into(graph, file, source, globals, cancellation_flag) {
             Err(LoadError::ParseErrors(parse_errors)) => {
                 Err(map_parse_errors(test_path, &parse_errors, source, "  "))
             }
@@ -293,20 +315,24 @@ impl TestArgs {
         }
     }
 
-    fn handle_result(&self, test_path: &Path, result: &TestResult) -> anyhow::Result<bool> {
+    fn handle_result(
+        &self,
+        result: &TestResult,
+        file_status: &mut FileStatusLogger,
+    ) -> anyhow::Result<bool> {
         let success = result.failure_count() == 0;
-        if !success || !self.hide_passing {
-            println!(
-                "{} {}: {}/{} assertions",
-                if success { "✓".green() } else { "✗".red() },
-                test_path.display(),
-                result.success_count(),
-                result.count()
-            );
+        if success {
+            file_status.ok("success")?;
+        } else {
+            file_status.error(&format!(
+                "{}/{} assertions failed",
+                result.failure_count(),
+                result.count(),
+            ))?;
         }
         if !success && !self.hide_failure_errors {
             for failure in result.failures_iter() {
-                println!("  {}", failure);
+                println!("{}", failure);
             }
         }
         Ok(success)
@@ -327,8 +353,8 @@ impl TestArgs {
             .map(|spec| spec.format(test_root, test_path))
         {
             self.save_graph(&path, &graph, filter)?;
-            if !success || !self.hide_passing {
-                println!("  Graph: {}", path.display());
+            if !success || !self.quiet {
+                println!("{}: graph at {}", test_path.display(), path.display());
             }
         }
         if let Some(path) = self
@@ -337,8 +363,8 @@ impl TestArgs {
             .map(|spec| spec.format(test_root, test_path))
         {
             self.save_paths(&path, paths, graph, filter)?;
-            if !success || !self.hide_passing {
-                println!("  Paths: {}", path.display());
+            if !success || !self.quiet {
+                println!("{}: paths at {}", test_path.display(), path.display());
             }
         }
         if let Some(path) = self
@@ -347,8 +373,12 @@ impl TestArgs {
             .map(|spec| spec.format(test_root, test_path))
         {
             self.save_visualization(&path, paths, graph, filter, &test_path)?;
-            if !success || !self.hide_passing {
-                println!("  Visualization: {}", path.display());
+            if !success || !self.quiet {
+                println!(
+                    "{}: visualization at {}",
+                    test_path.display(),
+                    path.display()
+                );
             }
         }
         Ok(())

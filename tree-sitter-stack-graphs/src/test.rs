@@ -220,7 +220,7 @@ impl Test {
         }
 
         for fragment in &mut fragments {
-            fragment.parse_assertions(|line| line_files[line])?;
+            fragment.parse_assertions(|line| line_files.get(line).cloned().flatten())?;
         }
 
         Ok(Self {
