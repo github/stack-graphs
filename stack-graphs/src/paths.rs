@@ -651,19 +651,31 @@ impl Path {
             .then_with(|| self.edges.cmp(paths, other.edges))
     }
 
+    pub fn starts_at_reference(&self, graph: &StackGraph) -> bool {
+        graph[self.start_node].is_reference()
+    }
+
+    pub fn ends_at_definition(&self, graph: &StackGraph) -> bool {
+        graph[self.end_node].is_definition()
+            && self.symbol_stack.is_empty()
+            && self.scope_stack.is_empty()
+    }
+
+    pub fn starts_at_endpoint(&self, graph: &StackGraph) -> bool {
+        graph[self.start_node].is_endpoint()
+    }
+
+    pub fn ends_at_endpoint(&self, graph: &StackGraph) -> bool {
+        graph[self.end_node].is_endpoint()
+    }
+
+    pub fn ends_in_jump(&self, graph: &StackGraph) -> bool {
+        graph[self.end_node].is_jump_to()
+    }
+
     /// A _complete_ path represents a full name binding that resolves a reference to a definition.
     pub fn is_complete(&self, graph: &StackGraph) -> bool {
-        if !graph[self.start_node].is_reference() {
-            return false;
-        } else if !graph[self.end_node].is_definition() {
-            return false;
-        } else if !self.symbol_stack.is_empty() {
-            return false;
-        } else if !self.scope_stack.is_empty() {
-            return false;
-        } else {
-            true
-        }
+        self.starts_at_reference(graph) && self.ends_at_definition(graph)
     }
 
     pub fn display<'a>(&'a self, graph: &'a StackGraph, paths: &'a mut Paths) -> impl Display + 'a {

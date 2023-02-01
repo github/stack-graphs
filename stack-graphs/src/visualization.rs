@@ -117,31 +117,10 @@ impl Filter for VisualizationFilter<'_> {
     }
 
     fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool {
-        if !self.0.include_path(graph, paths, path) {
-            return false;
-        }
-        if path.start_node == path.end_node {
-            return false;
-        }
-        if !match &graph[path.start_node] {
-            Node::PushScopedSymbol(_) | Node::PushSymbol(_) => true,
-            Node::Root(_) => true,
-            Node::Scope(node) => node.is_exported,
-            _ => false,
-        } {
-            return false;
-        }
-        if !match &graph[path.end_node] {
-            Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
-                path.symbol_stack.is_empty() && path.scope_stack.is_empty()
-            }
-            Node::Root(_) => true,
-            Node::Scope(node) => node.is_exported,
-            _ => false,
-        } {
-            return false;
-        }
-        return true;
+        self.0.include_path(graph, paths, path)
+            && !path.edges.is_empty()
+            && path.starts_at_reference(graph)
+            && (path.ends_at_definition(graph) || path.ends_in_jump(graph))
     }
 
     fn include_partial_path(
@@ -150,34 +129,9 @@ impl Filter for VisualizationFilter<'_> {
         paths: &PartialPaths,
         path: &PartialPath,
     ) -> bool {
-        if !self.0.include_partial_path(graph, paths, path) {
-            return false;
-        }
-        if path.start_node == path.end_node && path.edges.len() == 0 {
-            return false;
-        }
-        if !match &graph[path.start_node] {
-            Node::PushScopedSymbol(_) | Node::PushSymbol(_) => {
-                path.symbol_stack_precondition.can_match_empty()
-                    && path.scope_stack_precondition.can_match_empty()
-            }
-            Node::Root(_) => true,
-            Node::Scope(node) => node.is_exported,
-            _ => false,
-        } {
-            return false;
-        }
-        if !match &graph[path.end_node] {
-            Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
-                path.symbol_stack_postcondition.can_match_empty()
-                    && path.scope_stack_postcondition.can_match_empty()
-            }
-            Node::Root(_) => true,
-            Node::Scope(node) => node.is_exported,
-            _ => false,
-        } {
-            return false;
-        }
-        return true;
+        self.0.include_partial_path(graph, paths, path)
+            && !path.edges.is_empty()
+            && path.starts_at_reference(graph)
+            && (path.ends_at_definition(graph) || path.ends_in_jump(graph))
     }
 }

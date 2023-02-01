@@ -1052,7 +1052,7 @@ impl ForwardPartialPathStitcher {
         let mut stitcher =
             ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
         stitcher.should_extend =
-            Box::new(|g, _ps, p| p.edges.len() == 0 || !g[p.end_node].is_root());
+            Box::new(|g, _ps, p| p.edges.is_empty() || !g[p.end_node].is_root());
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             let partial_paths = stitcher

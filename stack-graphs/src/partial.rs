@@ -2063,6 +2063,10 @@ impl PartialPath {
         graph[self.end_node].is_endpoint()
     }
 
+    pub fn ends_in_jump(&self, graph: &StackGraph) -> bool {
+        graph[self.end_node].is_jump_to()
+    }
+
     /// Returns whether a partial path is "productive" — that is, whether it adds useful
     /// information to a path.  Non-productive paths are ignored.
     pub fn is_productive(&self, partials: &mut PartialPaths) -> bool {
@@ -2505,7 +2509,7 @@ impl PartialPaths {
         );
         while let Some(path) = queue.pop_front() {
             cancellation_flag.check("finding partial paths in file")?;
-            let is_seed = path.start_node == path.end_node && path.edges.len() == 0;
+            let is_seed = path.edges.is_empty();
             copious_debugging!(" => {}", path.display(graph, self));
             if !is_seed && as_complete_as_necessary(graph, &path) {
                 copious_debugging!("    * as complete as necessary");
