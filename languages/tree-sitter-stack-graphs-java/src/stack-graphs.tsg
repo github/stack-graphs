@@ -181,6 +181,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 [
   (class_declaration)
+  (enum_declaration)
   (field_declaration)
   (interface_declaration)
   (method_declaration)
@@ -215,6 +216,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (constructor_body (_) @a . (_) @b) {
   edge @b.before_scope -> @a.after_scope
+}
+
+(enum_declaration name: (_) @name) @this {
+  node def
+  attr (def) node_definition = @name
+  edge @this.defs -> def
 }
 
 (field_declaration
