@@ -24,8 +24,8 @@ const TSSG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 lazy_static! {
     static ref VALID_NAME: Regex = Regex::new(r"^[a-zA-Z0-9_.-]+$").unwrap();
-    static ref VALID_NPM_PKG: Regex = Regex::new(r"^(@[a-zA-Z0-9_.-]+/)?[a-zA-Z0-9_.-]+$").unwrap();
-    static ref VALID_NPM_VERSION: Regex = Regex::new(r"^[0-9]+\.[0-9]+\.[0-9]+$").unwrap();
+    static ref VALID_CRATE_NAME: Regex = Regex::new(r"^[a-zA-Z0-9_.-]+$").unwrap();
+    static ref VALID_CRATE_VERSION: Regex = Regex::new(r"^[0-9]+\.[0-9]+\.[0-9]+$").unwrap();
 }
 
 /// Initialize project
@@ -46,7 +46,11 @@ impl InitArgs {
         let mut config = ProjectSettings::default();
         loop {
             config.read_from_console()?;
-            println!("Settings for new project: {}", self.project_path.display());
+            println!("=== Review project settings ===");
+            println!(
+                "Project directory          : {}",
+                self.project_path.display()
+            );
             println!("{}", config);
             let action = Select::new()
                 .items(&["Generate", "Edit", "Cancel"])
@@ -93,23 +97,26 @@ struct ProjectSettings {
     language_name: String,
     language_id: String,
     language_file_extension: String,
-    project_npm_name: String,
-    project_npm_version: String,
-    project_author: String,
-    project_license: String,
-    grammar_npm_name: String,
-    grammar_npm_version: String,
+    package_name: String,
+    package_version: String,
+    author: String,
+    license: String,
+    grammar_package_name: String,
+    grammar_package_version: String,
 }
 
 impl ProjectSettings {
-    fn read_from_console(&mut self) -> anyhow::Result<Self> {
+    fn read_from_console(&mut self) -> anyhow::Result<()> {
         printdoc! {r#"
 
             Give the name of the programming language the stack graphs definitions in this
             project will target. This name will appear in the project description and comments.
             "#
         };
-        let language_name: String = Input::new().with_prompt("Language name").interact_text()?;
+        self.language_name = Input::new()
+            .with_prompt("Language name")
+            .with_initial_text(&self.language_name)
+            .interact_text()?;
         println!();
 
         printdoc! {r#"
@@ -118,11 +125,16 @@ impl ProjectSettings {
             name and suggested dependencies. May only contain letters, numbers, dashes, dots,
             and underscores.
             "#,
-            language_name,
+            self.language_name,
         };
-        let language_id: String = Input::new()
+        let default_language_id = self.language_name.to_lowercase();
+        self.language_id = Input::new()
             .with_prompt("Language identifier")
-            .with_initial_text(language_name.to_lowercase())
+            .with_initial_text(if self.language_id.is_empty() {
+                &default_language_id
+            } else {
+                &self.language_id
+            })
             .validate_with(regex_validator(&VALID_NAME))
             .interact_text()?;
         println!();
@@ -132,36 +144,45 @@ impl ProjectSettings {
             Give the file extension for {}. This file extension will be used for stub files in
             the project. May only contain letters, numbers, dashes, dots, and underscores.
             "#,
-            language_name,
+            self.language_name,
         };
-        let language_file_extension: String = Input::new()
+        self.language_file_extension = Input::new()
             .with_prompt("Language file extension")
+            .with_initial_text(&self.language_file_extension)
             .validate_with(regex_validator(&VALID_NAME))
             .interact_text()?;
         println!();
 
         printdoc! {r#"
 
-            Give the NPM package name for this project. Must be a valid scoped or unscoped
-            package name.
+            Give the package name for this project. Must be a valid Rust crate name.
             "#
         };
-        let project_npm_name: String = Input::new()
-            .with_prompt("Project NPM package name")
-            .with_initial_text("tree-sitter-stack-graphs-".to_string() + &language_id)
-            .validate_with(regex_validator(&VALID_NPM_PKG))
+        let default_package_name = "tree-sitter-stack-graphs-".to_string() + &self.language_id;
+        self.package_name = Input::new()
+            .with_prompt("Package name")
+            .with_initial_text(if self.package_name.is_empty() {
+                &default_package_name
+            } else {
+                &self.package_name
+            })
+            .validate_with(regex_validator(&VALID_CRATE_NAME))
             .interact_text()?;
         println!();
 
         printdoc! {r#"
 
-            Give the NPM package version for this project.
+            Give the package version for this project.
             "#
         };
-        let project_npm_version: String = Input::new()
-            .with_prompt("Project NPM package version")
-            .with_initial_text("0.1.0")
-            .validate_with(regex_validator(&VALID_NPM_VERSION))
+        self.package_version = Input::new()
+            .with_prompt("Package version")
+            .with_initial_text(if self.package_version.is_empty() {
+                "0.1.0"
+            } else {
+                &self.package_version
+            })
+            .validate_with(regex_validator(&VALID_CRATE_VERSION))
             .interact_text()?;
         println!();
 
@@ -170,8 +191,9 @@ impl ProjectSettings {
             Give the project author in the format NAME <EMAIL>. Leave empty to omit.
             "#
         };
-        let project_author: String = Input::new()
+        self.author = Input::new()
             .with_prompt("Author")
+            .with_initial_text(&self.author)
             .allow_empty(true)
             .interact_text()?;
         println!();
@@ -181,62 +203,58 @@ impl ProjectSettings {
             Give the project license as an SPDX expression. Leave empty to omit.
             "#
         };
-        let project_license: String = Input::new()
+        self.license = Input::new()
             .with_prompt("License")
+            .with_initial_text(&self.license)
             .allow_empty(true)
             .interact_text()?;
         println!();
 
         printdoc! {r#"
 
-            Give the NPM package name for the Tree-sitter grammar that is to be used for
+            Give the crate name for the Tree-sitter grammar that is to be used for
             parsing.
             "#
         };
-        let grammar_npm_name: String = Input::new()
-            .with_prompt("Grammar NPM package name")
-            .with_initial_text("tree-sitter-".to_string() + &language_id)
+        let default_grammar_package_name = "tree-sitter-".to_string() + &self.language_id;
+        self.grammar_package_name = Input::new()
+            .with_prompt("Grammar package name")
+            .with_initial_text(if self.grammar_package_name.is_empty() {
+                &default_grammar_package_name
+            } else {
+                &self.grammar_package_name
+            })
             .interact_text()?;
         println!();
 
         printdoc! {r##"
 
-            Give the NPM package version or dependency string for the {} dependency. The
-            format can be any of:
-             - MAJOR.MINOR.PATCH                    An NPM release version.
-                                                    Prefix with ~ to allow any patch version, for example: ~0.4.1
-                                                    Prefix with ^ to allow any minor version, for example: ^1.2.7
-             - github:OWNER/REPOSITORY#COMMITISH    A GitHub dependency, tagged to a branch, tag, or commit SHA
+            Give the crate version the {} dependency. The format must be MAJOR.MINOR.PATCH.
+            Prefix with ~ to allow any patch version, for example: ~0.4.1
+            Prefix with ^ to allow any minor version, for example: ^1.2.7
             "##,
-            grammar_npm_name,
+            self.grammar_package_name,
         };
-        let grammar_npm_version: String = Input::new()
-            .with_prompt("Grammar NPM package version")
+        self.grammar_package_version = Input::new()
+            .with_prompt("Grammar package version")
+            .with_initial_text(&self.grammar_package_version)
             .interact_text()?;
         println!();
 
-        Ok(ProjectSettings {
-            language_name,
-            language_id,
-            language_file_extension,
-            project_npm_name,
-            project_npm_version,
-            project_author,
-            project_license,
-            grammar_npm_name,
-            grammar_npm_version,
-        })
+        Ok(())
     }
 
     fn generate_files_into(&self, project_path: &Path) -> anyhow::Result<()> {
         fs::create_dir_all(project_path)?;
+        fs::create_dir_all(project_path.join("rust"))?;
         fs::create_dir_all(project_path.join("src"))?;
         fs::create_dir_all(project_path.join("test"))?;
-        fs::create_dir_all(project_path.join("bindings/rust"))?;
         self.generate_readme(project_path)?;
-        self.generate_package_json(project_path)?;
+        self.generate_changelog(project_path)?;
         self.generate_cargo_toml(project_path)?;
+        self.generate_rust_bin(project_path)?;
         self.generate_rust_lib(project_path)?;
+        self.generate_rust_test(project_path)?;
         self.generate_stack_graphs_tsg(project_path)?;
         self.generate_builtins_src(project_path)?;
         self.generate_builtins_cfg(project_path)?;
@@ -250,9 +268,38 @@ impl ProjectSettings {
         writedoc! {file, r####"
             # tree-sitter-stack-graphs definition for {}
 
-            This project defines tree-sitter-stack-graphs rules for {} using the [{}](https://www.npmjs.com/package/{}) grammar.
+            This project defines tree-sitter-stack-graphs rules for {} using the [{}][] grammar.
+
+            [{}]: https://crates.io/crates/{}
+
+            ## Usage
+
+            To use this library, add the following to your `Cargo.toml`:
+
+            ``` toml
+            [dependencies]
+            {} = "{}"
+            ```
+
+            Check out our [documentation](https://docs.rs/{}/*/) for more details on how to use this library.
+
+            ## Command-line Program
+
+            The command-line program for `{}` lets you do stack graph based analysis and lookup from the command line.
+
+            Install the program using `cargo install` as follows:
+
+            ``` sh
+            $ cargo install --features cli {}
+            $ {} --help
+            ```
 
             ## Development
+
+            The project is written in Rust, and requires a recent version installed.  Rust can be installed and updated using [rustup][].
+
+            [rustup]: https://rustup.rs/
+
 
             The project is organized as follows:
 
@@ -260,85 +307,81 @@ impl ProjectSettings {
             - Builtins sources and configuration are defined in `src/builtins.{}` and `builtins.cfg` respectively.
             - Tests are put into the `test` directory.
 
-            Make sure all development dependencies are installed by running:
+            Build the project by running:
 
-                npm install
+            ``` sh
+            $ cargo build
+            ```
 
-            Run all tests in the project by executing the following:
+            Run the tests as follows:
 
-                npm test
+            ``` sh
+            $ cargo test
+            ```
+
+            The project consists of a library and a CLI. By default, running `cargo` only applies to the library. To run `cargo` commands on the CLI as well, add `--features cli` or `--all-features`.
+
+            Run the CLI from source as follows:
+
+            ``` sh
+            $ cargo run --features cli -- ARGS
+            ```
+
+            Sources are formatted using the standard Rust formatted, which is applied by running:
+
+            ``` sh
+            $ cargo fmt
+            ```
+
+            The stack graph rules are written in [tree-sitter-graph][], which provides a VSCode extension for syntax highlighting.
+
+            [tree-sitter-graph]: https://github.com/tree-sitter/tree-sitter-graph
 
             Parse and test a single file by executing the following commands:
 
-                npm run parse-file test/test.{}
-                npm run test-file test/test.{}
+            ``` sh
+            $ cargo run --features cli -- parse FILES...
+            $ cargo run --features cli -- test TESTFILES...
+            ```
 
             Additional flags can be passed to these commands as well. For example, to generate a visualization for the test, execute:
 
-                npm run test-file -- -V test/test.{}
+            ``` sh
+            $ cargo run --features cli -- test -V TESTFILES...
+            ```
 
             To generate the visualization regardless of test outcome, execute:
 
-                npm run test-file -- -V --output-mode=always test/test.{}
-
-            These commands should be enough for regular development. If necessary, the `tree-sitter-stack-graphs` command can be invoked directly as well, by executing:
-
-                npx tree-sitter-stack-graphs
+            ``` sh
+            $ cargo run --features cli -- test -V --output-mode=always TESTFILES...
+            ```
 
             Go to https://crates.io/crates/tree-sitter-stack-graphs for links to examples and documentation.
             "####,
             self.language_name,
-            self.language_name, self.grammar_npm_name, self.grammar_npm_name,
-            self.language_file_extension,
-            self.language_file_extension,
-            self.language_file_extension,
-            self.language_file_extension,
+            self.language_name, self.grammar_package_name,
+            self.grammar_package_name, self.grammar_package_name,
+            self.package_name, self.package_version,
+            self.package_name,
+            self.package_name,
+            self.package_name,
+            self.package_name,
             self.language_file_extension,
         }?;
         Ok(())
     }
 
-    fn generate_package_json(&self, project_path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(project_path.join("package.json"))?;
-        writedoc! {file, r##"
-            {{
-                "name": "{}",
-                "version": "{}",
-                "description": "Stack graphs definition for {} using {}",
-            "##,
-            self.project_npm_name,
-            self.project_npm_version,
-            self.language_name, self.grammar_npm_name,
-        }?;
-        if !self.project_author.is_empty() {
-            writeln!(file, r#"    "author": "{}","#, self.project_author)?;
-        }
-        if !self.project_license.is_empty() {
-            writeln!(file, r#"    "license": "{}","#, self.project_license)?;
-        }
-        writedoc! {file, r##"
-                "keywords": [
-                    "tree-sitter",
-                    "stack-graphs",
-                    "{}"
-                ],
-                "devDependencies": {{
-                    "tree-sitter-stack-graphs": "~{}",
-                    "{}": "{}"
-                }},
-                "scripts": {{
-                    "test": "npx tree-sitter-stack-graphs test --grammar node_modules/{} --tsg src/stack-graphs --builtins src/builtins test",
-                    "parse-file": "npx tree-sitter-stack-graphs parse --grammar node_modules/{}",
-                    "test-file": "npx tree-sitter-stack-graphs test --grammar node_modules/{} --tsg src/stack-graphs --builtins src/builtins"
-                }}
-            }}
-            "##,
-            self.language_id,
-            TSSG_VERSION,
-            self.grammar_npm_name, self.grammar_npm_version,
-            self.grammar_npm_name,
-            self.grammar_npm_name,
-            self.grammar_npm_name,
+    fn generate_changelog(&self, project_path: &Path) -> anyhow::Result<()> {
+        let mut file = File::create(project_path.join("CHANGELOG.md"))?;
+        writedoc! {file, r####"
+            # Changelog for {}
+
+            All notable changes to this project will be documented in this file.
+
+            The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+            and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+            "####,
+            self.package_name,
         }?;
         Ok(())
     }
@@ -353,47 +396,137 @@ impl ProjectSettings {
             readme = "README.md"
             keywords = ["tree-sitter", "stack-graphs", "{}"]
             "#,
-            self.project_npm_name,
-            self.project_npm_version,
-            self.language_name, self.grammar_npm_name,
+            self.package_name,
+            self.package_version,
+            self.language_name, self.grammar_package_name,
             self.language_id
         }?;
-        if !self.project_author.is_empty() {
-            writeln!(file, r#"authors = ["{}"]"#, self.project_author)?;
+        if !self.author.is_empty() {
+            writeln!(file, r#"authors = ["{}"]"#, self.author)?;
         }
-        if !self.project_license.is_empty() {
-            writeln!(file, r#"license = "{}""#, self.project_license)?;
+        if !self.license.is_empty() {
+            writeln!(file, r#"license = "{}""#, self.license)?;
         }
         writedoc! {file, r#"
             edition = "2018"
 
-            include = [
-                "bindings/rust",
-                "src"
-            ]
+            [[bin]]
+            name = "{}"
+            path = "rust/bin.rs"
+            required-features = ["cli"]
 
             [lib]
-            path = "bindings/rust/lib.rs"
+            path = "rust/lib.rs"
+            test = false
 
-            [dev-dependencies]
-            tree-sitter-stack-graphs = "~{}"
+            [[test]]
+            name = "test"
+            path = "rust/test.rs"
+            harness = false
+            required-features = ["test"] # should be a forced feature, but Cargo does not support those
+
+            [features]
+            default = ["test"] # test is enabled by default because we cannot specify it as a forced featured for [[test]] above
+            cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
+            test = ["anyhow", "tree-sitter-stack-graphs/cli"]
+
+            [dependencies]
+            anyhow = {{ version = "1.0", optional = true }}
+            clap = {{ version = "3", optional = true }}
+            tree-sitter-stack-graphs = "{}"
+            {} = "{}"
             "#,
+            self.package_name,
             TSSG_VERSION,
+            self.grammar_package_name, self.grammar_package_version,
+        }?;
+        Ok(())
+    }
+
+    fn generate_rust_bin(&self, project_path: &Path) -> anyhow::Result<()> {
+        let mut file = File::create(project_path.join("rust/bin.rs"))?;
+        writedoc! {file, r#"
+            use clap::Parser;
+            use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
+            use tree_sitter_stack_graphs::NoCancellation;
+
+            fn main() -> anyhow::Result<()> {{
+                let cli = Cli::parse();
+                cli.subcommand.run(vec![
+                    tree_sitter_stack_graphs_typescript::language_configuration(&NoCancellation),
+                ])
+            }}
+
+            #[derive(Parser)]
+            #[clap(about, version)]
+            pub struct Cli {{
+                #[clap(subcommand)]
+                subcommand: Subcommands,
+            }}
+            "#
         }?;
         Ok(())
     }
 
     fn generate_rust_lib(&self, project_path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(project_path.join("bindings/rust/lib.rs"))?;
+        let mut file = File::create(project_path.join("rust/lib.rs"))?;
         writedoc! {file, r#"
-            /// The stack graphs query for this language
-            pub const STACK_GRAPHS_QUERY: &str = include_str!("../../src/stack-graphs.tsg");
+            use tree_sitter_stack_graphs::loader::FileAnalyzers;
+            use tree_sitter_stack_graphs::loader::LanguageConfiguration;
+            use tree_sitter_stack_graphs::CancellationFlag;
+
+            /// The stack graphs tsg source for this language
+            pub const STACK_GRAPHS_TSG_SOURCE: &str = include_str!("../src/stack-graphs.tsg");
 
             /// The stack graphs builtins configuration for this language
-            pub const STACK_GRAPHS_BUILTINS_CONFIG: &str = include_str!("../../src/builtins.cfg");
+            pub const STACK_GRAPHS_BUILTINS_CONFIG: &str = include_str!("../src/builtins.cfg");
             /// The stack graphs builtins source for this language
-            pub const STACK_GRAPHS_BUILTINS_SOURCE: &str = include_str!("../../src/builtins.ts");
-            "#
+            pub const STACK_GRAPHS_BUILTINS_SOURCE: &str = include_str!("../src/builtins.ts");
+
+            /// The name of the file path global variable
+            pub const FILE_PATH_VAR: &str = "FILE_PATH";
+
+            pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {{
+                LanguageConfiguration::from_tsg_str(
+                    {}::language(),
+                    Some(String::from("source.{}")),
+                    None,
+                    vec![String::from("{}")],
+                    STACK_GRAPHS_TSG_SOURCE,
+                    Some(STACK_GRAPHS_BUILTINS_SOURCE),
+                    Some(STACK_GRAPHS_BUILTINS_CONFIG),
+                    FileAnalyzers::new(),
+                    cancellation_flag,
+                )
+                .unwrap()
+            }}
+            "#,
+            self.grammar_package_name.replace("-", "_"),
+            self.language_file_extension,
+            self.language_file_extension,
+        }?;
+        Ok(())
+    }
+
+    fn generate_rust_test(&self, project_path: &Path) -> anyhow::Result<()> {
+        let mut file = File::create(project_path.join("rust/lib.rs"))?;
+        writedoc! {file, r#"
+            use std::path::PathBuf;
+            use tree_sitter_stack_graphs::ci::Tester;
+            use tree_sitter_stack_graphs::NoCancellation;
+
+            fn main() -> anyhow::Result<()> {{
+                let test_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test");
+                Tester::new(
+                    vec![{}::language_configuration(
+                        &NoCancellation,
+                    )],
+                    vec![test_path],
+                )
+                .run()
+            }}
+            "#,
+            self.package_name,
         }?;
         Ok(())
     }
@@ -466,9 +599,8 @@ impl ProjectSettings {
     fn generate_gitignore(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join(".gitignore"))?;
         writedoc! {file, r#"
+            *.html
             /Cargo.lock
-            /node_modules
-            /package-lock.json
             /target
             "#,
         }?;
@@ -493,12 +625,12 @@ impl std::fmt::Display for ProjectSettings {
             self.language_name,
             self.language_id,
             self.language_file_extension,
-            self.project_npm_name,
-            self.project_npm_version,
-            self.project_author,
-            self.project_license,
-            self.grammar_npm_name,
-            self.grammar_npm_version,
+            self.package_name,
+            self.package_version,
+            self.author,
+            self.license,
+            self.grammar_package_name,
+            self.grammar_package_version,
         }
     }
 }
