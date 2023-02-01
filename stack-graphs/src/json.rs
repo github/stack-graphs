@@ -37,6 +37,9 @@ use crate::partial::ScopeStackVariable;
 use crate::partial::SymbolStackVariable;
 use crate::stitching::Database;
 
+#[path = "filtered_stack_graph.rs"]
+mod filtered_stack_graph;
+
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub struct JsonError(#[from] serde_json::error::Error);
