@@ -119,6 +119,88 @@ fn check_test(
 }
 
 #[test]
+fn can_assert_defined_on_one_line() {
+    let python = r#"
+      x = 1;
+        x;
+      # ^ defined: 2
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn can_assert_defined_on_multiple_lines() {
+    let python = r#"
+      # --- path: a.py ---
+      x = 1;
+
+      # --- path: b.py ---
+      x = 1;
+
+      # --- path: c.py ---
+        x;
+      # ^ defined: 3, 6
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn can_assert_defined_on_no_lines() {
+    let python = r#"
+      y = 1;
+        x;
+      # ^ defined:
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn can_assert_defines_one_symbol() {
+    let python = r#"
+        x = 1;
+      # ^ defines: x
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn can_assert_defines_no_symbols() {
+    let python = r#"
+        x;
+      # ^ defines:
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn can_assert_refers_one_symbol() {
+    let python = r#"
+        x;
+      # ^ refers: x
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn can_assert_refers_no_symbols() {
+    let python = r#"
+        x = 1;
+      # ^ refers:
+    "#;
+    check_test(&PATH, python, &TSG, 1, 0);
+}
+
+#[test]
+fn test_cannot_use_unknown_assertion() {
+    let python = r#"
+      foo = 42
+      # ^ supercalifragilisticexpialidocious:
+    "#;
+    if let Ok(_) = Test::from_source(&PATH, python, &PATH) {
+        panic!("Parsing test unexpectedly succeeded.");
+    }
+}
+#[test]
 fn aligns_correctly_with_unicode() {
     let python = r#"
       x = 1;
@@ -152,22 +234,6 @@ fn test_can_be_multi_file() {
       # --- path: b.py ---
         x;
       # ^ defined: 3
-    "#;
-    check_test(&PATH, python, &TSG, 1, 0);
-}
-
-#[test]
-fn test_assert_multiple_lines() {
-    let python = r#"
-      # --- path: a.py ---
-      x = 1;
-
-      # --- path: b.py ---
-      x = 1;
-
-      # --- path: c.py ---
-        x;
-      # ^ defined: 3, 6
     "#;
     check_test(&PATH, python, &TSG, 1, 0);
 }

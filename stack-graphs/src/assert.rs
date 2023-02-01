@@ -14,6 +14,7 @@ use crate::arena::Handle;
 use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
+use crate::graph::Symbol;
 use crate::paths::Path;
 use crate::paths::Paths;
 use crate::CancellationError;
@@ -26,6 +27,14 @@ pub enum Assertion {
         source: AssertionSource,
         targets: Vec<AssertionTarget>,
     },
+    Defines {
+        source: AssertionSource,
+        symbols: Vec<Handle<Symbol>>,
+    },
+    Refers {
+        source: AssertionSource,
+        symbols: Vec<Handle<Symbol>>,
+    },
 }
 
 /// Source position of an assertion
@@ -36,7 +45,20 @@ pub struct AssertionSource {
 }
 
 impl AssertionSource {
-    fn reference_iter<'a>(
+    fn definitions_iter<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+    ) -> impl Iterator<Item = Handle<Node>> + 'a {
+        graph.nodes_for_file(self.file).filter(move |n| {
+            graph[*n].is_definition()
+                && graph
+                    .source_info(*n)
+                    .map(|s| s.span.contains(&self.position))
+                    .unwrap_or(false)
+        })
+    }
+
+    fn references_iter<'a>(
         &'a self,
         graph: &'a StackGraph,
     ) -> impl Iterator<Item = Handle<Node>> + 'a {
@@ -74,11 +96,21 @@ pub enum AssertionError {
     NoReferences {
         source: AssertionSource,
     },
-    IncorrectDefinitions {
+    IncorrectlyDefined {
         source: AssertionSource,
         references: Vec<Handle<Node>>,
         missing_targets: Vec<AssertionTarget>,
         unexpected_paths: Vec<Path>,
+    },
+    IncorrectDefinitions {
+        source: AssertionSource,
+        missing_symbols: Vec<Handle<Symbol>>,
+        unexpected_symbols: Vec<Handle<Symbol>>,
+    },
+    IncorrectReferences {
+        source: AssertionSource,
+        missing_symbols: Vec<Handle<Symbol>>,
+        unexpected_symbols: Vec<Handle<Symbol>>,
     },
     Cancelled(CancellationError),
 }
@@ -98,9 +130,11 @@ impl Assertion {
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
         match self {
-            Assertion::Defined { source, targets } => {
+            Self::Defined { source, targets } => {
                 self.run_defined(graph, paths, source, targets, cancellation_flag)
             }
+            Self::Defines { source, symbols } => self.run_defines(graph, source, symbols),
+            Self::Refers { source, symbols } => self.run_refers(graph, source, symbols),
         }
     }
 
@@ -112,7 +146,7 @@ impl Assertion {
         expected_targets: &Vec<AssertionTarget>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
-        let references = source.reference_iter(graph).collect::<Vec<_>>();
+        let references = source.references_iter(graph).collect::<Vec<_>>();
         if references.is_empty() {
             return Err(AssertionError::NoReferences {
                 source: source.clone(),
@@ -146,7 +180,7 @@ impl Assertion {
             .cloned()
             .collect::<Vec<_>>();
         if !missing_targets.is_empty() || !unexpected_paths.is_empty() {
-            return Err(AssertionError::IncorrectDefinitions {
+            return Err(AssertionError::IncorrectlyDefined {
                 source: source.clone(),
                 references,
                 missing_targets,
@@ -154,6 +188,70 @@ impl Assertion {
             });
         }
 
+        Ok(())
+    }
+
+    fn run_defines(
+        &self,
+        graph: &StackGraph,
+        source: &AssertionSource,
+        expected_symbols: &Vec<Handle<Symbol>>,
+    ) -> Result<(), AssertionError> {
+        let actual_symbols = source
+            .definitions_iter(graph)
+            .filter_map(|d| graph[d].symbol())
+            .collect::<Vec<_>>();
+        let missing_symbols = expected_symbols
+            .iter()
+            .filter(|x| !actual_symbols.contains(*x))
+            .cloned()
+            .unique()
+            .collect::<Vec<_>>();
+        let unexpected_symbols = actual_symbols
+            .iter()
+            .filter(|x| !expected_symbols.contains(*x))
+            .cloned()
+            .unique()
+            .collect::<Vec<_>>();
+        if !missing_symbols.is_empty() || !unexpected_symbols.is_empty() {
+            return Err(AssertionError::IncorrectDefinitions {
+                source: source.clone(),
+                missing_symbols,
+                unexpected_symbols,
+            });
+        }
+        Ok(())
+    }
+
+    fn run_refers(
+        &self,
+        graph: &StackGraph,
+        source: &AssertionSource,
+        expected_symbols: &Vec<Handle<Symbol>>,
+    ) -> Result<(), AssertionError> {
+        let actual_symbols = source
+            .references_iter(graph)
+            .filter_map(|d| graph[d].symbol())
+            .collect::<Vec<_>>();
+        let missing_symbols = expected_symbols
+            .iter()
+            .filter(|x| !actual_symbols.contains(*x))
+            .cloned()
+            .unique()
+            .collect::<Vec<_>>();
+        let unexpected_symbols = actual_symbols
+            .iter()
+            .filter(|x| !expected_symbols.contains(*x))
+            .cloned()
+            .unique()
+            .collect::<Vec<_>>();
+        if !missing_symbols.is_empty() || !unexpected_symbols.is_empty() {
+            return Err(AssertionError::IncorrectReferences {
+                source: source.clone(),
+                missing_symbols,
+                unexpected_symbols,
+            });
+        }
         Ok(())
     }
 }

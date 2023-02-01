@@ -10,22 +10,32 @@
 //! ## Assertions
 //!
 //! Test files are source files in the language under test with assertions added in comments.
-//! Assertions indicate a the position of a reference in the source with a carrot `^`, and
-//! specify the line numbers, separated by commas, of the definitions where the reference is
-//! expected to resolve.
+//! Assertions indicate the position of a reference or definition with a carrot `^` in the
+//! source, and specify comma separated expected values.
 //!
 //! An example test for Python might be defined in `test.py` and look as follows:
 //!
 //! ``` skip
-//! x = 42
-//! y = -1
-//! print(x, y)
+//! foo = 42
+//! # ^ defines: foo
+//! print(foo, bar)
+//! #     ^ refers: foo
 //! #     ^ defined: 1
-//! #        ^ defined: 2
+//! #          ^ refers: bar
+//! #          ^ defined:
 //! ```
 //!
 //! Consecutive lines with assertions all apply to the last source line without an assertion.
 //! In the example, both assertions refer to positions on line 3.
+//!
+//! The following assertions are supported:
+//!
+//!  - `defined`: takes a comma-separated list of line numbers, and expects a reference at this
+//!    position to resolves to definitions on those lines.
+//!  - `defines`: takes a comma-separated list of names, and expects definitions at this position
+//!    with the given names.
+//!  - `refers`: takes a comma-separated list of names, and expects references at this position
+//!    with the given names.
 //!
 //! ## Fragments for multi-file testing
 //!
@@ -71,42 +81,62 @@ use tree_sitter_graph::Variables;
 
 use crate::CancellationFlag;
 
+const DEFINED: &'static str = "defined";
+const DEFINES: &'static str = "defines";
+const REFERS: &'static str = "refers";
+
 lazy_static! {
     static ref PATH_REGEX: Regex = Regex::new(r#"---\s*path:\s*([^\s]+)\s*---"#).unwrap();
     static ref GLOBAL_REGEX: Regex =
         Regex::new(r#"---\s*global:\s*([^\s]+)=([^\s]+)\s*---"#).unwrap();
     static ref ASSERTION_REGEX: Regex =
-        Regex::new(r#"(\^)\s*defined:\s*(\d+(?:\s*,\s*\d+)*)?"#).unwrap();
+        Regex::new(r#"(\^)\s*(\w+):\s*([^\s,]+(?:\s*,\s*[^\s,]+)*)?"#).unwrap();
     static ref LINE_NUMBER_REGEX: Regex = Regex::new(r#"\d+"#).unwrap();
+    static ref NAME_REGEX: Regex = Regex::new(r#"[^\s,]+"#).unwrap();
 }
 
 /// An error that can occur while parsing tests
 #[derive(Debug, Error)]
 pub enum TestError {
-    AssertionRefersToNonSourceLine,
-    DuplicateGlobalVariable(String),
-    DuplicatePath(String),
-    GlobalBeforeFirstFragment,
+    AssertionRefersToNonSourceLine(usize),
+    DuplicateGlobalVariable(usize, String),
+    DuplicatePath(usize, String),
+    GlobalBeforeFirstFragment(usize),
+    InvalidAssertion(usize, String),
     InvalidColumn(usize, usize, usize),
 }
 
 impl std::fmt::Display for TestError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AssertionRefersToNonSourceLine => {
-                write!(f, "Assertion refers to non-source line")
+            Self::AssertionRefersToNonSourceLine(line) => {
+                write!(
+                    f,
+                    "Assertion on line {} refers to non-source line",
+                    line + 1
+                )
             }
-            Self::DuplicateGlobalVariable(global) => {
-                write!(f, "Duplicate global variable {}", global)
+            Self::DuplicateGlobalVariable(line, global) => {
+                write!(
+                    f,
+                    "Duplicate global variable {} on line {}",
+                    global,
+                    line + 1
+                )
             }
-            Self::DuplicatePath(path) => write!(f, "Duplicate path {}", path),
-            Self::GlobalBeforeFirstFragment => {
-                write!(f, "Global set before first fragment")
+            Self::DuplicatePath(line, path) => {
+                write!(f, "Duplicate path {} on line {}", path, line + 1)
             }
-            Self::InvalidColumn(assertion_line, column, regular_line) => write!(
+            Self::GlobalBeforeFirstFragment(line) => {
+                write!(f, "Global set before first fragment on line {}", line + 1)
+            }
+            Self::InvalidAssertion(line, assertion) => {
+                write!(f, "Invalid assertion {} on line {}", assertion, line + 1)
+            }
+            Self::InvalidColumn(line, column, regular_line) => write!(
                 f,
                 "Assertion on line {} refers to missing column {} on line {}",
-                assertion_line + 1,
+                line + 1,
                 column + 1,
                 regular_line + 1
             ),
@@ -162,7 +192,10 @@ impl Test {
                     let file = graph
                         .add_file(&current_path.to_string_lossy())
                         .map_err(|_| {
-                            TestError::DuplicatePath(format!("{}", current_path.display()))
+                            TestError::DuplicatePath(
+                                line_files.len(),
+                                format!("{}", current_path.display()),
+                            )
                         })?;
                     (line_files.len()..current_line_number)
                         .for_each(|_| line_files.push(Some(file)));
@@ -175,7 +208,7 @@ impl Test {
                     });
                 } else {
                     if have_globals {
-                        return Err(TestError::GlobalBeforeFirstFragment);
+                        return Err(TestError::GlobalBeforeFirstFragment(current_line_number));
                     }
                     have_fragments = true;
                     (line_files.len()..current_line_number).for_each(|_| line_files.push(None));
@@ -193,7 +226,10 @@ impl Test {
                     .insert(global_name.into(), global_value.into())
                     .is_some()
                 {
-                    return Err(TestError::DuplicateGlobalVariable(global_name.to_string()));
+                    return Err(TestError::DuplicateGlobalVariable(
+                        current_line_number,
+                        global_name.to_string(),
+                    ));
                 }
 
                 Self::push_whitespace_for(&current_line, &mut current_source);
@@ -208,7 +244,12 @@ impl Test {
         {
             let file = graph
                 .add_file(&current_path.to_string_lossy())
-                .map_err(|_| TestError::DuplicatePath(format!("{}", current_path.display())))?;
+                .map_err(|_| {
+                    TestError::DuplicatePath(
+                        line_files.len(),
+                        format!("{}", current_path.display()),
+                    )
+                })?;
             (line_files.len()..line_count).for_each(|_| line_files.push(Some(file)));
             fragments.push(TestFragment {
                 file,
@@ -220,7 +261,8 @@ impl Test {
         }
 
         for fragment in &mut fragments {
-            fragment.parse_assertions(|line| line_files.get(line).cloned().flatten())?;
+            fragment
+                .parse_assertions(&mut graph, |line| line_files.get(line).cloned().flatten())?;
         }
 
         Ok(Self {
@@ -252,7 +294,7 @@ impl Test {
 
 impl TestFragment {
     /// Parse assertions in the source.
-    fn parse_assertions<F>(&mut self, line_file: F) -> Result<(), TestError>
+    fn parse_assertions<F>(&mut self, graph: &mut StackGraph, line_file: F) -> Result<(), TestError>
     where
         F: Fn(usize) -> Option<Handle<File>>,
     {
@@ -267,13 +309,14 @@ impl TestFragment {
         {
             if let Some(m) = ASSERTION_REGEX.captures_iter(current_line.content).next() {
                 // assertion line
-                let last_regular_line = last_regular_line
-                    .as_ref()
-                    .ok_or_else(|| TestError::AssertionRefersToNonSourceLine)?;
+                let last_regular_line = last_regular_line.as_ref().ok_or_else(|| {
+                    TestError::AssertionRefersToNonSourceLine(current_line_number)
+                })?;
                 let last_regular_line_number = last_regular_line_number.unwrap();
 
                 let carret_match = m.get(1).unwrap();
-                let line_numbers_match = m.get(2);
+                let assertion_match = m.get(2).unwrap();
+                let values_match = m.get(3);
 
                 let column_utf8_offset = carret_match.start();
                 let column_grapheme_offset = current_line_span_calculator
@@ -301,16 +344,47 @@ impl TestFragment {
                     position,
                 };
 
-                let mut targets = Vec::new();
-                for line in LINE_NUMBER_REGEX
-                    .find_iter(line_numbers_match.map(|m| m.as_str()).unwrap_or(""))
-                {
-                    let line = line.as_str().parse::<usize>().unwrap() - 1;
-                    let file = line_file(line).ok_or(TestError::AssertionRefersToNonSourceLine)?;
-                    targets.push(AssertionTarget { file, line });
+                match assertion_match.as_str() {
+                    DEFINED => {
+                        let mut targets = Vec::new();
+                        for line in LINE_NUMBER_REGEX
+                            .find_iter(values_match.map(|m| m.as_str()).unwrap_or(""))
+                        {
+                            let line = line.as_str().parse::<usize>().unwrap() - 1;
+                            let file = line_file(line).ok_or(
+                                TestError::AssertionRefersToNonSourceLine(current_line_number),
+                            )?;
+                            targets.push(AssertionTarget { file, line });
+                        }
+                        self.assertions.push(Assertion::Defined { source, targets });
+                    }
+                    DEFINES => {
+                        let mut symbols = Vec::new();
+                        for name in
+                            NAME_REGEX.find_iter(values_match.map(|m| m.as_str()).unwrap_or(""))
+                        {
+                            let symbol = graph.add_symbol(name.as_str());
+                            symbols.push(symbol);
+                        }
+                        self.assertions.push(Assertion::Defines { source, symbols });
+                    }
+                    REFERS => {
+                        let mut symbols = Vec::new();
+                        for name in
+                            NAME_REGEX.find_iter(values_match.map(|m| m.as_str()).unwrap_or(""))
+                        {
+                            let symbol = graph.add_symbol(name.as_str());
+                            symbols.push(symbol);
+                        }
+                        self.assertions.push(Assertion::Refers { source, symbols });
+                    }
+                    _ => {
+                        return Err(TestError::InvalidAssertion(
+                            current_line_number,
+                            assertion_match.as_str().to_string(),
+                        ));
+                    }
                 }
-
-                self.assertions.push(Assertion::Defined { source, targets });
             } else {
                 // regular source line
                 last_regular_line = Some(current_line);
@@ -399,12 +473,24 @@ pub enum TestFailure {
         path: PathBuf,
         position: Position,
     },
-    IncorrectDefinitions {
+    IncorrectResolutions {
         path: PathBuf,
         position: Position,
         references: Vec<String>,
         missing_lines: Vec<usize>,
         unexpected_lines: HashMap<String, Vec<Option<usize>>>,
+    },
+    IncorrectDefinitions {
+        path: PathBuf,
+        position: Position,
+        missing_symbols: Vec<String>,
+        unexpected_symbols: Vec<String>,
+    },
+    IncorrectReferences {
+        path: PathBuf,
+        position: Position,
+        missing_symbols: Vec<String>,
+        unexpected_symbols: Vec<String>,
     },
     Cancelled(stack_graphs::CancellationError),
 }
@@ -421,7 +507,7 @@ impl std::fmt::Display for TestFailure {
                     position.column.grapheme_offset + 1
                 )
             }
-            Self::IncorrectDefinitions {
+            Self::IncorrectResolutions {
                 path,
                 position,
                 references,
@@ -468,6 +554,64 @@ impl std::fmt::Display for TestFailure {
                 }
                 Ok(())
             }
+            Self::IncorrectDefinitions {
+                path,
+                position,
+                missing_symbols,
+                unexpected_symbols,
+            } => {
+                write!(
+                    f,
+                    "{}:{}:{}: definitions",
+                    path.display(),
+                    position.line + 1,
+                    position.column.grapheme_offset + 1
+                )?;
+                if !missing_symbols.is_empty() {
+                    write!(
+                        f,
+                        " missing expected {}",
+                        missing_symbols.iter().format(", ")
+                    )?;
+                }
+                if !unexpected_symbols.is_empty() {
+                    write!(
+                        f,
+                        " found unexpected {}",
+                        unexpected_symbols.iter().format(", ")
+                    )?;
+                }
+                Ok(())
+            }
+            Self::IncorrectReferences {
+                path,
+                position,
+                missing_symbols,
+                unexpected_symbols,
+            } => {
+                write!(
+                    f,
+                    "{}:{}:{}: references",
+                    path.display(),
+                    position.line + 1,
+                    position.column.grapheme_offset + 1
+                )?;
+                if !missing_symbols.is_empty() {
+                    write!(
+                        f,
+                        " missing expected {}",
+                        missing_symbols.iter().format(", ")
+                    )?;
+                }
+                if !unexpected_symbols.is_empty() {
+                    write!(
+                        f,
+                        " found unexpected {}",
+                        unexpected_symbols.iter().format(", ")
+                    )?;
+                }
+                Ok(())
+            }
             Self::Cancelled(err) => write!(f, "{}", err),
         }
     }
@@ -503,7 +647,7 @@ impl Test {
                 path: self.path.clone(),
                 position: source.position,
             }),
-            AssertionError::IncorrectDefinitions {
+            AssertionError::IncorrectlyDefined {
                 source,
                 references,
                 missing_targets,
@@ -543,12 +687,52 @@ impl Test {
                 if missing_lines.is_empty() && unexpected_lines.is_empty() {
                     return Ok(());
                 }
-                Err(TestFailure::IncorrectDefinitions {
+                Err(TestFailure::IncorrectResolutions {
                     path: self.path.clone(),
                     position: source.position,
                     references,
                     missing_lines,
                     unexpected_lines,
+                })
+            }
+            AssertionError::IncorrectDefinitions {
+                source,
+                missing_symbols,
+                unexpected_symbols,
+            } => {
+                let missing_symbols = missing_symbols
+                    .iter()
+                    .map(|s| self.graph[*s].to_string())
+                    .collect::<Vec<_>>();
+                let unexpected_symbols = unexpected_symbols
+                    .iter()
+                    .map(|s| self.graph[*s].to_string())
+                    .collect::<Vec<_>>();
+                Err(TestFailure::IncorrectDefinitions {
+                    path: self.path.clone(),
+                    position: source.position,
+                    missing_symbols,
+                    unexpected_symbols,
+                })
+            }
+            AssertionError::IncorrectReferences {
+                source,
+                missing_symbols,
+                unexpected_symbols,
+            } => {
+                let missing_symbols = missing_symbols
+                    .iter()
+                    .map(|s| self.graph[*s].to_string())
+                    .collect::<Vec<_>>();
+                let unexpected_symbols = unexpected_symbols
+                    .iter()
+                    .map(|s| self.graph[*s].to_string())
+                    .collect::<Vec<_>>();
+                Err(TestFailure::IncorrectReferences {
+                    path: self.path.clone(),
+                    position: source.position,
+                    missing_symbols,
+                    unexpected_symbols,
                 })
             }
             AssertionError::Cancelled(err) => Err(TestFailure::Cancelled(err)),
