@@ -599,7 +599,7 @@ impl PartialSymbolStack {
         !self.symbols.is_empty()
     }
 
-    /// Returns whether this partial symbol stack has a symbol stack variable variable.
+    /// Returns whether this partial symbol stack has a symbol stack variable.
     #[inline(always)]
     pub fn has_variable(&self) -> bool {
         !self.variable.is_some()
