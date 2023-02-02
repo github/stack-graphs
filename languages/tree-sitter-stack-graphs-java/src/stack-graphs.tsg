@@ -290,6 +290,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (annotation name: (_) @name) @this {
   node @this.ref
+  node @this.lexical_scope
   attr (@this.ref) node_reference = @name
 }
 
