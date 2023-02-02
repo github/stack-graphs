@@ -2481,6 +2481,9 @@ impl PartialPaths {
     /// necessary pieces, then you should code up your own loop that calls
     /// [`PartialPath::extend`][] manually.
     ///
+    /// Caveat: Edges between nodes of different files are not used. Hence the returned set of partial
+    /// paths will not cover paths going through those edges.
+    ///
     /// [`PartialPath::extend`]: struct.PartialPath.html#method.extend
     pub fn find_minimal_partial_paths_set_in_file<F>(
         &mut self,
