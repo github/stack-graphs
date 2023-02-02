@@ -762,11 +762,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (implicit_this__typeof) push_symbol = ":"
   edge implicit_this -> @ident.lexical_scope
 
-  node ref
-  attr (ref) node_reference = @ident
-  edge ref -> @ident.lexical_scope
-  attr (ref -> @ident.lexical_scope) precedence = 1
-  edge ref -> member
+  node @ident.ref
+  attr (@ident.ref) node_reference = @ident
+  edge @ident.ref -> @ident.lexical_scope
+  attr (@ident.ref -> @ident.lexical_scope) precedence = 1
+  edge @ident.ref -> member
 
   attr (member) push_symbol = "."
 
@@ -777,28 +777,35 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @ident.type -> ref__typeof
 
   attr (ref__typeof) push_symbol = ":"
-  edge ref__typeof -> ref
+  edge ref__typeof -> @ident.ref
 }
 
 (field_access
   object: (_) @object
   field: (identifier) @identifier) @field_access {
-  node member
+  node @field_access.member
 
   edge @object.lexical_scope -> @field_access.lexical_scope
 
   node ref
   attr (ref) node_reference = @identifier
-  edge ref -> member
+  edge ref -> @field_access.member
 
-  attr (member) push_symbol = "."
-  edge member -> @object.type
+  attr (@field_access.member) push_symbol = "."
+  edge @field_access.member -> @object.type
 
   node ref__typeof
   edge @field_access.type -> ref__typeof
 
   attr (ref__typeof) push_symbol = ":"
   edge ref__typeof -> ref
+}
+
+(field_access
+  object: (identifier) @type ; this might represent a type identifier in the case of static member access
+  field: (identifier) @identifier) @this {
+  ; allow resolution of A.X to static members of lexically-scoped A
+  edge @this.member -> @type.ref
 }
 
 (method_invocation) @method_invocation
