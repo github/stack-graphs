@@ -197,6 +197,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (method_declaration)
   (constructor_declaration)
   (annotation_type_declaration)
+  (constant_declaration)
 ] @decl
 {
   node @decl.defs
@@ -226,6 +227,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (constructor_body (_) @a . (_) @b) {
   edge @b.before_scope -> @a.after_scope
+}
+
+(explicit_constructor_invocation) @this {
+  node @this.before_scope
+  node @this.after_scope
 }
 
 (enum_declaration name: (_) @name) @this {
@@ -403,6 +409,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (return_statement)
   (switch_expression)
   (synchronized_statement)
+  (throw_statement)
   (try_statement)
   (try_with_resources_statement)
   (while_statement)
@@ -1087,6 +1094,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type.lexical_scope -> @this.lexical_scope
 }
 
+(wildcard) @this
+{
+  node @this.lexical_scope
+}
+
 (type_identifier) @this
 {
   edge @this.type -> @this.lexical_scope
@@ -1109,6 +1121,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (block_comment)@block_comment {
   node @block_comment.before_scope
   node @block_comment.after_scope
+  node @block_comment.defs
+  node @block_comment.lexical_scope
 
   edge @block_comment.after_scope -> @block_comment.before_scope
 }
