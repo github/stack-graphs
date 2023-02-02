@@ -242,6 +242,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @this.constants
   attr (@this.constants) pop_symbol = "."
   edge def -> @this.constants
+
+  ; allow A.X field accesses to resolve constants
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+  edge def -> def__typeof
+  edge def__typeof -> @this.constants
 }
 
 (enum_declaration (enum_body (enum_constant name: (_) @name))) @this {
