@@ -86,14 +86,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @comment.aliased_type
   node @comment.applied_type
   node @comment.arg
-  node @comment.arg_index
   node @comment.args
   node @comment.async_type
   node @comment.await_type
   node @comment.callable
   node @comment.coargs
   node @comment.cocallable
-  node @comment.comp_index
   node @comment.coparam
   node @comment.coparams
   node @comment.cotype
@@ -435,6 +433,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (generator_function_declaration)
     (hash_bang_line)
     (if_statement)
+    (import_alias)
     (import_statement)
     (interface_declaration)
     (internal_module)
@@ -5292,18 +5291,21 @@ if none @is_acc {
 ;   (_)@element_type
 ; )@type
 
-(array_type
-  (_)@element_type
-)@type {
+(array_type)@type {
   node @type.indexable
-
-  ; propagate lexical scope
-  edge @element_type.lexical_scope -> @type.lexical_scope
 
   ; type is indexable element type
   edge @type.type -> @type.indexable
   ;
   attr (@type.indexable) pop_symbol = "[]"
+}
+
+(array_type
+  (_)@element_type
+)@type {
+  ; propagate lexical scope
+  edge @element_type.lexical_scope -> @type.lexical_scope
+
   edge @type.indexable -> @element_type.type
 }
 
