@@ -234,11 +234,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; import builtins
   node builtins_ref__ns
-  attr (builtins_ref__ns) symbol_reference = "%Proj"
+  attr (builtins_ref__ns) push_symbol = "%Proj"
   edge builtins_ref__ns -> ROOT_NODE
   ;
   node builtins_ref
-  attr (builtins_ref) symbol_reference = "<builtins>"
+  attr (builtins_ref) push_symbol = "<builtins>"
   edge builtins_ref -> builtins_ref__ns
   ;
   edge @prog.lexical_scope -> builtins_ref
