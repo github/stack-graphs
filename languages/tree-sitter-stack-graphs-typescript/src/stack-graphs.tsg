@@ -5266,6 +5266,7 @@ if none @is_acc {
 
 (type_arguments)@type_args {
   node @type_args.type_args
+  attr (@type_args.type_args) is_exported
 }
 
 (type_arguments
@@ -5900,6 +5901,7 @@ if none @is_acc {
 ]@gen_expr {
   node @gen_expr.type_app
   node @gen_expr.inferred_type_args
+  attr (@gen_expr.inferred_type_args) is_exported
 
   ; push inferred type arguments
   edge @gen_expr.applied_type -> @gen_expr.type_app
@@ -6118,6 +6120,7 @@ if none @is_acc {
   node @async.async_type__type_app
   node @async.async_type__type_arg
   node @async.async_type__type_args
+  attr (@async.async_type__type_args) is_exported
   node @async.async_type__promise_ref
   node @async.async_type__promise_ref__ns
   node @async.await_type
