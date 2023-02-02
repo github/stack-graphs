@@ -107,7 +107,7 @@ impl AnalyzeArgs {
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
-                if self.skip(source_path, &mut seen_mark) {
+                if self.should_skip(source_path, &mut seen_mark) {
                     continue;
                 }
                 self.analyze_file_with_context(source_root, source_path, loader, &mut seen_mark)?;
@@ -145,7 +145,7 @@ impl AnalyzeArgs {
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
 
-        if self.skip(source_path, seen_mark) {
+        if self.should_skip(source_path, seen_mark) {
             file_status.info("skipped")?;
             return Ok(());
         }
@@ -237,18 +237,20 @@ impl AnalyzeArgs {
         Ok(())
     }
 
-    fn skip(&self, path: &Path, seen_mark: &mut bool) -> bool {
+    /// Determines if a path should be skipped because we have not seen the
+    /// continue_from mark yet. The `seen_mark` parameter is necessary to keep
+    /// track of the mark between the calls in one run.
+    fn should_skip(&self, path: &Path, seen_mark: &mut bool) -> bool {
         if *seen_mark {
-            false
-        } else if let Some(mark) = &self.continue_from {
-            if path != mark {
-                true
-            } else {
-                *seen_mark = true;
-                false
+            return false; // return early and skip match
+        }
+        if let Some(mark) = &self.continue_from {
+            if path == mark {
+                *seen_mark = true; // this is the mark, we have seen it
             }
         } else {
-            false
+            *seen_mark = true; // early return from now on
         }
+        return !*seen_mark; // skip if we haven't seen the mark yet
     }
 }
