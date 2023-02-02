@@ -3,6 +3,6 @@ record A(int x, int y) {
   //^ defined: 1
 }
 class B {
-    B b;
+    A b;
   //^ defined: 1
 }
