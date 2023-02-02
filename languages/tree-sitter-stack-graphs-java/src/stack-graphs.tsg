@@ -405,6 +405,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.lexical_scope -> @this.lexical_scope
 }
 
+(record_declaration parameters: (formal_parameters (_) @param)) @this {
+  edge @param.lexical_scope -> @this.lexical_scope
+  edge @this.lexical_scope -> @param.def
+  edge @this.defs -> @param.def
+}
+
 ;; ============
 ;;  Statements
 ;; ============
