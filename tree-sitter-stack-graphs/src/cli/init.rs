@@ -23,9 +23,10 @@ use std::path::PathBuf;
 const TSSG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 lazy_static! {
-    static ref VALID_NAME: Regex = Regex::new(r"^[a-zA-Z0-9_.-]+$").unwrap();
-    static ref VALID_CRATE_NAME: Regex = Regex::new(r"^[a-zA-Z0-9_.-]+$").unwrap();
+    static ref VALID_CRATE_NAME: Regex = Regex::new(r"^[a-zA-Z_-][a-zA-Z0-9_-]*$").unwrap();
     static ref VALID_CRATE_VERSION: Regex = Regex::new(r"^[0-9]+\.[0-9]+\.[0-9]+$").unwrap();
+    static ref VALID_DEPENDENCY_VERSION: Regex =
+        Regex::new(r"^[~^]?[0-9]+(\.[0-9]+(\.[0-9]+)?)?$").unwrap();
 }
 
 /// Initialize project
@@ -46,6 +47,7 @@ impl InitArgs {
         let mut config = ProjectSettings::default();
         loop {
             config.read_from_console()?;
+            println!();
             println!("=== Review project settings ===");
             println!(
                 "Project directory          : {}",
@@ -97,12 +99,12 @@ struct ProjectSettings {
     language_name: String,
     language_id: String,
     language_file_extension: String,
-    package_name: String,
-    package_version: String,
+    crate_name: String,
+    crate_version: String,
     author: String,
     license: String,
-    grammar_package_name: String,
-    grammar_package_version: String,
+    grammar_crate_name: String,
+    grammar_crate_version: String,
 }
 
 impl ProjectSettings {
@@ -117,13 +119,12 @@ impl ProjectSettings {
             .with_prompt("Language name")
             .with_initial_text(&self.language_name)
             .interact_text()?;
-        println!();
 
         printdoc! {r#"
 
             Give an identifier for {}. This identifier will be used for the suggested project
-            name and suggested dependencies. May only contain letters, numbers, dashes, dots,
-            and underscores.
+            name and suggested dependencies. May only contain letters, numbers, dashes, and
+            underscores.
             "#,
             self.language_name,
         };
@@ -135,56 +136,58 @@ impl ProjectSettings {
             } else {
                 &self.language_id
             })
-            .validate_with(regex_validator(&VALID_NAME))
+            .validate_with(regex_validator(&VALID_CRATE_NAME))
             .interact_text()?;
-        println!();
 
         printdoc! {r#"
 
             Give the file extension for {}. This file extension will be used for stub files in
-            the project. May only contain letters, numbers, dashes, dots, and underscores.
+            the project. May only contain letters, numbers, dashes, and underscores.
             "#,
             self.language_name,
         };
+        let default_language_file_extension = if self.language_file_extension.is_empty() {
+            &self.language_id
+        } else {
+            &self.language_file_extension
+        };
         self.language_file_extension = Input::new()
             .with_prompt("Language file extension")
-            .with_initial_text(&self.language_file_extension)
-            .validate_with(regex_validator(&VALID_NAME))
+            .with_initial_text(default_language_file_extension)
+            .validate_with(regex_validator(&VALID_CRATE_NAME))
             .interact_text()?;
-        println!();
 
         printdoc! {r#"
 
-            Give the package name for this project. Must be a valid Rust crate name.
+            Give the crate name for this project. May only contain letters, numbers, dashes,
+            and underscores.
             "#
         };
-        let default_package_name = "tree-sitter-stack-graphs-".to_string() + &self.language_id;
-        self.package_name = Input::new()
+        let default_crate_name = "tree-sitter-stack-graphs-".to_string() + &self.language_id;
+        self.crate_name = Input::new()
             .with_prompt("Package name")
-            .with_initial_text(if self.package_name.is_empty() {
-                &default_package_name
+            .with_initial_text(if self.crate_name.is_empty() {
+                &default_crate_name
             } else {
-                &self.package_name
+                &self.crate_name
             })
             .validate_with(regex_validator(&VALID_CRATE_NAME))
             .interact_text()?;
-        println!();
 
         printdoc! {r#"
 
-            Give the package version for this project.
+            Give the crate version for this project. Must be in MAJOR.MINOR.PATCH format.
             "#
         };
-        self.package_version = Input::new()
+        self.crate_version = Input::new()
             .with_prompt("Package version")
-            .with_initial_text(if self.package_version.is_empty() {
+            .with_initial_text(if self.crate_version.is_empty() {
                 "0.1.0"
             } else {
-                &self.package_version
+                &self.crate_version
             })
             .validate_with(regex_validator(&VALID_CRATE_VERSION))
             .interact_text()?;
-        println!();
 
         printdoc! {r#"
 
@@ -196,7 +199,6 @@ impl ProjectSettings {
             .with_initial_text(&self.author)
             .allow_empty(true)
             .interact_text()?;
-        println!();
 
         printdoc! {r#"
 
@@ -208,40 +210,46 @@ impl ProjectSettings {
             .with_initial_text(&self.license)
             .allow_empty(true)
             .interact_text()?;
-        println!();
 
         printdoc! {r#"
 
             Give the crate name for the Tree-sitter grammar that is to be used for
-            parsing.
+            parsing. May only contain letters, numbers, dashes, and underscores.
             "#
         };
-        let default_grammar_package_name = "tree-sitter-".to_string() + &self.language_id;
-        self.grammar_package_name = Input::new()
-            .with_prompt("Grammar package name")
-            .with_initial_text(if self.grammar_package_name.is_empty() {
-                &default_grammar_package_name
+        let default_grammar_crate_name = "tree-sitter-".to_string() + &self.language_id;
+        self.grammar_crate_name = Input::new()
+            .with_prompt("Grammar crate name")
+            .with_initial_text(if self.grammar_crate_name.is_empty() {
+                &default_grammar_crate_name
             } else {
-                &self.grammar_package_name
+                &self.grammar_crate_name
             })
             .interact_text()?;
-        println!();
 
         printdoc! {r##"
 
-            Give the crate version the {} dependency. The format must be MAJOR.MINOR.PATCH.
-            Prefix with ~ to allow any patch version, for example: ~0.4.1
-            Prefix with ^ to allow any minor version, for example: ^1.2.7
+            Give the crate version the {} dependency. This must be a valid Cargo
+            dependency version. For example, 1.2, ^0.4.1, or ~3.2.4.
+            See https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html.
             "##,
-            self.grammar_package_name,
+            self.grammar_crate_name,
         };
-        self.grammar_package_version = Input::new()
-            .with_prompt("Grammar package version")
-            .with_initial_text(&self.grammar_package_version)
+        self.grammar_crate_version = Input::new()
+            .with_prompt("Grammar crate version")
+            .with_initial_text(&self.grammar_crate_version)
+            .validate_with(regex_validator(&VALID_DEPENDENCY_VERSION))
             .interact_text()?;
-        println!();
 
         Ok(())
+    }
+
+    fn package_name(&self) -> String {
+        self.crate_name.replace("-", "_")
+    }
+
+    fn grammar_package_name(&self) -> String {
+        self.grammar_crate_name.replace("-", "_")
     }
 
     fn generate_files_into(&self, project_path: &Path) -> anyhow::Result<()> {
@@ -359,13 +367,13 @@ impl ProjectSettings {
             Go to https://crates.io/crates/tree-sitter-stack-graphs for links to examples and documentation.
             "####,
             self.language_name,
-            self.language_name, self.grammar_package_name,
-            self.grammar_package_name, self.grammar_package_name,
-            self.package_name, self.package_version,
-            self.package_name,
-            self.package_name,
-            self.package_name,
-            self.package_name,
+            self.language_name, self.grammar_crate_name,
+            self.grammar_crate_name, self.grammar_crate_name,
+            self.crate_name, self.crate_version,
+            self.crate_name,
+            self.crate_name,
+            self.crate_name,
+            self.crate_name,
             self.language_file_extension,
         }?;
         Ok(())
@@ -381,7 +389,7 @@ impl ProjectSettings {
             The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
             and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
             "####,
-            self.package_name,
+            self.crate_name,
         }?;
         Ok(())
     }
@@ -396,9 +404,9 @@ impl ProjectSettings {
             readme = "README.md"
             keywords = ["tree-sitter", "stack-graphs", "{}"]
             "#,
-            self.package_name,
-            self.package_version,
-            self.language_name, self.grammar_package_name,
+            self.crate_name,
+            self.crate_version,
+            self.language_name, self.grammar_crate_name,
             self.language_id
         }?;
         if !self.author.is_empty() {
@@ -436,9 +444,9 @@ impl ProjectSettings {
             tree-sitter-stack-graphs = "{}"
             {} = "{}"
             "#,
-            self.package_name,
+            self.crate_name,
             TSSG_VERSION,
-            self.grammar_package_name, self.grammar_package_version,
+            self.grammar_crate_name, self.grammar_crate_version,
         }?;
         Ok(())
     }
@@ -453,7 +461,7 @@ impl ProjectSettings {
             fn main() -> anyhow::Result<()> {{
                 let cli = Cli::parse();
                 cli.subcommand.run(vec![
-                    tree_sitter_stack_graphs_typescript::language_configuration(&NoCancellation),
+                    {}::language_configuration(&NoCancellation),
                 ])
             }}
 
@@ -463,7 +471,8 @@ impl ProjectSettings {
                 #[clap(subcommand)]
                 subcommand: Subcommands,
             }}
-            "#
+            "#,
+            self.package_name(),
         }?;
         Ok(())
     }
@@ -481,7 +490,7 @@ impl ProjectSettings {
             /// The stack graphs builtins configuration for this language
             pub const STACK_GRAPHS_BUILTINS_CONFIG: &str = include_str!("../src/builtins.cfg");
             /// The stack graphs builtins source for this language
-            pub const STACK_GRAPHS_BUILTINS_SOURCE: &str = include_str!("../src/builtins.ts");
+            pub const STACK_GRAPHS_BUILTINS_SOURCE: &str = include_str!("../src/builtins.{}");
 
             /// The name of the file path global variable
             pub const FILE_PATH_VAR: &str = "FILE_PATH";
@@ -501,7 +510,8 @@ impl ProjectSettings {
                 .unwrap()
             }}
             "#,
-            self.grammar_package_name.replace("-", "_"),
+            self.language_file_extension,
+            self.grammar_package_name(),
             self.language_file_extension,
             self.language_file_extension,
         }?;
@@ -509,7 +519,7 @@ impl ProjectSettings {
     }
 
     fn generate_rust_test(&self, project_path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(project_path.join("rust/lib.rs"))?;
+        let mut file = File::create(project_path.join("rust/test.rs"))?;
         writedoc! {file, r#"
             use std::path::PathBuf;
             use tree_sitter_stack_graphs::ci::Tester;
@@ -526,7 +536,7 @@ impl ProjectSettings {
                 .run()
             }}
             "#,
-            self.package_name,
+            self.package_name(),
         }?;
         Ok(())
     }
@@ -625,12 +635,12 @@ impl std::fmt::Display for ProjectSettings {
             self.language_name,
             self.language_id,
             self.language_file_extension,
-            self.package_name,
-            self.package_version,
+            self.crate_name,
+            self.crate_version,
             self.author,
             self.license,
-            self.grammar_package_name,
-            self.grammar_package_version,
+            self.grammar_crate_name,
+            self.grammar_crate_version,
         }
     }
 }
