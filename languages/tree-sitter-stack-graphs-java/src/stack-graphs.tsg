@@ -397,10 +397,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.before_scope -> @method.lexical_scope
 }
 
-(record_declaration name: (_) @name) @this {
+(record_declaration name: (_) @name body: (_) @body) @this {
   node def
   attr (def) node_definition = @name
   edge @this.defs -> def
+
+  edge @body.lexical_scope -> @this.lexical_scope
 }
 
 ;; ============
