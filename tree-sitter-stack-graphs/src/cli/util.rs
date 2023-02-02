@@ -189,6 +189,13 @@ impl<'a> FileStatusLogger<'a> {
         Ok(())
     }
 
+    pub fn info(&mut self, status: &str) -> Result<(), anyhow::Error> {
+        self.print_path(true)?;
+        println!("{}", status.dimmed());
+        self.path_logged = false;
+        Ok(())
+    }
+
     pub fn warn(&mut self, status: &str) -> Result<(), anyhow::Error> {
         self.print_path(true)?;
         println!("{}", status.yellow());

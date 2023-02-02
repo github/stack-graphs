@@ -13,6 +13,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -45,6 +46,16 @@ pub struct AnalyzeArgs {
     )]
     pub source_paths: Vec<PathBuf>,
 
+    /// Continue analysis from the given file
+    #[clap(
+        long,
+        value_name = "SOURCE_PATH",
+        value_hint = ValueHint::AnyPath,
+        parse(from_os_str),
+        validator_os = path_exists,
+    )]
+    pub continue_from: Option<PathBuf>,
+
     #[clap(long, short = 'v')]
     pub verbose: bool,
 
@@ -55,18 +66,28 @@ pub struct AnalyzeArgs {
         parse(try_from_str = duration_from_seconds_str),
     )]
     pub max_file_time: Option<Duration>,
+
+    /// Wait for user input before starting analysis. Useful for profiling.
+    #[clap(long)]
+    pub wait_at_start: bool,
 }
 
 impl AnalyzeArgs {
     pub fn new(source_paths: Vec<PathBuf>) -> Self {
         Self {
             source_paths,
+            continue_from: None,
             verbose: false,
             max_file_time: None,
+            wait_at_start: false,
         }
     }
 
     pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+        if self.wait_at_start {
+            self.wait_for_input()?;
+        }
+        let mut seen_mark = false;
         for source_path in &self.source_paths {
             if source_path.is_dir() {
                 let source_root = source_path;
@@ -77,13 +98,29 @@ impl AnalyzeArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path();
-                    self.analyze_file_with_context(source_root, source_path, loader)?;
+                    self.analyze_file_with_context(
+                        source_root,
+                        source_path,
+                        loader,
+                        &mut seen_mark,
+                    )?;
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
-                self.analyze_file_with_context(source_root, source_path, loader)?;
+                if self.should_skip(source_path, &mut seen_mark) {
+                    continue;
+                }
+                self.analyze_file_with_context(source_root, source_path, loader, &mut seen_mark)?;
             }
         }
+        Ok(())
+    }
+
+    fn wait_for_input(&self) -> anyhow::Result<()> {
+        print!("<press ENTER to continue>");
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
         Ok(())
     }
 
@@ -93,9 +130,10 @@ impl AnalyzeArgs {
         source_root: &Path,
         source_path: &Path,
         loader: &mut Loader,
+        seen_mark: &mut bool,
     ) -> anyhow::Result<()> {
-        self.analyze_file(source_root, source_path, loader)
-            .with_context(|| format!("Error analyzing file {}", source_path.display()))
+        self.analyze_file(source_root, source_path, loader, seen_mark)
+            .with_context(|| format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display()))
     }
 
     fn analyze_file(
@@ -103,8 +141,14 @@ impl AnalyzeArgs {
         source_root: &Path,
         source_path: &Path,
         loader: &mut Loader,
+        seen_mark: &mut bool,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
+
+        if self.should_skip(source_path, seen_mark) {
+            file_status.info("skipped")?;
+            return Ok(());
+        }
 
         let mut file_reader = FileReader::new();
         let lc = match loader.load_for_file(source_path, &mut file_reader, &NoCancellation) {
@@ -191,5 +235,22 @@ impl AnalyzeArgs {
 
         file_status.ok("success")?;
         Ok(())
+    }
+
+    /// Determines if a path should be skipped because we have not seen the
+    /// continue_from mark yet. The `seen_mark` parameter is necessary to keep
+    /// track of the mark between the calls in one run.
+    fn should_skip(&self, path: &Path, seen_mark: &mut bool) -> bool {
+        if *seen_mark {
+            return false; // return early and skip match
+        }
+        if let Some(mark) = &self.continue_from {
+            if path == mark {
+                *seen_mark = true; // this is the mark, we have seen it
+            }
+        } else {
+            *seen_mark = true; // early return from now on
+        }
+        return !*seen_mark; // skip if we haven't seen the mark yet
     }
 }
