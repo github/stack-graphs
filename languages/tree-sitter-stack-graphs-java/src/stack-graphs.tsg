@@ -198,6 +198,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (constructor_declaration)
   (annotation_type_declaration)
   (constant_declaration)
+  (record_declaration)
 ] @decl
 {
   node @decl.defs
