@@ -133,7 +133,7 @@ impl AnalyzeArgs {
         seen_mark: &mut bool,
     ) -> anyhow::Result<()> {
         self.analyze_file(source_root, source_path, loader, seen_mark)
-            .with_context(|| format!("Error analyzing file {}", source_path.display()))
+            .with_context(|| format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display()))
     }
 
     fn analyze_file(
