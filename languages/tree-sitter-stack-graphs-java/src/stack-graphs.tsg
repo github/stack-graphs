@@ -543,21 +543,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @value.lexical_scope -> @this.before_scope
 }
 
-(local_variable_declaration
-  type: (generic_type
-    (type_identifier) @type
-    (type_arguments
-      (type_identifier) @type_identifier))) @local_var {
-  node @type_identifier.value
-  attr(@type_identifier.value) node_reference = @type_identifier
-
-  node @type.value
-  attr(@type.value) node_reference = @type
-
-  edge @type.value -> @local_var.after_scope
-  edge @type_identifier.value -> @local_var.after_scope
-}
-
 (return_statement (_) @expr) @stmt
 {
   edge @expr.lexical_scope -> @stmt.before_scope
