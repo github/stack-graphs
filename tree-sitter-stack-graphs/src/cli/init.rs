@@ -8,8 +8,9 @@
 use anyhow::anyhow;
 use clap::Args;
 use clap::ValueHint;
+use dialoguer::Input;
 use dialoguer::Select;
-use dialoguer::{Input, Validator};
+use dialoguer::Validator;
 use indoc::printdoc;
 use indoc::writedoc;
 use lazy_static::lazy_static;
@@ -21,6 +22,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 const TSSG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const DEFAULT_LICENSES: &[&str] = &["APACHE-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT"];
 
 lazy_static! {
     static ref VALID_CRATE_NAME: Regex = Regex::new(r"^[a-zA-Z_-][a-zA-Z0-9_-]*$").unwrap();
@@ -202,14 +205,47 @@ impl ProjectSettings {
 
         printdoc! {r#"
 
-            Give the project license as an SPDX expression. Leave empty to omit.
+            Give the project license as an SPDX expression. Choose "Other" to input
+            manually. Press ESC to deselect. See https://spdx.org/licenses/ for possible
+            license identifiers.
             "#
         };
-        self.license = Input::new()
+        let other_index = DEFAULT_LICENSES.len();
+        let none_index = other_index + 1;
+        let selected = DEFAULT_LICENSES
+            .iter()
+            .position(|l| l == &self.license)
+            .unwrap_or_else(|| {
+                if self.license.is_empty() {
+                    none_index
+                } else {
+                    other_index
+                }
+            });
+        let (other, other_default) = if selected == other_index {
+            (format!("Other ({})", self.license), self.license.as_ref())
+        } else {
+            ("Other".to_string(), "")
+        };
+        let mut selector = Select::new();
+        let selected = selector
             .with_prompt("License")
-            .with_initial_text(&self.license)
-            .allow_empty(true)
-            .interact_text()?;
+            .items(DEFAULT_LICENSES)
+            .item(&other)
+            .item("None")
+            .default(selected)
+            .interact()?;
+        self.license = if selected == none_index {
+            "".to_string()
+        } else if selected == other_index {
+            Input::new()
+                .with_prompt("Other license")
+                .with_initial_text(other_default)
+                .allow_empty(true)
+                .interact_text()?
+        } else {
+            DEFAULT_LICENSES[selected].to_string()
+        };
 
         printdoc! {r#"
 
