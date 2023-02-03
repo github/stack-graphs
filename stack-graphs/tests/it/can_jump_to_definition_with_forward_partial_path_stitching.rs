@@ -64,17 +64,17 @@ fn class_field_through_function_parameter() {
         &graph,
         &[
             // reference to `a` in import statement
-            "<%1> () [main.py(17) reference a] -> [a.py(0) definition a] <%1> ()",
+            "<%1> ($1) [main.py(17) reference a] -> [a.py(0) definition a] <%1> ($1)",
             // reference to `b` in import statement
-            "<%1> () [main.py(15) reference b] -> [b.py(0) definition b] <%1> ()",
+            "<%1> ($1) [main.py(15) reference b] -> [b.py(0) definition b] <%1> ($1)",
             // reference to `foo` in function call resolves to function definition
-            "<%1> () [main.py(13) reference foo] -> [a.py(5) definition foo] <%1> ()",
+            "<%1> ($1) [main.py(13) reference foo] -> [a.py(5) definition foo] <%1> ($1)",
             // reference to `A` as function parameter resolves to class definition
-            "<%1> () [main.py(9) reference A] -> [b.py(5) definition A] <%1> ()",
+            "<%1> ($1) [main.py(9) reference A] -> [b.py(5) definition A] <%1> ($1)",
             // reference to `bar` on result flows through body of `foo` to find `A.bar`
-            "<%1> () [main.py(10) reference bar] -> [b.py(8) definition bar] <%1> ()",
+            "<%1> ($1) [main.py(10) reference bar] -> [b.py(8) definition bar] <%1> ($1)",
             // reference to `x` in function body resolves to formal parameter
-            "<%1> () [a.py(8) reference x] -> [a.py(14) definition x] <%1> ()",
+            "<%1> ($1) [a.py(8) reference x] -> [a.py(14) definition x] <%1> ()",
         ],
     );
 }
@@ -86,13 +86,13 @@ fn cyclic_imports_python() {
         &graph,
         &[
             // reference to `a` in import statement
-            "<%1> () [main.py(8) reference a] -> [a.py(0) definition a] <%1> ()",
+            "<%1> ($1) [main.py(8) reference a] -> [a.py(0) definition a] <%1> ($1)",
             // reference to `foo` resolves through intermediate file to find `b.foo`
-            "<%1> () [main.py(6) reference foo] -> [b.py(6) definition foo] <%1> ()",
+            "<%1> ($1) [main.py(6) reference foo] -> [b.py(6) definition foo] <%1> ($1)",
             // reference to `b` in import statement
-            "<%1> () [a.py(6) reference b] -> [b.py(0) definition b] <%1> ()",
+            "<%1> ($1) [a.py(6) reference b] -> [b.py(0) definition b] <%1> ($1)",
             // reference to `a` in import statement
-            "<%1> () [b.py(8) reference a] -> [a.py(0) definition a] <%1> ()",
+            "<%1> ($1) [b.py(8) reference a] -> [a.py(0) definition a] <%1> ($1)",
         ],
     );
 }
@@ -104,16 +104,16 @@ fn cyclic_imports_rust() {
         &graph,
         &[
             // reference to `a` in `a::FOO` resolves to module definition
-            "<%1> () [test.rs(103) reference a] -> [test.rs(201) definition a] <%1> ()",
+            "<%1> ($1) [test.rs(103) reference a] -> [test.rs(201) definition a] <%1> ($1)",
             // reference to `a::FOO` in `main` can resolve either to `a::BAR` or `b::FOO`
-            "<%1> () [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <%1> ()",
-            "<%1> () [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <%1> ()",
+            "<%1> ($1) [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <%1> ($1)",
+            "<%1> ($1) [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <%1> ($1)",
             // reference to `b` in use statement resolves to module definition
-            "<%1> () [test.rs(206) reference b] -> [test.rs(301) definition b] <%1> ()",
+            "<%1> ($1) [test.rs(206) reference b] -> [test.rs(301) definition b] <%1> ($1)",
             // reference to `a` in use statement resolves to module definition
-            "<%1> () [test.rs(307) reference a] -> [test.rs(201) definition a] <%1> ()",
+            "<%1> ($1) [test.rs(307) reference a] -> [test.rs(201) definition a] <%1> ($1)",
             // reference to `BAR` in module `b` can _only_ resolve to `a::BAR`
-            "<%1> () [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <%1> ()",
+            "<%1> ($1) [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <%1> ($1)",
         ],
     );
 }
@@ -125,11 +125,11 @@ fn sequenced_import_star() {
         &graph,
         &[
             // reference to `a` in import statement
-            "<%1> () [main.py(8) reference a] -> [a.py(0) definition a] <%1> ()",
+            "<%1> ($1) [main.py(8) reference a] -> [a.py(0) definition a] <%1> ($1)",
             // reference to `foo` resolves through intermediate file to find `b.foo`
-            "<%1> () [main.py(6) reference foo] -> [b.py(5) definition foo] <%1> ()",
+            "<%1> ($1) [main.py(6) reference foo] -> [b.py(5) definition foo] <%1> ($1)",
             // reference to `b` in import statement
-            "<%1> () [a.py(6) reference b] -> [b.py(0) definition b] <%1> ()",
+            "<%1> ($1) [a.py(6) reference b] -> [b.py(0) definition b] <%1> ($1)",
         ],
     );
 }

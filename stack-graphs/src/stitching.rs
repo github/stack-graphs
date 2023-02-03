@@ -585,11 +585,6 @@ impl PathStitcher {
                 copious_debugging!("        is invalid: {:?}", err);
                 continue;
             }
-            #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
-            if let Err(err) = new_path.resolve(graph, paths) {
-                copious_debugging!("        cannot resolve: {:?}", err);
-                continue;
-            }
             copious_debugging!("        is {}", new_path.display(graph, paths));
             self.next_iteration.push_back(new_path);
         }
@@ -873,14 +868,6 @@ impl ForwardPartialPathStitcher {
                 }
                 if new_partial_path.start_node != partial_path.start_node {
                     copious_debugging!("        is invalid: slips off of starting node");
-                    continue;
-                }
-                if let Err(err) = new_partial_path.resolve(graph, partials) {
-                    copious_debugging!("        is invalid: cannot resolve: {:?}", err);
-                    continue;
-                }
-                if graph[new_partial_path.end_node].is_jump_to() {
-                    copious_debugging!("        is invalid: cannot resolve: ambiguous scope stack");
                     continue;
                 }
             }

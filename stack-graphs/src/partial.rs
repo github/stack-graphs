@@ -55,7 +55,6 @@ use crate::graph::Symbol;
 use crate::paths::Extend;
 use crate::paths::Path;
 use crate::paths::PathEdge;
-use crate::paths::PathEdgeList;
 use crate::paths::PathResolutionError;
 use crate::paths::Paths;
 use crate::paths::ScopeStack;
@@ -1006,6 +1005,26 @@ impl PartialSymbolStack {
         self.symbols
             .ensure_forwards(&mut partials.partial_symbol_stacks);
     }
+
+    /// Returns the largest value of any symbol stack variable in this partial symbol stack.
+    pub fn largest_symbol_stack_variable(&self) -> u32 {
+        self.variable
+            .into_option()
+            .map(SymbolStackVariable::as_u32)
+            .unwrap_or(0)
+    }
+
+    /// Returns the largest value of any scope stack variable in this partial symbol stack.
+    pub fn largest_scope_stack_variable(&self, partials: &PartialPaths) -> u32 {
+        // We don't have to check the postconditions, because it's not valid for a postcondition to
+        // refer to a variable that doesn't exist in the precondition.
+        self.iter_unordered(partials)
+            .filter_map(|symbol| symbol.scopes.into_option())
+            .filter_map(|scopes| scopes.variable.into_option())
+            .map(ScopeStackVariable::as_u32)
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 impl DisplayWithPartialPaths for PartialSymbolStack {
@@ -1422,6 +1441,14 @@ impl PartialScopeStack {
     fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
         self.scopes
             .ensure_forwards(&mut partials.partial_scope_stacks);
+    }
+
+    /// Returns the largest value of any scope stack variable in this partial scope stack.
+    pub fn largest_scope_stack_variable(&self) -> u32 {
+        self.variable
+            .into_option()
+            .map(ScopeStackVariable::as_u32)
+            .unwrap_or(0)
     }
 }
 
@@ -1906,39 +1933,27 @@ impl PartialPath {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         node: Handle<Node>,
-    ) -> Result<PartialPath, PathResolutionError> {
+    ) -> PartialPath {
         let initial_symbol_stack = SymbolStackVariable::initial();
         let initial_scope_stack = ScopeStackVariable::initial();
-        let symbol_stack_precondition = PartialSymbolStack::from_variable(initial_symbol_stack);
+        let mut symbol_stack_precondition = PartialSymbolStack::from_variable(initial_symbol_stack);
         let mut symbol_stack_postcondition =
             PartialSymbolStack::from_variable(initial_symbol_stack);
         let mut scope_stack_precondition = PartialScopeStack::from_variable(initial_scope_stack);
         let mut scope_stack_postcondition = PartialScopeStack::from_variable(initial_scope_stack);
 
-        let inner_node = &graph[node];
-        if let Node::PushScopedSymbol(inner_node) = inner_node {
-            scope_stack_precondition = PartialScopeStack::empty();
-            scope_stack_postcondition = PartialScopeStack::empty();
-            let scope = graph
-                .node_for_id(inner_node.scope)
-                .ok_or(PathResolutionError::UnknownAttachedScope)?;
-            scope_stack_postcondition.push_front(partials, scope);
-            let initial_symbol = PartialScopedSymbol {
-                symbol: inner_node.symbol,
-                scopes: ControlledOption::some(scope_stack_postcondition),
-            };
-            symbol_stack_postcondition.push_front(partials, initial_symbol);
-        } else if let Node::PushSymbol(inner_node) = inner_node {
-            scope_stack_precondition = PartialScopeStack::empty();
-            scope_stack_postcondition = PartialScopeStack::empty();
-            let initial_symbol = PartialScopedSymbol {
-                symbol: inner_node.symbol,
-                scopes: ControlledOption::none(),
-            };
-            symbol_stack_postcondition.push_front(partials, initial_symbol);
-        }
+        graph[node]
+            .apply_to_partial_stacks(
+                graph,
+                partials,
+                &mut symbol_stack_precondition,
+                &mut scope_stack_precondition,
+                &mut symbol_stack_postcondition,
+                &mut scope_stack_postcondition,
+            )
+            .expect("");
 
-        Ok(PartialPath {
+        PartialPath {
             start_node: node,
             end_node: node,
             symbol_stack_precondition,
@@ -1946,7 +1961,7 @@ impl PartialPath {
             scope_stack_precondition,
             scope_stack_postcondition,
             edges: PartialPathEdgeList::empty(),
-        })
+        }
     }
 
     /// Returns whether one path shadows another.  Note that shadowing is not commutative — if path
@@ -2140,38 +2155,51 @@ impl PartialPath {
         // We don't have to check the postconditions, because it's not valid for a postcondition to
         // refer to a variable that doesn't exist in the precondition.
         self.symbol_stack_precondition
-            .variable
-            .into_option()
-            .map(SymbolStackVariable::as_u32)
-            .unwrap_or(0)
+            .largest_symbol_stack_variable()
     }
 
     /// Returns the largest value of any scope stack variable in this partial path.
     pub fn largest_scope_stack_variable(&self, partials: &PartialPaths) -> u32 {
+        Self::largest_scope_stack_variable_for_partial_stacks(
+            partials,
+            &self.symbol_stack_precondition,
+            &self.scope_stack_precondition,
+        )
+    }
+
+    fn largest_scope_stack_variable_for_partial_stacks(
+        partials: &PartialPaths,
+        symbol_stack_precondition: &PartialSymbolStack,
+        scope_stack_precondition: &PartialScopeStack,
+    ) -> u32 {
         // We don't have to check the postconditions, because it's not valid for a postcondition to
         // refer to a variable that doesn't exist in the precondition.
-        let symbol_stack_precondition_variables = self
-            .symbol_stack_precondition
-            .iter_unordered(partials)
-            .filter_map(|symbol| symbol.scopes.into_option())
-            .filter_map(|scopes| scopes.variable.into_option())
-            .map(ScopeStackVariable::as_u32);
-        let scope_stack_precondition_variables = self
-            .scope_stack_precondition
-            .variable
-            .into_option()
-            .map(ScopeStackVariable::as_u32);
-        std::iter::empty()
-            .chain(symbol_stack_precondition_variables)
-            .chain(scope_stack_precondition_variables)
-            .max()
-            .unwrap_or(0)
+        std::cmp::max(
+            symbol_stack_precondition.largest_scope_stack_variable(partials),
+            scope_stack_precondition.largest_scope_stack_variable(),
+        )
     }
 
     /// Returns a fresh scope stack variable that is not already used anywhere in this partial
     /// path.
     pub fn fresh_scope_stack_variable(&self, partials: &PartialPaths) -> ScopeStackVariable {
-        ScopeStackVariable::fresher_than(self.largest_scope_stack_variable(partials))
+        Self::fresh_scope_stack_variable_for_partial_stack(
+            partials,
+            &self.symbol_stack_precondition,
+            &self.scope_stack_precondition,
+        )
+    }
+
+    fn fresh_scope_stack_variable_for_partial_stack(
+        partials: &PartialPaths,
+        symbol_stack_precondition: &PartialSymbolStack,
+        scope_stack_precondition: &PartialScopeStack,
+    ) -> ScopeStackVariable {
+        ScopeStackVariable::fresher_than(Self::largest_scope_stack_variable_for_partial_stacks(
+            partials,
+            symbol_stack_precondition,
+            scope_stack_precondition,
+        ))
     }
 
     pub fn display<'a>(
@@ -2258,85 +2286,14 @@ impl PartialPath {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
-        let sink = &graph[edge.sink];
-        if let Node::PushSymbol(sink) = sink {
-            // The symbol stack postcondition is our representation of the path's symbol stack.
-            // Pushing the symbol onto our postcondition indicates that using this partial path
-            // would push the symbol onto the path's symbol stack.
-            let sink_symbol = sink.symbol;
-            let postcondition_symbol = PartialScopedSymbol {
-                symbol: sink_symbol,
-                scopes: ControlledOption::none(),
-            };
-            self.symbol_stack_postcondition
-                .push_front(partials, postcondition_symbol);
-        } else if let Node::PushScopedSymbol(sink) = sink {
-            // The symbol stack postcondition is our representation of the path's symbol stack.
-            // Pushing the scoped symbol onto our postcondition indicates that using this partial
-            // path would push the scoped symbol onto the path's symbol stack.
-            let sink_symbol = sink.symbol;
-            let sink_scope = graph
-                .node_for_id(sink.scope)
-                .ok_or(PathResolutionError::UnknownAttachedScope)?;
-            let mut attached_scopes = self.scope_stack_postcondition;
-            attached_scopes.push_front(partials, sink_scope);
-            let postcondition_symbol = PartialScopedSymbol {
-                symbol: sink_symbol,
-                scopes: ControlledOption::some(attached_scopes),
-            };
-            self.symbol_stack_postcondition
-                .push_front(partials, postcondition_symbol);
-        } else if let Node::PopSymbol(sink) = sink {
-            // Ideally we want to pop sink's symbol off from top of the symbol stack postcondition.
-            if let Some(top) = self.symbol_stack_postcondition.pop_front(partials) {
-                if top.symbol != sink.symbol {
-                    return Err(PathResolutionError::IncorrectPoppedSymbol);
-                }
-                if top.scopes.is_some() {
-                    return Err(PathResolutionError::UnexpectedAttachedScopeList);
-                }
-            } else {
-                // If the symbol stack postcondition is empty, then we need to update the
-                // _precondition_ to indicate that the symbol stack needs to contain this symbol in
-                // order to successfully use this partial path.
-                let precondition_symbol = PartialScopedSymbol {
-                    symbol: sink.symbol,
-                    scopes: ControlledOption::none(),
-                };
-                self.symbol_stack_precondition
-                    .push_back(partials, precondition_symbol);
-            }
-        } else if let Node::PopScopedSymbol(sink) = sink {
-            // Ideally we want to pop sink's scoped symbol off from top of the symbol stack
-            // postcondition.
-            if let Some(top) = self.symbol_stack_postcondition.pop_front(partials) {
-                if top.symbol != sink.symbol {
-                    return Err(PathResolutionError::IncorrectPoppedSymbol);
-                }
-                let new_scope_stack = match top.scopes.into_option() {
-                    Some(scopes) => scopes,
-                    None => return Err(PathResolutionError::MissingAttachedScopeList),
-                };
-                self.scope_stack_postcondition = new_scope_stack;
-            } else {
-                // If the symbol stack postcondition is empty, then we need to update the
-                // _precondition_ to indicate that the symbol stack needs to contain this scoped
-                // symbol in order to successfully use this partial path.
-                let scope_stack_variable = self.fresh_scope_stack_variable(partials);
-                let precondition_symbol = PartialScopedSymbol {
-                    symbol: sink.symbol,
-                    scopes: ControlledOption::some(PartialScopeStack::from_variable(
-                        scope_stack_variable,
-                    )),
-                };
-                self.symbol_stack_precondition
-                    .push_back(partials, precondition_symbol);
-                self.scope_stack_postcondition =
-                    PartialScopeStack::from_variable(scope_stack_variable);
-            }
-        } else if let Node::DropScopes(_) = sink {
-            self.scope_stack_postcondition = PartialScopeStack::empty();
-        }
+        graph[edge.sink].apply_to_partial_stacks(
+            graph,
+            partials,
+            &mut self.symbol_stack_precondition,
+            &mut self.scope_stack_precondition,
+            &mut self.symbol_stack_postcondition,
+            &mut self.scope_stack_postcondition,
+        )?;
 
         self.end_node = edge.sink;
         self.edges.push_back(
@@ -2346,6 +2303,9 @@ impl PartialPath {
                 precedence: edge.precedence,
             },
         );
+
+        self.resolve(graph, partials)?;
+
         Ok(())
     }
 
@@ -2406,11 +2366,110 @@ impl PartialPath {
             if new_path.append(graph, partials, extension).is_err() {
                 continue;
             }
-            if new_path.resolve(graph, partials).is_err() {
-                continue;
-            }
             result.push(new_path);
         }
+    }
+}
+
+impl Node {
+    fn apply_to_partial_stacks(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        symbol_stack_precondition: &mut PartialSymbolStack,
+        scope_stack_precondition: &mut PartialScopeStack,
+        symbol_stack_postcondition: &mut PartialSymbolStack,
+        scope_stack_postcondition: &mut PartialScopeStack,
+    ) -> Result<(), PathResolutionError> {
+        match self {
+            Self::DropScopes(_) => {
+                *scope_stack_postcondition = PartialScopeStack::empty();
+            }
+            Self::JumpTo(_) => {}
+            Self::PopScopedSymbol(sink) => {
+                // Ideally we want to pop sink's scoped symbol off from top of the symbol stack
+                // postcondition.
+                if let Some(top) = symbol_stack_postcondition.pop_front(partials) {
+                    if top.symbol != sink.symbol {
+                        return Err(PathResolutionError::IncorrectPoppedSymbol);
+                    }
+                    let new_scope_stack = match top.scopes.into_option() {
+                        Some(scopes) => scopes,
+                        None => return Err(PathResolutionError::MissingAttachedScopeList),
+                    };
+                    *scope_stack_postcondition = new_scope_stack;
+                } else {
+                    // If the symbol stack postcondition is empty, then we need to update the
+                    // _precondition_ to indicate that the symbol stack needs to contain this scoped
+                    // symbol in order to successfully use this partial path.
+                    let scope_stack_variable =
+                        PartialPath::fresh_scope_stack_variable_for_partial_stack(
+                            partials,
+                            symbol_stack_precondition,
+                            scope_stack_precondition,
+                        );
+                    let precondition_symbol = PartialScopedSymbol {
+                        symbol: sink.symbol,
+                        scopes: ControlledOption::some(PartialScopeStack::from_variable(
+                            scope_stack_variable,
+                        )),
+                    };
+                    symbol_stack_precondition.push_back(partials, precondition_symbol);
+                    *scope_stack_postcondition =
+                        PartialScopeStack::from_variable(scope_stack_variable);
+                }
+            }
+            Self::PopSymbol(sink) => {
+                // Ideally we want to pop sink's symbol off from top of the symbol stack postcondition.
+                if let Some(top) = symbol_stack_postcondition.pop_front(partials) {
+                    if top.symbol != sink.symbol {
+                        return Err(PathResolutionError::IncorrectPoppedSymbol);
+                    }
+                    if top.scopes.is_some() {
+                        return Err(PathResolutionError::UnexpectedAttachedScopeList);
+                    }
+                } else {
+                    // If the symbol stack postcondition is empty, then we need to update the
+                    // _precondition_ to indicate that the symbol stack needs to contain this symbol in
+                    // order to successfully use this partial path.
+                    let precondition_symbol = PartialScopedSymbol {
+                        symbol: sink.symbol,
+                        scopes: ControlledOption::none(),
+                    };
+                    symbol_stack_precondition.push_back(partials, precondition_symbol);
+                }
+            }
+            Self::PushScopedSymbol(sink) => {
+                // The symbol stack postcondition is our representation of the path's symbol stack.
+                // Pushing the scoped symbol onto our postcondition indicates that using this partial
+                // path would push the scoped symbol onto the path's symbol stack.
+                let sink_symbol = sink.symbol;
+                let sink_scope = graph
+                    .node_for_id(sink.scope)
+                    .ok_or(PathResolutionError::UnknownAttachedScope)?;
+                let mut attached_scopes = scope_stack_postcondition.clone();
+                attached_scopes.push_front(partials, sink_scope);
+                let postcondition_symbol = PartialScopedSymbol {
+                    symbol: sink_symbol,
+                    scopes: ControlledOption::some(attached_scopes),
+                };
+                symbol_stack_postcondition.push_front(partials, postcondition_symbol);
+            }
+            Self::PushSymbol(sink) => {
+                // The symbol stack postcondition is our representation of the path's symbol stack.
+                // Pushing the symbol onto our postcondition indicates that using this partial path
+                // would push the symbol onto the path's symbol stack.
+                let sink_symbol = sink.symbol;
+                let postcondition_symbol = PartialScopedSymbol {
+                    symbol: sink_symbol,
+                    scopes: ControlledOption::none(),
+                };
+                symbol_stack_postcondition.push_front(partials, postcondition_symbol);
+            }
+            Self::Root(_) => {}
+            Self::Scope(_) => {}
+        }
+        Ok(())
     }
 }
 
@@ -2442,7 +2501,7 @@ impl PartialPaths {
     {
         let mut cycle_detector = CycleDetector::new();
         let mut queue = VecDeque::new();
-        queue.push_back(PartialPath::from_node(graph, self, StackGraph::root_node()).unwrap());
+        queue.push_back(PartialPath::from_node(graph, self, StackGraph::root_node()));
         queue.extend(
             graph
                 .nodes_for_file(file)
@@ -2452,7 +2511,7 @@ impl PartialPaths {
                     node @ Node::Scope(_) => node.is_exported_scope(),
                     _ => false,
                 })
-                .map(|node| PartialPath::from_node(graph, self, node).unwrap()),
+                .map(|node| PartialPath::from_node(graph, self, node)),
         );
         while let Some(path) = queue.pop_front() {
             cancellation_flag.check("finding partial paths in file")?;
@@ -2482,13 +2541,7 @@ impl Path {
         partials: &mut PartialPaths,
         partial_path: &PartialPath,
     ) -> Option<Path> {
-        let mut path = Path {
-            start_node: partial_path.start_node,
-            end_node: partial_path.start_node,
-            symbol_stack: SymbolStack::empty(),
-            scope_stack: ScopeStack::empty(),
-            edges: PathEdgeList::empty(),
-        };
+        let mut path = Path::from_node(graph, paths, partial_path.start_node)?;
         path.append_partial_path(graph, paths, partials, partial_path)
             .ok()?;
         Some(path)
@@ -2507,16 +2560,57 @@ impl Path {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
+        // If the join node operates on the stack, the effect is present in both sides.
+        // For correct joining, we must undo the effect on one of the sides. We match
+        // the end node of the lhs, and the start node of the rhs separately, depending
+        // on whether we must manipulate the lhs postcondition or rhs precondition,
+        // respectively. The reason we cannot use only one of the lhs end or rhs start
+        // node is that the variables used in them may differ.
+        let mut lhs_symbol_stack = self.symbol_stack;
+        let lhs_scope_stack = self.scope_stack;
+        let mut rhs_symbol_stack_precondition = partial_path.symbol_stack_precondition;
+        let mut rhs_scope_stack_precondition = partial_path.scope_stack_precondition;
+        match &graph[self.end_node] {
+            Node::DropScopes(_) => {}
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {}
+            Node::PopSymbol(_) => {}
+            Node::PushScopedSymbol(_) => {
+                lhs_symbol_stack.pop_front(paths).unwrap();
+            }
+            Node::PushSymbol(_) => {
+                lhs_symbol_stack.pop_front(paths).unwrap();
+            }
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+        match &graph[partial_path.start_node] {
+            Node::DropScopes(_) => {
+                rhs_scope_stack_precondition = PartialScopeStack::empty();
+            }
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {
+                let symbol = rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+                rhs_scope_stack_precondition = symbol.scopes.into_option().unwrap();
+            }
+            Node::PopSymbol(_) => {
+                rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+            }
+            Node::PushScopedSymbol(_) => {}
+            Node::PushSymbol(_) => {}
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+
         let mut symbol_bindings = SymbolStackBindings::new();
         let mut scope_bindings = ScopeStackBindings::new();
-        partial_path
-            .scope_stack_precondition
-            .match_stack(self.scope_stack, &mut scope_bindings)?;
-        partial_path.symbol_stack_precondition.match_stack(
+
+        rhs_scope_stack_precondition.match_stack(lhs_scope_stack, &mut scope_bindings)?;
+        rhs_symbol_stack_precondition.match_stack(
             graph,
             paths,
             partials,
-            self.symbol_stack,
+            lhs_symbol_stack,
             &mut symbol_bindings,
             &mut scope_bindings,
         )?;
@@ -2538,6 +2632,9 @@ impl Path {
             self.edges.push_back(paths, edge.into());
         }
         self.end_node = partial_path.end_node;
+
+        self.resolve(graph, paths)?;
+
         Ok(())
     }
 }
@@ -2567,17 +2664,59 @@ impl PartialPath {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
+        // If the join node operates on the stack, the effect is present in both sides.
+        // For correct joining, we must undo the effect on one of the sides. We match
+        // the end node of the lhs, and the start node of the rhs separately, depending
+        // on whether we must manipulate the lhs postcondition or rhs precondition,
+        // respectively. The reason we cannot use only one of the lhs end or rhs start
+        // node is that the variables used in them may differ.
+        let mut lhs_symbol_stack_postcondition = lhs.symbol_stack_postcondition;
+        let lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
+        let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
+        let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
+        match &graph[lhs.end_node] {
+            Node::DropScopes(_) => {}
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {}
+            Node::PopSymbol(_) => {}
+            Node::PushScopedSymbol(_) => {
+                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
+            }
+            Node::PushSymbol(_) => {
+                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
+            }
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+        match &graph[rhs.start_node] {
+            Node::DropScopes(_) => {
+                rhs_scope_stack_precondition = PartialScopeStack::empty();
+            }
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(_) => {
+                let symbol = rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+                rhs_scope_stack_precondition = symbol.scopes.into_option().unwrap();
+            }
+            Node::PopSymbol(_) => {
+                rhs_symbol_stack_precondition.pop_front(partials).unwrap();
+            }
+            Node::PushScopedSymbol(_) => {}
+            Node::PushSymbol(_) => {}
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+
         let mut symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
 
-        let unified_scope_stack = lhs.scope_stack_postcondition.unify(
+        let unified_scope_stack = lhs_scope_stack_postcondition.unify(
             partials,
-            rhs.scope_stack_precondition,
+            rhs_scope_stack_precondition,
             &mut scope_bindings,
         )?;
-        let unified_symbol_stack = lhs.symbol_stack_postcondition.unify(
+        let unified_symbol_stack = lhs_symbol_stack_postcondition.unify(
             partials,
-            rhs.symbol_stack_precondition,
+            rhs_symbol_stack_precondition,
             &mut symbol_bindings,
             &mut scope_bindings,
         )?;
@@ -2619,6 +2758,9 @@ impl PartialPath {
             lhs.edges.push_back(partials, edge);
         }
         lhs.end_node = rhs.end_node;
+
+        lhs.resolve(graph, partials)?;
+
         Ok(())
     }
 }
