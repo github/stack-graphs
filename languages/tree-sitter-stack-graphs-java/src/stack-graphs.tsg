@@ -236,15 +236,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (explicit_constructor_invocation constructor: (_) @constructor) @this {
-  edge @constructor.lexical_scope -> @this.lexical_scope
+  edge @constructor.lexical_scope -> @this.before_scope
 }
 
 (explicit_constructor_invocation object: (_) @object) @this {
-  edge @object.lexical_scope -> @this.lexical_scope
+  edge @object.lexical_scope -> @this.before_scope
 }
 
 (explicit_constructor_invocation arguments: (argument_list (_) @arg)) @this {
-  edge @arg.lexical_scope -> @this.lexical_scope
+  edge @arg.lexical_scope -> @this.before_scope
 }
 
 (enum_declaration name: (_) @name) @this {
