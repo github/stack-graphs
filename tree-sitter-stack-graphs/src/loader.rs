@@ -9,7 +9,7 @@
 
 use ini::Ini;
 use itertools::Itertools;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use stack_graphs::graph::StackGraph;
 use std::collections::HashMap;
@@ -29,12 +29,10 @@ use crate::CancellationFlag;
 use crate::FileAnalyzer;
 use crate::StackGraphLanguage;
 
-lazy_static! {
-    pub static ref DEFAULT_TSG_PATHS: Vec<LoadPath> =
-        vec![LoadPath::Grammar("queries/stack-graphs".into())];
-    pub static ref DEFAULT_BUILTINS_PATHS: Vec<LoadPath> =
-        vec![LoadPath::Grammar("queries/builtins".into())];
-}
+pub static DEFAULT_TSG_PATHS: Lazy<Vec<LoadPath>> =
+    Lazy::new(|| vec![LoadPath::Grammar("queries/stack-graphs".into())]);
+pub static DEFAULT_BUILTINS_PATHS: Lazy<Vec<LoadPath>> =
+    Lazy::new(|| vec![LoadPath::Grammar("queries/builtins".into())]);
 
 /// Data type that holds all information to recognize and analyze files for a language
 pub struct LanguageConfiguration {

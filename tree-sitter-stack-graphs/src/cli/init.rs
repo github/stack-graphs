@@ -14,7 +14,7 @@ use dialoguer::Select;
 use dialoguer::Validator;
 use indoc::printdoc;
 use indoc::writedoc;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::fs;
 use std::fs::File;
@@ -31,12 +31,12 @@ mod license;
 
 const TSSG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-lazy_static! {
-    static ref VALID_CRATE_NAME: Regex = Regex::new(r"^[a-zA-Z_-][a-zA-Z0-9_-]*$").unwrap();
-    static ref VALID_CRATE_VERSION: Regex = Regex::new(r"^[0-9]+\.[0-9]+\.[0-9]+$").unwrap();
-    static ref VALID_DEPENDENCY_VERSION: Regex =
-        Regex::new(r"^[~^]?[0-9]+(\.[0-9]+(\.[0-9]+)?)?$").unwrap();
-}
+static VALID_CRATE_NAME: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[a-zA-Z_-][a-zA-Z0-9_-]*$").unwrap());
+static VALID_CRATE_VERSION: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[0-9]+\.[0-9]+\.[0-9]+$").unwrap());
+static VALID_DEPENDENCY_VERSION: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[~^]?[0-9]+(\.[0-9]+(\.[0-9]+)?)?$").unwrap());
 
 /// Initialize project
 #[derive(Args)]

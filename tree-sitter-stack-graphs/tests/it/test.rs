@@ -5,7 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
@@ -18,9 +18,9 @@ use tree_sitter_stack_graphs::LoadError;
 use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
-lazy_static! {
-    static ref PATH: PathBuf = PathBuf::from("test.py");
-    static ref TSG: String = r#"
+static PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("test.py"));
+static TSG: Lazy<String> = Lazy::new(|| {
+    r#"
       global ROOT_NODE
       (module) @mod {
           node @mod.lexical_in
@@ -50,11 +50,15 @@ lazy_static! {
           attr (@name.ref) type = "push_symbol", symbol = (source-text @name), source_node = @name, is_reference
           edge @name.ref -> @stmt.lexical_in
       }
-    "#.to_string();
-    static ref TSG_WITH_PKG: String = r#"
+    "#.to_string()
+});
+static TSG_WITH_PKG: Lazy<String> = Lazy::new(|| {
+    r#"
       global PKG
-    "#.to_string() + &TSG;
-}
+    "#
+    .to_string()
+        + &TSG
+});
 
 fn build_stack_graph_into(
     graph: &mut StackGraph,
