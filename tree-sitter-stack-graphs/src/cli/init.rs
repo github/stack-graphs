@@ -308,12 +308,13 @@ impl ProjectSettings {
 
             [rustup]: https://rustup.rs/
 
-
             The project is organized as follows:
 
             - The stack graph rules are defined in `src/stack-graphs.tsg`.
             - Builtins sources and configuration are defined in `src/builtins.{}` and `builtins.cfg` respectively.
             - Tests are put into the `test` directory.
+
+            ### Building and Running Tests
 
             Build the project by running:
 
@@ -341,9 +342,15 @@ impl ProjectSettings {
             $ cargo fmt
             ```
 
-            The stack graph rules are written in [tree-sitter-graph][], which provides a VSCode extension for syntax highlighting.
+            ### Writing TSG
+
+            The stack graph rules are written in [tree-sitter-graph][]. Checkout the [examples][],
+            which contain self-contained TSG rules for specific language features. A VSCode
+            [extension][] is available that provides syntax highlighting for TSG files.
 
             [tree-sitter-graph]: https://github.com/tree-sitter/tree-sitter-graph
+            [examples]: https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/examples/
+            [extension]: https://marketplace.visualstudio.com/items?itemName=tree-sitter.tree-sitter-graph
 
             Parse and test a single file by executing the following commands:
 
@@ -352,7 +359,7 @@ impl ProjectSettings {
             $ cargo run --features cli -- test TESTFILES...
             ```
 
-            Additional flags can be passed to these commands as well. For example, to generate a visualization for the test, execute:
+            Generate a visualization to debug failing tests by passing the `-V` flag:
 
             ``` sh
             $ cargo run --features cli -- test -V TESTFILES...
