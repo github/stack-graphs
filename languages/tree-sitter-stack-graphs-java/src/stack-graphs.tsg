@@ -110,7 +110,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @class.lexical_scope -> this__expr_def
 
-  attr (this__expr_def) pop_symbol = "this", source_node = @class, empty_source_span
+  attr (this__expr_def) pop_symbol = "this", source_node = @name, empty_source_span
   edge this__expr_def -> @class.type
 
   attr (@class.type) pop_symbol = ":"
