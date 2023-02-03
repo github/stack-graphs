@@ -922,6 +922,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; =============
 
 [
+  (array_access)
   (array_initializer)
   (expression)
   (field_access)
