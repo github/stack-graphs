@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
+use chrono::Datelike;
 use clap::Args;
 use clap::ValueHint;
 use dialoguer::Input;
@@ -21,9 +22,14 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-const TSSG_VERSION: &str = env!("CARGO_PKG_VERSION");
+use self::license::lookup_license;
+use self::license::DEFAULT_LICENSES;
+use self::license::NO_LICENSE;
+use self::license::OTHER_LICENSE;
 
-const DEFAULT_LICENSES: &[&str] = &["APACHE-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT"];
+mod license;
+
+const TSSG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 lazy_static! {
     static ref VALID_CRATE_NAME: Regex = Regex::new(r"^[a-zA-Z_-][a-zA-Z0-9_-]*$").unwrap();
@@ -210,41 +216,29 @@ impl ProjectSettings {
             license identifiers.
             "#
         };
-        let other_index = DEFAULT_LICENSES.len();
-        let none_index = other_index + 1;
-        let selected = DEFAULT_LICENSES
-            .iter()
-            .position(|l| l == &self.license)
-            .unwrap_or_else(|| {
-                if self.license.is_empty() {
-                    none_index
-                } else {
-                    other_index
-                }
-            });
-        let (other, other_default) = if selected == other_index {
+        let selected = lookup_license(&self.license);
+        let (other, other_default) = if selected == OTHER_LICENSE {
             (format!("Other ({})", self.license), self.license.as_ref())
         } else {
             ("Other".to_string(), "")
         };
-        let mut selector = Select::new();
-        let selected = selector
+        let selected = Select::new()
             .with_prompt("License")
-            .items(DEFAULT_LICENSES)
+            .items(&DEFAULT_LICENSES.iter().map(|l| l.0).collect::<Vec<_>>())
             .item(&other)
             .item("None")
             .default(selected)
             .interact()?;
-        self.license = if selected == none_index {
+        self.license = if selected == NO_LICENSE {
             "".to_string()
-        } else if selected == other_index {
+        } else if selected == OTHER_LICENSE {
             Input::new()
                 .with_prompt("Other license")
                 .with_initial_text(other_default)
                 .allow_empty(true)
                 .interact_text()?
         } else {
-            DEFAULT_LICENSES[selected].to_string()
+            DEFAULT_LICENSES[selected].0.to_string()
         };
 
         printdoc! {r#"
@@ -288,6 +282,14 @@ impl ProjectSettings {
         self.grammar_crate_name.replace("-", "_")
     }
 
+    fn license_author(&self) -> String {
+        if self.author.is_empty() {
+            format!("the {} authors", self.crate_name)
+        } else {
+            self.author.clone()
+        }
+    }
+
     fn generate_files_into(&self, project_path: &Path) -> anyhow::Result<()> {
         fs::create_dir_all(project_path)?;
         fs::create_dir_all(project_path.join("rust"))?;
@@ -295,6 +297,7 @@ impl ProjectSettings {
         fs::create_dir_all(project_path.join("test"))?;
         self.generate_readme(project_path)?;
         self.generate_changelog(project_path)?;
+        self.generate_license(project_path)?;
         self.generate_cargo_toml(project_path)?;
         self.generate_rust_bin(project_path)?;
         self.generate_rust_lib(project_path)?;
@@ -437,6 +440,31 @@ impl ProjectSettings {
         Ok(())
     }
 
+    fn generate_license(&self, project_path: &Path) -> std::io::Result<()> {
+        match lookup_license(&self.license) {
+            NO_LICENSE | OTHER_LICENSE => {}
+            selected => {
+                let mut file = File::create(project_path.join("LICENSE"))?;
+                let year = chrono::Utc::now().year();
+                let author = self.license_author();
+                (DEFAULT_LICENSES[selected].2)(&mut file, year, &author)?;
+            }
+        };
+        Ok(())
+    }
+
+    fn write_license_header(&self, file: &mut File, prefix: &str) -> std::io::Result<()> {
+        match lookup_license(&self.license) {
+            NO_LICENSE | OTHER_LICENSE => {}
+            selected => {
+                let year = chrono::Utc::now().year();
+                let author = self.license_author();
+                (DEFAULT_LICENSES[selected].1)(file, year, &author, prefix)?;
+            }
+        };
+        Ok(())
+    }
+
     fn generate_cargo_toml(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("Cargo.toml"))?;
         writedoc! {file, r#"
@@ -496,6 +524,7 @@ impl ProjectSettings {
 
     fn generate_rust_bin(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("rust/bin.rs"))?;
+        self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
             use clap::Parser;
             use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
@@ -522,6 +551,7 @@ impl ProjectSettings {
 
     fn generate_rust_lib(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("rust/lib.rs"))?;
+        self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
             use tree_sitter_stack_graphs::loader::FileAnalyzers;
             use tree_sitter_stack_graphs::loader::LanguageConfiguration;
@@ -563,6 +593,7 @@ impl ProjectSettings {
 
     fn generate_rust_test(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("rust/test.rs"))?;
+        self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
             use std::path::PathBuf;
             use tree_sitter_stack_graphs::ci::Tester;
@@ -586,6 +617,7 @@ impl ProjectSettings {
 
     fn generate_stack_graphs_tsg(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("src/stack-graphs.tsg"))?;
+        self.write_license_header(&mut file, ";; ")?;
         writedoc! {file, r#"
             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
             ;; Stack graphs definition for {}

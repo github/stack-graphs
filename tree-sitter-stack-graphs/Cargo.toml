@@ -22,10 +22,22 @@ name = "tree-sitter-stack-graphs"
 required-features = ["cli"]
 
 [features]
-cli = ["clap", "colored", "dialoguer", "env_logger", "indoc", "pathdiff", "stack-graphs/json", "tree-sitter-config", "walkdir"]
+cli = [
+  "chrono",
+  "clap",
+  "colored",
+  "dialoguer",
+  "env_logger",
+  "indoc",
+  "pathdiff",
+  "stack-graphs/json",
+  "tree-sitter-config",
+  "walkdir"
+]
 
 [dependencies]
 anyhow = "1.0"
+chrono = { version = "0.4", optional = true }
 clap = { version = "3", optional = true, features=["derive"] }
 colored = { version = "2.0", optional = true }
 controlled-option = ">=0.4"
