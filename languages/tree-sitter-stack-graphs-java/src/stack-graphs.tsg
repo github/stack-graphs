@@ -1,0 +1,471 @@
+;;;;;;;;;;;;;;;;;;;
+;; Global Variables
+
+global FILE_PATH
+global ROOT_NODE
+global JUMP_TO_SCOPE_NODE
+
+;;;;;;;;;;;;;;;;;;;;;;;
+;; Attribute Shorthands
+
+attribute node_definition = node        => type = "pop_symbol", node_symbol = node, is_definition
+attribute node_reference = node         => type = "push_symbol", node_symbol = node, is_reference
+attribute pop_node = node               => type = "pop_symbol", node_symbol = node
+attribute pop_scoped_node = node        => type = "pop_scoped_symbol", node_symbol = node
+attribute pop_scoped_symbol = symbol    => type = "pop_scoped_symbol", symbol = symbol
+attribute pop_symbol = symbol           => type = "pop_symbol", symbol = symbol
+attribute push_node = node              => type = "push_symbol", node_symbol = node
+attribute push_scoped_node = node       => type = "push_scoped_symbol", node_symbol = node
+attribute push_scoped_symbol = symbol   => type = "push_scoped_symbol", symbol = symbol
+attribute push_symbol = symbol          => type = "push_symbol", symbol = symbol
+attribute scoped_node_definition = node => type = "pop_scoped_symbol", node_symbol = node, is_definition
+attribute scoped_node_reference = node  => type = "push_scoped_symbol", node_symbol = node, is_reference
+attribute symbol_definition = symbol    => type = "pop_symbol", symbol = symbol, is_definition
+attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol, is_reference
+
+attribute node_symbol = node            => symbol = (source-text node), source_node = node
+
+; ######
+; #     # #####   ####   ####  #####    ##   #    #  ####
+; #     # #    # #    # #    # #    #  #  #  ##  ## #
+; ######  #    # #    # #      #    # #    # # ## #  ####
+; #       #####  #    # #  ### #####  ###### #    #      #
+; #       #   #  #    # #    # #   #  #    # #    # #    #
+; #       #    #  ####   ####  #    # #    # #    #  ####
+;
+; ########################################################
+
+(program)@prog {
+  node @prog.defs
+  node @prog.lexical_scope
+  edge @prog.lexical_scope -> ROOT_NODE
+  edge ROOT_NODE -> @prog.defs
+}
+
+(program (_)@declaration)@prog {
+  edge @prog.defs -> @declaration.defs
+  edge @declaration.lexical_scope -> @prog.lexical_scope
+}
+
+
+;; =======================
+;;  Top level declarations
+;; =======================
+
+(import_declaration) @import {
+  node @import.defs
+  node @import.lexical_scope
+}
+
+(import_declaration
+  (scoped_identifier
+    name: (identifier) @scope_name)
+  ) @import {
+
+  node @scope_name.value
+  attr (@scope_name.value) node_definition = @scope_name
+
+  edge @import.defs -> @scope_name.value
+}
+
+(import_declaration
+  (scoped_identifier
+    scope: (scoped_identifier
+    name: (identifier) @name))) @import {
+  node @name.value
+  attr (@name.value) node_definition = @name
+
+  edge @import.defs -> @name.value
+}
+
+;;;;;;;;;;;;;;;;;;;;
+;; Class Expressions
+
+(class_declaration
+  name: (identifier) @name
+  body: (class_body) @class_body) @class {
+
+  node def
+  node @class.lexical_scope
+  node @class.defs
+  attr (def) node_definition = @name
+
+  node ref
+  attr (ref) node_reference = @name
+  edge ref -> @class.lexical_scope
+  edge @class_body.lexical_scope -> ref
+
+  edge @class_body.lexical_scope -> @class.lexical_scope
+
+  edge @class_body.lexical_scope -> @class_body.defs
+  attr (@class_body.lexical_scope -> @class_body.defs) precedence = 1
+  edge @class.defs -> def
+  edge def -> @class_body.defs
+
+  node this__expr_def
+  node @class.type
+
+  edge @class.lexical_scope -> this__expr_def
+
+  attr (this__expr_def) pop_symbol = "this", source_node = @class, empty_source_span
+  edge this__expr_def -> @class.type
+
+  attr (@class.type) pop_symbol = ":"
+
+  edge @class.type -> ref
+  attr (@class.type -> ref) precedence = 1
+}
+
+(class_declaration
+  superclass: (superclass
+    (type_identifier) @identifier) @superclass
+    body: (class_body) @class_body) @class {
+
+    node ref
+    attr (ref) node_reference = @identifier
+
+    edge ref -> @class.lexical_scope
+    edge @class_body.lexical_scope -> ref
+
+    node super__expr_def
+    node super__expr_def__typeof
+
+    edge @class.lexical_scope -> super__expr_def
+
+    attr (super__expr_def) pop_symbol = "super", source_node = @superclass, empty_source_span
+    edge super__expr_def -> super__expr_def__typeof
+
+    attr (super__expr_def__typeof) pop_symbol = ":"
+
+    edge super__expr_def__typeof -> ref
+    edge @class.type -> ref
+}
+
+(class_body) @class_body {
+  node @class_body.lexical_scope
+  node @class_body.defs
+}
+
+(class_body (_)@declaration)@class_body {
+  edge @class_body.defs -> @declaration.defs
+  edge @declaration.lexical_scope -> @class_body.lexical_scope
+}
+
+;; =====================
+;;  Member Declarations
+;; =====================
+
+(field_declaration
+  declarator: (variable_declarator
+    name: (_) @name
+  )
+) @field_decl
+{
+  node @field_decl.lexical_scope
+  node @field_decl.defs
+  node def
+  attr (def) node_definition = @name
+  edge @field_decl.defs -> def
+}
+
+(method_declaration
+  name: (identifier) @name
+  body: (block) @block) @method
+{
+  node @method.defs
+  node @method.lexical_scope
+
+  node member
+  edge @method.defs -> member
+
+  attr (member) pop_symbol = "."
+
+  node def
+  attr (def) node_definition = @name
+  edge member -> def
+}
+
+(method_declaration
+  body: (_) @stmt) @method
+{
+  edge @stmt.before_scope -> @method.lexical_scope
+}
+
+
+;; ============
+;;  Statements
+;; ============
+
+(expression_statement (_) @expr) @expr_stmt
+{
+  node @expr_stmt.before_scope
+  node @expr_stmt.after_scope
+  edge @expr.lexical_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
+}
+
+(block) @block {
+  node @block.before_scope
+  node @block.after_scope
+}
+
+(block
+  (_) @left
+  .
+  (_) @right
+)
+{
+  edge @right.before_scope -> @left.after_scope
+}
+
+(block
+  .
+  (_) @first) @block {
+  edge @first.before_scope -> @block.before_scope
+}
+
+(block
+  (_) @last
+  . ) @block {
+  edge @block.after_scope -> @last.after_scope
+}
+
+(return_statement) @return_stmt
+{
+  node @return_stmt.before_scope
+  node @return_stmt.after_scope
+}
+
+(local_variable_declaration
+  type: (_) @type
+  declarator: (variable_declarator
+    name: (_) @name
+  )
+) @local_var
+{
+  node def
+  attr (def) node_definition = @name
+  edge @local_var.after_scope -> def
+  edge @local_var.after_scope -> @local_var.before_scope
+  attr (@local_var.after_scope -> @local_var.before_scope) precedence = 1
+
+  edge @type.lexical_scope -> @local_var.before_scope
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+
+  edge def -> def__typeof
+
+  edge def__typeof -> @type.type
+}
+
+(local_variable_declaration
+  declarator: (variable_declarator
+    value: (_) @value
+  )
+) @local_var
+{
+  node @local_var.after_scope
+  node @local_var.before_scope
+}
+
+(local_variable_declaration
+  type: (generic_type
+    (type_identifier) @type
+    (type_arguments
+      (type_identifier) @type_identifier))) @local_var {
+  node @type_identifier.value
+  attr(@type_identifier.value) node_reference = @type_identifier
+
+  node @type.value
+  attr(@type.value) node_reference = @type
+
+  edge @type.value -> @local_var.after_scope
+  edge @type_identifier.value -> @local_var.after_scope
+}
+
+;; =====================
+;;  Primary Expressions
+;; =====================
+
+(primary_expression/identifier) @ident
+{
+  node ref
+  node ref__typeof
+
+  attr (ref) node_reference = @ident
+
+  edge ref -> @ident.lexical_scope
+
+  edge @ident.type -> ref__typeof
+
+  attr (ref__typeof) push_symbol = ":"
+  edge ref__typeof -> ref
+}
+
+(field_access) @field_access {
+  node @field_access.before_scope
+}
+
+(field_access
+  object: (super)
+  field: (identifier) @identifier) @field_access {
+  node ref
+  attr (ref) node_reference = @identifier
+  edge ref -> @field_access.lexical_scope
+}
+
+(method_invocation) @method_invocation
+{
+  node @method_invocation.before_scope
+  node @method_invocation.after_scope
+}
+
+; method calls with implicit receiver
+(method_invocation
+  !object
+  name: (identifier) @method_name) @method_invocation {
+  node member
+  node implicit_this
+  node implicit_this__typeof
+
+  node object__typeof
+
+  ; attr (implicit_this) node_reference = @method_invocation
+  attr (implicit_this) symbol_reference = "this", empty_source_span
+
+  ; receiver is implicitly "this"
+  edge implicit_this__typeof -> implicit_this
+  attr (implicit_this__typeof) push_symbol = ":"
+  edge implicit_this -> @method_invocation.lexical_scope
+
+  node expr_ref
+  attr (expr_ref) node_reference = @method_name
+  edge expr_ref -> member
+
+  attr (member) push_symbol = "."
+
+  edge member -> object__typeof
+  edge object__typeof -> implicit_this__typeof
+
+  node expr_ref__typeof
+  edge @method_invocation.type -> expr_ref__typeof
+
+  attr (expr_ref__typeof) push_symbol = ":"
+  edge expr_ref__typeof -> expr_ref
+}
+
+(local_variable_declaration
+  type: (type_identifier) @type
+  declarator: (variable_declarator
+    name: (identifier) @identifier
+    value: (object_creation_expression
+      type: (type_identifier) @object)
+  )) @local_variable {
+  node @object.value
+  attr (@object.value) node_reference = @object
+  node @type.value
+  attr(@type.value) node_reference = @type
+  edge @type.value -> @local_variable.after_scope
+  edge @local_variable.after_scope -> @object.value
+  edge @object.value -> @local_variable.after_scope
+}
+
+;; =============
+;;  Expressions
+;; =============
+
+[
+  ; FIXME: all expressions should be here
+  (assignment_expression)
+  (field_access)
+  (identifier)
+  (method_invocation)
+  (super)
+  (this)
+] @expr
+{
+  node @expr.type
+  node @expr.lexical_scope
+}
+
+[
+  (super)
+  (this)
+] @expr
+{
+
+  node expr_ref
+  node expr_ref__typeof
+
+  attr (expr_ref) node_reference = @expr
+  edge expr_ref -> @expr.lexical_scope
+
+  edge @expr.type -> expr_ref__typeof
+
+  attr (expr_ref__typeof) push_symbol = ":"
+  edge expr_ref__typeof -> expr_ref
+}
+
+(method_invocation
+  object: (_) @object
+  name: (identifier) @method_name) @method_invocation {
+    node member
+
+    edge @object.lexical_scope -> @method_invocation.lexical_scope
+
+    node expr_ref
+    attr (expr_ref) node_reference = @method_name
+    edge expr_ref -> member
+
+    attr (member) push_symbol = "."
+    edge member -> @object.type
+
+    node expr_ref__typeof
+    edge @method_invocation.type -> expr_ref__typeof
+
+    attr (expr_ref__typeof) push_symbol = ":"
+    edge expr_ref__typeof -> expr_ref
+}
+
+;; ==========
+;;  Types
+;; ==========
+
+[
+  (generic_type)
+  (integral_type)
+  (type_identifier)
+  (void_type)
+] @type
+{
+  node @type.lexical_scope
+  node @type.type
+}
+
+(type_identifier) @this
+{
+  attr (@this.type) node_reference = @this
+  edge @this.type -> @this.lexical_scope
+}
+
+;; ==========
+;;  Comments
+;; ==========
+
+(line_comment)@line_comment {
+  node @line_comment.before_scope
+  node @line_comment.after_scope
+  node @line_comment.lexical_defs
+  node @line_comment.lexical_scope
+  node @line_comment.defs
+
+  edge @line_comment.after_scope -> @line_comment.before_scope
+}
+
+(block_comment)@block_comment {
+  node @block_comment.before_scope
+  node @block_comment.after_scope
+
+  edge @block_comment.after_scope -> @block_comment.before_scope
+}

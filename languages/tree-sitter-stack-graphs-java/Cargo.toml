@@ -1,0 +1,40 @@
+[package]
+name = "tree-sitter-stack-graphs-java"
+version = "0.1.0"
+description = "Stack graphs for the Java programming language"
+
+homepage = "https://github.com/github/stack-graphs/tree/main/stack-graphs/languages/tree-sitter-stack-graphs-java"
+repository = "https://github.com/github/stack-graphs"
+license = "MIT OR Apache-2.0"
+readme = "languages/tree-sitter-stack-graphs-java/README.md"
+edition = "2021"
+
+authors = [
+  "Beka Valentine <bekavalentine@github.com>",
+  "Douglas Creager <dcreager@dcreager.net>",
+  "GitHub <opensource+stack-graphs@github.com>",
+  "Hendrik van Antwerpen <hendrikvanantwerpen@github.com>",
+  "Nina Kaufman <rnkaufman@github.com>",
+  "Rob Rix <robrix@github.com>",
+]
+
+keywords = ["tree-sitter", "stack-graphs", "java"]
+
+[[bin]]
+name = "tree-sitter-stack-graphs-java"
+path = "rust/bin.rs"
+
+[lib]
+path = "rust/lib.rs"
+test = false
+
+[[test]]
+name = "test"
+path = "rust/test.rs"
+harness = false # need to provide own main function to handle running tests
+
+[dependencies]
+anyhow = "1.0"
+clap = "3"
+tree-sitter-stack-graphs = { version = "~0.6.0", path = "../../tree-sitter-stack-graphs", features=["cli"] }
+tree-sitter-java = { git = "http://github.com/tree-sitter/tree-sitter-java", rev="09d650def6cdf7f479f4b78f595e9ef5b58ce31e" }
