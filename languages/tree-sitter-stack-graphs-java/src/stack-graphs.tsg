@@ -121,13 +121,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (class_declaration
   superclass: (superclass
-    (type_identifier) @identifier)
+    (type_identifier) @superclass_name)
     body: (class_body) @class_body) @class {
 
     node ref
-    attr (ref) node_reference = @identifier
+    attr (ref) node_reference = @superclass_name
 
-    edge @identifier.lexical_scope -> @class.lexical_scope
+    edge @superclass_name.lexical_scope -> @class.lexical_scope
 
     edge ref -> @class.lexical_scope
     edge @class_body.lexical_scope -> ref
@@ -137,7 +137,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     edge @class.lexical_scope -> super__expr_def
 
-    attr (super__expr_def) pop_symbol = "super", source_node = @identifier, empty_source_span
+    attr (super__expr_def) pop_symbol = "super", source_node = @superclass_name, empty_source_span
     edge super__expr_def -> super__expr_def__typeof
 
     attr (super__expr_def__typeof) pop_symbol = ":"
