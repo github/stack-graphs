@@ -1576,17 +1576,45 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     let partial_path_list = unsafe { &mut *partial_path_list };
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
-    partials
-        .find_all_partial_paths_in_file(
-            graph,
-            file,
-            &AtomicUsizeCancellationFlag(cancellation_flag),
-            |_graph, partials, mut path| {
-                path.ensure_both_directions(partials);
-                partial_path_list.partial_paths.push(path);
-            },
-        )
-        .into()
+    sg_partial_path_arena_find_partial_paths_in_file_inner(
+        graph,
+        partials,
+        file,
+        partial_path_list,
+        &AtomicUsizeCancellationFlag(cancellation_flag),
+    )
+    .into()
+}
+
+fn sg_partial_path_arena_find_partial_paths_in_file_inner(
+    graph: &StackGraph,
+    partials: &mut PartialPaths,
+    file: Handle<File>,
+    partial_path_list: &mut sg_partial_path_list,
+    cancellation_flag: &dyn CancellationFlag,
+) -> Result<(), CancellationError> {
+    let mut db = Database::new();
+    partials.find_minimal_partial_paths_set_in_file(
+        graph,
+        file,
+        cancellation_flag,
+        |graph, partials, path| {
+            db.add_partial_path(graph, partials, path);
+        },
+    )?;
+    #[allow(deprecated)]
+    ForwardPartialPathStitcher::find_locally_complete_partial_paths(
+        graph,
+        partials,
+        &mut db,
+        cancellation_flag,
+        |_graph, partials, path| {
+            let mut path = path.clone();
+            path.ensure_both_directions(partials);
+            partial_path_list.partial_paths.push(path);
+        },
+    )?;
+    Ok(())
 }
 
 /// A handle to a partial path in a partial path database.  A zero handle represents a missing

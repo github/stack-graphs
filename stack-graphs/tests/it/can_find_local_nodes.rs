@@ -20,9 +20,14 @@ fn check_local_nodes(graph: &StackGraph, file: &str, expected_local_nodes: &[&st
     let mut partials = PartialPaths::new();
     let mut database = Database::new();
     partials
-        .find_all_partial_paths_in_file(graph, file, &NoCancellation, |graph, partials, path| {
-            database.add_partial_path(graph, partials, path);
-        })
+        .find_minimal_partial_paths_set_in_file(
+            graph,
+            file,
+            &NoCancellation,
+            |graph, partials, path| {
+                database.add_partial_path(graph, partials, path);
+            },
+        )
         .expect("should never be cancelled");
 
     let mut results = BTreeSet::new();

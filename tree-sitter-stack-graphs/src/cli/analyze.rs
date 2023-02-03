@@ -216,14 +216,12 @@ impl AnalyzeArgs {
 
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
-        match partials.find_all_partial_paths_in_file(
+        match partials.find_minimal_partial_paths_set_in_file(
             &graph,
             file,
             &cancellation_flag.as_ref(),
             |g, ps, p| {
-                if p.is_complete_as_possible(g) {
-                    db.add_partial_path(g, ps, p);
-                }
+                db.add_partial_path(g, ps, p);
             },
         ) {
             Ok(_) => {}

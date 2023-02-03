@@ -579,6 +579,11 @@ impl Node {
         matches!(self, Node::Root(_))
     }
 
+    #[inline(always)]
+    pub fn is_endpoint(&self) -> bool {
+        self.is_definition() || self.is_exported_scope() || self.is_reference() || self.is_root()
+    }
+
     /// Returns this node's symbol, if it has one.  (_Pop symbol_, _pop scoped symbol_, _push
     /// symbol_, and _push scoped symbol_ nodes have symbols.)
     pub fn symbol(&self) -> Option<Handle<Symbol>> {

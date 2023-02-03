@@ -315,6 +315,15 @@ impl<H, T> SupplementalArena<H, T> {
     pub fn len(&self) -> usize {
         self.items.len()
     }
+
+    /// Iterate over the items in this arena.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
+        self.items
+            .iter()
+            .enumerate()
+            .skip(1)
+            .map(|(i, x)| (Handle::from_some(i as u32), unsafe { &*(x.as_ptr()) }))
+    }
 }
 
 impl<H, T> SupplementalArena<H, T>

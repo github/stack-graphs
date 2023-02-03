@@ -23,7 +23,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
     // Generate partial paths for everything in the database.
     for file in graph.iter_files() {
         partials
-            .find_all_partial_paths_in_file(
+            .find_minimal_partial_paths_set_in_file(
                 graph,
                 file,
                 &NoCancellation,
@@ -37,12 +37,16 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
     let references = graph
         .iter_nodes()
         .filter(|handle| graph[*handle].is_reference());
-    let complete_partial_paths = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+    let mut complete_partial_paths = Vec::new();
+    ForwardPartialPathStitcher::find_all_complete_partial_paths(
         graph,
         &mut partials,
         &mut db,
         references,
         &NoCancellation,
+        |_, _, p| {
+            complete_partial_paths.push(p.clone());
+        },
     )
     .expect("should never be cancelled");
     let results = complete_partial_paths

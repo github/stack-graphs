@@ -11,8 +11,11 @@ use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::json::Filter;
 use crate::json::JsonError;
+use crate::partial::PartialPath;
+use crate::partial::PartialPaths;
 use crate::paths::Path;
 use crate::paths::Paths;
+use crate::stitching::Database;
 
 static CSS: &'static str = include_str!("visualization/visualization.css");
 static D3: &'static str = include_str!("visualization/d3.v7.min.js");
@@ -29,12 +32,13 @@ impl StackGraph {
     pub fn to_html_string(
         &self,
         title: &str,
-        paths: &mut Paths,
+        partials: &mut PartialPaths,
+        db: &mut Database,
         filter: &dyn Filter,
     ) -> Result<String, JsonError> {
         let filter = VisualizationFilter(filter);
         let graph = self.to_json(&filter).to_string()?;
-        let paths = paths.to_json(self, &filter).to_string()?;
+        let paths = db.to_json(self, partials, &filter).to_string()?;
         let html = format!(
             r#"
 <!DOCTYPE html>
@@ -113,30 +117,21 @@ impl Filter for VisualizationFilter<'_> {
     }
 
     fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool {
-        if !self.0.include_path(graph, paths, path) {
-            return false;
-        }
-        if path.start_node == path.end_node {
-            return false;
-        }
-        if !match &graph[path.start_node] {
-            Node::PushScopedSymbol(_) | Node::PushSymbol(_) => true,
-            Node::Root(_) => true,
-            Node::Scope(node) => node.is_exported,
-            _ => false,
-        } {
-            return false;
-        }
-        if !match &graph[path.end_node] {
-            Node::PopScopedSymbol(_) | Node::PopSymbol(_) => {
-                path.symbol_stack.is_empty() && path.scope_stack.is_empty()
-            }
-            Node::Root(_) => true,
-            Node::Scope(node) => node.is_exported,
-            _ => false,
-        } {
-            return false;
-        }
-        return true;
+        self.0.include_path(graph, paths, path)
+            && !path.edges.is_empty()
+            && path.starts_at_reference(graph)
+            && (path.ends_at_definition(graph) || path.ends_in_jump(graph))
+    }
+
+    fn include_partial_path(
+        &self,
+        graph: &StackGraph,
+        paths: &PartialPaths,
+        path: &PartialPath,
+    ) -> bool {
+        self.0.include_partial_path(graph, paths, path)
+            && !path.edges.is_empty()
+            && path.starts_at_reference(graph)
+            && (path.ends_at_definition(graph) || path.ends_in_jump(graph))
     }
 }

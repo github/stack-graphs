@@ -14,7 +14,9 @@ use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::json::Filter;
-use stack_graphs::paths::Paths;
+use stack_graphs::partial::PartialPaths;
+use stack_graphs::stitching::Database;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
@@ -269,7 +271,9 @@ impl TestArgs {
                 ));
             }
         }
-        let result = test.run(cancellation_flag)?;
+        let mut partials = PartialPaths::new();
+        let mut db = Database::new();
+        let result = test.run(&mut partials, &mut db, cancellation_flag)?;
         let success = self.handle_result(&result, &mut file_status)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
@@ -277,9 +281,11 @@ impl TestArgs {
                 test_root,
                 test_path,
                 &test.graph,
-                &mut test.paths,
+                &mut partials,
+                &mut db,
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
+                cancellation_flag,
             )?;
         }
         Ok(result)
@@ -343,36 +349,47 @@ impl TestArgs {
         test_root: &Path,
         test_path: &Path,
         graph: &StackGraph,
-        paths: &mut Paths,
+        partials: &mut PartialPaths,
+        db: &mut Database,
         filter: &dyn Filter,
         success: bool,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> anyhow::Result<()> {
-        if let Some(path) = self
+        let save_graph = self
             .save_graph
             .as_ref()
-            .map(|spec| spec.format(test_root, test_path))
-        {
+            .map(|spec| spec.format(test_root, test_path));
+        let save_paths = self
+            .save_paths
+            .as_ref()
+            .map(|spec| spec.format(test_root, test_path));
+        let save_visualization = self
+            .save_visualization
+            .as_ref()
+            .map(|spec| spec.format(test_root, test_path));
+
+        if let Some(path) = save_graph {
             self.save_graph(&path, &graph, filter)?;
             if !success || !self.quiet {
                 println!("{}: graph at {}", test_path.display(), path.display());
             }
         }
-        if let Some(path) = self
-            .save_paths
-            .as_ref()
-            .map(|spec| spec.format(test_root, test_path))
-        {
-            self.save_paths(&path, paths, graph, filter)?;
+
+        let mut db = if save_paths.is_some() || save_visualization.is_some() {
+            self.compute_paths(graph, partials, db, filter, cancellation_flag)?
+        } else {
+            Database::new()
+        };
+
+        if let Some(path) = save_paths {
+            self.save_paths(&path, graph, partials, &mut db, filter)?;
             if !success || !self.quiet {
                 println!("{}: paths at {}", test_path.display(), path.display());
             }
         }
-        if let Some(path) = self
-            .save_visualization
-            .as_ref()
-            .map(|spec| spec.format(test_root, test_path))
-        {
-            self.save_visualization(&path, paths, graph, filter, &test_path)?;
+
+        if let Some(path) = save_visualization {
+            self.save_visualization(&path, graph, partials, &mut db, filter, &test_path)?;
             if !success || !self.quiet {
                 println!(
                     "{}: visualization at {}",
@@ -399,14 +416,45 @@ impl TestArgs {
         Ok(())
     }
 
+    fn compute_paths(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+        filter: &dyn Filter,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> anyhow::Result<Database> {
+        let references = graph
+            .iter_nodes()
+            .filter(|n| filter.include_node(graph, n))
+            .collect::<Vec<_>>();
+        let mut paths = Vec::new();
+        ForwardPartialPathStitcher::find_all_complete_partial_paths(
+            graph,
+            partials,
+            db,
+            references.clone(),
+            &cancellation_flag,
+            |_, _, p| {
+                paths.push(p.clone());
+            },
+        )?;
+        let mut db = Database::new();
+        for path in paths {
+            db.add_partial_path(graph, partials, path);
+        }
+        Ok(db)
+    }
+
     fn save_paths(
         &self,
         path: &Path,
-        paths: &mut Paths,
         graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
         filter: &dyn Filter,
     ) -> anyhow::Result<()> {
-        let json = paths.to_json(graph, filter).to_string_pretty()?;
+        let json = db.to_json(graph, partials, filter).to_string_pretty()?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -418,12 +466,13 @@ impl TestArgs {
     fn save_visualization(
         &self,
         path: &Path,
-        paths: &mut Paths,
         graph: &StackGraph,
+        paths: &mut PartialPaths,
+        db: &mut Database,
         filter: &dyn Filter,
         test_path: &Path,
     ) -> anyhow::Result<()> {
-        let html = graph.to_html_string(&format!("{}", test_path.display()), paths, filter)?;
+        let html = graph.to_html_string(&format!("{}", test_path.display()), paths, db, filter)?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
