@@ -309,8 +309,8 @@
 //! ```
 
 use controlled_option::ControlledOption;
-use lazy_static::lazy_static;
 use lsp_positions::SpanCalculator;
+use once_cell::sync::Lazy;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
@@ -368,19 +368,16 @@ static SYMBOL_ATTR: &'static str = "symbol";
 static TYPE_ATTR: &'static str = "type";
 
 // Expected attributes per node type
-lazy_static! {
-    static ref DROP_SCOPES_ATTRS: HashSet<&'static str> = HashSet::from([TYPE_ATTR]);
-    static ref POP_SCOPED_SYMBOL_ATTRS: HashSet<&'static str> =
-        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]);
-    static ref POP_SYMBOL_ATTRS: HashSet<&'static str> =
-        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]);
-    static ref PUSH_SCOPED_SYMBOL_ATTRS: HashSet<&'static str> =
-        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, SCOPE_ATTR, IS_REFERENCE_ATTR]);
-    static ref PUSH_SYMBOL_ATTRS: HashSet<&'static str> =
-        HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_REFERENCE_ATTR]);
-    static ref SCOPE_ATTRS: HashSet<&'static str> =
-        HashSet::from([TYPE_ATTR, IS_EXPORTED_ATTR, IS_ENDPOINT_ATTR]);
-}
+static POP_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]));
+static POP_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]));
+static PUSH_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, SCOPE_ATTR, IS_REFERENCE_ATTR]));
+static PUSH_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_REFERENCE_ATTR]));
+static SCOPE_ATTRS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| HashSet::from([TYPE_ATTR, IS_EXPORTED_ATTR, IS_ENDPOINT_ATTR]));
 
 // Edge attribute names
 static PRECEDENCE_ATTR: &'static str = "precedence";

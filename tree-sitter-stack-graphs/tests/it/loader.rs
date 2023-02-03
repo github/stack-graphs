@@ -5,7 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use std::path::PathBuf;
@@ -15,13 +15,13 @@ use tree_sitter_stack_graphs::loader::Loader;
 use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
-lazy_static! {
-    static ref PATH: PathBuf = PathBuf::from("test.py");
-    static ref TSG: String = r#"
+static PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("test.py"));
+static TSG: Lazy<String> = Lazy::new(|| {
+    r#"
       (module) {}
     "#
-    .to_string();
-}
+    .to_string()
+});
 
 #[test]
 fn can_load_from_provided_language_configuration() {

@@ -58,10 +58,10 @@
 //! Any content before the first fragment header of the file is ignored, and will not be part of the test.
 
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use lsp_positions::Position;
 use lsp_positions::PositionedSubstring;
 use lsp_positions::SpanCalculator;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use stack_graphs::arena::Handle;
 use stack_graphs::assert::Assertion;
@@ -85,15 +85,14 @@ const DEFINED: &'static str = "defined";
 const DEFINES: &'static str = "defines";
 const REFERS: &'static str = "refers";
 
-lazy_static! {
-    static ref PATH_REGEX: Regex = Regex::new(r#"---\s*path:\s*([^\s]+)\s*---"#).unwrap();
-    static ref GLOBAL_REGEX: Regex =
-        Regex::new(r#"---\s*global:\s*([^\s]+)=([^\s]+)\s*---"#).unwrap();
-    static ref ASSERTION_REGEX: Regex =
-        Regex::new(r#"(\^)\s*(\w+):\s*([^\s,]+(?:\s*,\s*[^\s,]+)*)?"#).unwrap();
-    static ref LINE_NUMBER_REGEX: Regex = Regex::new(r#"\d+"#).unwrap();
-    static ref NAME_REGEX: Regex = Regex::new(r#"[^\s,]+"#).unwrap();
-}
+static PATH_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"---\s*path:\s*([^\s]+)\s*---"#).unwrap());
+static GLOBAL_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"---\s*global:\s*([^\s]+)=([^\s]+)\s*---"#).unwrap());
+static ASSERTION_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(\^)\s*(\w+):\s*([^\s,]+(?:\s*,\s*[^\s,]+)*)?"#).unwrap());
+static LINE_NUMBER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\d+"#).unwrap());
+static NAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"[^\s,]+"#).unwrap());
 
 /// An error that can occur while parsing tests
 #[derive(Debug, Error)]

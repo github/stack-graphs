@@ -39,7 +39,22 @@ Alternatively, the program can be invoked via NPM as follows:
 $ npx tree-sitter-stack-graphs
 ```
 
-Check out our [examples](https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/examples/) for more details on how to work with the CLI.
+## Getting Started
+
+Starting a new project to develop stack graph definitions for your favourite language
+is as easy as running the `init` command:
+
+``` sh
+$ tree-sitter-stack-graphs init PROJECT_DIR
+```
+
+Answer the questions to provide information about the language, the grammar dependency, and
+the project and hit `Generate` to generate the new project. Check out `PROJECT_DIR/README.md`
+to find out how to start developing.
+
+Also check out our [examples][] for more details on how to work with the CLI.
+
+[examples]: https://github.com/github/stack-graphs/blob/main/tree-sitter-stack-graphs/examples/
 
 ## Development
 
