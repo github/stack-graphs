@@ -86,6 +86,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;;;;;;;;;;;;;;;;;;;
 ;; Class Expressions
 
+; Classes (and other declarations with members, e.g. records, enums, interfaces) define a name in their enclosing scope as well as names belonging to the class itself (i.e. statics) and instances of the class.
+;
+; They additionally implicitly define `this` available in the bodies of instance methods, and subclasses further define `super`. The nodes defining these point at the types of the class and superclass, respectively.
+
 (class_declaration
   name: (identifier) @name
   body: (class_body) @class_body) @class {
@@ -1110,7 +1114,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ] @type
 {
   node @type.lexical_scope
-  node @type.type
+  node @type.type ; FIXME: is this actually needed?
 }
 
 [
