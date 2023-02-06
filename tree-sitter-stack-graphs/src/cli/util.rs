@@ -13,6 +13,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use std::time::Instant;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 
 use crate::cli::MAX_PARSE_ERRORS;
@@ -164,6 +165,8 @@ pub struct FileStatusLogger<'a> {
     path: &'a Path,
     verbose: bool,
     path_logged: bool,
+    #[cfg(debug_assertions)]
+    processing_started: Option<Instant>,
 }
 
 impl<'a> FileStatusLogger<'a> {
@@ -172,50 +175,81 @@ impl<'a> FileStatusLogger<'a> {
             path,
             verbose,
             path_logged: false,
+            #[cfg(debug_assertions)]
+            processing_started: None,
         }
     }
 
-    pub fn processing(&mut self) -> Result<(), anyhow::Error> {
-        self.print_path(false)?;
-        Ok(())
-    }
-
-    pub fn ok(&mut self, status: &str) -> Result<(), anyhow::Error> {
-        self.print_path(false)?;
-        if self.verbose {
-            println!("{}", status.green());
-            self.path_logged = false;
+    pub fn processing(&mut self) -> std::io::Result<()> {
+        #[cfg(debug_assertions)]
+        {
+            self.processing_started = Some(Instant::now());
         }
-        Ok(())
-    }
-
-    pub fn info(&mut self, status: &str) -> Result<(), anyhow::Error> {
-        self.print_path(true)?;
-        println!("{}", status.dimmed());
-        self.path_logged = false;
-        Ok(())
-    }
-
-    pub fn warn(&mut self, status: &str) -> Result<(), anyhow::Error> {
-        self.print_path(true)?;
-        println!("{}", status.yellow());
-        self.path_logged = false;
-        Ok(())
-    }
-
-    pub fn error(&mut self, status: &str) -> Result<(), anyhow::Error> {
-        self.print_path(true)?;
-        println!("{}", status.red());
-        self.path_logged = false;
-        Ok(())
-    }
-
-    fn print_path(&mut self, force: bool) -> Result<(), anyhow::Error> {
-        if (self.verbose || force) && !self.path_logged {
-            print!("{}: ", self.path.display());
-            std::io::stdout().flush()?;
-            self.path_logged = true;
+        if !self.verbose {
+            return Ok(());
         }
-        Ok(())
+        self.print_path();
+        std::io::stdout().flush()
+    }
+
+    pub fn ok(&mut self, status: &str) -> std::io::Result<()> {
+        if !self.verbose {
+            return Ok(());
+        }
+        self.print_path();
+        print!("{}", status.green());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        std::io::stdout().flush()
+    }
+
+    pub fn info(&mut self, status: &str) -> std::io::Result<()> {
+        if !self.verbose {
+            return Ok(());
+        }
+        self.print_path();
+        print!("{}", status.dimmed());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        std::io::stdout().flush()
+    }
+
+    pub fn warn(&mut self, status: &str) -> std::io::Result<()> {
+        self.print_path();
+        print!("{}", status.yellow());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        std::io::stdout().flush()
+    }
+
+    pub fn error(&mut self, status: &str) -> std::io::Result<()> {
+        self.print_path();
+        print!("{}", status.red());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        std::io::stdout().flush()
+    }
+
+    fn print_path(&mut self) {
+        if self.path_logged {
+            return;
+        }
+        print!("{}: ", self.path.display());
+        self.path_logged = true;
+    }
+
+    #[cfg(debug_assertions)]
+    fn print_processing_time(&mut self) {
+        if let Some(processing_started) = self.processing_started {
+            print!(" [{:.2} s]", processing_started.elapsed().as_secs_f64());
+        }
     }
 }
