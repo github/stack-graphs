@@ -161,13 +161,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @param.lexical_scope -> @class.lexical_scope
 }
 
-(type_parameter (type_identifier) @id) @this {
+(type_parameter (type_identifier) @name) @this {
   node @this.def
   node @this.lexical_scope
 
-  edge @id.lexical_scope -> @this.lexical_scope
+  edge @name.lexical_scope -> @this.lexical_scope
 
-  attr (@this.def) node_definition = @id
+  attr (@this.def) node_definition = @name
 }
 
 (spread_parameter) @spread_param {
@@ -391,7 +391,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @method.defs -> @param.def
 }
 
-(formal_parameter type: (_) @type (_) @id) @param
+(formal_parameter type: (_) @type (_) @name) @param
 {
   node @param.def
   node @param.lexical_scope
@@ -399,7 +399,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @type.lexical_scope -> @param.lexical_scope
 
-  attr (@param.def) node_definition = @id
+  attr (@param.def) node_definition = @name
 
   attr (def__typeof) pop_symbol = ":"
   edge def__typeof -> @type.type
@@ -520,12 +520,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @expr_stmt.after_scope -> @expr_stmt.before_scope
 }
 
-(enhanced_for_statement type: (_) @type (_) @id value: (_) @value body: (_) @body) @stmt {
+(enhanced_for_statement type: (_) @type (_) @name value: (_) @value body: (_) @body) @stmt {
   edge @type.lexical_scope -> @stmt.before_scope
   edge @value.lexical_scope -> @stmt.before_scope
   node def
   node defs
-  attr (def) node_definition = @id
+  attr (def) node_definition = @name
   edge defs -> @stmt.before_scope
   edge defs -> def
   edge @body.before_scope -> defs
@@ -558,7 +558,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @alternative.before_scope -> @stmt.before_scope
 }
 
-(labeled_statement (identifier) @id (statement) @child) @stmt {
+(labeled_statement (identifier) @name (statement) @child) @stmt {
   edge @child.before_scope -> @stmt.before_scope
   edge @stmt.after_scope -> @child.after_scope
   ; FIXME: labels
@@ -643,10 +643,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
-(try_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @id) body: (_) @body)) @stmt {
+(try_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @name) body: (_) @body)) @stmt {
   node def
   node defs
-  attr (def) node_definition = @id
+  attr (def) node_definition = @name
   edge defs -> def
   edge @body.before_scope -> defs
   edge defs -> @stmt.before_scope
@@ -696,12 +696,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @this.after_scope
 }
 
-(resource type: (_) @type (_) @id value: (_) @value) @this {
+(resource type: (_) @type (_) @name value: (_) @value) @this {
   edge @type.lexical_scope -> @this.before_scope
   edge @value.lexical_scope -> @this.before_scope
 
   node def
-  attr (def) node_definition = @id
+  attr (def) node_definition = @name
 
   node def__typeof
   attr (def__typeof) pop_symbol = ":"
@@ -714,19 +714,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @this.after_scope -> @this.before_scope
 }
 
-(resource . (identifier) @id .) @this {
-  node @id.lexical_scope
-  node @id.type
+(resource . (identifier) @name .) @this {
+  node @name.lexical_scope
+  node @name.type
 
   node ref
   node ref__typeof
 
-  attr (ref) node_reference = @id
+  attr (ref) node_reference = @name
 
-  edge ref -> @id.lexical_scope
-  edge @id.lexical_scope -> @this.before_scope
+  edge ref -> @name.lexical_scope
+  edge @name.lexical_scope -> @this.before_scope
 
-  edge @id.type -> ref__typeof
+  edge @name.type -> ref__typeof
 
   attr (ref__typeof) push_symbol = ":"
   edge ref__typeof -> ref
@@ -739,10 +739,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @this.after_scope -> @this.before_scope
 }
 
-(try_with_resources_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @id) body: (_) @body)) @stmt {
+(try_with_resources_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @name) body: (_) @body)) @stmt {
   node def
   node defs
-  attr (def) node_definition = @id
+  attr (def) node_definition = @name
   edge defs -> def
   edge @body.before_scope -> defs
   edge defs -> @stmt.before_scope
@@ -797,7 +797,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type.lexical_scope -> @this.lexical_scope
 }
 
-(primary_expression/identifier) @ident
+(primary_expression/identifier) @name
 {
   node member
   node implicit_this
@@ -808,12 +808,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (implicit_this) symbol_reference = "this", empty_source_span
   edge implicit_this__typeof -> implicit_this
   attr (implicit_this__typeof) push_symbol = ":"
-  edge implicit_this -> @ident.lexical_scope
+  edge implicit_this -> @name.lexical_scope
 
   node ref
-  attr (ref) node_reference = @ident
-  edge ref -> @ident.lexical_scope
-  attr (ref -> @ident.lexical_scope) precedence = 1
+  attr (ref) node_reference = @name
+  edge ref -> @name.lexical_scope
+  attr (ref -> @name.lexical_scope) precedence = 1
   edge ref -> member
 
   attr (member) push_symbol = "."
@@ -822,7 +822,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge object__typeof -> implicit_this__typeof
 
   node ref__typeof
-  edge @ident.type -> ref__typeof
+  edge @name.type -> ref__typeof
 
   attr (ref__typeof) push_symbol = ":"
   edge ref__typeof -> ref
@@ -830,13 +830,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (field_access
   object: (_) @object
-  field: (identifier) @identifier) @field_access {
+  field: (identifier) @name) @field_access {
   node member
 
   edge @object.lexical_scope -> @field_access.lexical_scope
 
   node ref
-  attr (ref) node_reference = @identifier
+  attr (ref) node_reference = @name
   edge ref -> member
 
   attr (member) push_symbol = "."
@@ -897,11 +897,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @lhs.lexical_scope -> @this.lexical_scope
 }
 
-(method_reference . (_) @lhs (identifier) @id) @this {
+(method_reference . (_) @lhs (identifier) @name) @this {
   node @this.member
 
   node expr_ref
-  attr (expr_ref) node_reference = @id
+  attr (expr_ref) node_reference = @name
   edge expr_ref -> @this.member
 
   attr (@this.member) push_symbol = "."
@@ -914,7 +914,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge expr_ref__typeof -> expr_ref
 }
 
-(method_reference . (identifier) @lhs (identifier) @id) @this {
+(method_reference . (identifier) @lhs (identifier) @name) @this {
   ; @lhs could be a type name
   node ref
   attr (ref) node_reference = @lhs
@@ -947,10 +947,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @expr.lexical_scope
 }
 
-(assignment_expression left: (identifier) @ident) @this {
+(assignment_expression left: (identifier) @name) @this {
   ; FIXME: can we combine this with primary_expression/identifier?
-  node @ident.lexical_scope
-  node @ident.type
+  node @name.lexical_scope
+  node @name.type
   node member
   node implicit_this
   node implicit_this__typeof
@@ -960,12 +960,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (implicit_this) symbol_reference = "this", empty_source_span
   edge implicit_this__typeof -> implicit_this
   attr (implicit_this__typeof) push_symbol = ":"
-  edge implicit_this -> @ident.lexical_scope
+  edge implicit_this -> @name.lexical_scope
 
   node ref
-  attr (ref) node_reference = @ident
-  edge ref -> @ident.lexical_scope
-  attr (ref -> @ident.lexical_scope) precedence = 1
+  attr (ref) node_reference = @name
+  edge ref -> @name.lexical_scope
+  attr (ref -> @name.lexical_scope) precedence = 1
   edge ref -> member
 
   attr (member) push_symbol = "."
@@ -974,12 +974,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge object__typeof -> implicit_this__typeof
 
   node ref__typeof
-  edge @ident.type -> ref__typeof
+  edge @name.type -> ref__typeof
 
   attr (ref__typeof) push_symbol = ":"
   edge ref__typeof -> ref
 
-  edge @ident.lexical_scope -> @this.lexical_scope
+  edge @name.lexical_scope -> @this.lexical_scope
 }
 
 (assignment_expression left: (field_access) @access) @this {
