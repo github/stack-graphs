@@ -195,6 +195,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;  Member Declarations
 ;; =====================
 
+; Member declarations can occur as members of classes, enums, etc. They propagate lexical scope and usually define one or more names, available in `defs`.
+
 [
   (class_declaration)
   (enum_declaration)
@@ -207,6 +209,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (record_declaration)
 ] @decl
 {
+  ; FIXME: can we get away with defining one and only one thing for each of these, and therefore having a `.def` node instead of `.defs`?
   node @decl.defs
   node @decl.lexical_scope
 }
@@ -432,6 +435,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ============
 ;;  Statements
 ;; ============
+
+; Statements are sequenced one after the next, and some (local variable declarations) bring names into scope/shadow existing names for subsequent statements. Thus, instead of having a lexical scope, they have before and after scopes; the before scope points to the previous statement, or the parent scope for the first statement in a sequence, while the after scope points either at the before scope (if no variable is bound) or at a node referencing any variables the statement binds.
 
 [
   (assert_statement)
@@ -921,6 +926,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;  Expressions
 ;; =============
 
+; Expressions have a lexical scope (propagated to child expressions) and a type. The lexical scope is used for lexical name lookup, while types enable type-based name lookup (for field accesses, method lookup, and so forth).
+
 [
   (array_access)
   (array_initializer)
@@ -1087,6 +1094,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ==========
 ;;  Types
 ;; ==========
+
+; Types have a lexical scope for type name lookup.
 
 [
   (annotated_type)
