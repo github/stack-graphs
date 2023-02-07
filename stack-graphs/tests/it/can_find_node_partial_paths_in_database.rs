@@ -14,7 +14,6 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
-use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -28,29 +27,17 @@ fn check_node_partial_paths(
     let id = NodeID::new_in_file(file, id.1);
     let node = graph.node_for_id(id).expect("Cannot find node");
     let mut partials = PartialPaths::new();
-    let mut db0 = Database::new();
+    let mut db = Database::new();
     partials
         .find_minimal_partial_paths_set_in_file(
             graph,
             file,
             &NoCancellation,
             |graph, partials, path| {
-                db0.add_partial_path(graph, partials, path);
+                db.add_partial_path(graph, partials, path);
             },
         )
         .expect("should never be cancelled");
-    let mut db = Database::new();
-    #[allow(deprecated)]
-    ForwardPartialPathStitcher::find_locally_complete_partial_paths(
-        graph,
-        &mut partials,
-        &mut db0,
-        &NoCancellation,
-        |g, ps, p| {
-            db.add_partial_path(g, ps, p.clone());
-        },
-    )
-    .expect("should never be cancelled");
 
     let mut results = Vec::<Handle<PartialPath>>::new();
     db.find_candidate_partial_paths_from_node(graph, &mut partials, node, &mut results);
@@ -77,8 +64,7 @@ fn class_field_through_function_parameter() {
         &mut graph,
         ("main.py", 10),
         &[
-            "<%1> ($1) [main.py(10) reference bar] -> [root] <a.foo()/([main.py(7)],$1).bar,%1> ($1)",
-            "<%1> ($1) [main.py(10) reference bar] -> [root] <b.foo()/([main.py(7)],$1).bar,%1> ($1)",
+            "<%1> ($1) [main.py(10) reference bar] -> [main.py(13) reference foo] <foo()/([main.py(7)],$1).bar,%1> ($1)",
         ],
     );
     check_node_partial_paths(
@@ -99,7 +85,7 @@ fn cyclic_imports_python() {
     check_node_partial_paths(
         &mut graph,
         ("main.py", 6),
-        &["<%1> ($1) [main.py(6) reference foo] -> [root] <a.foo,%1> ($1)"],
+        &["<%1> ($1) [main.py(6) reference foo] -> [main.py(8) reference a] <a.foo,%1> ($1)"],
     );
     check_node_partial_paths(
         &mut graph,
@@ -119,15 +105,12 @@ fn cyclic_imports_rust() {
     check_node_partial_paths(
         &mut graph,
         ("test.rs", 101),
-        &[
-            "<%1> ($1) [test.rs(101) reference FOO] -> [test.rs(204) definition BAR] <%1> ($1)",
-            "<%1> ($1) [test.rs(101) reference FOO] -> [test.rs(304) definition FOO] <%1> ($1)",
-        ],
+        &["<%1> ($1) [test.rs(101) reference FOO] -> [test.rs(103) reference a] <a::FOO,%1> ($1)"],
     );
     check_node_partial_paths(
         &mut graph,
         ("test.rs", 305),
-        &["<%1> ($1) [test.rs(305) reference BAR] -> [test.rs(204) definition BAR] <%1> ($1)"],
+        &["<%1> ($1) [test.rs(305) reference BAR] -> [test.rs(307) reference a] <a::BAR,%1> ($1)"],
     );
 }
 
@@ -137,7 +120,7 @@ fn sequenced_import_star() {
     check_node_partial_paths(
         &mut graph,
         ("main.py", 6),
-        &["<%1> ($1) [main.py(6) reference foo] -> [root] <a.foo,%1> ($1)"],
+        &["<%1> ($1) [main.py(6) reference foo] -> [main.py(8) reference a] <a.foo,%1> ($1)"],
     );
     check_node_partial_paths(
         &mut graph,

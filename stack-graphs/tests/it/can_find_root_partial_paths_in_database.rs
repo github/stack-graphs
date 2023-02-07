@@ -17,7 +17,6 @@ use stack_graphs::paths::Paths;
 use stack_graphs::paths::ScopedSymbol;
 use stack_graphs::paths::SymbolStack;
 use stack_graphs::stitching::Database;
-use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::SymbolStackKey;
 use stack_graphs::NoCancellation;
 
@@ -32,29 +31,17 @@ fn check_root_partial_paths(
     let file = graph.get_file_unchecked(file);
     let mut paths = Paths::new();
     let mut partials = PartialPaths::new();
-    let mut db0 = Database::new();
+    let mut db = Database::new();
     partials
         .find_minimal_partial_paths_set_in_file(
             graph,
             file,
             &NoCancellation,
             |graph, partials, path| {
-                db0.add_partial_path(graph, partials, path);
+                db.add_partial_path(graph, partials, path);
             },
         )
         .expect("should never be cancelled");
-    let mut db = Database::new();
-    #[allow(deprecated)]
-    ForwardPartialPathStitcher::find_locally_complete_partial_paths(
-        graph,
-        &mut partials,
-        &mut db0,
-        &NoCancellation,
-        |g, ps, p| {
-            db.add_partial_path(g, ps, p.clone());
-        },
-    )
-    .expect("should never be cancelled");
 
     let mut symbol_stack = SymbolStack::empty();
     for symbol in precondition.iter().rev() {
@@ -92,11 +79,7 @@ fn class_field_through_function_parameter() {
         &mut graph,
         "main.py",
         &["__main__", ".", "baz"],
-        &[
-            "<__main__.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
-            "<__main__.,%2> ($1) [root] -> [root] <b.,%2> ($1)",
-            "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
-        ],
+        &["<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)"],
     );
     check_root_partial_paths(
         &mut graph,
@@ -119,28 +102,19 @@ fn cyclic_imports_python() {
         &mut graph,
         "main.py",
         &["__main__", ".", "baz"],
-        &[
-            "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
-            "<__main__.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
-        ],
+        &["<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)"],
     );
     check_root_partial_paths(
         &mut graph,
         "a.py",
         &["a", ".", "baz"],
-        &[
-            "<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)",
-            "<a.,%2> ($1) [root] -> [root] <b.,%2> ($1)",
-        ],
+        &["<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)"],
     );
     check_root_partial_paths(
         &mut graph,
         "b.py",
         &["b", ".", "baz"],
-        &[
-            "<b,%1> ($1) [root] -> [b.py(0) definition b] <%1> ($1)",
-            "<b.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
-        ],
+        &["<b,%1> ($1) [root] -> [b.py(0) definition b] <%1> ($1)"],
     );
 }
 
@@ -164,19 +138,13 @@ fn sequenced_import_star() {
         &mut graph,
         "main.py",
         &["__main__", ".", "baz"],
-        &[
-            "<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)",
-            "<__main__.,%2> ($1) [root] -> [root] <a.,%2> ($1)",
-        ],
+        &["<__main__,%1> ($1) [root] -> [main.py(0) definition __main__] <%1> ($1)"],
     );
     check_root_partial_paths(
         &mut graph,
         "a.py",
         &["a", ".", "baz"],
-        &[
-            "<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)",
-            "<a.,%2> ($1) [root] -> [root] <b.,%2> ($1)",
-        ],
+        &["<a,%1> ($1) [root] -> [a.py(0) definition a] <%1> ($1)"],
     );
     check_root_partial_paths(
         &mut graph,

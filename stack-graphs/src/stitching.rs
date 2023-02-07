@@ -725,10 +725,8 @@ pub struct ForwardPartialPathStitcher {
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
-    should_extend: Box<ShouldExtend>,
+    should_extend: fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
 }
-
-type ShouldExtend = dyn Fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool;
 
 impl ForwardPartialPathStitcher {
     /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack
@@ -787,7 +785,7 @@ impl ForwardPartialPathStitcher {
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
-            should_extend: Box::new(|_, _, _| true),
+            should_extend: |_, _, _| true,
         }
     }
 
@@ -813,7 +811,7 @@ impl ForwardPartialPathStitcher {
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
-            should_extend: Box::new(|_, _, _| true),
+            should_extend: |_, _, _| true,
         }
     }
 
@@ -844,6 +842,14 @@ impl ForwardPartialPathStitcher {
     /// paths found in the previous phase, with no additional bound.
     pub fn set_max_work_per_phase(&mut self, max_work_per_phase: usize) {
         self.max_work_per_phase = max_work_per_phase;
+    }
+
+    /// Sets a condition that determines if a partial path is a candidate that should be extended.
+    pub fn set_should_extend(
+        &mut self,
+        should_extend: fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
+    ) {
+        self.should_extend = should_extend;
     }
 
     /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
@@ -896,15 +902,13 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                if new_partial_path.start_node != partial_path.start_node {
-                    copious_debugging!("        is invalid: slips off of starting node");
+                if !new_partial_path.is_productive(partials) {
+                    copious_debugging!("        is invalid: not productive");
                     continue;
                 }
             }
             copious_debugging!("        is {}", new_partial_path.display(graph, partials));
-            if new_partial_path.is_productive(partials) {
-                self.next_iteration.push_back(new_partial_path);
-            }
+            self.next_iteration.push_back(new_partial_path);
         }
 
         extension_count
@@ -988,78 +992,13 @@ impl ForwardPartialPathStitcher {
     {
         let mut stitcher =
             ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
+        stitcher.set_should_extend(|g, _, p| p.starts_at_reference(g));
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             let complete_partial_paths = stitcher
                 .previous_phase_partial_paths()
                 .filter(|partial_path| partial_path.is_complete(graph));
             for path in complete_partial_paths {
-                visit(graph, partials, path);
-            }
-            stitcher.process_next_phase(graph, partials, db);
-        }
-        Ok(())
-    }
-
-    /// Finds a set of locally complete partial paths, calling the `visit` closure for each one.
-    ///
-    /// This functions computes paths that
-    ///  (a) start at references, exported scopes, or the root,
-    ///  (b) end at definitions, exported scopes, jump-to-scope nodes, or the root, and
-    ///  (c) do not go through the root node.
-    /// If the partial paths in de provided database are file-local, the resutling paths set will
-    /// contain all paths that are locally complete, or end at a file boundary. The set of paths
-    /// may contain paths that can be constructed by stitching other paths in the result set.
-    ///
-    /// This function will not return until all reachable partial paths have been processed, so
-    /// your database must already contain all partial paths that might be needed.  If you have a
-    /// very large stack graph stored in some other storage system, and want more control over
-    /// lazily loading only the necessary pieces, then you should code up your own loop that calls
-    /// [`process_next_phase`][] manually.
-    ///
-    /// [`process_next_phase`]: #method.process_next_phase
-    #[deprecated = "This method replicates old PartialPaths::find_all_partial_paths_in_file behavior. It has poor performance because it computes more paths than necessary, and users should use PartialPaths::find_minimal_partial_paths_set_in_file instead."]
-    pub fn find_locally_complete_partial_paths<F>(
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        db: &mut Database,
-        cancellation_flag: &dyn CancellationFlag,
-        mut visit: F,
-    ) -> Result<(), CancellationError>
-    where
-        F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
-    {
-        fn is_start_node(graph: &StackGraph, node: Handle<Node>) -> bool {
-            let node = &graph[node];
-            node.is_reference() || node.is_exported_scope() || node.is_root()
-        }
-        fn is_complete(graph: &StackGraph, path: &PartialPath) -> bool {
-            let start_node = &graph[path.start_node];
-            let end_node = &graph[path.end_node];
-            let start_ok = path.starts_at_reference(graph)
-                || start_node.is_root()
-                || start_node.is_exported_scope();
-            let end_ok = path.ends_at_definition(graph)
-                || end_node.is_exported_scope()
-                || end_node.is_root()
-                || end_node.is_jump_to();
-            start_ok && end_ok
-        }
-        let starting_nodes = graph
-            .iter_nodes()
-            .filter(|node| is_start_node(graph, *node))
-            .collect::<Vec<_>>();
-        let mut stitcher =
-            ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
-        stitcher.should_extend =
-            Box::new(|g, _ps, p| p.edges.is_empty() || !g[p.end_node].is_root());
-        while !stitcher.is_complete() {
-            cancellation_flag.check("finding complete partial paths")?;
-            let partial_paths = stitcher
-                .previous_phase_partial_paths()
-                .filter(|partial_path| is_complete(graph, partial_path))
-                .collect::<Vec<_>>();
-            for path in partial_paths {
                 visit(graph, partials, path);
             }
             stitcher.process_next_phase(graph, partials, db);
