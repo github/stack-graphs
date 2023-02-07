@@ -169,6 +169,7 @@ impl TestArgs {
                 let test_root = test_path;
                 for test_entry in WalkDir::new(test_root)
                     .follow_links(true)
+                    .sort_by_file_name()
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())

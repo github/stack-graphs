@@ -98,6 +98,7 @@ impl AnalyzeArgs {
                 let source_root = source_path;
                 for source_entry in WalkDir::new(source_root)
                     .follow_links(true)
+                    .sort_by_file_name()
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
