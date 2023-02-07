@@ -725,6 +725,7 @@ pub struct ForwardPartialPathStitcher {
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
+    should_extend: fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
 }
 
 impl ForwardPartialPathStitcher {
@@ -784,6 +785,7 @@ impl ForwardPartialPathStitcher {
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
+            should_extend: |_, _, _| true,
         }
     }
 
@@ -809,6 +811,7 @@ impl ForwardPartialPathStitcher {
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
+            should_extend: |_, _, _| true,
         }
     }
 
@@ -839,6 +842,14 @@ impl ForwardPartialPathStitcher {
     /// paths found in the previous phase, with no additional bound.
     pub fn set_max_work_per_phase(&mut self, max_work_per_phase: usize) {
         self.max_work_per_phase = max_work_per_phase;
+    }
+
+    /// Sets a condition that determines if a partial path is a candidate that should be extended.
+    pub fn set_should_extend(
+        &mut self,
+        should_extend: fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
+    ) {
+        self.should_extend = should_extend;
     }
 
     /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
@@ -891,15 +902,13 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                if new_partial_path.start_node != partial_path.start_node {
-                    copious_debugging!("        is invalid: slips off of starting node");
+                if !new_partial_path.is_productive(partials) {
+                    copious_debugging!("        is invalid: not productive");
                     continue;
                 }
             }
             copious_debugging!("        is {}", new_partial_path.display(graph, partials));
-            if new_partial_path.is_productive(partials) {
-                self.next_iteration.push_back(new_partial_path);
-            }
+            self.next_iteration.push_back(new_partial_path);
         }
 
         extension_count
@@ -933,6 +942,10 @@ impl ForwardPartialPathStitcher {
                 "--> Candidate partial path {}",
                 partial_path.display(graph, partials)
             );
+            if !(self.should_extend)(graph, partials, &partial_path) {
+                copious_debugging!("    Should not extend");
+                continue;
+            }
             if !self
                 .cycle_detector
                 .should_process_path(&partial_path, |probe| {
@@ -979,6 +992,7 @@ impl ForwardPartialPathStitcher {
     {
         let mut stitcher =
             ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
+        stitcher.set_should_extend(|g, _, p| p.starts_at_reference(g));
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             let complete_partial_paths = stitcher
