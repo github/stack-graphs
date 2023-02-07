@@ -59,6 +59,10 @@ pub struct AnalyzeArgs {
     #[clap(long, short = 'v')]
     pub verbose: bool,
 
+    /// Hide failure error details.
+    #[clap(long)]
+    pub hide_error_details: bool,
+
     /// Maximum runtime per file in seconds.
     #[clap(
         long,
@@ -78,6 +82,7 @@ impl AnalyzeArgs {
             source_paths,
             continue_from: None,
             verbose: false,
+            hide_error_details: false,
             max_file_time: None,
             wait_at_start: false,
         }
@@ -93,6 +98,7 @@ impl AnalyzeArgs {
                 let source_root = source_path;
                 for source_entry in WalkDir::new(source_root)
                     .follow_links(true)
+                    .sort_by_file_name()
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
@@ -203,7 +209,9 @@ impl AnalyzeArgs {
             Err(LoadError::ParseErrors(parse_errors)) => {
                 let parse_error = map_parse_errors(source_path, &parse_errors, &source, "");
                 file_status.error("parsing failed")?;
-                eprintln!("{}", parse_error);
+                if !self.hide_error_details {
+                    println!("{}", parse_error);
+                }
                 return Ok(());
             }
             Err(LoadError::Cancelled(_)) => {

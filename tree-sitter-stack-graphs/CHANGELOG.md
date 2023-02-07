@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `--show-ignored` flag of the `test` command has been renamed to `--show-skipped`. Only explicitly skipped test files (with a `.skip` extension) will be shown. Other unsupported files are, such as generated HTML files, are never shown.
 - The `--hide-passing` flag of the `test` command has been renamed to the more common `--quiet`/`-q`.
 - The output of the `test` command has changed to print the test name before the test result, so that it clear which test is currently running.
+- The output of the `test` and `analyze` commands has changed in debug builds to include the run time per file.
+- The `--hide-failure-errors` has been renamed to the more general `--hide-error-details`. The new flag is supported by the `test` and `analyze` commands.
+- The files in directory arguments are now processed in filename order.
 
 ## v0.6.0 -- 2023-01-13
 

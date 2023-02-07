@@ -90,7 +90,7 @@ pub struct TestArgs {
 
     /// Hide failure error details.
     #[clap(long)]
-    pub hide_failure_errors: bool,
+    pub hide_error_details: bool,
 
     /// Show skipped files in output.
     #[clap(long)]
@@ -153,7 +153,7 @@ impl TestArgs {
         Self {
             test_paths,
             quiet: false,
-            hide_failure_errors: false,
+            hide_error_details: false,
             show_skipped: false,
             save_graph: None,
             save_paths: None,
@@ -169,6 +169,7 @@ impl TestArgs {
                 let test_root = test_path;
                 for test_entry in WalkDir::new(test_root)
                     .follow_links(true)
+                    .sort_by_file_name()
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
@@ -336,7 +337,7 @@ impl TestArgs {
                 result.count(),
             ))?;
         }
-        if !success && !self.hide_failure_errors {
+        if !success && !self.hide_error_details {
             for failure in result.failures_iter() {
                 println!("{}", failure);
             }
