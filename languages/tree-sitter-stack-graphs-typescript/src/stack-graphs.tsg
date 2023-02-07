@@ -2732,7 +2732,7 @@ if none @is_async {
 }
 
 
-;; Variables
+;; Variables / Identifiers
 
 ; x;
 
@@ -2742,6 +2742,8 @@ if none @is_async {
   (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
   (assignment_expression left:(identifier)@name)
   (augmented_assignment_expression left:(identifier)@name)
+  (asserts (identifier)@name)
+  (type_predicate name:(identifier)@name)
   ; FIXME type_query has its own restricted expression production
   ;       we need to do this for every (identifier) inside a type query
   ;       this cannot be expressed, so we manually unroll three levels here
@@ -2789,6 +2791,8 @@ if none @is_def {
   (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
   (assignment_expression left:(identifier)@name)
   (augmented_assignment_expression left:(identifier)@name)
+  (asserts (identifier)@name)
+  (type_predicate name:(identifier)@name)
   ; FIXME type_query has its own restricted expression production
   (type_query (identifier)@name)
   (type_query (member_expression object:(identifier)@name))
@@ -4972,9 +4976,6 @@ if none @is_acc {
 )@asserts {
   ; propagate lexical scope
   edge @type.lexical_scope -> @asserts.lexical_scope
-
-  ; type is type of inner
-  edge @asserts.type -> @type.type
 }
 
 
@@ -5119,9 +5120,8 @@ if none @is_acc {
   (_)@type
 )@type_pred {
   ; propagate lexical scope
+  edge @name.lexical_scope -> @type_pred.lexical_scope
   edge @type.lexical_scope -> @type_pred.lexical_scope
-
-  ; FIXME name is a expression reference
 }
 
 
