@@ -39,7 +39,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @prog.defs
   node @prog.lexical_scope
   edge @prog.lexical_scope -> ROOT_NODE
-  edge ROOT_NODE -> @prog.defs
+  edge @prog.lexical_scope -> @prog.defs
 }
 
 (program (_)@declaration)@prog {
@@ -52,9 +52,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;  Top level declarations
 ;; =======================
 
-(import_declaration) @import {
-  node @import.defs
-  node @import.lexical_scope
+[
+  (module_declaration)
+  (package_declaration)
+  (import_declaration)
+] @decl
+{
+  node @decl.defs
+  node @decl.lexical_scope
 }
 
 (import_declaration
@@ -81,13 +86,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;;;;;;;;;;;;;;;;;;;
 ;; Class Expressions
 
+; Classes (and other declarations with members, e.g. records, enums, interfaces) define a name in their enclosing scope as well as names belonging to the class itself (i.e. statics) and instances of the class.
+;
+; They additionally implicitly define `this` available in the bodies of instance methods, and subclasses further define `super`. The nodes defining these point at the types of the class and superclass, respectively.
+
 (class_declaration
   name: (identifier) @name
   body: (class_body) @class_body) @class {
 
   node def
-  node @class.lexical_scope
-  node @class.defs
   attr (def) node_definition = @name
 
   node ref
@@ -107,7 +114,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @class.lexical_scope -> this__expr_def
 
-  attr (this__expr_def) pop_symbol = "this", source_node = @class, empty_source_span
+  attr (this__expr_def) pop_symbol = "this", source_node = @name, empty_source_span
   edge this__expr_def -> @class.type
 
   attr (@class.type) pop_symbol = ":"
@@ -118,11 +125,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (class_declaration
   superclass: (superclass
-    (type_identifier) @identifier) @superclass
+    (type_identifier) @superclass_name)
     body: (class_body) @class_body) @class {
 
     node ref
-    attr (ref) node_reference = @identifier
+    attr (ref) node_reference = @superclass_name
+
+    edge @superclass_name.lexical_scope -> @class.lexical_scope
 
     edge ref -> @class.lexical_scope
     edge @class_body.lexical_scope -> ref
@@ -132,13 +141,42 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     edge @class.lexical_scope -> super__expr_def
 
-    attr (super__expr_def) pop_symbol = "super", source_node = @superclass, empty_source_span
+    attr (super__expr_def) pop_symbol = "super", source_node = @superclass_name, empty_source_span
     edge super__expr_def -> super__expr_def__typeof
 
     attr (super__expr_def__typeof) pop_symbol = ":"
 
     edge super__expr_def__typeof -> ref
     edge @class.type -> ref
+}
+
+
+(class_declaration (type_parameters)) @class {
+  node @class.type_parameters
+  edge @class.lexical_scope -> @class.type_parameters
+}
+
+(class_declaration (type_parameters (type_parameter) @param)) @class {
+  edge @class.type_parameters -> @param.def
+  edge @param.lexical_scope -> @class.lexical_scope
+}
+
+(type_parameter (type_identifier) @name) @this {
+  node @this.def
+  node @this.lexical_scope
+
+  edge @name.lexical_scope -> @this.lexical_scope
+
+  attr (@this.def) node_definition = @name
+}
+
+(spread_parameter) @spread_param {
+  node @spread_param.lexical_scope
+  node @spread_param.def
+}
+
+(class_declaration interfaces: (super_interfaces (type_list (_) @type))) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
 }
 
 (class_body) @class_body {
@@ -151,29 +189,190 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @declaration.lexical_scope -> @class_body.lexical_scope
 }
 
+(class_body (block) @block) {
+  node @block.defs
+  node @block.lexical_scope
+  edge @block.lexical_scope -> @block.before_scope
+}
+
 ;; =====================
 ;;  Member Declarations
 ;; =====================
 
+; Member declarations can occur as members of classes, enums, etc. They propagate lexical scope and usually define one or more names, available in `defs`.
+
+[
+  (class_declaration)
+  (enum_declaration)
+  (field_declaration)
+  (interface_declaration)
+  (method_declaration)
+  (constructor_declaration)
+  (annotation_type_declaration)
+  (constant_declaration)
+  (record_declaration)
+] @decl
+{
+  ; FIXME: can we get away with defining one and only one thing for each of these, and therefore having a `.def` node instead of `.defs`?
+  node @decl.defs
+  node @decl.lexical_scope
+}
+
+(annotation_type_declaration
+  name: (identifier) @name) @annotation {
+
+  node def
+  attr (def) node_definition = @name
+  edge def -> @annotation.lexical_scope
+  edge @annotation.defs -> def
+}
+
+(constructor_declaration body: (constructor_body) @body) @this {
+  edge @body.lexical_scope -> @this.lexical_scope
+}
+
+(constructor_body) @this {
+  node @this.lexical_scope
+}
+
+(constructor_body . (_) @first) @this {
+  edge @first.before_scope -> @this.lexical_scope
+}
+
+(constructor_body (_) @a . (_) @b) {
+  edge @b.before_scope -> @a.after_scope
+}
+
+(explicit_constructor_invocation) @this {
+  node @this.before_scope
+  node @this.after_scope
+}
+
+(explicit_constructor_invocation constructor: (_) @constructor) @this {
+  edge @constructor.lexical_scope -> @this.before_scope
+}
+
+(explicit_constructor_invocation object: (_) @object) @this {
+  edge @object.lexical_scope -> @this.before_scope
+}
+
+(explicit_constructor_invocation arguments: (argument_list (_) @arg)) @this {
+  edge @arg.lexical_scope -> @this.before_scope
+}
+
+(enum_declaration name: (_) @name) @this {
+  node def
+  attr (def) node_definition = @name
+  edge @this.defs -> def
+
+  node @this.constants
+  attr (@this.constants) pop_symbol = "."
+  edge def -> @this.constants
+
+  ; allow A.X field accesses to resolve constants
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+  edge def -> def__typeof
+  edge def__typeof -> @this.constants
+}
+
+(enum_declaration (enum_body (enum_constant name: (_) @name))) @this {
+  node def
+  attr (def) node_definition = @name
+  edge @this.constants -> def
+}
+
 (field_declaration
+  type: (_) @type
   declarator: (variable_declarator
     name: (_) @name
   )
 ) @field_decl
 {
-  node @field_decl.lexical_scope
-  node @field_decl.defs
+  edge @type.lexical_scope -> @field_decl.lexical_scope
+
+  node member
+  edge @field_decl.defs -> member
+
+  attr (member) pop_symbol = "."
+
   node def
   attr (def) node_definition = @name
-  edge @field_decl.defs -> def
+  edge member -> def
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+  edge def__typeof -> @type.type
+
+  edge def -> def__typeof
+}
+
+(modifiers) @this {
+  node @this.lexical_scope
+}
+
+(modifiers (_) @annotation) @this {
+  edge @annotation.ref -> @this.lexical_scope
+}
+
+(marker_annotation name: (_) @name) @this {
+  node @this.ref
+  attr (@this.ref) node_reference = @name
+}
+
+(annotation name: (_) @name) @this {
+  node @this.ref
+  node @this.lexical_scope
+  attr (@this.ref) node_reference = @name
+}
+
+(modifiers (annotation arguments: (annotation_argument_list (_) @value))) @this {
+  edge @value.lexical_scope -> @this.lexical_scope
+}
+
+(element_value_array_initializer) @this {
+  node @this.def
+  node @this.lexical_scope
+}
+
+(element_value_pair value: (_) @value) @this {
+  node @this.lexical_scope
+  edge @value.lexical_scope -> @this.lexical_scope
+}
+
+(field_declaration (modifiers) @modifiers) @decl {
+  edge @modifiers.lexical_scope -> @decl.lexical_scope
+}
+
+(interface_declaration name: (_) @name body: (_) @body) @this {
+  node def
+  attr (def) node_definition = @name
+  edge @this.defs -> def
+
+  edge def -> @body.defs
+  edge @body.lexical_scope -> @this.lexical_scope
+}
+
+(interface_declaration (extends_interfaces (type_list (_) @type))) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(interface_body) @this {
+  node @this.defs
+  node @this.lexical_scope
+}
+
+(interface_body (_) @child) @this {
+  edge @this.defs -> @child.defs
+  edge @child.lexical_scope -> @this.lexical_scope
 }
 
 (method_declaration
+  type: (_) @type
   name: (identifier) @name
   body: (block) @block) @method
 {
-  node @method.defs
-  node @method.lexical_scope
+  edge @type.lexical_scope -> @method.lexical_scope
 
   node member
   edge @method.defs -> member
@@ -185,28 +384,97 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge member -> def
 }
 
+(method_declaration (formal_parameters (_) @param)) @method
+{
+  edge @param.lexical_scope -> @method.lexical_scope
+  edge @method.lexical_scope -> @param.def
+  edge @method.defs -> @param.def
+}
+
+(formal_parameter type: (_) @type (_) @name) @param
+{
+  node @param.def
+  node @param.lexical_scope
+  node def__typeof
+
+  edge @type.lexical_scope -> @param.lexical_scope
+
+  attr (@param.def) node_definition = @name
+
+  attr (def__typeof) pop_symbol = ":"
+  edge def__typeof -> @type.type
+
+  edge @param.def -> def__typeof
+}
+
+(formal_parameter (modifiers) @modifiers) @this {
+  edge @modifiers.lexical_scope -> @this.lexical_scope
+}
+
+(method_declaration
+  (modifiers) @modifiers) @this {
+  edge @modifiers.lexical_scope -> @this.lexical_scope
+}
+
 (method_declaration
   body: (_) @stmt) @method
 {
   edge @stmt.before_scope -> @method.lexical_scope
 }
 
+(record_declaration name: (_) @name body: (_) @body) @this {
+  node def
+  attr (def) node_definition = @name
+  edge @this.defs -> def
+
+  edge @body.lexical_scope -> @this.lexical_scope
+}
+
+(record_declaration parameters: (formal_parameters (_) @param)) @this {
+  edge @param.lexical_scope -> @this.lexical_scope
+  edge @this.lexical_scope -> @param.def
+  edge @this.defs -> @param.def
+}
 
 ;; ============
 ;;  Statements
 ;; ============
 
-(expression_statement (_) @expr) @expr_stmt
+; Statements are sequenced one after the next, and some (local variable declarations) bring names into scope/shadow existing names for subsequent statements. Thus, instead of having a lexical scope, they have before and after scopes; the before scope points to the previous statement, or the parent scope for the first statement in a sequence, while the after scope points either at the before scope (if no variable is bound) or at a node referencing any variables the statement binds.
+
+[
+  (assert_statement)
+  (block)
+  (break_statement)
+  (continue_statement)
+  (declaration)
+  (do_statement)
+  (expression_statement)
+  (enhanced_for_statement)
+  (for_statement)
+  (if_statement)
+  (labeled_statement)
+  (local_variable_declaration)
+  (return_statement)
+  (switch_expression)
+  (synchronized_statement)
+  (throw_statement)
+  (try_statement)
+  (try_with_resources_statement)
+  (while_statement)
+  (yield_statement)
+] @stmt
 {
-  node @expr_stmt.before_scope
-  node @expr_stmt.after_scope
-  edge @expr.lexical_scope -> @expr_stmt.before_scope
-  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
+  node @stmt.before_scope
+  node @stmt.after_scope
 }
 
-(block) @block {
-  node @block.before_scope
-  node @block.after_scope
+(assert_statement) @stmt {
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(assert_statement (expression) @expr) @stmt {
+  edge @expr.lexical_scope -> @stmt.before_scope
 }
 
 (block
@@ -230,10 +498,70 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
-(return_statement) @return_stmt
+(break_statement) @stmt {
+  ; FIXME: labels
+}
+
+(continue_statement) @stmt {
+  ; FIXME: labels
+}
+
+(declaration) @decl {}
+
+(do_statement body: (_) @body condition: (_) @cond) @stmt {
+  edge @body.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+  edge @cond.lexical_scope -> @stmt.before_scope
+}
+
+(expression_statement (_) @expr) @expr_stmt
 {
-  node @return_stmt.before_scope
-  node @return_stmt.after_scope
+  edge @expr.lexical_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @expr_stmt.before_scope
+}
+
+(enhanced_for_statement type: (_) @type (_) @name value: (_) @value body: (_) @body) @stmt {
+  edge @type.lexical_scope -> @stmt.before_scope
+  edge @value.lexical_scope -> @stmt.before_scope
+  node def
+  node defs
+  attr (def) node_definition = @name
+  edge defs -> @stmt.before_scope
+  edge defs -> def
+  edge @body.before_scope -> defs
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(for_statement init: (expression) @init condition: (_) @condition update: (_) @update body: (_) @body) @stmt {
+  edge @init.lexical_scope -> @stmt.before_scope
+  edge @condition.lexical_scope -> @stmt.before_scope
+  edge @update.lexical_scope -> @stmt.before_scope
+  edge @body.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(for_statement init: (local_variable_declaration) @init condition: (_) @condition update: (_) @update body: (_) @body) @stmt {
+  edge @init.before_scope -> @stmt.before_scope
+  edge @condition.lexical_scope -> @init.after_scope
+  edge @update.lexical_scope -> @init.after_scope
+  edge @body.before_scope -> @init.after_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(if_statement condition: (_) @condition consequence: (_) @consequence) @stmt {
+  edge @condition.lexical_scope -> @stmt.before_scope
+  edge @consequence.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(if_statement alternative: (_) @alternative) @stmt {
+  edge @alternative.before_scope -> @stmt.before_scope
+}
+
+(labeled_statement (identifier) @name (statement) @child) @stmt {
+  edge @child.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @child.after_scope
+  ; FIXME: labels
 }
 
 (local_variable_declaration
@@ -259,66 +587,276 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge def__typeof -> @type.type
 }
 
-(local_variable_declaration
-  declarator: (variable_declarator
-    value: (_) @value
-  )
-) @local_var
-{
-  node @local_var.after_scope
-  node @local_var.before_scope
+(local_variable_declaration declarator: (variable_declarator value: (_) @value)) @this {
+  edge @value.lexical_scope -> @this.before_scope
 }
 
-(local_variable_declaration
-  type: (generic_type
-    (type_identifier) @type
-    (type_arguments
-      (type_identifier) @type_identifier))) @local_var {
-  node @type_identifier.value
-  attr(@type_identifier.value) node_reference = @type_identifier
+(return_statement (_) @expr) @stmt
+{
+  edge @expr.lexical_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
 
-  node @type.value
-  attr(@type.value) node_reference = @type
+(switch_expression condition: (_) @condition body: (_) @body) @stmt {
+  edge @condition.lexical_scope -> @stmt.before_scope
+  edge @body.lexical_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
 
-  edge @type.value -> @local_var.after_scope
-  edge @type_identifier.value -> @local_var.after_scope
+(switch_block) @this {
+  node @this.lexical_scope
+}
+
+(switch_block (switch_block_statement_group (switch_label) @label)) @this {
+  edge @label.lexical_scope -> @this.lexical_scope
+}
+
+(switch_block (switch_block_statement_group (switch_label)+ . (statement) @first)) @this {
+  edge @first.before_scope -> @this.lexical_scope
+}
+
+(switch_block (switch_block_statement_group (switch_label)+ (statement) @a . (statement) @b)) @this {
+  edge @b.before_scope -> @a.after_scope
+}
+
+(switch_block (switch_rule (switch_label) @label (_) @body)) @this {
+  edge @label.lexical_scope -> @this.lexical_scope
+  edge @body.before_scope -> @this.lexical_scope
+}
+
+(switch_label) @label {
+  node @label.lexical_scope
+}
+
+(switch_label (expression) @expr) @label {
+  edge @expr.lexical_scope -> @label.lexical_scope
+}
+
+(synchronized_statement (_) @expr body: (_) @body) @stmt {
+  edge @expr.lexical_scope -> @stmt.before_scope
+  edge @body.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(try_statement body: (_) @body) @stmt {
+  edge @body.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(try_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @name) body: (_) @body)) @stmt {
+  node def
+  node defs
+  attr (def) node_definition = @name
+  edge defs -> def
+  edge @body.before_scope -> defs
+  edge defs -> @stmt.before_scope
+
+  edge @type.lexical_scope -> @stmt.before_scope
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+
+  edge def -> def__typeof
+
+  edge def__typeof -> @type.type
+}
+
+(catch_type) @catch_type {
+  node @catch_type.type
+  node @catch_type.lexical_scope
+}
+
+(catch_type (_) @type) @catch_type {
+  edge @catch_type.type -> @type.type
+  edge @type.lexical_scope -> @catch_type.lexical_scope
+}
+
+(try_statement (finally_clause (_) @finally)) @stmt {
+  edge @finally.before_scope -> @stmt.before_scope
+}
+
+(try_with_resources_statement) @stmt {
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(try_with_resources_statement resources: (resource_specification . (resource) @first)) @stmt {
+  edge @first.before_scope -> @stmt.before_scope
+}
+
+(try_with_resources_statement resources: (resource_specification (resource) @a . (resource) @b)) @stmt {
+  edge @b.before_scope -> @a.after_scope
+}
+
+(try_with_resources_statement resources: (resource_specification (resource) @last .) body: (_) @body) @stmt {
+  edge @body.before_scope -> @last.after_scope
+}
+
+(resource) @this {
+  node @this.before_scope
+  node @this.after_scope
+}
+
+(resource type: (_) @type (_) @name value: (_) @value) @this {
+  edge @type.lexical_scope -> @this.before_scope
+  edge @value.lexical_scope -> @this.before_scope
+
+  node def
+  attr (def) node_definition = @name
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+
+  edge def -> def__typeof
+
+  edge def__typeof -> @type.type
+
+  edge @this.after_scope -> def
+  edge @this.after_scope -> @this.before_scope
+}
+
+(resource . (identifier) @name .) @this {
+  node @name.lexical_scope
+  node @name.type
+
+  node ref
+  node ref__typeof
+
+  attr (ref) node_reference = @name
+
+  edge ref -> @name.lexical_scope
+  edge @name.lexical_scope -> @this.before_scope
+
+  edge @name.type -> ref__typeof
+
+  attr (ref__typeof) push_symbol = ":"
+  edge ref__typeof -> ref
+
+  edge @this.after_scope -> @this.before_scope
+}
+
+(resource (field_access) @field_access) @this {
+  edge @field_access.lexical_scope -> @this.before_scope
+  edge @this.after_scope -> @this.before_scope
+}
+
+(try_with_resources_statement (catch_clause (catch_formal_parameter (catch_type) @type (_) @name) body: (_) @body)) @stmt {
+  node def
+  node defs
+  attr (def) node_definition = @name
+  edge defs -> def
+  edge @body.before_scope -> defs
+  edge defs -> @stmt.before_scope
+
+  edge @type.lexical_scope -> @stmt.before_scope
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+
+  edge def -> def__typeof
+
+  edge def__typeof -> @type.type
+}
+
+(try_with_resources_statement (finally_clause (_) @finally)) @stmt {
+  edge @finally.before_scope -> @stmt.before_scope
+}
+
+(while_statement condition: (_) @condition body: (_) @body) @stmt {
+  edge @condition.lexical_scope -> @stmt.before_scope
+  edge @body.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
+}
+
+(yield_statement (_) @expr) @stmt {
+  edge @expr.lexical_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @stmt.before_scope
 }
 
 ;; =====================
 ;;  Primary Expressions
 ;; =====================
 
-(primary_expression/identifier) @ident
+(array_access (primary_expression) @array (expression) @index) @this {
+  edge @array.lexical_scope -> @this.lexical_scope
+  edge @index.lexical_scope -> @this.lexical_scope
+}
+
+(array_creation_expression type: (_) @type) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(array_creation_expression (dimensions_expr (_) @expr)) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+}
+
+(array_initializer (_) @expr) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+}
+
+(class_literal (_) @type) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(primary_expression/identifier) @name
 {
+  node member
+  node implicit_this
+  node implicit_this__typeof
+
+  node object__typeof
+
+  attr (implicit_this) symbol_reference = "this", empty_source_span
+  edge implicit_this__typeof -> implicit_this
+  attr (implicit_this__typeof) push_symbol = ":"
+  edge implicit_this -> @name.lexical_scope
+
   node ref
+  attr (ref) node_reference = @name
+  edge ref -> @name.lexical_scope
+  attr (ref -> @name.lexical_scope) precedence = 1
+  edge ref -> member
+
+  attr (member) push_symbol = "."
+
+  edge member -> object__typeof
+  edge object__typeof -> implicit_this__typeof
+
   node ref__typeof
-
-  attr (ref) node_reference = @ident
-
-  edge ref -> @ident.lexical_scope
-
-  edge @ident.type -> ref__typeof
+  edge @name.type -> ref__typeof
 
   attr (ref__typeof) push_symbol = ":"
   edge ref__typeof -> ref
 }
 
-(field_access) @field_access {
-  node @field_access.before_scope
-}
-
 (field_access
-  object: (super)
-  field: (identifier) @identifier) @field_access {
+  object: (_) @object
+  field: (identifier) @name) @field_access {
+  node member
+
+  edge @object.lexical_scope -> @field_access.lexical_scope
+
   node ref
-  attr (ref) node_reference = @identifier
-  edge ref -> @field_access.lexical_scope
+  attr (ref) node_reference = @name
+  edge ref -> member
+
+  attr (member) push_symbol = "."
+  edge member -> @object.type
+
+  node ref__typeof
+  edge @field_access.type -> ref__typeof
+
+  attr (ref__typeof) push_symbol = ":"
+  edge ref__typeof -> ref
 }
 
 (method_invocation) @method_invocation
 {
   node @method_invocation.before_scope
   node @method_invocation.after_scope
+}
+
+(method_invocation arguments: (argument_list (expression) @expr)) @method_invocation {
+  edge @expr.lexical_scope -> @method_invocation.lexical_scope
 }
 
 ; method calls with implicit receiver
@@ -355,32 +893,52 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge expr_ref__typeof -> expr_ref
 }
 
-(local_variable_declaration
-  type: (type_identifier) @type
-  declarator: (variable_declarator
-    name: (identifier) @identifier
-    value: (object_creation_expression
-      type: (type_identifier) @object)
-  )) @local_variable {
-  node @object.value
-  attr (@object.value) node_reference = @object
-  node @type.value
-  attr(@type.value) node_reference = @type
-  edge @type.value -> @local_variable.after_scope
-  edge @local_variable.after_scope -> @object.value
-  edge @object.value -> @local_variable.after_scope
+(method_reference . (_) @lhs) @this {
+  edge @lhs.lexical_scope -> @this.lexical_scope
+}
+
+(method_reference . (_) @lhs (identifier) @name) @this {
+  node @this.member
+
+  node expr_ref
+  attr (expr_ref) node_reference = @name
+  edge expr_ref -> @this.member
+
+  attr (@this.member) push_symbol = "."
+  edge @this.member -> @lhs.type
+
+  node expr_ref__typeof
+  ; edge @this.type -> expr_ref__typeof ; FIXME: function types
+
+  attr (expr_ref__typeof) push_symbol = ":"
+  edge expr_ref__typeof -> expr_ref
+}
+
+(method_reference . (identifier) @lhs (identifier) @name) @this {
+  ; @lhs could be a type name
+  node ref
+  attr (ref) node_reference = @lhs
+  edge @this.member -> ref
+  edge ref -> @this.lexical_scope
+}
+
+(parenthesized_expression (_) @child) @expr {
+  edge @child.lexical_scope -> @expr.lexical_scope
 }
 
 ;; =============
 ;;  Expressions
 ;; =============
 
+; Expressions have a lexical scope (propagated to child expressions) and a type. The lexical scope is used for lexical name lookup, while types enable type-based name lookup (for field accesses, method lookup, and so forth).
+
 [
-  ; FIXME: all expressions should be here
-  (assignment_expression)
+  (array_access)
+  (array_initializer)
+  (expression)
   (field_access)
-  (identifier)
-  (method_invocation)
+  (parenthesized_expression)
+  (primary_expression)
   (super)
   (this)
 ] @expr
@@ -389,12 +947,93 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @expr.lexical_scope
 }
 
+(assignment_expression left: (identifier) @name) @this {
+  ; FIXME: can we combine this with primary_expression/identifier?
+  node @name.lexical_scope
+  node @name.type
+  node member
+  node implicit_this
+  node implicit_this__typeof
+
+  node object__typeof
+
+  attr (implicit_this) symbol_reference = "this", empty_source_span
+  edge implicit_this__typeof -> implicit_this
+  attr (implicit_this__typeof) push_symbol = ":"
+  edge implicit_this -> @name.lexical_scope
+
+  node ref
+  attr (ref) node_reference = @name
+  edge ref -> @name.lexical_scope
+  attr (ref -> @name.lexical_scope) precedence = 1
+  edge ref -> member
+
+  attr (member) push_symbol = "."
+
+  edge member -> object__typeof
+  edge object__typeof -> implicit_this__typeof
+
+  node ref__typeof
+  edge @name.type -> ref__typeof
+
+  attr (ref__typeof) push_symbol = ":"
+  edge ref__typeof -> ref
+
+  edge @name.lexical_scope -> @this.lexical_scope
+}
+
+(assignment_expression left: (field_access) @access) @this {
+  edge @access.lexical_scope -> @this.lexical_scope
+}
+
+(assignment_expression right: (_) @right) @this {
+  edge @right.lexical_scope -> @this.lexical_scope
+}
+
+(binary_expression left: (_) @lhs right: (_) @rhs) @this {
+  edge @lhs.lexical_scope -> @this.lexical_scope
+  edge @rhs.lexical_scope -> @this.lexical_scope
+}
+
+(cast_expression type: (_) @type) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(cast_expression value: (_) @expr) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+}
+
+(instanceof_expression left: (_) @expr right: (_) @type) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(lambda_expression) @this {
+  node @this.params
+}
+
+(lambda_expression body: (expression) @body) @this {
+  edge @body.lexical_scope -> @this.lexical_scope
+  edge @body.lexical_scope -> @this.params
+}
+
+(lambda_expression body: (block) @body) @this {
+  edge @body.before_scope -> @this.lexical_scope
+  edge @body.before_scope -> @this.params
+}
+
+(lambda_expression parameters: (_) @param) @this {
+  node param
+  attr (param) node_definition = @param
+
+  edge @this.params -> param
+}
+
 [
   (super)
   (this)
 ] @expr
 {
-
   node expr_ref
   node expr_ref__typeof
 
@@ -428,24 +1067,87 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge expr_ref__typeof -> expr_ref
 }
 
+(object_creation_expression (primary_expression) @child) @this {
+  edge @child.lexical_scope -> @this.lexical_scope
+}
+
+(object_creation_expression type_arguments: (type_arguments (_) @type)) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(object_creation_expression type: (_) @type) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(object_creation_expression arguments: (argument_list (expression) @expr)) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+}
+
+(ternary_expression (expression) @expr) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+}
+
+(unary_expression (expression) @expr) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+}
+
+(update_expression (expression) @expr) @this {
+  edge @expr.lexical_scope -> @this.lexical_scope
+}
+
 ;; ==========
 ;;  Types
 ;; ==========
 
+; Types have a lexical scope for type name lookup.
+
 [
+  (annotated_type)
+  (array_type)
+  (boolean_type)
+  (floating_point_type)
   (generic_type)
   (integral_type)
+  (scoped_type_identifier)
   (type_identifier)
   (void_type)
 ] @type
 {
   node @type.lexical_scope
-  node @type.type
+  node @type.type ; FIXME: is this actually needed?
+}
+
+[
+  (boolean_type)
+  (floating_point_type)
+  (integral_type)
+  (type_identifier)
+  (void_type)
+] @type
+{
+  attr (@type.type) node_reference = @type
+}
+
+(array_type element: (_) @child) @this {
+  edge @child.lexical_scope -> @this.lexical_scope
+  ; FIXME: use some sort of subscripting relation for .type
+}
+
+(generic_type . (_) @name) @this {
+  edge @name.lexical_scope -> @this.lexical_scope
+}
+
+(generic_type (type_arguments (_) @type)) @this {
+  edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(wildcard) @this
+{
+  node @this.lexical_scope
 }
 
 (type_identifier) @this
 {
-  attr (@this.type) node_reference = @this
   edge @this.type -> @this.lexical_scope
 }
 
@@ -466,6 +1168,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (block_comment)@block_comment {
   node @block_comment.before_scope
   node @block_comment.after_scope
+  node @block_comment.defs
+  node @block_comment.lexical_scope
 
   edge @block_comment.after_scope -> @block_comment.before_scope
 }

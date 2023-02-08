@@ -22,3 +22,14 @@ class TestClass {
     int z = 8;
   }
 }
+
+class Shadowing {
+  int x;
+  void f() {
+      x;
+    //^ defined: 27
+    int x;
+      x;
+    //^ defined: 31
+  }
+}

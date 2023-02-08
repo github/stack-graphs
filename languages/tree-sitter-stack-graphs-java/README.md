@@ -7,7 +7,7 @@ This project defines tree-sitter-stack-graphs rules for Java using the [tree-sit
 The project is organized as follows:
 
 - The stack graph rules are defined in `src/stack-graphs.tsg`.
-- Tests are put into the `tests` directory.
+- Tests are put into the `test` directory.
 
 The following commands are intended to be run from the repo root.
 
