@@ -2363,6 +2363,8 @@ impl PartialPath {
 }
 
 impl Node {
+    /// Update the given partial path pre- and postconditions with the effect of
+    /// appending this node to that partial path.
     fn apply_to_partial_stacks(
         &self,
         graph: &StackGraph,
