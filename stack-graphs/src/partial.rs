@@ -2462,6 +2462,59 @@ impl Node {
         }
         Ok(())
     }
+
+    /// Ensure the given closed precondition stacks are half-open for this end node.
+    fn halfopen_closed_precondition(
+        &self,
+        partials: &mut PartialPaths,
+        symbol_stack: &mut PartialSymbolStack,
+        scope_stack: &mut PartialScopeStack,
+    ) {
+        match self {
+            Node::DropScopes(_) => {
+                *scope_stack = PartialScopeStack::empty();
+            }
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+                *scope_stack = symbol.scopes.into_option().unwrap();
+            }
+            Node::PopSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Node::PushScopedSymbol(_) => {}
+            Node::PushSymbol(_) => {}
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+    }
+
+    /// Ensure the given closed postcondition stacks are half-open for this start node.
+    fn halfopen_closed_postcondition(
+        &self,
+        partials: &mut PartialPaths,
+        symbol_stack: &mut PartialSymbolStack,
+        _scope_stack: &mut PartialScopeStack,
+    ) {
+        match self {
+            Self::DropScopes(_) => {}
+            Self::JumpTo(_) => {}
+            Self::PopScopedSymbol(_) => {}
+            Self::PopSymbol(_) => {}
+            Self::PushScopedSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Self::PushSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Self::Root(_) => {}
+            Self::Scope(_) => {}
+        }
+    }
 }
 
 impl PartialPaths {
@@ -2680,40 +2733,19 @@ impl PartialPath {
         // respectively. The reason we cannot use only one of the lhs end or rhs start
         // node is that the variables used in them may differ.
         let mut lhs_symbol_stack_postcondition = lhs.symbol_stack_postcondition;
-        let lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
+        let mut lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
         let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
         let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
-        match &graph[lhs.end_node] {
-            Node::DropScopes(_) => {}
-            Node::JumpTo(_) => {}
-            Node::PopScopedSymbol(_) => {}
-            Node::PopSymbol(_) => {}
-            Node::PushScopedSymbol(_) => {
-                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
-            }
-            Node::PushSymbol(_) => {
-                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
-            }
-            Node::Root(_) => {}
-            Node::Scope(_) => {}
-        }
-        match &graph[rhs.start_node] {
-            Node::DropScopes(_) => {
-                rhs_scope_stack_precondition = PartialScopeStack::empty();
-            }
-            Node::JumpTo(_) => {}
-            Node::PopScopedSymbol(_) => {
-                let symbol = rhs_symbol_stack_precondition.pop_front(partials).unwrap();
-                rhs_scope_stack_precondition = symbol.scopes.into_option().unwrap();
-            }
-            Node::PopSymbol(_) => {
-                rhs_symbol_stack_precondition.pop_front(partials).unwrap();
-            }
-            Node::PushScopedSymbol(_) => {}
-            Node::PushSymbol(_) => {}
-            Node::Root(_) => {}
-            Node::Scope(_) => {}
-        }
+        graph[lhs.end_node].halfopen_closed_postcondition(
+            partials,
+            &mut lhs_symbol_stack_postcondition,
+            &mut lhs_scope_stack_postcondition,
+        );
+        graph[rhs.start_node].halfopen_closed_precondition(
+            partials,
+            &mut rhs_symbol_stack_precondition,
+            &mut rhs_scope_stack_precondition,
+        );
 
         let mut symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
