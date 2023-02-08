@@ -34,21 +34,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; #       #    #  ####   ####  #    # #    # #    #  ####
 ;
 ; ########################################################
-(program)@prog {
-  scan FILE_PATH {
-    "([^/]+)\.java$" {
-    ; FIXME add definitions
-
-    }
-  }
-
-}
 
 (program)@prog {
   node @prog.defs
   node @prog.lexical_scope
   edge @prog.lexical_scope -> ROOT_NODE
-  edge ROOT_NODE -> @prog.defs
+  edge @prog.lexical_scope -> @prog.defs
 }
 
 (program (_)@declaration)@prog {
