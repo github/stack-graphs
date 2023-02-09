@@ -5,9 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use controlled_option::ControlledOption;
 use stack_graphs::arena::Handle;
-use stack_graphs::graph::Edge;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
@@ -16,42 +14,13 @@ use stack_graphs::partial::PartialPathEdgeList;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::partial::PartialScopeStack;
 use stack_graphs::partial::PartialScopeStackBindings;
-use stack_graphs::partial::PartialScopedSymbol;
-use stack_graphs::partial::PartialSymbolStack;
 use stack_graphs::partial::PartialSymbolStackBindings;
 use stack_graphs::partial::ScopeStackVariable;
 use stack_graphs::partial::SymbolStackVariable;
 use stack_graphs::paths::PathResolutionError;
 use stack_graphs::stitching::Database;
 
-type NiceSymbolStack<'a> = (&'a [NiceScopedSymbol<'a>], Option<SymbolStackVariable>);
-type NiceScopedSymbol<'a> = (&'a str, Option<NiceScopeStack<'a>>);
-type NiceScopeStack<'a> = (&'a [u32], Option<ScopeStackVariable>);
-type NicePartialPath<'a> = &'a [Handle<Node>];
-
-fn create_symbol_stack(
-    graph: &mut StackGraph,
-    partials: &mut PartialPaths,
-    contents: NiceSymbolStack,
-) -> PartialSymbolStack {
-    let mut stack = if let Some(var) = contents.1 {
-        PartialSymbolStack::from_variable(var)
-    } else {
-        PartialSymbolStack::empty()
-    };
-    for scoped_symbol in contents.0 {
-        let symbol = graph.add_symbol(scoped_symbol.0);
-        let scopes = scoped_symbol
-            .1
-            .map(|scopes| create_scope_stack(graph, partials, scopes));
-        let scoped_symbol = PartialScopedSymbol {
-            symbol,
-            scopes: ControlledOption::from_option(scopes),
-        };
-        stack.push_back(partials, scoped_symbol);
-    }
-    stack
-}
+use crate::util::*;
 
 #[test]
 fn will_skip_divergent_partial_paths() {
@@ -355,28 +324,6 @@ fn can_unify_partial_symbol_stacks() -> Result<(), PathResolutionError> {
     Ok(())
 }
 
-fn create_scope_stack(
-    graph: &mut StackGraph,
-    partials: &mut PartialPaths,
-    contents: NiceScopeStack,
-) -> PartialScopeStack {
-    let file = graph.get_or_create_file("file");
-    let mut stack = if let Some(var) = contents.1 {
-        PartialScopeStack::from_variable(var)
-    } else {
-        PartialScopeStack::empty()
-    };
-    for scope in contents.0 {
-        let node_id = NodeID::new_in_file(file, *scope);
-        let node = match graph.node_for_id(node_id) {
-            Some(node) => node,
-            None => graph.add_scope_node(node_id, true).unwrap(),
-        };
-        stack.push_back(partials, node);
-    }
-    stack
-}
-
 #[test]
 fn can_unify_partial_scope_stacks() -> Result<(), PathResolutionError> {
     fn verify(
@@ -617,41 +564,8 @@ fn can_concatenate_partial_paths() -> Result<(), PathResolutionError> {
 
         let mut ps = PartialPaths::new();
 
-        let mut lns = left.iter();
-        let mut prev = lns.next().unwrap();
-        let mut l = PartialPath::from_node(&g, &mut ps, *prev);
-        for next in lns {
-            g.add_edge(*prev, *next, 0);
-            l.append(
-                &g,
-                &mut ps,
-                Edge {
-                    source: *prev,
-                    sink: *next,
-                    precedence: 0,
-                },
-            )
-            .expect("");
-            prev = next;
-        }
-
-        let mut rns = right.iter();
-        let mut prev = rns.next().unwrap();
-        let mut r = PartialPath::from_node(&g, &mut ps, *prev);
-        for next in rns {
-            g.add_edge(*prev, *next, 0);
-            r.append(
-                &g,
-                &mut ps,
-                Edge {
-                    source: *prev,
-                    sink: *next,
-                    precedence: 0,
-                },
-            )
-            .expect("");
-            prev = next;
-        }
+        let mut l = create_partial_path_and_edges(&mut g, &mut ps, left).expect("");
+        let mut r = create_partial_path_and_edges(&mut g, &mut ps, right).expect("");
 
         r.ensure_no_overlapping_variables(&mut ps, &l);
         l.concatenate(&g, &mut ps, &r)?;
