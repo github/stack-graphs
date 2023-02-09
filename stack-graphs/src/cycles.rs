@@ -29,13 +29,15 @@
 //! always use this particular heuristic, however!  We reserve the right to change the heuristic at
 //! any time.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use smallvec::SmallVec;
 
 use crate::arena::Handle;
 use crate::graph::Node;
+use crate::graph::StackGraph;
 use crate::partial::PartialPath;
+use crate::partial::PartialPaths;
 use crate::paths::Path;
 
 /// Helps detect cycles in the path-finding algorithm.
@@ -84,7 +86,7 @@ impl HasPathKey for PartialPath {
     }
 }
 
-const MAX_SIMILAR_PATH_COUNT: usize = 7;
+const MAX_SIMILAR_PATH_COUNT: usize = 13;
 
 impl<P> CycleDetector<P>
 where
@@ -124,6 +126,108 @@ where
         }
 
         paths_with_same_nodes.insert(index, path.clone());
+        true
+    }
+}
+
+#[derive(Clone)]
+pub struct AppendingCycleDetector {
+    states: VecDeque<AppendingPathState>,
+}
+
+#[derive(Clone, Copy)]
+struct AppendingPathState {
+    node: Handle<Node>,
+}
+
+impl AppendingCycleDetector {
+    pub fn from_node(node: Handle<Node>) -> Self {
+        let mut states = Vec::new();
+        states.push(AppendingPathState { node });
+        Self {
+            states: states.into(),
+        }
+    }
+
+    pub fn appended(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        node: Handle<Node>,
+        new_path: &PartialPath,
+    ) -> bool {
+        if let Some(i) = self.states.iter().position(|s| s.node == node) {
+            let mut rhs = PartialPath::from_node(graph, partials, node);
+            for s in self.states.range(i + 1..) {
+                graph[s.node]
+                    .apply_to_partial_stacks(
+                        graph,
+                        partials,
+                        &mut rhs.symbol_stack_precondition,
+                        &mut rhs.scope_stack_precondition,
+                        &mut rhs.symbol_stack_postcondition,
+                        &mut rhs.scope_stack_postcondition,
+                    )
+                    .unwrap();
+            }
+            let mut loop_path = new_path.clone();
+            if loop_path.concatenate(graph, partials, &rhs).is_ok()
+                && loop_path.symbol_stack_postcondition.len()
+                    > new_path.symbol_stack_postcondition.len()
+            {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[derive(Clone)]
+pub struct JoiningCycleDetector {
+    states: VecDeque<JoiningPathState>,
+}
+
+#[derive(Clone)]
+struct JoiningPathState {
+    path: PartialPath, // FIXME replace with handle into db
+}
+
+impl JoiningCycleDetector {
+    pub fn from_partial_path(
+        _graph: &StackGraph,
+        _partials: &mut PartialPaths,
+        path: PartialPath,
+    ) -> Self {
+        let mut states = Vec::new();
+        states.push(JoiningPathState { path });
+        Self {
+            states: states.into(),
+        }
+    }
+
+    pub fn joined(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        new_path: &PartialPath,
+    ) -> bool {
+        if let Some(i) = self
+            .states
+            .iter()
+            .position(|s| s.path.start_node == new_path.end_node)
+        {
+            let mut rhs = self.states[i].path.clone();
+            for s in self.states.range(i + 1..) {
+                rhs.concatenate(graph, partials, &s.path).unwrap();
+            }
+            let mut loop_path = new_path.clone();
+            if loop_path.concatenate(graph, partials, &rhs).is_ok()
+                && loop_path.symbol_stack_postcondition.len()
+                    > new_path.symbol_stack_postcondition.len()
+            {
+                return false;
+            }
+        }
         true
     }
 }

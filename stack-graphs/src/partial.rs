@@ -45,6 +45,7 @@ use smallvec::SmallVec;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
+use crate::cycles::AppendingCycleDetector;
 use crate::cycles::CycleDetector;
 use crate::graph::Edge;
 use crate::graph::File;
@@ -170,7 +171,7 @@ impl SymbolStackVariable {
 
     /// Creates a new symbol stack variable.  This constructor is used when creating a new, empty
     /// partial path, since there aren't any other variables that we need to be fresher than.
-    fn initial() -> SymbolStackVariable {
+    pub(crate) fn initial() -> SymbolStackVariable {
         SymbolStackVariable(unsafe { NonZeroU32::new_unchecked(1) })
     }
 
@@ -950,6 +951,36 @@ impl PartialSymbolStack {
             other.variable.into_option(),
             |a, b| a == b,
         )
+    }
+
+    pub fn has_prefix(
+        mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        mut prefix: PartialSymbolStack,
+    ) -> bool {
+        println!();
+        println!("Check path {}", self.display(graph, partials));
+        println!("for prefix {}", prefix.display(graph, partials));
+        if self.has_variable() != prefix.has_variable() {
+            println!(" * different variables");
+            // FIXME should we compare variables here?
+            //       can we assume that variables of the extended path are preserved (and the extension is renamed)
+            return false;
+        }
+        while let Some(prefix_symbol) = prefix.pop_back(partials) {
+            if let Some(self_symbol) = self.pop_back(partials) {
+                if !self_symbol.equals(partials, &prefix_symbol) {
+                    println!(" * stacks diverge");
+                    return false; // stacks diverge
+                }
+            } else {
+                println!(" * prefix is longer");
+                return false; // prefix is longer
+            }
+        }
+        println!(" * prefix consumed");
+        return true; // prefix consumed
     }
 
     pub fn cmp(
@@ -2338,11 +2369,12 @@ impl PartialPath {
     /// as a parameter, instead of building it up ourselves, so that you have control over which
     /// particular collection type to use, and so that you can reuse result collections across
     /// multiple calls.
-    pub fn extend_from_file<R: Extend<PartialPath>>(
+    pub fn extend_from_file<R: Extend<(PartialPath, AppendingCycleDetector)>>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
         file: Handle<File>,
+        path_cycle_detector: AppendingCycleDetector,
         result: &mut R,
     ) {
         let extensions = graph.outgoing_edges(self.end_node);
@@ -2352,12 +2384,17 @@ impl PartialPath {
                 continue;
             }
             let mut new_path = self.clone();
+            let mut new_cycle_detector = path_cycle_detector.clone();
             // If there are errors adding this edge to the partial path, or resolving the resulting
             // partial path, just skip the edge — it's not a fatal error.
             if new_path.append(graph, partials, extension).is_err() {
                 continue;
             }
-            result.push(new_path);
+            if !new_cycle_detector.appended(graph, partials, extension.sink, &new_path) {
+                println!("cyclic {}", new_path.display(graph, partials));
+                continue;
+            }
+            result.push((new_path, new_cycle_detector));
         }
     }
 }
@@ -2365,7 +2402,7 @@ impl PartialPath {
 impl Node {
     /// Update the given partial path pre- and postconditions with the effect of
     /// appending this node to that partial path.
-    fn apply_to_partial_stacks(
+    pub(crate) fn apply_to_partial_stacks(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2641,38 +2678,34 @@ impl PartialPaths {
         }
 
         copious_debugging!("Find all partial paths in {}", graph[file]);
-        let mut cycle_detector = CycleDetector::new();
+        let mut similar_path_detector = CycleDetector::new();
         let mut queue = VecDeque::new();
-        queue.push_back(PartialPath::from_node(graph, self, StackGraph::root_node()));
         queue.extend(
             graph
                 .nodes_for_file(file)
+                .chain(std::iter::once(StackGraph::root_node()))
                 .filter(|node| graph[*node].is_endpoint())
-                .map(|node| PartialPath::from_node(graph, self, node)),
+                .map(|node| {
+                    let path = PartialPath::from_node(graph, self, node);
+                    (path, AppendingCycleDetector::from_node(node))
+                }),
         );
-        while let Some(path) = queue.pop_front() {
+        while let Some((path, path_cycle_detector)) = queue.pop_front() {
             cancellation_flag.check("finding partial paths in file")?;
             let is_seed = path.edges.is_empty();
             copious_debugging!(" => {}", path.display(graph, self));
             if !is_seed && as_complete_as_necessary(graph, &path) {
-                copious_debugging!("    * as complete as necessary");
-                if !path.is_productive(self) {
-                    copious_debugging!("    * not productive");
-                } else if !cycle_detector
+                if !similar_path_detector
                     .should_process_path(&path, |probe| probe.cmp(graph, self, &path))
                 {
-                    copious_debugging!("    * presumed a cycle");
+                    copious_debugging!("    * too many similar");
                 } else {
                     copious_debugging!("    * visit");
                     visit(graph, self, path);
                 }
-            } else if !is_seed
-                && !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path))
-            {
-                copious_debugging!("    * presumed a cycle");
             } else {
                 copious_debugging!("    * extend");
-                path.extend_from_file(graph, self, file, &mut queue);
+                path.extend_from_file(graph, self, file, path_cycle_detector, &mut queue);
             }
         }
         Ok(())
