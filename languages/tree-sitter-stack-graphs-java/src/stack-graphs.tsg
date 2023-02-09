@@ -498,6 +498,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
+(break_statement (identifier) @name) @this {
+  edge @this.after_scope -> @this.before_scope
+}
 (break_statement (identifier) @name) @stmt {
   node ref
   node ns
@@ -508,7 +511,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (ns) push_symbol = "%Label"
 
   edge ns -> @stmt.before_scope
-  edge @stmt.after_scope -> @stmt.before_scope
 }
 
 (continue_statement) @stmt {
