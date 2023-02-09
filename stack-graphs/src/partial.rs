@@ -953,36 +953,6 @@ impl PartialSymbolStack {
         )
     }
 
-    pub fn has_prefix(
-        mut self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        mut prefix: PartialSymbolStack,
-    ) -> bool {
-        println!();
-        println!("Check path {}", self.display(graph, partials));
-        println!("for prefix {}", prefix.display(graph, partials));
-        if self.has_variable() != prefix.has_variable() {
-            println!(" * different variables");
-            // FIXME should we compare variables here?
-            //       can we assume that variables of the extended path are preserved (and the extension is renamed)
-            return false;
-        }
-        while let Some(prefix_symbol) = prefix.pop_back(partials) {
-            if let Some(self_symbol) = self.pop_back(partials) {
-                if !self_symbol.equals(partials, &prefix_symbol) {
-                    println!(" * stacks diverge");
-                    return false; // stacks diverge
-                }
-            } else {
-                println!(" * prefix is longer");
-                return false; // prefix is longer
-            }
-        }
-        println!(" * prefix consumed");
-        return true; // prefix consumed
-    }
-
     pub fn cmp(
         mut self,
         graph: &StackGraph,
