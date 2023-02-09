@@ -498,8 +498,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
-(break_statement) @stmt {
-  ; FIXME: labels
+(break_statement (identifier) @name) @stmt {
+  node ref
+  node ns
+
+  attr (ref) node_reference = @name
+  edge ref -> ns
+
+  attr (ns) push_symbol = "%Label"
+
+  edge ns -> @stmt.before_scope
 }
 
 (continue_statement) @stmt {
