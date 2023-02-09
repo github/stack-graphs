@@ -541,6 +541,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
+(for_statement !init !condition !update body: (_) @body) @this {
+  edge @body.before_scope -> @this.before_scope
+  edge @this.after_scope -> @this.before_scope
+}
+
 (for_statement init: (expression) @init condition: (_) @condition update: (_) @update body: (_) @body) @stmt {
   edge @init.lexical_scope -> @stmt.before_scope
   edge @condition.lexical_scope -> @stmt.before_scope
