@@ -40,6 +40,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (program)@prog {
   node @prog.defs
   node @prog.lexical_scope
+  node @prog.exports
+  node @prog.globals
   edge @prog.lexical_scope -> ROOT_NODE
   edge @prog.lexical_scope -> @prog.defs
 }
@@ -79,6 +81,65 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (scoped_identifier
     scope: (scoped_identifier
     name: (identifier) @name))) @import {
+  node @name.value
+  attr (@name.value) node_definition = @name
+
+  edge @import.defs -> @name.value
+}
+
+(program [(import_declaration)]* @import) @prog {
+  var proj_scope = ROOT_NODE
+
+  if (not (eq PROJECT_NAME "")) {
+    ; project definition
+    node proj_def__ns
+    attr (proj_def__ns) pop_symbol = "%Proj"
+    edge proj_scope -> proj_def__ns
+    ;
+    node proj_def
+    attr (proj_def) pop_symbol = PROJECT_NAME
+    edge proj_def__ns -> proj_def
+    ;
+    set proj_scope = proj_def
+  }
+
+  ; expose globals
+  edge proj_scope -> @prog.globals
+
+  var mod_scope = proj_scope
+  if (not (is-empty @import)) {
+    ; module definition
+    let mod_name = (path-filestem FILE_PATH)
+    let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
+    ;
+    node mod_def__ns
+    attr (mod_def__ns) pop_symbol = "%M"
+    edge mod_scope -> mod_def__ns
+    set mod_scope = mod_def__ns
+    ;
+    scan mod_path {
+      "index$" {
+        ; skip last component for index files
+      }
+      "([^/]+)/?" {
+        node mod_def
+        attr (mod_def) pop_symbol = $1
+        edge mod_scope -> mod_def
+        set mod_scope = mod_def
+      }
+    }
+    ; make the last one a definition
+    attr (mod_scope) is_definition, source_node = @prog, empty_source_span
+    ; expose exports via module definition
+    edge mod_scope -> @prog.exports
+  } else {
+    ; expose definitions via project scope
+    edge mod_scope -> @prog.defs
+  }
+}
+
+(import_declaration
+  (identifier) @name) @import {
   node @name.value
   attr (@name.value) node_definition = @name
 
@@ -1222,6 +1283,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (generic_type (type_arguments (_) @type)) @this {
   edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(scoped_type_identifier . (_) @name) @this {
+  edge @name.lexical_scope -> @this.lexical_scope
 }
 
 (wildcard) @this
