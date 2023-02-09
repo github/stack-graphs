@@ -88,7 +88,7 @@ impl HasPathKey for PartialPath {
     }
 }
 
-const MAX_SIMILAR_PATH_COUNT: usize = 13;
+const MAX_SIMILAR_PATH_COUNT: usize = 7;
 
 impl<P> CycleDetector<P>
 where
