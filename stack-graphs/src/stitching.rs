@@ -777,7 +777,7 @@ impl ForwardPartialPathStitcher {
             .map(|handle| {
                 (
                     db[handle].clone(),
-                    JoiningCycleDetector::from_partial_path(graph, partials, db[handle].clone()),
+                    JoiningCycleDetector::from_partial_path_handle(graph, partials, db, handle),
                 )
             })
             .unzip();
@@ -919,7 +919,7 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                if !new_cycle_detector.joined(graph, partials, &extension) {
+                if !new_cycle_detector.joined(graph, partials, db, &extension) {
                     copious_debugging!("        is invalid: cyclic");
                     continue;
                 }
@@ -1028,5 +1028,20 @@ impl ForwardPartialPathStitcher {
             stitcher.process_next_phase(graph, partials, db);
         }
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum OwnedOrDatabasePath {
+    Db(Handle<PartialPath>),
+    Owned(PartialPath),
+}
+
+impl OwnedOrDatabasePath {
+    pub(crate) fn get<'a>(&'a self, db: &'a Database) -> &'a PartialPath {
+        match self {
+            Self::Db(path) => &db[*path],
+            Self::Owned(path) => path,
+        }
     }
 }

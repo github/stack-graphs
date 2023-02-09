@@ -39,6 +39,8 @@ use crate::graph::StackGraph;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::Path;
+use crate::stitching::Database;
+use crate::stitching::OwnedOrDatabasePath;
 
 /// Helps detect cycles in the path-finding algorithm.
 pub struct CycleDetector<P> {
@@ -132,20 +134,13 @@ where
 
 #[derive(Clone)]
 pub struct AppendingCycleDetector {
-    states: VecDeque<AppendingPathState>,
-}
-
-#[derive(Clone, Copy)]
-struct AppendingPathState {
-    node: Handle<Node>,
+    nodes: VecDeque<Handle<Node>>,
 }
 
 impl AppendingCycleDetector {
     pub fn from_node(node: Handle<Node>) -> Self {
-        let mut states = Vec::new();
-        states.push(AppendingPathState { node });
         Self {
-            states: states.into(),
+            nodes: vec![node].into(),
         }
     }
 
@@ -156,10 +151,10 @@ impl AppendingCycleDetector {
         node: Handle<Node>,
         new_path: &PartialPath,
     ) -> bool {
-        if let Some(i) = self.states.iter().position(|s| s.node == node) {
+        if let Some(i) = self.nodes.iter().position(|n| *n == node) {
             let mut rhs = PartialPath::from_node(graph, partials, node);
-            for s in self.states.range(i + 1..) {
-                graph[s.node]
+            for node in self.nodes.range(i + 1..) {
+                graph[*node]
                     .apply_to_partial_stacks(
                         graph,
                         partials,
@@ -184,12 +179,7 @@ impl AppendingCycleDetector {
 
 #[derive(Clone)]
 pub struct JoiningCycleDetector {
-    states: VecDeque<JoiningPathState>,
-}
-
-#[derive(Clone)]
-struct JoiningPathState {
-    path: PartialPath, // FIXME replace with handle into db
+    paths: VecDeque<OwnedOrDatabasePath>,
 }
 
 impl JoiningCycleDetector {
@@ -198,10 +188,19 @@ impl JoiningCycleDetector {
         _partials: &mut PartialPaths,
         path: PartialPath,
     ) -> Self {
-        let mut states = Vec::new();
-        states.push(JoiningPathState { path });
         Self {
-            states: states.into(),
+            paths: vec![OwnedOrDatabasePath::Owned(path)].into(),
+        }
+    }
+
+    pub fn from_partial_path_handle(
+        _graph: &StackGraph,
+        _partials: &mut PartialPaths,
+        _db: &Database,
+        path: Handle<PartialPath>,
+    ) -> Self {
+        Self {
+            paths: vec![OwnedOrDatabasePath::Db(path)].into(),
         }
     }
 
@@ -209,16 +208,17 @@ impl JoiningCycleDetector {
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
+        db: &Database,
         new_path: &PartialPath,
     ) -> bool {
         if let Some(i) = self
-            .states
+            .paths
             .iter()
-            .position(|s| s.path.start_node == new_path.end_node)
+            .position(|p| p.get(db).start_node == new_path.end_node)
         {
-            let mut rhs = self.states[i].path.clone();
-            for s in self.states.range(i + 1..) {
-                rhs.concatenate(graph, partials, &s.path).unwrap();
+            let mut rhs = self.paths[i].get(db).clone();
+            for path in self.paths.range(i + 1..) {
+                rhs.concatenate(graph, partials, path.get(db)).unwrap();
             }
             let mut loop_path = new_path.clone();
             if loop_path.concatenate(graph, partials, &rhs).is_ok()
