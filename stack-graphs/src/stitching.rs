@@ -1057,6 +1057,70 @@ impl ForwardPartialPathStitcher {
         }
         Ok(())
     }
+
+    /// Returns all of the locally maximal paths that are reachable from a set of starting nodes,
+    /// building them up by stitching together partial paths from this database. The locally maximal
+    /// partial path set consists of all paths between externally reachable nodes that are necessary
+    /// to construct complete paths (i.e., paths from root, exported scopes, and references to root,
+    /// jumps, and definitions). With a locally maximal path set it is not necessary to stitch paths
+    /// within a single file together to cover all complete paths.
+    ///
+    /// This functions expects a minimal partial path set, such as produced by [`find_minimal_partial_path_set`][].
+    ///
+    /// This function will not return until all reachable partial paths have been processed, so
+    /// your database must already contain all partial paths that might be needed.  If you have a
+    /// very large stack graph stored in some other storage system, and want more control over
+    /// lazily loading only the necessary pieces, then you should code up your own loop that calls
+    /// [`process_next_phase`][] manually.
+    ///
+    /// [`process_next_phase`]: #method.process_next_phase
+    /// [`find_minimal_partial_path_set`]: crate::partial::PartialPaths#find_minimal_partial_paths_set
+    pub fn find_locally_maximal_partial_path_set<I, F>(
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+        starting_nodes: I,
+        cancellation_flag: &dyn CancellationFlag,
+        mut visit: F,
+    ) -> Result<(), CancellationError>
+    where
+        I: IntoIterator<Item = Handle<Node>>,
+        F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
+    {
+        fn is_startnode(node: &Node) -> bool {
+            node.is_root() || node.is_reference() || node.is_exported_scope()
+        }
+        fn is_endnode(node: &Node) -> bool {
+            node.is_root() || node.is_definition() || node.is_jump_to()
+        }
+        fn should_extend(
+            graph: &StackGraph,
+            _partials: &mut PartialPaths,
+            path: &PartialPath,
+        ) -> bool {
+            !graph[path.end_node].is_root()
+        }
+        let mut stitcher = ForwardPartialPathStitcher::from_nodes(
+            graph,
+            partials,
+            db,
+            starting_nodes
+                .into_iter()
+                .filter(|n| is_startnode(&graph[*n])),
+        );
+        stitcher.set_should_extend(should_extend);
+        while !stitcher.is_complete() {
+            cancellation_flag.check("finding complete partial paths")?;
+            let complete_partial_paths = stitcher
+                .previous_phase_partial_paths()
+                .filter(|partial_path| is_endnode(&graph[partial_path.end_node]));
+            for path in complete_partial_paths {
+                visit(graph, partials, path);
+            }
+            stitcher.process_next_phase(graph, partials, db);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
