@@ -7,11 +7,13 @@
 
 use anyhow::anyhow;
 use anyhow::Context as _;
+use clap::ArgEnum;
 use clap::Args;
 use clap::ValueHint;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
@@ -71,9 +73,24 @@ pub struct AnalyzeArgs {
     )]
     pub max_file_time: Option<Duration>,
 
+    /// Kind of partial path set to compute.
+    #[clap(
+        long,
+        arg_enum,
+        default_value_t = PartialPathSet::Minimal,
+    )]
+    pub partial_path_set: PartialPathSet,
+
     /// Wait for user input before starting analysis. Useful for profiling.
     #[clap(long)]
     pub wait_at_start: bool,
+}
+
+/// Flag to control partial path computation
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum PartialPathSet {
+    Minimal,
+    LocallyMaximal,
 }
 
 impl AnalyzeArgs {
@@ -84,6 +101,7 @@ impl AnalyzeArgs {
             verbose: false,
             hide_error_details: false,
             max_file_time: None,
+            partial_path_set: PartialPathSet::Minimal,
             wait_at_start: false,
         }
     }
@@ -223,21 +241,47 @@ impl AnalyzeArgs {
         };
 
         let mut partials = PartialPaths::new();
-        let mut db = Database::new();
-        match partials.find_minimal_partial_path_set_in_file(
-            &graph,
-            file,
-            &cancellation_flag.as_ref(),
-            |g, ps, p| {
-                db.add_partial_path(g, ps, p);
-            },
-        ) {
-            Ok(_) => {}
-            Err(_) => {
-                file_status.warn("path computation timed out")?;
-                return Ok(());
+        let mut db = {
+            let mut minimal_db = Database::new();
+            match partials.find_minimal_partial_path_set_in_file(
+                &graph,
+                file,
+                &cancellation_flag.as_ref(),
+                |g, ps, p| {
+                    minimal_db.add_partial_path(g, ps, p);
+                },
+            ) {
+                Ok(_) => {}
+                Err(_) => {
+                    file_status.warn("path computation timed out")?;
+                    return Ok(());
+                }
             }
-        }
+            minimal_db
+        };
+        let _db = match self.partial_path_set {
+            PartialPathSet::Minimal => db,
+            PartialPathSet::LocallyMaximal => {
+                let mut locally_maximal_db = Database::new();
+                match ForwardPartialPathStitcher::find_locally_maximal_partial_path_set(
+                    &graph,
+                    &mut partials,
+                    &mut db,
+                    graph.nodes_for_file(file),
+                    &cancellation_flag.as_ref(),
+                    |g, ps, p| {
+                        locally_maximal_db.add_partial_path(g, ps, p.clone());
+                    },
+                ) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        file_status.warn("path computation timed out")?;
+                        return Ok(());
+                    }
+                }
+                locally_maximal_db
+            }
+        };
 
         file_status.ok("success")?;
         Ok(())
