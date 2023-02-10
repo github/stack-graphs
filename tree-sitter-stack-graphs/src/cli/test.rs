@@ -37,22 +37,6 @@ use crate::StackGraphLanguage;
 
 use super::util::FileStatusLogger;
 
-/// Flag to control output
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
-pub enum OutputMode {
-    Always,
-    OnFailure,
-}
-
-impl OutputMode {
-    fn test(&self, failure: bool) -> bool {
-        match self {
-            Self::Always => true,
-            Self::OnFailure => failure,
-        }
-    }
-}
-
 /// Run tests
 #[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
@@ -143,9 +127,24 @@ pub struct TestArgs {
         long,
         arg_enum,
         default_value_t = OutputMode::OnFailure,
-        require_equals = true,
     )]
     pub output_mode: OutputMode,
+}
+
+/// Flag to control output
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum OutputMode {
+    Always,
+    OnFailure,
+}
+
+impl OutputMode {
+    fn test(&self, failure: bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::OnFailure => failure,
+        }
+    }
 }
 
 impl TestArgs {
