@@ -1818,7 +1818,7 @@ fn can_serialize_partial_paths() {
     let mut db = Database::new();
     for file in graph.iter_files() {
         partials
-            .find_minimal_partial_paths_set_in_file(&graph, file, &NoCancellation, |g, ps, p| {
+            .find_minimal_partial_path_set_in_file(&graph, file, &NoCancellation, |g, ps, p| {
                 db.add_partial_path(g, ps, p);
             })
             .expect("Expect path finding to work");

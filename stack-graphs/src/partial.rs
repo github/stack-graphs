@@ -2485,7 +2485,7 @@ impl PartialPaths {
     /// paths will not cover paths going through those edges.
     ///
     /// [`PartialPath::extend`]: struct.PartialPath.html#method.extend
-    pub fn find_minimal_partial_paths_set_in_file<F>(
+    pub fn find_minimal_partial_path_set_in_file<F>(
         &mut self,
         graph: &StackGraph,
         file: Handle<File>,

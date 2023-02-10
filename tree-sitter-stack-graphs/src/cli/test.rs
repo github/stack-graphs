@@ -273,6 +273,16 @@ impl TestArgs {
         }
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
+        for file in test.graph.iter_files() {
+            partials.find_minimal_partial_path_set_in_file(
+                &test.graph,
+                file,
+                &(cancellation_flag as &dyn CancellationFlag),
+                |g, ps, p| {
+                    db.add_partial_path(g, ps, p);
+                },
+            )?;
+        }
         let result = test.run(&mut partials, &mut db, cancellation_flag)?;
         let success = self.handle_result(&result, &mut file_status)?;
         if self.output_mode.test(!success) {

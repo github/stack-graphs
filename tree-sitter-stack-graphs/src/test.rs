@@ -627,7 +627,7 @@ impl Test {
     ) -> Result<TestResult, stack_graphs::CancellationError> {
         // build partial paths
         for file in self.graph.iter_files() {
-            partials.find_minimal_partial_paths_set_in_file(
+            partials.find_minimal_partial_path_set_in_file(
                 &self.graph,
                 file,
                 &cancellation_flag,

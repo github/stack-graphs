@@ -19,7 +19,7 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
     let mut partials = PartialPaths::new();
     let mut results = BTreeSet::new();
     partials
-        .find_minimal_partial_paths_set_in_file(
+        .find_minimal_partial_path_set_in_file(
             graph,
             file,
             &NoCancellation,

@@ -107,6 +107,19 @@ fn check_test(
     }
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
+    for fragment in &test.fragments {
+        partials
+            .find_minimal_partial_path_set_in_file(
+                &test.graph,
+                fragment.file,
+                &stack_graphs::NoCancellation,
+                |graph, partials, path| {
+                    db.add_partial_path(graph, partials, path);
+                },
+            )
+            .expect("should nopt be cancelled");
+    }
+
     let results = test
         .run(&mut partials, &mut db, &NoCancellation)
         .expect("should never be cancelled");

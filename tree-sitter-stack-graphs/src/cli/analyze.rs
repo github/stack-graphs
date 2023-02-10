@@ -224,7 +224,7 @@ impl AnalyzeArgs {
 
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
-        match partials.find_minimal_partial_paths_set_in_file(
+        match partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
             &cancellation_flag.as_ref(),
