@@ -2361,7 +2361,6 @@ impl PartialPath {
                 continue;
             }
             if !new_cycle_detector.appended(graph, partials, extension.sink, &new_path) {
-                println!("cyclic {}", new_path.display(graph, partials));
                 continue;
             }
             result.push((new_path, new_cycle_detector));

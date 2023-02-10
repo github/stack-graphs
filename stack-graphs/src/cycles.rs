@@ -151,27 +151,29 @@ impl AppendingCycleDetector {
         node: Handle<Node>,
         new_path: &PartialPath,
     ) -> bool {
-        if let Some(i) = self.nodes.iter().position(|n| *n == node) {
-            let mut rhs = PartialPath::from_node(graph, partials, node);
-            for node in self.nodes.range(i + 1..) {
-                graph[*node]
-                    .apply_to_partial_stacks(
-                        graph,
-                        partials,
-                        &mut rhs.symbol_stack_precondition,
-                        &mut rhs.scope_stack_precondition,
-                        &mut rhs.symbol_stack_postcondition,
-                        &mut rhs.scope_stack_postcondition,
-                    )
-                    .unwrap();
-            }
-            let mut loop_path = new_path.clone();
-            if loop_path.concatenate(graph, partials, &rhs).is_ok()
-                && loop_path.symbol_stack_postcondition.len()
-                    > new_path.symbol_stack_postcondition.len()
-            {
-                return false;
-            }
+        let i = match self.nodes.iter().position(|n| *n == node) {
+            Some(i) => i,
+            None => return true,
+        };
+        let mut rhs = PartialPath::from_node(graph, partials, node);
+        for node in self.nodes.range(i + 1..) {
+            graph[*node]
+                .apply_to_partial_stacks(
+                    graph,
+                    partials,
+                    &mut rhs.symbol_stack_precondition,
+                    &mut rhs.scope_stack_precondition,
+                    &mut rhs.symbol_stack_postcondition,
+                    &mut rhs.scope_stack_postcondition,
+                )
+                .unwrap();
+        }
+        let mut loop_path = new_path.clone();
+        if loop_path.concatenate(graph, partials, &rhs).is_ok()
+            && loop_path.symbol_stack_postcondition.len()
+                > new_path.symbol_stack_postcondition.len()
+        {
+            return false;
         }
         true
     }
