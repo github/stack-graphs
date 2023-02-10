@@ -133,6 +133,14 @@ pub struct TestArgs {
     /// Do not load builtins for tests.
     #[clap(long)]
     pub no_builtins: bool,
+
+    /// Kind of partial path set to compute.
+    #[clap(
+        long,
+        arg_enum,
+        default_value_t = PartialPathSet::Minimal,
+    )]
+    pub partial_path_set: PartialPathSet,
 }
 
 /// Flag to control output
@@ -151,6 +159,13 @@ impl OutputMode {
     }
 }
 
+/// Flag to control partial path computation
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum PartialPathSet {
+    Minimal,
+    LocallyMaximal,
+}
+
 impl TestArgs {
     pub fn new(test_paths: Vec<PathBuf>) -> Self {
         Self {
@@ -163,6 +178,7 @@ impl TestArgs {
             save_visualization: None,
             output_mode: OutputMode::OnFailure,
             no_builtins: false,
+            partial_path_set: PartialPathSet::Minimal,
         }
     }
 
@@ -278,18 +294,42 @@ impl TestArgs {
                 ));
             }
         }
+
         let mut partials = PartialPaths::new();
-        let mut db = Database::new();
-        for file in test.graph.iter_files() {
-            partials.find_minimal_partial_path_set_in_file(
-                &test.graph,
-                file,
-                &(cancellation_flag as &dyn CancellationFlag),
-                |g, ps, p| {
-                    db.add_partial_path(g, ps, p);
-                },
-            )?;
-        }
+        let mut db = {
+            let mut minimal_db = Database::new();
+            for file in test.graph.iter_files() {
+                partials.find_minimal_partial_path_set_in_file(
+                    &test.graph,
+                    file,
+                    &(cancellation_flag as &dyn CancellationFlag),
+                    |g, ps, p| {
+                        minimal_db.add_partial_path(g, ps, p);
+                    },
+                )?;
+            }
+            minimal_db
+        };
+        let mut db = match self.partial_path_set {
+            PartialPathSet::Minimal => db,
+            PartialPathSet::LocallyMaximal => {
+                let mut locally_maximal_db = Database::new();
+                for file in test.graph.iter_files() {
+                    ForwardPartialPathStitcher::find_locally_maximal_partial_path_set(
+                        &test.graph,
+                        &mut partials,
+                        &mut db,
+                        test.graph.nodes_for_file(file),
+                        &(cancellation_flag as &dyn CancellationFlag),
+                        |g, ps, p| {
+                            locally_maximal_db.add_partial_path(g, ps, p.clone());
+                        },
+                    )?;
+                }
+                locally_maximal_db
+            }
+        };
+
         let result = test.run(&mut partials, &mut db, cancellation_flag)?;
         let success = self.handle_result(&result, &mut file_status)?;
         if self.output_mode.test(!success) {

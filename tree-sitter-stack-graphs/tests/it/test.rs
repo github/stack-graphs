@@ -92,19 +92,21 @@ fn check_test(
         expected_successes + expected_failures,
         assertion_count,
     );
+
     let mut globals = Variables::new();
-    for fragments in &test.fragments {
+    for fragment in &test.fragments {
         globals.clear();
-        fragments.add_globals_to(&mut globals);
+        fragment.add_globals_to(&mut globals);
         build_stack_graph_into(
             &mut test.graph,
-            fragments.file,
-            &fragments.source,
+            fragment.file,
+            &fragment.source,
             tsg_source,
             &globals,
         )
         .expect("Could not load stack graph");
     }
+
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
     for fragment in &test.fragments {

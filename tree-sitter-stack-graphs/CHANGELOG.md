@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Changed
 
 - The `LanguageConfiguration::matches_file` method takes a `ContentProvider` instead of an `Option<&str>` value. This allows lazy file reading *after* the filename is checked, instead of the unconditional loading required before. To give content readers the opportunity to cache read values, a mutable reference is required. The return type has changed to `std::io::Result` to propagate possible errors from content providers. A `FileReader` implementation that caches the last read file is provided as well.
+- The `Test::run` command does not compute partial paths anymore. Instead, the caller is responsible for filling the database before running the test.
 
 #### Fixed
 
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Added
 
 - A new `analyze` command that computes stack graphs and partial paths for all given source files and directories. The command does not produce any output at the moment. Analysis per file can be limited using the `--max-file-time` flag.
+- The `analyze` and `test` commands support a new `--partial-paths-set` flag that controls whether the commands compute a `minimal` (default) or `locally-maximal` path set.
 
 #### Changed
 
