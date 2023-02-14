@@ -6,7 +6,7 @@ description = "Stack graphs for the Java programming language"
 homepage = "https://github.com/github/stack-graphs/tree/main/stack-graphs/languages/tree-sitter-stack-graphs-java"
 repository = "https://github.com/github/stack-graphs"
 license = "MIT OR Apache-2.0"
-readme = "languages/tree-sitter-stack-graphs-java/README.md"
+readme = "README.md"
 edition = "2021"
 
 authors = [
