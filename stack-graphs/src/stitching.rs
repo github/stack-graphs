@@ -1115,7 +1115,15 @@ impl ForwardPartialPathStitcher {
                 .previous_phase_partial_paths()
                 .filter(|partial_path| is_endnode(&graph[partial_path.end_node]));
             for path in complete_partial_paths {
-                visit(graph, partials, path);
+                // If a path ends in a definition, there's no need for the user to extend it and we
+                // can close it, because all extensions are already computed by us.
+                if path.ends_at_definition(graph) {
+                    let mut path = path.clone();
+                    path.close();
+                    visit(graph, partials, &path);
+                } else {
+                    visit(graph, partials, path);
+                }
             }
             stitcher.process_next_phase(graph, partials, db);
         }

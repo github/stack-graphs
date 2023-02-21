@@ -2118,6 +2118,17 @@ impl PartialPath {
         }
     }
 
+    /// Ensures that the partial path does not have a symbol stack variable in the post condition.
+    pub fn close(&mut self) {
+        if !self.symbol_stack_postcondition.has_variable() {
+            return;
+        }
+        let mut symbol_stack_precondition = self.symbol_stack_precondition;
+        let mut symbol_stack_postcondition = self.symbol_stack_postcondition;
+        symbol_stack_precondition.variable = None.into();
+        symbol_stack_postcondition.variable = None.into();
+    }
+
     /// Ensures that the content of this partial path is available in both forwards and backwards
     /// directions.
     pub fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
