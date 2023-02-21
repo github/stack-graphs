@@ -216,7 +216,7 @@ impl JoiningCycleDetector {
         if let Some(i) = self
             .paths
             .iter()
-            .position(|p| p.get(db).start_node == new_path.end_node)
+            .rposition(|p| p.get(db).start_node == new_path.end_node)
         {
             let mut rhs = self.paths[i].get(db).clone();
             for path in self.paths.range(i + 1..) {
