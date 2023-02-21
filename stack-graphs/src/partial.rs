@@ -45,8 +45,8 @@ use smallvec::SmallVec;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
-use crate::cycles::CycleDetector;
 use crate::cycles::EdgeAppendingCycleDetector;
+use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -2696,7 +2696,7 @@ impl PartialPaths {
         }
 
         copious_debugging!("Find all partial paths in {}", graph[file]);
-        let mut similar_path_detector = CycleDetector::new();
+        let mut similar_path_detector = SimilarPathDetector::new();
         let mut queue = VecDeque::new();
         queue.extend(
             graph

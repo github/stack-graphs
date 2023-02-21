@@ -48,8 +48,8 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
-use crate::cycles::CycleDetector;
 use crate::cycles::PartialPathAppendingCycleDetector;
+use crate::cycles::SimilarPathDetector;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
@@ -477,7 +477,7 @@ pub struct PathStitcher {
     candidate_paths: Vec<Handle<PartialPath>>,
     queue: VecDeque<Path>,
     next_iteration: VecDeque<Path>,
-    cycle_detector: CycleDetector<Path>,
+    cycle_detector: SimilarPathDetector<Path>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -522,7 +522,7 @@ impl PathStitcher {
             candidate_paths,
             queue: VecDeque::new(),
             next_iteration,
-            cycle_detector: CycleDetector::new(),
+            cycle_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -725,7 +725,7 @@ pub struct ForwardPartialPathStitcher {
         VecDeque<PartialPath>,
         VecDeque<PartialPathAppendingCycleDetector>,
     ),
-    similar_path_detector: CycleDetector<PartialPath>,
+    similar_path_detector: SimilarPathDetector<PartialPath>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -794,7 +794,7 @@ impl ForwardPartialPathStitcher {
             candidate_partial_paths,
             queue: VecDeque::new(),
             next_iteration,
-            similar_path_detector: CycleDetector::new(),
+            similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -834,7 +834,7 @@ impl ForwardPartialPathStitcher {
             candidate_partial_paths: Vec::new(),
             queue: VecDeque::new(),
             next_iteration,
-            similar_path_detector: CycleDetector::new(),
+            similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
