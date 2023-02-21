@@ -45,8 +45,8 @@ use crate::paths::Path;
 use crate::stitching::Database;
 use crate::stitching::OwnedOrDatabasePath;
 
-/// Helps detect cycles in the path-finding algorithm.
-pub struct CycleDetector<P> {
+/// Helps detect similar paths in the path-finding algorithm.
+pub struct SimilarPathDetector<P> {
     paths: HashMap<PathKey, SmallVec<[P; 8]>>,
 }
 
@@ -93,13 +93,13 @@ impl HasPathKey for PartialPath {
 
 const MAX_SIMILAR_PATH_COUNT: usize = 7;
 
-impl<P> CycleDetector<P>
+impl<P> SimilarPathDetector<P>
 where
     P: HasPathKey,
 {
     /// Creates a new, empty cycle detector.
-    pub fn new() -> CycleDetector<P> {
-        CycleDetector {
+    pub fn new() -> SimilarPathDetector<P> {
+        SimilarPathDetector {
             paths: HashMap::new(),
         }
     }

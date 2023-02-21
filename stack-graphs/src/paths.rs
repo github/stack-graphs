@@ -26,7 +26,7 @@ use crate::arena::DequeArena;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
-use crate::cycles::CycleDetector;
+use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::NodeID;
@@ -901,7 +901,7 @@ impl Paths {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
     {
-        let mut cycle_detector = CycleDetector::new();
+        let mut cycle_detector = SimilarPathDetector::new();
         let mut queue = starting_nodes
             .into_iter()
             .filter_map(|node| Path::from_node(graph, self, node))
