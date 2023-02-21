@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use chrono::Datelike;
 use clap::Args;
 use clap::ValueHint;
 use dialoguer::Input;
@@ -21,6 +20,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use time::OffsetDateTime;
 
 use self::license::lookup_license;
 use self::license::DEFAULT_LICENSES;
@@ -445,7 +445,7 @@ impl ProjectSettings {
             NO_LICENSE | OTHER_LICENSE => {}
             selected => {
                 let mut file = File::create(project_path.join("LICENSE"))?;
-                let year = chrono::Utc::now().year();
+                let year = OffsetDateTime::now_utc().year();
                 let author = self.license_author();
                 (DEFAULT_LICENSES[selected].2)(&mut file, year, &author)?;
             }
@@ -457,7 +457,7 @@ impl ProjectSettings {
         match lookup_license(&self.license) {
             NO_LICENSE | OTHER_LICENSE => {}
             selected => {
-                let year = chrono::Utc::now().year();
+                let year = OffsetDateTime::now_utc().year();
                 let author = self.license_author();
                 (DEFAULT_LICENSES[selected].1)(file, year, &author, prefix)?;
             }

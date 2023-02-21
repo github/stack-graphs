@@ -23,7 +23,6 @@ required-features = ["cli"]
 
 [features]
 cli = [
-  "chrono",
   "clap",
   "colored",
   "dialoguer",
@@ -31,13 +30,13 @@ cli = [
   "indoc",
   "pathdiff",
   "stack-graphs/json",
+  "time",
   "tree-sitter-config",
   "walkdir"
 ]
 
 [dependencies]
 anyhow = "1.0"
-chrono = { version = "0.4", optional = true }
 clap = { version = "3", optional = true, features=["derive"] }
 colored = { version = "2.0", optional = true }
 controlled-option = ">=0.4"
@@ -53,6 +52,7 @@ regex = "1"
 rust-ini = "0.18"
 stack-graphs = { version="0.10", path="../stack-graphs" }
 thiserror = "1.0"
+time = { version = "0.3", optional = true }
 tree-sitter = ">= 0.19"
 tree-sitter-config = { version = "0.19", optional = true }
 tree-sitter-graph = "0.7"
