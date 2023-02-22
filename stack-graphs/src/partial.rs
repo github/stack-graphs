@@ -2068,26 +2068,82 @@ impl PartialPath {
         graph[self.end_node].is_jump_to()
     }
 
-    /// Returns whether a partial path is "productive" — that is, whether it adds useful
-    /// information to a path.  Non-productive paths are ignored.
-    pub fn is_productive(&self, partials: &mut PartialPaths) -> bool {
+    /// Returns whether a partial path is "productive" --- that is, it is not cyclic, or it consumes
+    /// symbols from the stack, possible replacing them by different symbols.
+    pub fn is_productive(&self, graph: &StackGraph, partials: &mut PartialPaths) -> bool {
         // StackGraph ensures that there are no nodes with duplicate IDs, so we can do a simple
         // comparison of node handles here.
         if self.start_node != self.end_node {
             return true;
         }
-        if !self
+
+        let lhs = self;
+        let mut rhs = self.clone();
+        rhs.ensure_no_overlapping_variables(partials, lhs);
+
+        // If the join node operates on the stack, the effect is present in both sides.
+        // For correct joining, we must undo the effect on one of the sides. We match
+        // the end node of the lhs, and the start node of the rhs separately, depending
+        // on whether we must manipulate the lhs postcondition or rhs precondition,
+        // respectively. The reason we cannot use only one of the lhs end or rhs start
+        // node is that the variables used in them may differ.
+        let mut lhs_symbol_stack_postcondition = lhs.symbol_stack_postcondition;
+        let mut lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
+        let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
+        let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
+        graph[lhs.end_node].halfopen_closed_postcondition(
+            partials,
+            &mut lhs_symbol_stack_postcondition,
+            &mut lhs_scope_stack_postcondition,
+        );
+        graph[rhs.start_node].halfopen_closed_precondition(
+            partials,
+            &mut rhs_symbol_stack_precondition,
+            &mut rhs_scope_stack_precondition,
+        );
+
+        let mut symbol_bindings = PartialSymbolStackBindings::new();
+        let mut scope_bindings = PartialScopeStackBindings::new();
+        if lhs_symbol_stack_postcondition
+            .unify(
+                partials,
+                rhs_symbol_stack_precondition,
+                &mut symbol_bindings,
+                &mut scope_bindings,
+            )
+            .is_err()
+        {
+            // symbol stacks are incompatible
+            return true;
+        }
+        if lhs_scope_stack_postcondition
+            .unify(partials, rhs_scope_stack_precondition, &mut scope_bindings)
+            .is_err()
+        {
+            // scope stacks are incompatible
+            return true;
+        }
+
+        if lhs
             .symbol_stack_precondition
-            .matches(partials, self.symbol_stack_postcondition)
+            .variable
+            .into_option()
+            .map_or(false, |v| symbol_bindings.get(v).iter().len() > 0)
         {
+            // symbol stack precondition strengthened
             return true;
         }
-        if !self
+
+        if lhs
             .scope_stack_precondition
-            .matches(partials, self.scope_stack_postcondition)
+            .variable
+            .into_option()
+            .map_or(false, |v| scope_bindings.get(v).iter().len() > 0)
         {
+            // scope stack precondition strengthened
             return true;
         }
+
         false
     }
 
@@ -2350,7 +2406,13 @@ impl PartialPath {
         let extensions = graph.outgoing_edges(self.end_node);
         result.reserve(extensions.size_hint().0);
         for extension in extensions {
+            copious_debugging!(
+                "      -> with edge {} -> {}",
+                extension.source.display(graph),
+                extension.sink.display(graph)
+            );
             if !graph[extension.sink].is_in_file(file) {
+                copious_debugging!("         * outside file");
                 continue;
             }
             let mut new_path = self.clone();
@@ -2358,9 +2420,11 @@ impl PartialPath {
             // If there are errors adding this edge to the partial path, or resolving the resulting
             // partial path, just skip the edge — it's not a fatal error.
             if new_path.append(graph, partials, extension).is_err() {
+                copious_debugging!("         * invalid extension");
                 continue;
             }
-            if !new_cycle_detector.appended(graph, partials, extension.sink, &new_path) {
+            if !new_cycle_detector.appended(graph, partials, extension.sink) {
+                copious_debugging!("         * cycle");
                 continue;
             }
             result.push((new_path, new_cycle_detector));

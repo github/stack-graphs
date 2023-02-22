@@ -34,10 +34,12 @@ use std::collections::{HashMap, VecDeque};
 use smallvec::SmallVec;
 
 use crate::arena::Handle;
+use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
+use crate::paths::Extend;
 use crate::paths::Path;
 use crate::stitching::Database;
 use crate::stitching::OwnedOrDatabasePath;
@@ -148,34 +150,48 @@ impl AppendingCycleDetector {
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        node: Handle<Node>,
-        new_path: &PartialPath,
+        appended_node: Handle<Node>,
     ) -> bool {
-        let i = match self.nodes.iter().position(|n| *n == node) {
+        // find last occurrence of the appended node
+        let i = self.nodes.iter().rposition(|n| *n == appended_node);
+
+        // add new node
+        self.nodes.push(appended_node);
+
+        // check if the appended node was found
+        let i = match i {
             Some(i) => i,
             None => return true,
         };
-        let mut rhs = PartialPath::from_node(graph, partials, node);
+
+        // construct cyclic path
+        let mut cyclic_path = PartialPath::from_node(graph, partials, self.nodes[i]);
         for node in self.nodes.range(i + 1..) {
-            graph[*node]
-                .apply_to_partial_stacks(
+            if cyclic_path.ends_in_jump(graph) {
+                // restore jump target
+                cyclic_path
+                    .scope_stack_precondition
+                    .push_back(partials, *node);
+                cyclic_path
+                    .scope_stack_postcondition
+                    .push_front(partials, *node);
+                cyclic_path.resolve(graph, partials).unwrap();
+            }
+            cyclic_path
+                .append(
                     graph,
                     partials,
-                    &mut rhs.symbol_stack_precondition,
-                    &mut rhs.scope_stack_precondition,
-                    &mut rhs.symbol_stack_postcondition,
-                    &mut rhs.scope_stack_postcondition,
+                    Edge {
+                        source: cyclic_path.end_node,
+                        sink: *node,
+                        precedence: 0,
+                    },
                 )
                 .unwrap();
         }
-        let mut loop_path = new_path.clone();
-        if loop_path.concatenate(graph, partials, &rhs).is_ok()
-            && loop_path.symbol_stack_postcondition.len()
-                > new_path.symbol_stack_postcondition.len()
-        {
-            return false;
-        }
-        true
+
+        // process path if it is productive
+        cyclic_path.is_productive(graph, partials)
     }
 }
 
@@ -191,7 +207,7 @@ impl JoiningCycleDetector {
         path: PartialPath,
     ) -> Self {
         Self {
-            paths: vec![OwnedOrDatabasePath::Owned(path)].into(),
+            paths: vec![path.into()].into(),
         }
     }
 
@@ -202,7 +218,7 @@ impl JoiningCycleDetector {
         path: Handle<PartialPath>,
     ) -> Self {
         Self {
-            paths: vec![OwnedOrDatabasePath::Db(path)].into(),
+            paths: vec![path.into()].into(),
         }
     }
 
@@ -211,25 +227,43 @@ impl JoiningCycleDetector {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &Database,
-        new_path: &PartialPath,
+        joined_path: OwnedOrDatabasePath,
     ) -> bool {
-        if let Some(i) = self
+        // add new fragment
+        self.paths.push(joined_path.into());
+        let joined_path = self.paths.back().unwrap().get(db);
+
+        // find a fragment starting with our end node
+        // (includes new fragment, in case that is cyclic)
+        let end_node = joined_path.end_node;
+        let i = match self
             .paths
             .iter()
-            .rposition(|p| p.get(db).start_node == new_path.end_node)
+            .rposition(|p| p.get(db).start_node == end_node)
         {
-            let mut rhs = self.paths[i].get(db).clone();
-            for path in self.paths.range(i + 1..) {
-                rhs.concatenate(graph, partials, path.get(db)).unwrap();
+            Some(i) => i,
+            None => return true,
+        };
+
+        // construct the cyclic path
+        let mut cyclic_path = self.paths[i].get(db).clone();
+        for path in self.paths.range(i + 1..) {
+            let path = path.get(db);
+            if cyclic_path.ends_in_jump(graph) {
+                // restore jump target
+                cyclic_path
+                    .scope_stack_precondition
+                    .push_back(partials, path.start_node);
+                cyclic_path
+                    .scope_stack_postcondition
+                    .push_front(partials, path.start_node);
+                cyclic_path.resolve(graph, partials).unwrap();
             }
-            let mut loop_path = new_path.clone();
-            if loop_path.concatenate(graph, partials, &rhs).is_ok()
-                && loop_path.symbol_stack_postcondition.len()
-                    > new_path.symbol_stack_postcondition.len()
-            {
-                return false;
-            }
+            cyclic_path.ensure_no_overlapping_variables(partials, path);
+            cyclic_path.concatenate(graph, partials, path).unwrap();
         }
-        true
+
+        // process path if it is productive
+        cyclic_path.is_productive(graph, partials)
     }
 }
