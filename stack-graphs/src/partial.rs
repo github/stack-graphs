@@ -2118,8 +2118,8 @@ impl PartialPath {
         }
     }
 
-    /// Ensures that the partial path does not have a symbol stack variable in the post condition.
-    pub fn close(&mut self) {
+    /// Ensures that the partial path matches the symbol stack completely, and does not have a symbol stack variable.
+    pub fn finalize(&mut self) {
         if !self.symbol_stack_postcondition.has_variable() {
             return;
         }

@@ -1119,7 +1119,7 @@ impl ForwardPartialPathStitcher {
                 // can close it, because all extensions are already computed by us.
                 if path.ends_at_definition(graph) {
                     let mut path = path.clone();
-                    path.close();
+                    path.finalize();
                     visit(graph, partials, &path);
                 } else {
                     visit(graph, partials, path);
