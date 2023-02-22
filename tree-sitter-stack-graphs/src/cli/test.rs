@@ -129,6 +129,10 @@ pub struct TestArgs {
         default_value_t = OutputMode::OnFailure,
     )]
     pub output_mode: OutputMode,
+
+    /// Do not load builtins for tests.
+    #[clap(long)]
+    pub no_builtins: bool,
 }
 
 /// Flag to control output
@@ -158,6 +162,7 @@ impl TestArgs {
             save_paths: None,
             save_visualization: None,
             output_mode: OutputMode::OnFailure,
+            no_builtins: false,
         }
     }
 
@@ -229,8 +234,10 @@ impl TestArgs {
 
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
-        self.load_builtins_into(&lc, &mut test.graph)
-            .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
+        if !self.no_builtins {
+            self.load_builtins_into(&lc, &mut test.graph)
+                .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
+        }
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
             if let Some(fa) = test_fragment
