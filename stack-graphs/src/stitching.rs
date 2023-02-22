@@ -903,11 +903,11 @@ impl ForwardPartialPathStitcher {
         self.next_iteration.0.reserve(extension_count);
         self.next_iteration.1.reserve(extension_count);
         for extension in &self.candidate_partial_paths {
-            let mut extension = db[*extension].clone();
+            let mut extension_path = db[*extension].clone();
             copious_debugging!("    Extend {}", partial_path.display(graph, partials));
-            copious_debugging!("      with {}", extension.display(graph, partials));
-            extension.ensure_no_overlapping_variables(partials, partial_path);
-            copious_debugging!("        -> {}", extension.display(graph, partials));
+            copious_debugging!("      with {}", extension_path.display(graph, partials));
+            extension_path.ensure_no_overlapping_variables(partials, partial_path);
+            copious_debugging!("        -> {}", extension_path.display(graph, partials));
 
             let mut new_partial_path = partial_path.clone();
             let mut new_cycle_detector = cycle_detector.clone();
@@ -915,11 +915,11 @@ impl ForwardPartialPathStitcher {
             // partial path, just skip the extension — it's not a fatal error.
             #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
             {
-                if let Err(err) = new_partial_path.concatenate(graph, partials, &extension) {
+                if let Err(err) = new_partial_path.concatenate(graph, partials, &extension_path) {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                if !new_cycle_detector.joined(graph, partials, db, &extension) {
+                if !new_cycle_detector.joined(graph, partials, db, extension.into()) {
                     copious_debugging!("        is invalid: cyclic");
                     continue;
                 }
@@ -1032,7 +1032,7 @@ impl ForwardPartialPathStitcher {
 }
 
 #[derive(Clone)]
-pub(crate) enum OwnedOrDatabasePath {
+pub enum OwnedOrDatabasePath {
     Db(Handle<PartialPath>),
     Owned(PartialPath),
 }
@@ -1043,5 +1043,23 @@ impl OwnedOrDatabasePath {
             Self::Db(path) => &db[*path],
             Self::Owned(path) => path,
         }
+    }
+}
+
+impl From<Handle<PartialPath>> for OwnedOrDatabasePath {
+    fn from(value: Handle<PartialPath>) -> Self {
+        Self::Db(value)
+    }
+}
+
+impl From<&Handle<PartialPath>> for OwnedOrDatabasePath {
+    fn from(value: &Handle<PartialPath>) -> Self {
+        Self::Db(*value)
+    }
+}
+
+impl From<PartialPath> for OwnedOrDatabasePath {
+    fn from(value: PartialPath) -> Self {
+        Self::Owned(value)
     }
 }
