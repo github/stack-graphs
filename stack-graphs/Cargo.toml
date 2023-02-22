@@ -37,3 +37,6 @@ thiserror = { version="1.0" }
 itertools = "0.10"
 maplit = "1.0"
 pretty_assertions = "0.7"
+
+[package.metadata.docs.rs]
+all-features = true
