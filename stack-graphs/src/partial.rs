@@ -2068,8 +2068,8 @@ impl PartialPath {
         graph[self.end_node].is_jump_to()
     }
 
-    /// Returns whether a partial path is "productive" --- that is, it is not cyclic, or it consumes
-    /// symbols from the stack, possible replacing them by different symbols.
+    /// Returns whether a partial path is "productive" --- that is, it is not cyclic, or its
+    /// pre- and postcondition are incompatible.
     pub fn is_productive(&self, graph: &StackGraph, partials: &mut PartialPaths) -> bool {
         // StackGraph ensures that there are no nodes with duplicate IDs, so we can do a simple
         // comparison of node handles here.
@@ -2081,54 +2081,16 @@ impl PartialPath {
         let mut rhs = self.clone();
         rhs.ensure_no_overlapping_variables(partials, lhs);
 
-        // If the join node operates on the stack, the effect is present in both sides.
-        // For correct joining, we must undo the effect on one of the sides. We match
-        // the end node of the lhs, and the start node of the rhs separately, depending
-        // on whether we must manipulate the lhs postcondition or rhs precondition,
-        // respectively. The reason we cannot use only one of the lhs end or rhs start
-        // node is that the variables used in them may differ.
-        let mut lhs_symbol_stack_postcondition = lhs.symbol_stack_postcondition;
-        let mut lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
-        let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
-        let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
-        graph[lhs.end_node].halfopen_closed_postcondition(
-            partials,
-            &mut lhs_symbol_stack_postcondition,
-            &mut lhs_scope_stack_postcondition,
-        );
-        graph[rhs.start_node].halfopen_closed_precondition(
-            partials,
-            &mut rhs_symbol_stack_precondition,
-            &mut rhs_scope_stack_precondition,
-        );
-
-        let mut symbol_bindings = PartialSymbolStackBindings::new();
-        let mut scope_bindings = PartialScopeStackBindings::new();
-        if lhs_symbol_stack_postcondition
-            .unify(
-                partials,
-                rhs_symbol_stack_precondition,
-                &mut symbol_bindings,
-                &mut scope_bindings,
-            )
-            .is_err()
-        {
-            // symbol stacks are incompatible
-            return true;
-        }
-        if lhs_scope_stack_postcondition
-            .unify(partials, rhs_scope_stack_precondition, &mut scope_bindings)
-            .is_err()
-        {
-            // scope stacks are incompatible
-            return true;
-        }
+        let join = match Self::compute_join(graph, partials, lhs, &rhs) {
+            Ok(join) => join,
+            Err(_) => return true,
+        };
 
         if lhs
             .symbol_stack_precondition
             .variable
             .into_option()
-            .map_or(false, |v| symbol_bindings.get(v).iter().len() > 0)
+            .map_or(false, |v| join.symbol_bindings.get(v).iter().len() > 0)
         {
             // symbol stack precondition strengthened
             return true;
@@ -2138,7 +2100,7 @@ impl PartialPath {
             .scope_stack_precondition
             .variable
             .into_option()
-            .map_or(false, |v| scope_bindings.get(v).iter().len() > 0)
+            .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
         {
             // scope stack precondition strengthened
             return true;
@@ -2850,6 +2812,66 @@ impl PartialPath {
     ) -> Result<(), PathResolutionError> {
         let lhs = self;
 
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused_mut))]
+        let mut join = Self::compute_join(graph, partials, lhs, rhs)?;
+        #[cfg(feature = "copious-debugging")]
+        {
+            let unified_symbol_stack = join
+                .unified_symbol_stack
+                .display(graph, partials)
+                .to_string();
+            let unified_scope_stack = join
+                .unified_scope_stack
+                .display(graph, partials)
+                .to_string();
+            let symbol_bindings = join.symbol_bindings.display(graph, partials).to_string();
+            let scope_bindings = join.scope_bindings.display(graph, partials).to_string();
+            copious_debugging!(
+                "       via <{}> ({}) {} {}",
+                unified_symbol_stack,
+                unified_scope_stack,
+                symbol_bindings,
+                scope_bindings,
+            );
+        }
+
+        lhs.symbol_stack_precondition = lhs.symbol_stack_precondition.apply_partial_bindings(
+            partials,
+            &join.symbol_bindings,
+            &join.scope_bindings,
+        )?;
+        lhs.symbol_stack_postcondition = rhs.symbol_stack_postcondition.apply_partial_bindings(
+            partials,
+            &join.symbol_bindings,
+            &join.scope_bindings,
+        )?;
+
+        lhs.scope_stack_precondition = lhs
+            .scope_stack_precondition
+            .apply_partial_bindings(partials, &join.scope_bindings)?;
+        lhs.scope_stack_postcondition = rhs
+            .scope_stack_postcondition
+            .apply_partial_bindings(partials, &join.scope_bindings)?;
+
+        let mut edges = rhs.edges;
+        while let Some(edge) = edges.pop_front(partials) {
+            lhs.edges.push_back(partials, edge);
+        }
+        lhs.end_node = rhs.end_node;
+
+        lhs.resolve(graph, partials)?;
+
+        Ok(())
+    }
+
+    /// Compute the bindings to join to partial paths. It is the caller's responsibility
+    /// to ensure non-overlapping variables, if that is required.
+    fn compute_join(
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        lhs: &PartialPath,
+        rhs: &PartialPath,
+    ) -> Result<Join, PathResolutionError> {
         if lhs.end_node != rhs.start_node {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
@@ -2872,61 +2894,34 @@ impl PartialPath {
 
         let mut symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
-
-        let unified_scope_stack = lhs_scope_stack_postcondition.unify(
-            partials,
-            rhs_scope_stack_precondition,
-            &mut scope_bindings,
-        )?;
         let unified_symbol_stack = lhs_symbol_stack_postcondition.unify(
             partials,
             rhs_symbol_stack_precondition,
             &mut symbol_bindings,
             &mut scope_bindings,
         )?;
-        #[cfg(feature = "copious-debugging")]
-        {
-            let unified_symbol_stack = unified_symbol_stack.display(graph, partials).to_string();
-            let unified_scope_stack = unified_scope_stack.display(graph, partials).to_string();
-            let symbol_bindings = symbol_bindings.display(graph, partials).to_string();
-            let scope_bindings = scope_bindings.display(graph, partials).to_string();
-            copious_debugging!(
-                "       via <{}> ({}) {} {}",
-                unified_symbol_stack,
-                unified_scope_stack,
-                symbol_bindings,
-                scope_bindings,
-            );
-        }
-
-        lhs.symbol_stack_precondition = lhs.symbol_stack_precondition.apply_partial_bindings(
+        let unified_scope_stack = lhs_scope_stack_postcondition.unify(
             partials,
-            &symbol_bindings,
-            &scope_bindings,
-        )?;
-        lhs.symbol_stack_postcondition = rhs.symbol_stack_postcondition.apply_partial_bindings(
-            partials,
-            &symbol_bindings,
-            &scope_bindings,
+            rhs_scope_stack_precondition,
+            &mut scope_bindings,
         )?;
 
-        lhs.scope_stack_precondition = lhs
-            .scope_stack_precondition
-            .apply_partial_bindings(partials, &scope_bindings)?;
-        lhs.scope_stack_postcondition = rhs
-            .scope_stack_postcondition
-            .apply_partial_bindings(partials, &scope_bindings)?;
-
-        let mut edges = rhs.edges;
-        while let Some(edge) = edges.pop_front(partials) {
-            lhs.edges.push_back(partials, edge);
-        }
-        lhs.end_node = rhs.end_node;
-
-        lhs.resolve(graph, partials)?;
-
-        Ok(())
+        Ok(Join {
+            unified_symbol_stack,
+            unified_scope_stack,
+            symbol_bindings,
+            scope_bindings,
+        })
     }
+}
+
+struct Join {
+    #[cfg_attr(not(feature = "copious-debugging"), allow(dead_code))]
+    pub unified_symbol_stack: PartialSymbolStack,
+    #[cfg_attr(not(feature = "copious-debugging"), allow(dead_code))]
+    pub unified_scope_stack: PartialScopeStack,
+    pub symbol_bindings: PartialSymbolStackBindings,
+    pub scope_bindings: PartialScopeStackBindings,
 }
 
 //-------------------------------------------------------------------------------------------------
