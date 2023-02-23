@@ -514,7 +514,7 @@ fn can_create_partial_path_from_node() {
 }
 
 #[test]
-fn can_concatenate_partial_paths() -> Result<(), PathResolutionError> {
+fn can_append_partial_paths() -> Result<(), PathResolutionError> {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").expect("");
 
@@ -568,7 +568,7 @@ fn can_concatenate_partial_paths() -> Result<(), PathResolutionError> {
         let mut r = create_partial_path_and_edges(&mut g, &mut ps, right).expect("");
 
         r.ensure_no_overlapping_variables(&mut ps, &l);
-        l.concatenate(&g, &mut ps, &r)?;
+        l.append_partial_path(&g, &mut ps, &r)?;
         let actual = l.display(&g, &mut ps).to_string();
         assert_eq!(actual, expected);
 

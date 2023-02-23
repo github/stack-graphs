@@ -28,10 +28,11 @@
 //! “import/export” points.
 //!
 //! At query time, we can then load in the _partial paths_ for each file, instead of the files'
-//! full stack graph structure.  We can efficiently [concatenate][] partial paths together,
+//! full stack graph structure.  We can efficiently [append][] or [prepend][] partial paths together,
 //! producing the original "full" path that represents a name binding.
 //!
-//! [concatenate]: struct.PartialPath.html#method.concatenate
+//! [append]: struct.PartialPath.html#method.append_partial_path
+//! [prepend]: struct.PartialPath.html#method.prepend_partial_path
 
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -814,8 +815,8 @@ impl PartialSymbolStack {
     /// account any existing variable assignments, and updates those variable assignments with
     /// whatever constraints are necessary to produce a correct result.
     ///
-    /// Note that this operation is commutative.  (Concatenating partial paths, defined in
-    /// [`PartialPath::concatenate`][], is not.)
+    /// Note that this operation is commutative.  (Appending and prepending partial paths, defined in
+    /// [`PartialPath::append_partial_path`][]/[`PartialPath::prepend_partial_path`][], is not.)
     pub fn unify(
         self,
         partials: &mut PartialPaths,
@@ -1242,8 +1243,8 @@ impl PartialScopeStack {
     /// account any existing variable assignments, and updates those variable assignments with
     /// whatever constraints are necessary to produce a correct result.
     ///
-    /// Note that this operation is commutative.  (Concatenating partial paths, defined in
-    /// [`PartialPath::concatenate`][], is not.)
+    /// Note that this operation is commutative.  (Appending and prepending partial paths, defined in
+    /// [`PartialPath::append_partial_path`][]/[`PartialPath::prepend_partial_path`][], is not.)
     pub fn unify(
         self,
         partials: &mut PartialPaths,
@@ -2795,16 +2796,15 @@ impl Path {
 // Extending partial paths with partial paths
 
 impl PartialPath {
-    /// Attempts to concatenate two partial paths.  If the postcondition of the “left” partial path
-    /// is not compatible with the precondition of the “right” path, we return an error describing
-    /// why.
+    /// Attempts to append a partial path to this one.  If the postcondition of the “left” partial path
+    /// is not compatible with the precondition of the “right” path, we return an error describing why.
     ///
     /// If the left- and right-hand partial paths have any symbol or scope stack variables in
     /// common, then we ensure that the variables bind to the same values on both sides.  It's your
     /// responsibility to update the two partial paths so that they have no variables in common, if
     /// that's needed for your use case.
     #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
-    pub fn concatenate(
+    pub fn append_partial_path(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2860,6 +2860,74 @@ impl PartialPath {
         lhs.end_node = rhs.end_node;
 
         lhs.resolve(graph, partials)?;
+
+        Ok(())
+    }
+
+    /// Attempts to prepend a partial path to this one.  If the postcondition of the “left” partial path
+    /// is not compatible with the precondition of the “right” path, we return an error describing why.
+    ///
+    /// If the left- and right-hand partial paths have any symbol or scope stack variables in
+    /// common, then we ensure that the variables bind to the same values on both sides.  It's your
+    /// responsibility to update the two partial paths so that they have no variables in common, if
+    /// that's needed for your use case.
+    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
+    pub fn prepend_partial_path(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        lhs: &PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        let rhs = self;
+
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused_mut))]
+        let mut join = Self::compute_join(graph, partials, lhs, rhs)?;
+        #[cfg(feature = "copious-debugging")]
+        {
+            let unified_symbol_stack = join
+                .unified_symbol_stack
+                .display(graph, partials)
+                .to_string();
+            let unified_scope_stack = join
+                .unified_scope_stack
+                .display(graph, partials)
+                .to_string();
+            let symbol_bindings = join.symbol_bindings.display(graph, partials).to_string();
+            let scope_bindings = join.scope_bindings.display(graph, partials).to_string();
+            copious_debugging!(
+                "       via <{}> ({}) {} {}",
+                unified_symbol_stack,
+                unified_scope_stack,
+                symbol_bindings,
+                scope_bindings,
+            );
+        }
+
+        rhs.symbol_stack_precondition = lhs.symbol_stack_precondition.apply_partial_bindings(
+            partials,
+            &join.symbol_bindings,
+            &join.scope_bindings,
+        )?;
+        rhs.symbol_stack_postcondition = rhs.symbol_stack_postcondition.apply_partial_bindings(
+            partials,
+            &join.symbol_bindings,
+            &join.scope_bindings,
+        )?;
+
+        rhs.scope_stack_precondition = lhs
+            .scope_stack_precondition
+            .apply_partial_bindings(partials, &join.scope_bindings)?;
+        rhs.scope_stack_postcondition = rhs
+            .scope_stack_postcondition
+            .apply_partial_bindings(partials, &join.scope_bindings)?;
+
+        let mut edges = lhs.edges;
+        while let Some(edge) = edges.pop_back(partials) {
+            rhs.edges.push_front(partials, edge);
+        }
+        rhs.start_node = lhs.start_node;
+
+        rhs.resolve(graph, partials)?;
 
         Ok(())
     }

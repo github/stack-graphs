@@ -915,7 +915,9 @@ impl ForwardPartialPathStitcher {
             // partial path, just skip the extension — it's not a fatal error.
             #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
             {
-                if let Err(err) = new_partial_path.concatenate(graph, partials, &extension_path) {
+                if let Err(err) =
+                    new_partial_path.append_partial_path(graph, partials, &extension_path)
+                {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }

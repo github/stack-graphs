@@ -260,7 +260,9 @@ impl JoiningCycleDetector {
                 cyclic_path.resolve(graph, partials).unwrap();
             }
             cyclic_path.ensure_no_overlapping_variables(partials, path);
-            cyclic_path.concatenate(graph, partials, path).unwrap();
+            cyclic_path
+                .append_partial_path(graph, partials, path)
+                .unwrap();
         }
 
         // process path if it is productive
