@@ -8,6 +8,7 @@
 use controlled_option::ControlledOption;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::Edge;
+use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
@@ -24,6 +25,41 @@ pub(crate) type NiceSymbolStack<'a> = (&'a [NiceScopedSymbol<'a>], Option<Symbol
 pub(crate) type NiceScopedSymbol<'a> = (&'a str, Option<NiceScopeStack<'a>>);
 pub(crate) type NiceScopeStack<'a> = (&'a [u32], Option<ScopeStackVariable>);
 pub(crate) type NicePartialPath<'a> = &'a [Handle<Node>];
+
+pub(crate) fn create_scope_node(
+    graph: &mut StackGraph,
+    file: Handle<File>,
+    is_exported: bool,
+) -> Handle<Node> {
+    let id = graph.new_node_id(file);
+    graph.add_scope_node(id, is_exported).unwrap()
+}
+
+pub(crate) fn create_push_symbol_node(
+    graph: &mut StackGraph,
+    file: Handle<File>,
+    symbol: &str,
+    is_reference: bool,
+) -> Handle<Node> {
+    let id = graph.new_node_id(file);
+    let symbol = graph.add_symbol(symbol);
+    graph
+        .add_push_symbol_node(id, symbol, is_reference)
+        .unwrap()
+}
+
+pub(crate) fn create_pop_symbol_node(
+    graph: &mut StackGraph,
+    file: Handle<File>,
+    symbol: &str,
+    is_definition: bool,
+) -> Handle<Node> {
+    let id = graph.new_node_id(file);
+    let symbol = graph.add_symbol(symbol);
+    graph
+        .add_pop_symbol_node(id, symbol, is_definition)
+        .unwrap()
+}
 
 pub(crate) fn create_symbol_stack(
     graph: &mut StackGraph,
@@ -76,14 +112,11 @@ pub(crate) fn create_partial_path_and_edges(
     partials: &mut PartialPaths,
     contents: NicePartialPath,
 ) -> Result<PartialPath, PathResolutionError> {
-    let mut g = StackGraph::new();
-    g.add_from_graph(graph).expect("");
-
     let mut nodes = contents.iter();
     let mut prev = nodes.next().unwrap();
     let mut path = PartialPath::from_node(graph, partials, *prev);
     for next in nodes {
-        g.add_edge(*prev, *next, 0);
+        graph.add_edge(*prev, *next, 0);
         path.append(
             graph,
             partials,
