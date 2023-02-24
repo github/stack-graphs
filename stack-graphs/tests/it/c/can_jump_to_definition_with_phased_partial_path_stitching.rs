@@ -8,6 +8,8 @@
 use std::collections::BTreeSet;
 
 use pretty_assertions::assert_eq;
+use stack_graphs::c::sg_appended_paths_arena_free;
+use stack_graphs::c::sg_appended_paths_arena_new;
 use stack_graphs::c::sg_forward_partial_path_stitcher_free;
 use stack_graphs::c::sg_forward_partial_path_stitcher_from_nodes;
 use stack_graphs::c::sg_forward_partial_path_stitcher_process_next_phase;
@@ -108,6 +110,7 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
     let partials = sg_partial_path_arena_new();
     let rust_partials = unsafe { &mut (*partials).inner };
     let db = sg_partial_path_database_new();
+    let paths = sg_appended_paths_arena_new();
 
     // Create a new external storage layer holding _all_ of the partial paths in the stack graph.
     let mut storage_layer = StorageLayer::new(graph.graph, partials);
@@ -133,6 +136,7 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
         graph.graph,
         partials,
         db,
+        paths,
         references.len(),
         references.as_ptr() as *const _,
     );
@@ -218,7 +222,13 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
         }
 
         // And then kick off the next phase!
-        sg_forward_partial_path_stitcher_process_next_phase(graph.graph, partials, db, stitcher);
+        sg_forward_partial_path_stitcher_process_next_phase(
+            graph.graph,
+            partials,
+            db,
+            paths,
+            stitcher,
+        );
     }
     copious_debugging!("==> Path stitching done");
 
@@ -229,6 +239,7 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
         .collect::<BTreeSet<_>>();
     assert_eq!(expected_partial_paths, results);
 
+    sg_appended_paths_arena_free(paths);
     sg_forward_partial_path_stitcher_free(stitcher);
     sg_partial_path_database_free(db);
     sg_partial_path_arena_free(partials);

@@ -15,6 +15,7 @@ use std::sync::atomic::AtomicUsize;
 use libc::c_char;
 
 use crate::arena::Handle;
+use crate::cycles::AppendedPartialPaths;
 use crate::graph::File;
 use crate::graph::InternedString;
 use crate::graph::Node;
@@ -95,6 +96,25 @@ pub extern "C" fn sg_partial_path_arena_new() -> *mut sg_partial_path_arena {
 /// Frees a path arena, and all of its contents.
 #[no_mangle]
 pub extern "C" fn sg_partial_path_arena_free(partials: *mut sg_partial_path_arena) {
+    drop(unsafe { Box::from_raw(partials) })
+}
+
+/// Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
+pub struct sg_appended_paths_arena {
+    pub inner: AppendedPartialPaths,
+}
+
+/// Creates a new, initially empty partial path arena.
+#[no_mangle]
+pub extern "C" fn sg_appended_paths_arena_new() -> *mut sg_appended_paths_arena {
+    Box::into_raw(Box::new(sg_appended_paths_arena {
+        inner: AppendedPartialPaths::new(),
+    }))
+}
+
+/// Frees a path arena, and all of its contents.
+#[no_mangle]
+pub extern "C" fn sg_appended_paths_arena_free(partials: *mut sg_appended_paths_arena) {
     drop(unsafe { Box::from_raw(partials) })
 }
 
@@ -1962,17 +1982,20 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     graph: *const sg_stack_graph,
     partials: *mut sg_partial_path_arena,
     db: *mut sg_partial_path_database,
+    paths: *mut sg_appended_paths_arena,
     count: usize,
     starting_nodes: *const sg_node_handle,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let db = unsafe { &mut (*db).inner };
+    let paths = unsafe { &mut (*paths).inner };
     let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, count) };
     let stitcher = ForwardPartialPathStitcher::from_nodes(
         graph,
         partials,
         db,
+        paths,
         starting_nodes.iter().copied().map(sg_node_handle::into),
     );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
@@ -1992,18 +2015,21 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
     graph: *const sg_stack_graph,
     partials: *mut sg_partial_path_arena,
     db: *mut sg_partial_path_database,
+    paths: *mut sg_appended_paths_arena,
     count: usize,
     initial_partial_paths: *const sg_partial_path,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let db = unsafe { &mut (*db).inner };
+    let paths = unsafe { &mut (*paths).inner };
     let initial_partial_paths =
         unsafe { std::slice::from_raw_parts(initial_partial_paths as *const PartialPath, count) };
     let stitcher = ForwardPartialPathStitcher::from_partial_paths(
         graph,
         partials,
         db,
+        paths,
         initial_partial_paths.to_vec(),
     );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
@@ -2038,13 +2064,17 @@ pub extern "C" fn sg_forward_partial_path_stitcher_process_next_phase(
     graph: *const sg_stack_graph,
     partials: *mut sg_partial_path_arena,
     db: *mut sg_partial_path_database,
+    paths: *mut sg_appended_paths_arena,
     stitcher: *mut sg_forward_partial_path_stitcher,
 ) {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let db = unsafe { &mut (*db).inner };
+    let paths = unsafe { &mut (*paths).inner };
     let stitcher = unsafe { &mut *(stitcher as *mut InternalForwardPartialPathStitcher) };
-    stitcher.stitcher.process_next_phase(graph, partials, db);
+    stitcher
+        .stitcher
+        .process_next_phase(graph, partials, db, paths);
     stitcher.update_previous_phase_partial_paths(partials);
 }
 
