@@ -28,11 +28,10 @@
 //! “import/export” points.
 //!
 //! At query time, we can then load in the _partial paths_ for each file, instead of the files'
-//! full stack graph structure.  We can efficiently [append][] or [prepend][] partial paths together,
+//! full stack graph structure.  We can efficiently [concatenate][] partial paths together,
 //! producing the original "full" path that represents a name binding.
 //!
-//! [append]: struct.PartialPath.html#method.append_partial_path
-//! [prepend]: struct.PartialPath.html#method.prepend_partial_path
+//! [concatenate]: struct.PartialPath.html#method.concatenate
 
 use std::collections::VecDeque;
 use std::convert::TryFrom;
@@ -46,8 +45,8 @@ use smallvec::SmallVec;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
-use crate::cycles::AppendingCycleDetector;
 use crate::cycles::CycleDetector;
+use crate::cycles::EdgeAppendingCycleDetector;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -815,8 +814,8 @@ impl PartialSymbolStack {
     /// account any existing variable assignments, and updates those variable assignments with
     /// whatever constraints are necessary to produce a correct result.
     ///
-    /// Note that this operation is commutative.  (Appending and prepending partial paths, defined in
-    /// [`PartialPath::append_partial_path`][]/[`PartialPath::prepend_partial_path`][], is not.)
+    /// Note that this operation is commutative.  (Concatenating partial paths, defined in
+    /// [`PartialPath::concatenate`][], is not.)
     pub fn unify(
         self,
         partials: &mut PartialPaths,
@@ -1243,8 +1242,8 @@ impl PartialScopeStack {
     /// account any existing variable assignments, and updates those variable assignments with
     /// whatever constraints are necessary to produce a correct result.
     ///
-    /// Note that this operation is commutative.  (Appending and prepending partial paths, defined in
-    /// [`PartialPath::append_partial_path`][]/[`PartialPath::prepend_partial_path`][], is not.)
+    /// Note that this operation is commutative.  (Concatenating partial paths, defined in
+    /// [`PartialPath::concatenate`][], is not.)
     pub fn unify(
         self,
         partials: &mut PartialPaths,
@@ -1961,7 +1960,7 @@ impl PartialPath {
         let mut scope_stack_postcondition = PartialScopeStack::from_variable(initial_scope_stack);
 
         graph[node]
-            .apply_to_partial_stacks(
+            .append_to_partial_stacks(
                 graph,
                 partials,
                 &mut symbol_stack_precondition,
@@ -2297,7 +2296,7 @@ impl PartialPath {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
-        graph[edge.sink].apply_to_partial_stacks(
+        graph[edge.sink].append_to_partial_stacks(
             graph,
             partials,
             &mut self.symbol_stack_precondition,
@@ -2349,6 +2348,26 @@ impl PartialPath {
         Ok(())
     }
 
+    /// Attempts to resolve any _jump to scope_ node at the end of a partial path to the given node.
+    /// If the partial path does not end in a _jump to scope_ node, we do nothing.  If it does, and we
+    /// cannot resolve it, then we return an error describing why.
+    pub fn resolve_to(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        node: Handle<Node>,
+    ) -> Result<(), PathResolutionError> {
+        if !graph[self.end_node].is_jump_to() {
+            return Ok(());
+        }
+        if self.scope_stack_postcondition.contains_scopes() {
+            return Err(PathResolutionError::ScopeStackUnsatisfied); // this path was not properly resolved
+        }
+        self.scope_stack_precondition.push_back(partials, node);
+        self.end_node = node;
+        Ok(())
+    }
+
     /// Attempts to extend one partial path as part of the partial-path-finding algorithm, using
     /// only outgoing edges that belong to a particular file.  When calling this function, you are
     /// responsible for ensuring that `graph` already contains data for all of the possible edges
@@ -2358,12 +2377,12 @@ impl PartialPath {
     /// as a parameter, instead of building it up ourselves, so that you have control over which
     /// particular collection type to use, and so that you can reuse result collections across
     /// multiple calls.
-    pub fn extend_from_file<R: Extend<(PartialPath, AppendingCycleDetector)>>(
+    pub fn extend_from_file<R: Extend<(PartialPath, EdgeAppendingCycleDetector)>>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
         file: Handle<File>,
-        path_cycle_detector: AppendingCycleDetector,
+        path_cycle_detector: EdgeAppendingCycleDetector,
         result: &mut R,
     ) {
         let extensions = graph.outgoing_edges(self.end_node);
@@ -2386,7 +2405,10 @@ impl PartialPath {
                 copious_debugging!("         * invalid extension");
                 continue;
             }
-            if !new_cycle_detector.appended(graph, partials, extension.sink) {
+            if new_cycle_detector
+                .append_edge(graph, partials, extension)
+                .is_err()
+            {
                 copious_debugging!("         * cycle");
                 continue;
             }
@@ -2398,7 +2420,7 @@ impl PartialPath {
 impl Node {
     /// Update the given partial path pre- and postconditions with the effect of
     /// appending this node to that partial path.
-    pub(crate) fn apply_to_partial_stacks(
+    pub(crate) fn append_to_partial_stacks(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2682,8 +2704,10 @@ impl PartialPaths {
                 .chain(std::iter::once(StackGraph::root_node()))
                 .filter(|node| graph[*node].is_endpoint())
                 .map(|node| {
-                    let path = PartialPath::from_node(graph, self, node);
-                    (path, AppendingCycleDetector::from_node(node))
+                    (
+                        PartialPath::from_node(graph, self, node),
+                        EdgeAppendingCycleDetector::new(),
+                    )
                 }),
         );
         while let Some((path, path_cycle_detector)) = queue.pop_front() {
@@ -2804,7 +2828,7 @@ impl PartialPath {
     /// responsibility to update the two partial paths so that they have no variables in common, if
     /// that's needed for your use case.
     #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
-    pub fn append_partial_path(
+    pub fn concatenate(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2860,74 +2884,6 @@ impl PartialPath {
         lhs.end_node = rhs.end_node;
 
         lhs.resolve(graph, partials)?;
-
-        Ok(())
-    }
-
-    /// Attempts to prepend a partial path to this one.  If the postcondition of the “left” partial path
-    /// is not compatible with the precondition of the “right” path, we return an error describing why.
-    ///
-    /// If the left- and right-hand partial paths have any symbol or scope stack variables in
-    /// common, then we ensure that the variables bind to the same values on both sides.  It's your
-    /// responsibility to update the two partial paths so that they have no variables in common, if
-    /// that's needed for your use case.
-    #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
-    pub fn prepend_partial_path(
-        &mut self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        lhs: &PartialPath,
-    ) -> Result<(), PathResolutionError> {
-        let rhs = self;
-
-        #[cfg_attr(not(feature = "copious-debugging"), allow(unused_mut))]
-        let mut join = Self::compute_join(graph, partials, lhs, rhs)?;
-        #[cfg(feature = "copious-debugging")]
-        {
-            let unified_symbol_stack = join
-                .unified_symbol_stack
-                .display(graph, partials)
-                .to_string();
-            let unified_scope_stack = join
-                .unified_scope_stack
-                .display(graph, partials)
-                .to_string();
-            let symbol_bindings = join.symbol_bindings.display(graph, partials).to_string();
-            let scope_bindings = join.scope_bindings.display(graph, partials).to_string();
-            copious_debugging!(
-                "       via <{}> ({}) {} {}",
-                unified_symbol_stack,
-                unified_scope_stack,
-                symbol_bindings,
-                scope_bindings,
-            );
-        }
-
-        rhs.symbol_stack_precondition = lhs.symbol_stack_precondition.apply_partial_bindings(
-            partials,
-            &join.symbol_bindings,
-            &join.scope_bindings,
-        )?;
-        rhs.symbol_stack_postcondition = rhs.symbol_stack_postcondition.apply_partial_bindings(
-            partials,
-            &join.symbol_bindings,
-            &join.scope_bindings,
-        )?;
-
-        rhs.scope_stack_precondition = lhs
-            .scope_stack_precondition
-            .apply_partial_bindings(partials, &join.scope_bindings)?;
-        rhs.scope_stack_postcondition = rhs
-            .scope_stack_postcondition
-            .apply_partial_bindings(partials, &join.scope_bindings)?;
-
-        let mut edges = lhs.edges;
-        while let Some(edge) = edges.pop_back(partials) {
-            rhs.edges.push_front(partials, edge);
-        }
-        rhs.start_node = lhs.start_node;
-
-        rhs.resolve(graph, partials)?;
 
         Ok(())
     }
