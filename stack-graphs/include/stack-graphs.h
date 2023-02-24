@@ -1074,7 +1074,7 @@ struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_n
 // `previous_phase_partial_paths_length` fields.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *graph,
                                                                                              struct sg_partial_path_arena *partials,
-                                                                                             struct sg_partial_path_database *_db,
+                                                                                             struct sg_partial_path_database *db,
                                                                                              size_t count,
                                                                                              const struct sg_partial_path *initial_partial_paths);
 
