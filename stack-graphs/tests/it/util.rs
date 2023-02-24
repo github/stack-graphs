@@ -131,3 +131,11 @@ pub(crate) fn create_partial_path_and_edges(
 
     Ok(path)
 }
+
+pub(crate) fn edge(source: Handle<Node>, sink: Handle<Node>, precedence: i32) -> Edge {
+    Edge {
+        source,
+        sink,
+        precedence,
+    }
+}

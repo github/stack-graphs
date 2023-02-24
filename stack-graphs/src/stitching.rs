@@ -49,7 +49,7 @@ use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
 use crate::cycles::CycleDetector;
-use crate::cycles::JoiningCycleDetector;
+use crate::cycles::PartialPathAppendingCycleDetector;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
@@ -720,8 +720,11 @@ impl PathStitcher {
 /// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
 pub struct ForwardPartialPathStitcher {
     candidate_partial_paths: Vec<Handle<PartialPath>>,
-    queue: VecDeque<(PartialPath, JoiningCycleDetector)>,
-    next_iteration: (VecDeque<PartialPath>, VecDeque<JoiningCycleDetector>),
+    queue: VecDeque<(PartialPath, PartialPathAppendingCycleDetector)>,
+    next_iteration: (
+        VecDeque<PartialPath>,
+        VecDeque<PartialPathAppendingCycleDetector>,
+    ),
     similar_path_detector: CycleDetector<PartialPath>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
@@ -777,7 +780,12 @@ impl ForwardPartialPathStitcher {
             .map(|handle| {
                 (
                     db[handle].clone(),
-                    JoiningCycleDetector::from_partial_path_handle(graph, partials, db, handle),
+                    PartialPathAppendingCycleDetector::from_partial_path(
+                        graph,
+                        partials,
+                        db,
+                        handle.into(),
+                    ),
                 )
             })
             .unzip();
@@ -807,12 +815,18 @@ impl ForwardPartialPathStitcher {
     pub fn from_partial_paths(
         graph: &StackGraph,
         partials: &mut PartialPaths,
+        db: &mut Database,
         initial_partial_paths: Vec<PartialPath>,
     ) -> ForwardPartialPathStitcher {
         let next_iteration = initial_partial_paths
             .into_iter()
             .map(|p| {
-                let c = JoiningCycleDetector::from_partial_path(graph, partials, p.clone());
+                let c = PartialPathAppendingCycleDetector::from_partial_path(
+                    graph,
+                    partials,
+                    db,
+                    p.clone().into(),
+                );
                 (p, c)
             })
             .unzip();
@@ -875,7 +889,7 @@ impl ForwardPartialPathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         partial_path: &PartialPath,
-        cycle_detector: JoiningCycleDetector,
+        cycle_detector: PartialPathAppendingCycleDetector,
     ) -> usize {
         self.candidate_partial_paths.clear();
         if graph[partial_path.end_node].is_root() {
@@ -915,13 +929,14 @@ impl ForwardPartialPathStitcher {
             // partial path, just skip the extension — it's not a fatal error.
             #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
             {
-                if let Err(err) =
-                    new_partial_path.append_partial_path(graph, partials, &extension_path)
-                {
+                if let Err(err) = new_partial_path.concatenate(graph, partials, &extension_path) {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                if !new_cycle_detector.joined(graph, partials, db, extension.into()) {
+                if new_cycle_detector
+                    .append_partial_path(graph, partials, db, extension.into())
+                    .is_err()
+                {
                     copious_debugging!("        is invalid: cyclic");
                     continue;
                 }
