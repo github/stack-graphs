@@ -48,6 +48,7 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
+use crate::cycles::AppendedPartialPaths;
 use crate::cycles::PartialPathAppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Node;
@@ -749,6 +750,7 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
+        paths: &mut AppendedPartialPaths,
         starting_nodes: I,
     ) -> ForwardPartialPathStitcher
     where
@@ -784,6 +786,7 @@ impl ForwardPartialPathStitcher {
                         graph,
                         partials,
                         db,
+                        paths,
                         handle.into(),
                     ),
                 )
@@ -816,6 +819,7 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
+        paths: &mut AppendedPartialPaths,
         initial_partial_paths: Vec<PartialPath>,
     ) -> ForwardPartialPathStitcher {
         let next_iteration = initial_partial_paths
@@ -825,6 +829,7 @@ impl ForwardPartialPathStitcher {
                     graph,
                     partials,
                     db,
+                    paths,
                     p.clone().into(),
                 );
                 (p, c)
@@ -888,6 +893,7 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
+        paths: &mut AppendedPartialPaths,
         partial_path: &PartialPath,
         cycle_detector: PartialPathAppendingCycleDetector,
     ) -> usize {
@@ -934,7 +940,7 @@ impl ForwardPartialPathStitcher {
                     continue;
                 }
                 if new_cycle_detector
-                    .append_partial_path(graph, partials, db, extension.into())
+                    .append_partial_path(graph, partials, db, paths, extension.into())
                     .is_err()
                 {
                     copious_debugging!("        is invalid: cyclic");
@@ -968,6 +974,7 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
+        paths: &mut AppendedPartialPaths,
     ) {
         copious_debugging!("==> Start phase {}", self.phase_number);
         self.queue.extend(
@@ -996,7 +1003,7 @@ impl ForwardPartialPathStitcher {
                 continue;
             }
             work_performed +=
-                self.stitch_partial_path(graph, partials, db, &partial_path, cycle_detector);
+                self.stitch_partial_path(graph, partials, db, paths, &partial_path, cycle_detector);
             if work_performed >= self.max_work_per_phase {
                 break;
             }
@@ -1031,8 +1038,9 @@ impl ForwardPartialPathStitcher {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
+        let mut paths = AppendedPartialPaths::new();
         let mut stitcher =
-            ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
+            ForwardPartialPathStitcher::from_nodes(graph, partials, db, &mut paths, starting_nodes);
         stitcher.set_should_extend(|g, _, p| p.starts_at_reference(g));
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
@@ -1042,7 +1050,7 @@ impl ForwardPartialPathStitcher {
             for path in complete_partial_paths {
                 visit(graph, partials, path);
             }
-            stitcher.process_next_phase(graph, partials, db);
+            stitcher.process_next_phase(graph, partials, db, &mut paths);
         }
         Ok(())
     }

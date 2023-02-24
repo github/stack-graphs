@@ -135,9 +135,20 @@ where
     }
 }
 
+// ----------------------------------------------------------------------------
+// Cycle detector when appending edges
+
 #[derive(Clone)]
 pub struct EdgeAppendingCycleDetector {
     edges: VecDeque<Edge>,
+}
+
+pub struct AppendedEdges {}
+
+impl AppendedEdges {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
 impl EdgeAppendingCycleDetector {
@@ -151,6 +162,7 @@ impl EdgeAppendingCycleDetector {
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
+        _edges: &mut AppendedEdges,
         edge: Edge,
     ) -> Result<(), ()> {
         let end_node = edge.sink;
@@ -188,9 +200,20 @@ impl EdgeAppendingCycleDetector {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Cycle detector when appending partial paths
+
 #[derive(Clone)]
 pub struct PartialPathAppendingCycleDetector {
     paths: VecDeque<OwnedOrDatabasePath>,
+}
+
+pub struct AppendedPartialPaths {}
+
+impl AppendedPartialPaths {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
 impl PartialPathAppendingCycleDetector {
@@ -198,6 +221,7 @@ impl PartialPathAppendingCycleDetector {
         _graph: &StackGraph,
         _partials: &mut PartialPaths,
         _db: &mut Database,
+        _paths: &mut AppendedPartialPaths,
         path: OwnedOrDatabasePath,
     ) -> Self {
         Self {
@@ -210,6 +234,7 @@ impl PartialPathAppendingCycleDetector {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &Database,
+        _paths: &mut AppendedPartialPaths,
         path: OwnedOrDatabasePath,
     ) -> Result<(), ()> {
         let end_node = path.get(db).end_node;

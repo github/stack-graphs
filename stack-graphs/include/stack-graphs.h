@@ -60,6 +60,9 @@ enum sg_result {
 };
 
 // Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
+struct sg_appended_paths_arena;
+
+// Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
 struct sg_partial_path_arena;
 
 // Contains a "database" of partial paths.
@@ -661,6 +664,12 @@ struct sg_partial_path_arena *sg_partial_path_arena_new(void);
 // Frees a path arena, and all of its contents.
 void sg_partial_path_arena_free(struct sg_partial_path_arena *partials);
 
+// Creates a new, initially empty partial path arena.
+struct sg_appended_paths_arena *sg_appended_paths_arena_new(void);
+
+// Frees a path arena, and all of its contents.
+void sg_appended_paths_arena_free(struct sg_appended_paths_arena *partials);
+
 // Creates a new, initially empty partial path database.
 struct sg_partial_path_database *sg_partial_path_database_new(void);
 
@@ -1062,6 +1071,7 @@ void sg_forward_path_stitcher_free(struct sg_forward_path_stitcher *stitcher);
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_nodes(const struct sg_stack_graph *graph,
                                                                                      struct sg_partial_path_arena *partials,
                                                                                      struct sg_partial_path_database *db,
+                                                                                     struct sg_appended_paths_arena *paths,
                                                                                      size_t count,
                                                                                      const sg_node_handle *starting_nodes);
 
@@ -1075,6 +1085,7 @@ struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_n
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *graph,
                                                                                              struct sg_partial_path_arena *partials,
                                                                                              struct sg_partial_path_database *db,
+                                                                                             struct sg_appended_paths_arena *paths,
                                                                                              size_t count,
                                                                                              const struct sg_partial_path *initial_partial_paths);
 
@@ -1097,6 +1108,7 @@ void sg_forward_partial_path_stitcher_set_max_work_per_phase(struct sg_forward_p
 void sg_forward_partial_path_stitcher_process_next_phase(const struct sg_stack_graph *graph,
                                                          struct sg_partial_path_arena *partials,
                                                          struct sg_partial_path_database *db,
+                                                         struct sg_appended_paths_arena *paths,
                                                          struct sg_forward_partial_path_stitcher *stitcher);
 
 // Frees a forward path stitcher.
