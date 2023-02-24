@@ -16,6 +16,8 @@ use std::time::Duration;
 
 use crate::util::*;
 
+const TEST_TIMEOUT: Duration = Duration::from_secs(3);
+
 // ----------------------------------------------------------------------------
 // productive paths
 
@@ -167,7 +169,7 @@ fn finding_simple_identity_cycle_is_detected() {
     // test termination of path finding
     {
         let mut path_count = 0usize;
-        let cancellation_flag = CancelAfterDuration::new(Duration::from_secs(10));
+        let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
         let result = partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
@@ -269,7 +271,7 @@ fn finding_composite_identity_cycle_is_detected() {
     // test termination of path finding
     {
         let mut path_count = 0usize;
-        let cancellation_flag = CancelAfterDuration::new(Duration::from_secs(10));
+        let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
         let result = partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
@@ -309,5 +311,31 @@ fn stitching_composite_identity_cycle_is_detected() {
         assert!(cd
             .append(&graph, &mut partials, &mut db, &mut paths, p1.into())
             .is_err());
+    }
+}
+
+#[test]
+fn appending_eliminating_cycle_terminates() {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").unwrap();
+    let r = StackGraph::root_node();
+    let s = create_scope_node(&mut graph, file, false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+
+    let mut partials = PartialPaths::new();
+    create_partial_path_and_edges(&mut graph, &mut partials, &[r, s, foo_def, s, r]).unwrap();
+
+    // test termination of path finding
+    {
+        let mut path_count = 0usize;
+        let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
+        let result = partials.find_minimal_partial_path_set_in_file(
+            &graph,
+            file,
+            &cancellation_flag,
+            |_, _, _| path_count += 1,
+        );
+        assert!(result.is_ok());
+        assert_eq!(0, path_count);
     }
 }
