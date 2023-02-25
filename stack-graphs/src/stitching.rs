@@ -726,6 +726,7 @@ pub struct ForwardPartialPathStitcher {
         VecDeque<PartialPath>,
         VecDeque<PartialPathAppendingCycleDetector>,
     ),
+    appended_paths: AppendedPartialPaths,
     similar_path_detector: SimilarPathDetector<PartialPath>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
@@ -750,7 +751,6 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
-        paths: &mut AppendedPartialPaths,
         starting_nodes: I,
     ) -> ForwardPartialPathStitcher
     where
@@ -776,6 +776,7 @@ impl ForwardPartialPathStitcher {
                 );
             }
         }
+        let mut appended_paths = AppendedPartialPaths::new();
         let next_iteration = candidate_partial_paths
             .iter()
             .copied()
@@ -786,7 +787,7 @@ impl ForwardPartialPathStitcher {
                         graph,
                         partials,
                         db,
-                        paths,
+                        &mut appended_paths,
                         handle.into(),
                     ),
                 )
@@ -798,6 +799,7 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             similar_path_detector: SimilarPathDetector::new(),
+            appended_paths,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -819,9 +821,9 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
-        paths: &mut AppendedPartialPaths,
         initial_partial_paths: Vec<PartialPath>,
     ) -> ForwardPartialPathStitcher {
+        let mut appended_paths = AppendedPartialPaths::new();
         let next_iteration = initial_partial_paths
             .into_iter()
             .map(|p| {
@@ -829,7 +831,7 @@ impl ForwardPartialPathStitcher {
                     graph,
                     partials,
                     db,
-                    paths,
+                    &mut appended_paths,
                     p.clone().into(),
                 );
                 (p, c)
@@ -839,6 +841,7 @@ impl ForwardPartialPathStitcher {
             candidate_partial_paths: Vec::new(),
             queue: VecDeque::new(),
             next_iteration,
+            appended_paths,
             similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
@@ -893,7 +896,6 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
-        paths: &mut AppendedPartialPaths,
         partial_path: &PartialPath,
         cycle_detector: PartialPathAppendingCycleDetector,
     ) -> usize {
@@ -940,7 +942,13 @@ impl ForwardPartialPathStitcher {
                     continue;
                 }
                 if new_cycle_detector
-                    .append_partial_path(graph, partials, db, paths, extension.into())
+                    .append_partial_path(
+                        graph,
+                        partials,
+                        db,
+                        &mut self.appended_paths,
+                        extension.into(),
+                    )
                     .is_err()
                 {
                     copious_debugging!("        is invalid: cyclic");
@@ -974,7 +982,6 @@ impl ForwardPartialPathStitcher {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
-        paths: &mut AppendedPartialPaths,
     ) {
         copious_debugging!("==> Start phase {}", self.phase_number);
         self.queue.extend(
@@ -1003,7 +1010,7 @@ impl ForwardPartialPathStitcher {
                 continue;
             }
             work_performed +=
-                self.stitch_partial_path(graph, partials, db, paths, &partial_path, cycle_detector);
+                self.stitch_partial_path(graph, partials, db, &partial_path, cycle_detector);
             if work_performed >= self.max_work_per_phase {
                 break;
             }
@@ -1038,9 +1045,8 @@ impl ForwardPartialPathStitcher {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
-        let mut paths = AppendedPartialPaths::new();
         let mut stitcher =
-            ForwardPartialPathStitcher::from_nodes(graph, partials, db, &mut paths, starting_nodes);
+            ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
         stitcher.set_should_extend(|g, _, p| p.starts_at_reference(g));
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
@@ -1050,7 +1056,7 @@ impl ForwardPartialPathStitcher {
             for path in complete_partial_paths {
                 visit(graph, partials, path);
             }
-            stitcher.process_next_phase(graph, partials, db, &mut paths);
+            stitcher.process_next_phase(graph, partials, db);
         }
         Ok(())
     }

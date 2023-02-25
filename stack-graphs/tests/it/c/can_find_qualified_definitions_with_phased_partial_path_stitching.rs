@@ -9,8 +9,6 @@ use std::collections::BTreeSet;
 
 use controlled_option::ControlledOption;
 use pretty_assertions::assert_eq;
-use stack_graphs::c::sg_appended_paths_arena_free;
-use stack_graphs::c::sg_appended_paths_arena_new;
 use stack_graphs::c::sg_forward_partial_path_stitcher_free;
 use stack_graphs::c::sg_forward_partial_path_stitcher_from_partial_paths;
 use stack_graphs::c::sg_forward_partial_path_stitcher_process_next_phase;
@@ -119,7 +117,6 @@ fn check_find_qualified_definitions(
     let partials = sg_partial_path_arena_new();
     let rust_partials = unsafe { &mut (*partials).inner };
     let db = sg_partial_path_database_new();
-    let paths = sg_appended_paths_arena_new();
 
     // Create a new external storage layer holding _all_ of the partial paths in the stack graph.
     let mut storage_layer = StorageLayer::new(graph.graph, partials);
@@ -151,7 +148,6 @@ fn check_find_qualified_definitions(
         graph.graph,
         partials,
         db,
-        paths,
         1,
         &initial_partial_path as *const PartialPath as *const _,
     );
@@ -237,13 +233,7 @@ fn check_find_qualified_definitions(
         }
 
         // And then kick off the next phase!
-        sg_forward_partial_path_stitcher_process_next_phase(
-            graph.graph,
-            partials,
-            db,
-            paths,
-            stitcher,
-        );
+        sg_forward_partial_path_stitcher_process_next_phase(graph.graph, partials, db, stitcher);
     }
     copious_debugging!("==> Path stitching done");
 
@@ -254,7 +244,6 @@ fn check_find_qualified_definitions(
         .collect::<BTreeSet<_>>();
     assert_eq!(expected_partial_paths, results);
 
-    sg_appended_paths_arena_free(paths);
     sg_forward_partial_path_stitcher_free(stitcher);
     sg_partial_path_database_free(db);
     sg_partial_path_arena_free(partials);
