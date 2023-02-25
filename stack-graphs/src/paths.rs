@@ -28,7 +28,6 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
-use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::NodeID;
@@ -918,7 +917,6 @@ impl Paths {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
     {
-        let mut similar_path_detector_detector = SimilarPathDetector::new();
         let mut queue = starting_nodes
             .into_iter()
             .filter_map(|node| {
@@ -929,13 +927,7 @@ impl Paths {
         let mut edges = Appendables::new();
         while let Some((path, path_cycle_detector)) = queue.pop_front() {
             cancellation_flag.check("finding paths")?;
-            if !similar_path_detector_detector
-                .should_process_path(&path, |probe| probe.cmp(graph, self, &path))
-            {
-                continue;
-            } else {
-                visit(graph, self, path.clone());
-            }
+            visit(graph, self, path.clone());
             if !path_cycle_detector
                 .is_cyclic(graph, &mut partials, &mut (), &mut edges)
                 .expect("cyclic test failed when finding paths")

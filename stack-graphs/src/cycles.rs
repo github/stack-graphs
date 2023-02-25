@@ -29,10 +29,7 @@
 //! always use this particular heuristic, however!  We reserve the right to change the heuristic at
 //! any time.
 
-use std::collections::HashMap;
-
 use enumset::EnumSet;
-use smallvec::SmallVec;
 
 use crate::arena::Handle;
 use crate::arena::List;
@@ -43,100 +40,9 @@ use crate::graph::StackGraph;
 use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
-use crate::paths::Path;
 use crate::paths::PathResolutionError;
 use crate::stitching::Database;
 use crate::stitching::OwnedOrDatabasePath;
-
-/// Helps detect similar paths in the path-finding algorithm.
-pub struct SimilarPathDetector<P> {
-    paths: HashMap<PathKey, SmallVec<[P; 8]>>,
-}
-
-#[doc(hidden)]
-#[derive(Clone, Eq, Hash, PartialEq)]
-pub struct PathKey {
-    start_node: Handle<Node>,
-    end_node: Handle<Node>,
-}
-
-#[doc(hidden)]
-pub trait HasPathKey: Clone {
-    fn key(&self) -> PathKey;
-    fn is_shorter_than(&self, other: &Self) -> bool;
-}
-
-impl HasPathKey for Path {
-    fn key(&self) -> PathKey {
-        PathKey {
-            start_node: self.start_node,
-            end_node: self.end_node,
-        }
-    }
-
-    fn is_shorter_than(&self, other: &Self) -> bool {
-        self.edges.len() < other.edges.len() && self.symbol_stack.len() <= other.symbol_stack.len()
-    }
-}
-
-impl HasPathKey for PartialPath {
-    fn key(&self) -> PathKey {
-        PathKey {
-            start_node: self.start_node,
-            end_node: self.end_node,
-        }
-    }
-
-    fn is_shorter_than(&self, other: &Self) -> bool {
-        self.edges.len() < other.edges.len()
-            && (self.symbol_stack_precondition.len() + self.symbol_stack_postcondition.len())
-                <= (other.symbol_stack_precondition.len() + other.symbol_stack_postcondition.len())
-    }
-}
-
-const MAX_SIMILAR_PATH_COUNT: usize = 7;
-
-impl<P> SimilarPathDetector<P>
-where
-    P: HasPathKey,
-{
-    /// Creates a new, empty cycle detector.
-    pub fn new() -> SimilarPathDetector<P> {
-        SimilarPathDetector {
-            paths: HashMap::new(),
-        }
-    }
-
-    /// Determines whether we should process this path during the path-finding algorithm.  If our
-    /// heuristics decide that this path is a duplicate, or is "non-productive", then we return
-    /// `false`, and the path-finding algorithm will skip this path.
-    pub fn should_process_path<F>(&mut self, path: &P, cmp: F) -> bool
-    where
-        F: FnMut(&P) -> std::cmp::Ordering,
-    {
-        let key = path.key();
-        let paths_with_same_nodes = self.paths.entry(key).or_default();
-        let index = match paths_with_same_nodes.binary_search_by(cmp) {
-            // We've already seen this exact path before; no need to process it again.
-            Ok(_) => return false,
-            // Otherwise add it to the list.
-            Err(index) => index,
-        };
-
-        // Count how many paths we've already processed that have the same endpoints and are
-        // "shorter".
-        let similar_path_count = paths_with_same_nodes
-            .iter()
-            .filter(|similar_path| similar_path.is_shorter_than(path))
-            .count();
-        if similar_path_count > MAX_SIMILAR_PATH_COUNT {
-            return false;
-        }
-
-        paths_with_same_nodes.insert(index, path.clone());
-        true
-    }
-}
 
 // ----------------------------------------------------------------------------
 // Cycle detector

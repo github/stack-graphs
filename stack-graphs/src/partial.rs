@@ -48,7 +48,6 @@ use crate::arena::DequeArena;
 use crate::arena::Handle;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
-use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -2793,7 +2792,6 @@ impl PartialPaths {
         }
 
         copious_debugging!("Find all partial paths in {}", graph[file]);
-        let mut similar_path_detector = SimilarPathDetector::new();
         let mut queue = VecDeque::new();
         let mut edges = Appendables::new();
         queue.extend(
@@ -2813,14 +2811,8 @@ impl PartialPaths {
             let is_seed = path.edges.is_empty();
             copious_debugging!(" => {}", path.display(graph, self));
             if !is_seed && as_complete_as_necessary(graph, &path) {
-                if !similar_path_detector
-                    .should_process_path(&path, |probe| probe.cmp(graph, self, &path))
-                {
-                    copious_debugging!("    * too many similar");
-                } else {
-                    copious_debugging!("    * visit");
-                    visit(graph, self, path);
-                }
+                copious_debugging!("    * visit");
+                visit(graph, self, path);
             } else if !path_cycle_detector
                 .is_cyclic(graph, self, &mut (), &mut edges)
                 .expect("cyclic test failed when finding partial paths")
