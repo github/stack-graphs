@@ -716,6 +716,8 @@ impl<'a> DisplayWithPaths for &'a Path {
 /// Errors that can occur during the path resolution process.
 #[derive(Debug)]
 pub enum PathResolutionError {
+    /// The path is cyclic, and the cycle is disallowed.
+    DisallowedCycle,
     /// The path contains a _jump to scope_ node, but there are no scopes on the scope stack to
     /// jump to.
     EmptyScopeStack,

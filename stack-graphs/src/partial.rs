@@ -45,8 +45,8 @@ use smallvec::SmallVec;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
-use crate::cycles::AppendedEdges;
-use crate::cycles::EdgeAppendingCycleDetector;
+use crate::cycles::Appendages;
+use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::File;
@@ -2378,13 +2378,13 @@ impl PartialPath {
     /// as a parameter, instead of building it up ourselves, so that you have control over which
     /// particular collection type to use, and so that you can reuse result collections across
     /// multiple calls.
-    pub fn extend_from_file<R: Extend<(PartialPath, EdgeAppendingCycleDetector)>>(
+    pub fn extend_from_file<R: Extend<(PartialPath, AppendingCycleDetector<Edge>)>>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
         file: Handle<File>,
-        edges: &mut AppendedEdges,
-        path_cycle_detector: EdgeAppendingCycleDetector,
+        edges: &mut Appendages<Edge>,
+        path_cycle_detector: AppendingCycleDetector<Edge>,
         result: &mut R,
     ) {
         let extensions = graph.outgoing_edges(self.end_node);
@@ -2408,7 +2408,7 @@ impl PartialPath {
                 continue;
             }
             if new_cycle_detector
-                .append_edge(graph, partials, edges, extension)
+                .append(graph, partials, &mut (), edges, extension)
                 .is_err()
             {
                 copious_debugging!("         * cycle");
@@ -2700,7 +2700,7 @@ impl PartialPaths {
         copious_debugging!("Find all partial paths in {}", graph[file]);
         let mut similar_path_detector = SimilarPathDetector::new();
         let mut queue = VecDeque::new();
-        let mut edges = AppendedEdges::new();
+        let mut edges = Appendages::new();
         queue.extend(
             graph
                 .nodes_for_file(file)
@@ -2709,7 +2709,7 @@ impl PartialPaths {
                 .map(|node| {
                     (
                         PartialPath::from_node(graph, self, node),
-                        EdgeAppendingCycleDetector::new(),
+                        AppendingCycleDetector::new(),
                     )
                 }),
         );

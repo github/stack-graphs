@@ -5,13 +5,12 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use stack_graphs::cycles::AppendedEdges;
-use stack_graphs::cycles::AppendedPartialPaths;
-use stack_graphs::cycles::EdgeAppendingCycleDetector;
-use stack_graphs::cycles::PartialPathAppendingCycleDetector;
+use stack_graphs::cycles::Appendages;
+use stack_graphs::cycles::AppendingCycleDetector;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::OwnedOrDatabasePath;
 use stack_graphs::CancelAfterDuration;
 use std::time::Duration;
 
@@ -148,19 +147,20 @@ fn finding_simple_identity_cycle_is_detected() {
 
     // test edge cycle detector
     {
-        let mut edges = AppendedEdges::new();
-        let mut cd = EdgeAppendingCycleDetector::new();
+        let mut edges = Appendages::new();
+        let mut cd = AppendingCycleDetector::new();
+        let ctx = &mut ();
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(r, foo_ref, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(r, foo_ref, 0))
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(foo_ref, s, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(foo_ref, s, 0))
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(s, foo_def, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(s, foo_def, 0))
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(foo_def, r, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(foo_def, r, 0))
             .is_err());
     }
 
@@ -198,16 +198,11 @@ fn stitching_simple_identity_cycle_is_detected() {
 
     // test partial path cycle detector
     {
-        let mut paths = AppendedPartialPaths::new();
-        let mut cd = PartialPathAppendingCycleDetector::from_partial_path(
-            &graph,
-            &mut partials,
-            &mut db,
-            &mut paths,
-            p0.into(),
-        );
+        let mut paths = Appendages::new();
+        let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
+            AppendingCycleDetector::from(&mut paths, p0.into());
         assert!(cd
-            .append_partial_path(&graph, &mut partials, &mut db, &mut paths, p1.into())
+            .append(&graph, &mut partials, &mut db, &mut paths, p1.into())
             .is_err());
     }
 }
@@ -233,28 +228,41 @@ fn finding_composite_identity_cycle_is_detected() {
 
     // test edge cycle detector
     {
-        let mut edges = AppendedEdges::new();
-        let mut cd = EdgeAppendingCycleDetector::new();
+        let mut edges = Appendages::new();
+        let mut cd = AppendingCycleDetector::new();
+        let ctx = &mut ();
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(r, s, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(r, s, 0))
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(s, bar_def, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(s, bar_def, 0))
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(bar_def, foo_ref, 0))
+            .append(
+                &graph,
+                &mut partials,
+                ctx,
+                &mut edges,
+                edge(bar_def, foo_ref, 0)
+            )
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(foo_ref, s, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(foo_ref, s, 0))
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(s, foo_def, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(s, foo_def, 0))
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(foo_def, bar_ref, 0))
+            .append(
+                &graph,
+                &mut partials,
+                ctx,
+                &mut edges,
+                edge(foo_def, bar_ref, 0)
+            )
             .is_ok());
         assert!(cd
-            .append_edge(&graph, &mut partials, &mut edges, edge(bar_ref, s, 0))
+            .append(&graph, &mut partials, ctx, &mut edges, edge(bar_ref, s, 0))
             .is_err());
     }
 
@@ -295,16 +303,11 @@ fn stitching_composite_identity_cycle_is_detected() {
 
     // test joining cycle detector
     {
-        let mut paths = AppendedPartialPaths::new();
-        let mut cd = PartialPathAppendingCycleDetector::from_partial_path(
-            &graph,
-            &mut partials,
-            &mut db,
-            &mut paths,
-            p0.into(),
-        );
+        let mut paths = Appendages::new();
+        let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
+            AppendingCycleDetector::from(&mut paths, p0.into());
         assert!(cd
-            .append_partial_path(&graph, &mut partials, &mut db, &mut paths, p1.into())
+            .append(&graph, &mut partials, &mut db, &mut paths, p1.into())
             .is_err());
     }
 }

@@ -42,6 +42,7 @@ use crate::graph::StackGraph;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::Path;
+use crate::paths::PathResolutionError;
 use crate::stitching::Database;
 use crate::stitching::OwnedOrDatabasePath;
 
@@ -136,43 +137,64 @@ where
 }
 
 // ----------------------------------------------------------------------------
-// Cycle detector when appending edges
+// Cycle detector
 
-#[derive(Clone)]
-pub struct EdgeAppendingCycleDetector {
-    edges: List<Edge>,
+pub trait Appendable {
+    type Ctx;
+
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        ctx: &mut Self::Ctx,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError>;
+    fn start_node(&self, ctx: &mut Self::Ctx) -> Handle<Node>;
+    fn end_node(&self, ctx: &mut Self::Ctx) -> Handle<Node>;
 }
 
-pub type AppendedEdges = ListArena<Edge>;
+#[derive(Clone)]
+pub struct AppendingCycleDetector<A> {
+    appendages: List<A>,
+}
 
-impl EdgeAppendingCycleDetector {
+pub type Appendages<A> = ListArena<A>;
+
+impl<A: Appendable + Clone> AppendingCycleDetector<A> {
     pub fn new() -> Self {
         Self {
-            edges: List::empty(),
+            appendages: List::empty(),
         }
     }
 
-    pub fn append_edge(
+    pub fn from(appendages: &mut Appendages<A>, appendage: A) -> Self {
+        let mut result = Self::new();
+        result.appendages.push_front(appendages, appendage);
+        result
+    }
+
+    pub fn append(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        appended_edges: &mut AppendedEdges,
-        edge: Edge,
-    ) -> Result<(), ()> {
-        let end_node = edge.sink;
-        self.edges.push_front(appended_edges, edge);
+        ctx: &mut A::Ctx,
+        appendages: &mut Appendages<A>,
+        appendage: A,
+    ) -> Result<(), PathResolutionError> {
+        let end_node = appendage.end_node(ctx);
+        self.appendages.push_front(appendages, appendage);
 
         let mut maybe_cyclic_path = None;
-        let mut index = self.edges;
-        let mut edges = self.edges;
+        let mut index = self.appendages;
+        let mut values = self.appendages;
         loop {
             // find loop point
             let mut count = 0usize;
             loop {
-                match index.pop_front(appended_edges) {
-                    Some(edge) => {
+                match index.pop_front(appendages) {
+                    Some(appendage) => {
                         count += 1;
-                        if edge.source == end_node {
+                        if appendage.start_node(ctx) == end_node {
                             break;
                         }
                     }
@@ -181,18 +203,21 @@ impl EdgeAppendingCycleDetector {
             }
 
             // get prefix edges
-            let mut prefix_edges = List::empty();
+            let mut prefix_appendages = List::empty();
             for _ in 0..count {
-                prefix_edges.push_front(appended_edges, *edges.pop_front(appended_edges).unwrap());
+                let appendage = values.pop_front(appendages).unwrap();
+                prefix_appendages.push_front(appendages, appendage.clone());
             }
 
-            // build prefix path
+            // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
-            while let Some(edge) = prefix_edges.pop_front(appended_edges) {
+            while let Some(appendage) = prefix_appendages.pop_front(appendages) {
                 prefix_path
-                    .resolve_to(graph, partials, edge.source)
+                    .resolve_to(graph, partials, appendage.start_node(ctx))
                     .unwrap();
-                prefix_path.append(graph, partials, *edge).unwrap();
+                appendage
+                    .append_to(graph, partials, ctx, &mut prefix_path)
+                    .unwrap();
             }
 
             // build cyclic path
@@ -206,99 +231,54 @@ impl EdgeAppendingCycleDetector {
                 .concatenate(graph, partials, &cyclic_path)
                 .unwrap();
             if !prefix_path.is_productive(graph, partials) {
-                return Err(());
+                return Err(PathResolutionError::DisallowedCycle);
             }
             maybe_cyclic_path = Some(prefix_path);
         }
     }
 }
 
-// ----------------------------------------------------------------------------
-// Cycle detector when appending partial paths
+impl Appendable for Edge {
+    type Ctx = ();
 
-#[derive(Clone)]
-pub struct PartialPathAppendingCycleDetector {
-    paths: List<OwnedOrDatabasePath>,
-}
-
-pub type AppendedPartialPaths = ListArena<OwnedOrDatabasePath>;
-
-impl PartialPathAppendingCycleDetector {
-    pub fn from_partial_path(
-        _graph: &StackGraph,
-        _partials: &mut PartialPaths,
-        _db: &mut Database,
-        appended_paths: &mut AppendedPartialPaths,
-        path: OwnedOrDatabasePath,
-    ) -> Self {
-        let mut paths = List::empty();
-        paths.push_front(appended_paths, path);
-        Self { paths }
-    }
-
-    pub fn append_partial_path(
-        &mut self,
+    fn append_to(
+        &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        db: &Database,
-        appended_paths: &mut AppendedPartialPaths,
-        path: OwnedOrDatabasePath,
-    ) -> Result<(), ()> {
-        let end_node = path.get(db).end_node;
-        self.paths.push_front(appended_paths, path);
+        _: &mut (),
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        path.append(graph, partials, *self)
+    }
 
-        let mut maybe_cyclic_path = None;
-        let mut index = self.paths;
-        let mut paths = self.paths;
-        loop {
-            // find loop point
-            let mut count = 0usize;
-            loop {
-                match index.pop_front(appended_paths) {
-                    Some(path) => {
-                        count += 1;
-                        if path.get(db).start_node == end_node {
-                            break;
-                        }
-                    }
-                    None => return Ok(()),
-                }
-            }
+    fn start_node(&self, _: &mut ()) -> Handle<Node> {
+        self.source
+    }
 
-            // get prefix paths
-            let mut prefix_paths = List::empty();
-            for _ in 0..count {
-                prefix_paths.push_front(
-                    appended_paths,
-                    paths.pop_front(appended_paths).unwrap().clone(),
-                );
-            }
+    fn end_node(&self, _: &mut ()) -> Handle<Node> {
+        self.sink
+    }
+}
 
-            // build prefix path
-            let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
-            while let Some(path) = prefix_paths.pop_front(appended_paths) {
-                let path = path.get(db);
-                prefix_path
-                    .resolve_to(graph, partials, path.start_node)
-                    .unwrap();
-                prefix_path.ensure_no_overlapping_variables(partials, path);
-                prefix_path.concatenate(graph, partials, path).unwrap();
-            }
+impl Appendable for OwnedOrDatabasePath {
+    type Ctx = Database;
 
-            // build cyclic path
-            let cyclic_path = maybe_cyclic_path
-                .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
-            prefix_path
-                .resolve_to(graph, partials, cyclic_path.start_node)
-                .unwrap();
-            prefix_path.ensure_no_overlapping_variables(partials, &cyclic_path);
-            prefix_path
-                .concatenate(graph, partials, &cyclic_path)
-                .unwrap();
-            if !prefix_path.is_productive(graph, partials) {
-                return Err(());
-            }
-            maybe_cyclic_path = Some(prefix_path);
-        }
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        path.ensure_no_overlapping_variables(partials, self.get(db));
+        path.concatenate(graph, partials, self.get(db))
+    }
+
+    fn start_node(&self, db: &mut Database) -> Handle<Node> {
+        self.get(db).start_node
+    }
+
+    fn end_node(&self, db: &mut Database) -> Handle<Node> {
+        self.get(db).end_node
     }
 }
