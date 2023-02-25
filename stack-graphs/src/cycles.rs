@@ -162,7 +162,7 @@ impl EdgeAppendingCycleDetector {
         let end_node = edge.sink;
         self.edges.push_front(appended_edges, edge);
 
-        let mut cyclic_path = PartialPath::from_node(graph, partials, end_node);
+        let mut maybe_cyclic_path = None;
         let mut index = self.edges;
         let mut edges = self.edges;
         loop {
@@ -196,6 +196,8 @@ impl EdgeAppendingCycleDetector {
             }
 
             // build cyclic path
+            let cyclic_path = maybe_cyclic_path
+                .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
             prefix_path
                 .resolve_to(graph, partials, cyclic_path.start_node)
                 .unwrap();
@@ -203,11 +205,10 @@ impl EdgeAppendingCycleDetector {
             prefix_path
                 .concatenate(graph, partials, &cyclic_path)
                 .unwrap();
-            cyclic_path = prefix_path;
-
-            if !cyclic_path.is_productive(graph, partials) {
+            if !prefix_path.is_productive(graph, partials) {
                 return Err(());
             }
+            maybe_cyclic_path = Some(prefix_path);
         }
     }
 }
@@ -246,7 +247,7 @@ impl PartialPathAppendingCycleDetector {
         let end_node = path.get(db).end_node;
         self.paths.push_front(appended_paths, path);
 
-        let mut cyclic_path = PartialPath::from_node(graph, partials, end_node);
+        let mut maybe_cyclic_path = None;
         let mut index = self.paths;
         let mut paths = self.paths;
         loop {
@@ -285,6 +286,8 @@ impl PartialPathAppendingCycleDetector {
             }
 
             // build cyclic path
+            let cyclic_path = maybe_cyclic_path
+                .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
             prefix_path
                 .resolve_to(graph, partials, cyclic_path.start_node)
                 .unwrap();
@@ -292,11 +295,10 @@ impl PartialPathAppendingCycleDetector {
             prefix_path
                 .concatenate(graph, partials, &cyclic_path)
                 .unwrap();
-            cyclic_path = prefix_path;
-
-            if !cyclic_path.is_productive(graph, partials) {
+            if !prefix_path.is_productive(graph, partials) {
                 return Err(());
             }
+            maybe_cyclic_path = Some(prefix_path);
         }
     }
 }
