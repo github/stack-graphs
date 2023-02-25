@@ -48,8 +48,8 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
-use crate::cycles::AppendedPartialPaths;
-use crate::cycles::PartialPathAppendingCycleDetector;
+use crate::cycles::Appendages;
+use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Node;
 use crate::graph::StackGraph;
@@ -721,12 +721,12 @@ impl PathStitcher {
 /// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
 pub struct ForwardPartialPathStitcher {
     candidate_partial_paths: Vec<Handle<PartialPath>>,
-    queue: VecDeque<(PartialPath, PartialPathAppendingCycleDetector)>,
+    queue: VecDeque<(PartialPath, AppendingCycleDetector<OwnedOrDatabasePath>)>,
     next_iteration: (
         VecDeque<PartialPath>,
-        VecDeque<PartialPathAppendingCycleDetector>,
+        VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
-    appended_paths: AppendedPartialPaths,
+    appended_paths: Appendages<OwnedOrDatabasePath>,
     similar_path_detector: SimilarPathDetector<PartialPath>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
@@ -776,20 +776,14 @@ impl ForwardPartialPathStitcher {
                 );
             }
         }
-        let mut appended_paths = AppendedPartialPaths::new();
+        let mut appended_paths = Appendages::new();
         let next_iteration = candidate_partial_paths
             .iter()
             .copied()
             .map(|handle| {
                 (
                     db[handle].clone(),
-                    PartialPathAppendingCycleDetector::from_partial_path(
-                        graph,
-                        partials,
-                        db,
-                        &mut appended_paths,
-                        handle.into(),
-                    ),
+                    AppendingCycleDetector::from(&mut appended_paths, handle.into()),
                 )
             })
             .unzip();
@@ -818,22 +812,16 @@ impl ForwardPartialPathStitcher {
     /// [`previous_phase_partial paths`]: #method.previous_phase_partial paths
     /// [`process_next_phase`]: #method.process_next_phase
     pub fn from_partial_paths(
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        db: &mut Database,
+        _graph: &StackGraph,
+        _partials: &mut PartialPaths,
+        _db: &mut Database,
         initial_partial_paths: Vec<PartialPath>,
     ) -> ForwardPartialPathStitcher {
-        let mut appended_paths = AppendedPartialPaths::new();
+        let mut appended_paths = Appendages::new();
         let next_iteration = initial_partial_paths
             .into_iter()
             .map(|p| {
-                let c = PartialPathAppendingCycleDetector::from_partial_path(
-                    graph,
-                    partials,
-                    db,
-                    &mut appended_paths,
-                    p.clone().into(),
-                );
+                let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
                 (p, c)
             })
             .unzip();
@@ -897,7 +885,7 @@ impl ForwardPartialPathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         partial_path: &PartialPath,
-        cycle_detector: PartialPathAppendingCycleDetector,
+        cycle_detector: AppendingCycleDetector<OwnedOrDatabasePath>,
     ) -> usize {
         self.candidate_partial_paths.clear();
         if graph[partial_path.end_node].is_root() {
@@ -942,7 +930,7 @@ impl ForwardPartialPathStitcher {
                     continue;
                 }
                 if new_cycle_detector
-                    .append_partial_path(
+                    .append(
                         graph,
                         partials,
                         db,
