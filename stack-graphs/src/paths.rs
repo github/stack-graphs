@@ -26,12 +26,16 @@ use crate::arena::DequeArena;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
+use crate::cycles::Appendages;
+use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::partial::Cyclicity;
+use crate::partial::PartialPaths;
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
 use crate::CancellationError;
@@ -867,17 +871,26 @@ impl Path {
     /// parameter, instead of building it up ourselves, so that you have control over which
     /// particular collection type to use, and so that you can reuse result collections across
     /// multiple calls.
-    pub fn extend<R: Extend<Path>>(&self, graph: &StackGraph, paths: &mut Paths, result: &mut R) {
+    pub fn extend<R: Extend<(Path, AppendingCycleDetector<Edge>)>>(
+        &self,
+        graph: &StackGraph,
+        paths: &mut Paths,
+        edges: &mut Appendages<Edge>,
+        path_cycle_detector: AppendingCycleDetector<Edge>,
+        result: &mut R,
+    ) {
         let extensions = graph.outgoing_edges(self.end_node);
         result.reserve(extensions.size_hint().0);
         for extension in extensions {
             let mut new_path = self.clone();
+            let mut new_cycle_detector = path_cycle_detector.clone();
             // If there are errors adding this edge to the path, or resolving the resulting path,
             // just skip the edge — it's not a fatal error.
             if new_path.append(graph, paths, extension).is_err() {
                 continue;
             }
-            result.push(new_path);
+            new_cycle_detector.append(edges, extension);
+            result.push((new_path, new_cycle_detector));
         }
     }
 }
@@ -903,18 +916,32 @@ impl Paths {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
     {
-        let mut cycle_detector = SimilarPathDetector::new();
+        let mut similar_path_detector_detector = SimilarPathDetector::new();
         let mut queue = starting_nodes
             .into_iter()
-            .filter_map(|node| Path::from_node(graph, self, node))
+            .filter_map(|node| {
+                Path::from_node(graph, self, node).map(|p| (p, AppendingCycleDetector::new()))
+            })
             .collect::<VecDeque<_>>();
-        while let Some(path) = queue.pop_front() {
+        let mut partials = PartialPaths::new();
+        let mut edges = Appendages::new();
+        while let Some((path, path_cycle_detector)) = queue.pop_front() {
             cancellation_flag.check("finding paths")?;
-            if !cycle_detector.should_process_path(&path, |probe| probe.cmp(graph, self, &path)) {
+            if !similar_path_detector_detector
+                .should_process_path(&path, |probe| probe.cmp(graph, self, &path))
+            {
                 continue;
+            } else {
+                visit(graph, self, path.clone());
             }
-            path.extend(graph, self, &mut queue);
-            visit(graph, self, path);
+            if !path_cycle_detector
+                .is_cyclic(graph, &mut partials, &mut (), &mut edges)
+                .into_iter()
+                .all(|c| c == Cyclicity::StrengthensPrecondition)
+            {
+            } else {
+                path.extend(graph, self, &mut edges, path_cycle_detector, &mut queue);
+            }
         }
         Ok(())
     }
