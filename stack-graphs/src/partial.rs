@@ -2069,13 +2069,14 @@ impl PartialPath {
         graph[self.end_node].is_jump_to()
     }
 
-    /// Returns whether a partial path is "productive" --- that is, it is not cyclic, or its
-    /// pre- and postcondition are incompatible.
-    pub fn is_productive(&self, graph: &StackGraph, partials: &mut PartialPaths) -> bool {
+    /// Returns whether a partial path is cyclic---that is, it starts and ends at the same node,
+    /// and its postcondition is compatible with its precondition.  If the path is cyclic, a
+    /// tuple is returned indicating whether cycle requires strengthening the pre- or postcondition.
+    pub fn is_cyclic(&self, graph: &StackGraph, partials: &mut PartialPaths) -> Option<Cyclicity> {
         // StackGraph ensures that there are no nodes with duplicate IDs, so we can do a simple
         // comparison of node handles here.
         if self.start_node != self.end_node {
-            return true;
+            return None;
         }
 
         let lhs = self;
@@ -2084,7 +2085,7 @@ impl PartialPath {
 
         let join = match Self::compute_join(graph, partials, lhs, &rhs) {
             Ok(join) => join,
-            Err(_) => return true,
+            Err(_) => return None,
         };
 
         if lhs
@@ -2092,22 +2093,28 @@ impl PartialPath {
             .variable
             .into_option()
             .map_or(false, |v| join.symbol_bindings.get(v).iter().len() > 0)
+            || lhs
+                .scope_stack_precondition
+                .variable
+                .into_option()
+                .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
         {
-            // symbol stack precondition strengthened
-            return true;
-        }
-
-        if lhs
-            .scope_stack_precondition
+            Some(Cyclicity::StrengthensPrecondition)
+        } else if rhs
+            .symbol_stack_postcondition
             .variable
             .into_option()
-            .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
+            .map_or(false, |v| join.symbol_bindings.get(v).iter().len() > 0)
+            || rhs
+                .scope_stack_postcondition
+                .variable
+                .into_option()
+                .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
         {
-            // scope stack precondition strengthened
-            return true;
+            Some(Cyclicity::StrengthensPostcondition)
+        } else {
+            Some(Cyclicity::Free)
         }
-
-        false
     }
 
     /// Ensures that the content of this partial path is available in both forwards and backwards
@@ -2220,6 +2227,16 @@ impl PartialPath {
     ) -> impl Display + 'a {
         display_with(self, graph, partials)
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Cyclicity {
+    /// The path can be freely concatenated to itself.
+    Free,
+    /// Concatenating the path to itself strengthens the precondition---symbols are eliminated from the stack.
+    StrengthensPrecondition,
+    /// Concatenating the path to itself strengthens the postcondition---symbols are introduced on the stack.
+    StrengthensPostcondition,
 }
 
 impl<'a> DisplayWithPartialPaths for &'a PartialPath {
@@ -2407,13 +2424,7 @@ impl PartialPath {
                 copious_debugging!("         * invalid extension");
                 continue;
             }
-            if new_cycle_detector
-                .append(graph, partials, &mut (), edges, extension)
-                .is_err()
-            {
-                copious_debugging!("         * cycle");
-                continue;
-            }
+            new_cycle_detector.append(edges, extension);
             result.push((new_path, new_cycle_detector));
         }
     }
@@ -2676,10 +2687,6 @@ impl PartialPaths {
     ///  (a) is minimal, no path can be constructed by stitching other paths in the set, and
     ///  (b) covers all complete paths, from references to definitions, when used for path stitching
     ///
-    /// Callers are advised _not_ to filter this set in the visitor using functions like
-    /// [`PartialPath::is_productive`][] as that may interfere with implementation changes of this
-    /// function.
-    ///
     /// This function will not return until all reachable partial paths have been processed, so
     /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
     /// stored in some other storage system, and want more control over lazily loading only the
@@ -2734,6 +2741,11 @@ impl PartialPaths {
                     copious_debugging!("    * visit");
                     visit(graph, self, path);
                 }
+            } else if !path_cycle_detector
+                .is_cyclic(graph, self, &mut (), &mut edges)
+                .is_empty()
+            {
+                copious_debugging!("    * cycle");
             } else {
                 copious_debugging!("    * extend");
                 path.extend_from_file(

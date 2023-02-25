@@ -54,6 +54,7 @@ use crate::cycles::SimilarPathDetector;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
+use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::partial::PartialSymbolStack;
@@ -931,15 +932,12 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                if new_cycle_detector
-                    .append(
-                        graph,
-                        partials,
-                        db,
-                        &mut self.appended_paths,
-                        extension.into(),
-                    )
-                    .is_err()
+                new_cycle_detector.append(&mut self.appended_paths, extension.into());
+                let cycles =
+                    new_cycle_detector.is_cyclic(graph, partials, db, &mut self.appended_paths);
+                if !cycles
+                    .into_iter()
+                    .all(|c| c == Cyclicity::StrengthensPrecondition)
                 {
                     copious_debugging!("        is invalid: cyclic");
                     continue;
