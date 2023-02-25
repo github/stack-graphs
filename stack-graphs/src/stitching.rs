@@ -50,7 +50,6 @@ use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
 use crate::cycles::Appendages;
 use crate::cycles::AppendingCycleDetector;
-use crate::cycles::SimilarPathDetector;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
@@ -483,7 +482,6 @@ pub struct PathStitcher {
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
     appended_paths: Appendages<OwnedOrDatabasePath>,
-    cycle_detector: SimilarPathDetector<Path>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -535,7 +533,6 @@ impl PathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
-            cycle_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -668,12 +665,6 @@ impl PathStitcher {
         );
         let mut work_performed = 0;
         while let Some((path, cycle_detector)) = self.queue.pop_front() {
-            if !self
-                .cycle_detector
-                .should_process_path(&path, |probe| probe.cmp(graph, paths, &path))
-            {
-                continue;
-            }
             work_performed += self.stitch_path(graph, paths, partials, db, &path, cycle_detector);
             if work_performed >= self.max_work_per_phase {
                 break;
@@ -759,7 +750,6 @@ pub struct ForwardPartialPathStitcher {
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
     appended_paths: Appendages<OwnedOrDatabasePath>,
-    similar_path_detector: SimilarPathDetector<PartialPath>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -825,7 +815,6 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
-            similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -862,7 +851,6 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
-            similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -1016,15 +1004,6 @@ impl ForwardPartialPathStitcher {
             );
             if !(self.should_extend)(graph, partials, &partial_path) {
                 copious_debugging!("    Should not extend");
-                continue;
-            }
-            if !self
-                .similar_path_detector
-                .should_process_path(&partial_path, |probe| {
-                    probe.cmp(graph, partials, &partial_path)
-                })
-            {
-                copious_debugging!("    Cycle detected");
                 continue;
             }
             work_performed +=
