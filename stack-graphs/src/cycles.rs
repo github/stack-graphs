@@ -39,6 +39,7 @@ use crate::arena::ListArena;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
+use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::Path;
@@ -173,16 +174,23 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
         result
     }
 
-    pub fn append(
-        &mut self,
+    pub fn append(&mut self, appendages: &mut Appendages<A>, appendage: A) {
+        self.appendages.push_front(appendages, appendage);
+    }
+
+    pub fn is_cyclic(
+        &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
         ctx: &mut A::Ctx,
         appendages: &mut Appendages<A>,
-        appendage: A,
-    ) -> Result<(), PathResolutionError> {
-        let end_node = appendage.end_node(ctx);
-        self.appendages.push_front(appendages, appendage);
+    ) -> Vec<Cyclicity> {
+        let mut cycles = Vec::new();
+
+        let end_node = match self.appendages.clone().pop_front(appendages) {
+            Some(appendage) => appendage.end_node(ctx),
+            None => return cycles,
+        };
 
         let mut maybe_cyclic_path = None;
         let mut index = self.appendages;
@@ -198,7 +206,7 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
                             break;
                         }
                     }
-                    None => return Ok(()),
+                    None => return cycles,
                 }
             }
 
@@ -230,8 +238,8 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
             prefix_path
                 .concatenate(graph, partials, &cyclic_path)
                 .unwrap();
-            if !prefix_path.is_productive(graph, partials) {
-                return Err(PathResolutionError::DisallowedCycle);
+            if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
+                cycles.push(cyclicity);
             }
             maybe_cyclic_path = Some(prefix_path);
         }
