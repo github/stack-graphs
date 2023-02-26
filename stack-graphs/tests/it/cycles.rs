@@ -177,12 +177,14 @@ fn finding_simple_identity_cycle_is_detected() {
             cd.append(&mut edges, *edge);
             assert!(cd
                 .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
                 .is_empty());
         }
         cd.append(&mut edges, edge(foo_def, r, 0));
         assert_eq!(
             vec![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
         );
     }
 
@@ -227,6 +229,7 @@ fn stitching_simple_identity_cycle_is_detected() {
         assert_eq!(
             vec![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)
+                .unwrap()
         );
     }
 }
@@ -267,12 +270,14 @@ fn finding_composite_identity_cycle_is_detected() {
             cd.append(&mut edges, *edge);
             assert!(cd
                 .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
                 .is_empty());
         }
         cd.append(&mut edges, edge(bar_ref, s, 0));
         assert_eq!(
             vec![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
         );
     }
 
@@ -320,6 +325,7 @@ fn stitching_composite_identity_cycle_is_detected() {
         assert_eq!(
             vec![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)
+                .unwrap()
         );
     }
 }

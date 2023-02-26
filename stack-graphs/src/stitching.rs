@@ -620,8 +620,9 @@ impl PathStitcher {
                 continue;
             }
             new_cycle_detector.append(&mut self.appended_paths, extension.into());
-            let cycles =
-                new_cycle_detector.is_cyclic(graph, partials, db, &mut self.appended_paths);
+            let cycles = new_cycle_detector
+                .is_cyclic(graph, partials, db, &mut self.appended_paths)
+                .unwrap();
             if !cycles
                 .into_iter()
                 .all(|c| c == Cyclicity::StrengthensPrecondition)
@@ -961,8 +962,9 @@ impl ForwardPartialPathStitcher {
                     continue;
                 }
                 new_cycle_detector.append(&mut self.appended_paths, extension.into());
-                let cycles =
-                    new_cycle_detector.is_cyclic(graph, partials, db, &mut self.appended_paths);
+                let cycles = new_cycle_detector
+                    .is_cyclic(graph, partials, db, &mut self.appended_paths)
+                    .unwrap();
                 if !cycles
                     .into_iter()
                     .all(|c| c == Cyclicity::StrengthensPrecondition)

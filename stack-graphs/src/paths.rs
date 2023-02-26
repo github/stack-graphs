@@ -936,6 +936,7 @@ impl Paths {
             }
             if !path_cycle_detector
                 .is_cyclic(graph, &mut partials, &mut (), &mut edges)
+                .unwrap()
                 .into_iter()
                 .all(|c| c == Cyclicity::StrengthensPrecondition)
             {
