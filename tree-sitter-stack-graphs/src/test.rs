@@ -617,27 +617,14 @@ impl std::fmt::Display for TestFailure {
 
 impl Test {
     /// Run the test. It is the responsibility of the caller to ensure that
-    /// the stack graph has been constructed for the test fragments before running
-    /// the test.
+    /// the stack graph for the test fragments has been constructed, and the
+    /// database has been filled with partial paths before running the test.
     pub fn run(
         &mut self,
         partials: &mut PartialPaths,
         db: &mut Database,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<TestResult, stack_graphs::CancellationError> {
-        // build partial paths
-        for file in self.graph.iter_files() {
-            partials.find_minimal_partial_path_set_in_file(
-                &self.graph,
-                file,
-                &cancellation_flag,
-                |g, ps, p| {
-                    db.add_partial_path(g, ps, p);
-                },
-            )?;
-        }
-
-        // test assertions
         let mut result = TestResult::new();
         for fragment in &self.fragments {
             for assertion in &fragment.assertions {
