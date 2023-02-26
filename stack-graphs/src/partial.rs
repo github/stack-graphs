@@ -2378,10 +2378,22 @@ impl PartialPath {
         if !graph[self.end_node].is_jump_to() {
             return Ok(());
         }
-        if self.scope_stack_postcondition.contains_scopes() {
-            return Err(PathResolutionError::ScopeStackUnsatisfied); // this path was not properly resolved
-        }
-        self.scope_stack_precondition.push_back(partials, node);
+        let scope_variable = match self.scope_stack_postcondition.variable() {
+            Some(scope_variable) => scope_variable,
+            None => return Err(PathResolutionError::ScopeStackUnsatisfied),
+        };
+        let mut scope_stack = PartialScopeStack::from_variable(scope_variable);
+        scope_stack.push_front(partials, node);
+        let mut scope_bindings = PartialScopeStackBindings::new();
+        scope_bindings
+            .add(partials, scope_variable, scope_stack)
+            .unwrap();
+        self.scope_stack_precondition
+            .apply_partial_bindings(partials, &scope_bindings)
+            .unwrap();
+        self.scope_stack_postcondition
+            .apply_partial_bindings(partials, &scope_bindings)
+            .unwrap();
         self.end_node = node;
         Ok(())
     }
@@ -2561,9 +2573,7 @@ impl Node {
         scope_stack: &mut PartialScopeStack,
     ) {
         match self {
-            Node::DropScopes(_) => {
-                *scope_stack = PartialScopeStack::empty();
-            }
+            Node::DropScopes(_) => {}
             Node::JumpTo(_) => {}
             Node::PopScopedSymbol(node) => {
                 let symbol = symbol_stack.pop_front(partials).unwrap();
