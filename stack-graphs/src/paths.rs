@@ -26,7 +26,7 @@ use crate::arena::DequeArena;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
-use crate::cycles::Appendages;
+use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
@@ -875,7 +875,7 @@ impl Path {
         &self,
         graph: &StackGraph,
         paths: &mut Paths,
-        edges: &mut Appendages<Edge>,
+        edges: &mut Appendables<Edge>,
         path_cycle_detector: AppendingCycleDetector<Edge>,
         result: &mut R,
     ) {
@@ -924,7 +924,7 @@ impl Paths {
             })
             .collect::<VecDeque<_>>();
         let mut partials = PartialPaths::new();
-        let mut edges = Appendages::new();
+        let mut edges = Appendables::new();
         while let Some((path, path_cycle_detector)) = queue.pop_front() {
             cancellation_flag.check("finding paths")?;
             if !similar_path_detector_detector
@@ -936,6 +936,7 @@ impl Paths {
             }
             if !path_cycle_detector
                 .is_cyclic(graph, &mut partials, &mut (), &mut edges)
+                .expect("cyclic test failed when finding paths")
                 .into_iter()
                 .all(|c| c == Cyclicity::StrengthensPrecondition)
             {

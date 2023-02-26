@@ -2743,6 +2743,7 @@ impl PartialPaths {
                 }
             } else if !path_cycle_detector
                 .is_cyclic(graph, self, &mut (), &mut edges)
+                .expect("cyclic test failed when finding partial paths")
                 .is_empty()
             {
                 copious_debugging!("    * cycle");

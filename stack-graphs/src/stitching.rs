@@ -482,7 +482,7 @@ pub struct PathStitcher {
         VecDeque<Path>,
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
-    appended_paths: Appendages<OwnedOrDatabasePath>,
+    appended_paths: Appendables<OwnedOrDatabasePath>,
     cycle_detector: SimilarPathDetector<Path>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
@@ -517,7 +517,7 @@ impl PathStitcher {
             copious_debugging!("    Initial node {}", node.display(graph));
             db.find_candidate_partial_paths_from_node(graph, partials, node, &mut candidate_paths);
         }
-        let mut appended_paths = Appendages::new();
+        let mut appended_paths = Appendables::new();
         let next_iteration = candidate_paths
             .iter()
             .filter_map(|partial_path| {
@@ -620,8 +620,9 @@ impl PathStitcher {
                 continue;
             }
             new_cycle_detector.append(&mut self.appended_paths, extension.into());
-            let cycles =
-                new_cycle_detector.is_cyclic(graph, partials, db, &mut self.appended_paths);
+            let cycles = new_cycle_detector
+                .is_cyclic(graph, partials, db, &mut self.appended_paths)
+                .expect("cyclic test failed when stitching paths");
             if !cycles
                 .into_iter()
                 .all(|c| c == Cyclicity::StrengthensPrecondition)
@@ -963,8 +964,9 @@ impl ForwardPartialPathStitcher {
                     continue;
                 }
                 new_cycle_detector.append(&mut self.appended_paths, extension.into());
-                let cycles =
-                    new_cycle_detector.is_cyclic(graph, partials, db, &mut self.appended_paths);
+                let cycles = new_cycle_detector
+                    .is_cyclic(graph, partials, db, &mut self.appended_paths)
+                    .expect("cyclic test failed when stitching partial paths");
                 if !cycles
                     .into_iter()
                     .all(|c| c == Cyclicity::StrengthensPrecondition)
