@@ -1817,7 +1817,9 @@ impl PartialPathEdgeList {
     pub fn shadows(mut self, partials: &mut PartialPaths, mut other: PartialPathEdgeList) -> bool {
         while let Some(self_edge) = self.pop_front(partials) {
             if let Some(other_edge) = other.pop_front(partials) {
-                if self_edge.shadows(other_edge) {
+                if self_edge.source_node_id != other_edge.source_node_id {
+                    return false;
+                } else if self_edge.shadows(other_edge) {
                     return true;
                 }
             } else {
