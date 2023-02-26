@@ -494,7 +494,9 @@ impl PathEdgeList {
     pub fn shadows(mut self, paths: &mut Paths, mut other: PathEdgeList) -> bool {
         while let Some(self_edge) = self.pop_front(paths) {
             if let Some(other_edge) = other.pop_front(paths) {
-                if self_edge.shadows(other_edge) {
+                if self_edge.source_node_id != other_edge.source_node_id {
+                    return false;
+                } else if self_edge.shadows(other_edge) {
                     return true;
                 }
             } else {
