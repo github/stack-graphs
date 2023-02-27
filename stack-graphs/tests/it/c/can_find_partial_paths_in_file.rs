@@ -73,7 +73,7 @@ fn partial_path_edge_list_available_in_both_directions(
 
 fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[&str]) {
     let rust_graph = unsafe { &(*graph.graph).inner };
-    let file = rust_graph.get_file_unchecked(file);
+    let file = rust_graph.get_file(file).expect("Missing file");
 
     let partials = sg_partial_path_arena_new();
     let path_list = sg_partial_path_list_new();

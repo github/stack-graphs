@@ -185,7 +185,9 @@ fn can_add_graph_to_empty_graph() {
     graph.add_from_graph(&other).expect("Adding graph failed");
 
     for other_file in other.iter_files() {
-        let file = graph.get_file_unchecked(other[other_file].name());
+        let file = graph
+            .get_file(other[other_file].name())
+            .expect("Missing file");
         assert_eq!(
             graph.nodes_for_file(file).count(),
             other.nodes_for_file(other_file).count()

@@ -10,11 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - New `Defines` and `Refers` assertions test for the presence of definitions and references, respectively, without resolution.
+- A method `StackGraph::get_file` to look up an existing file.
 
 ### Changed
 
 - The `IncorrectDefinitions` error is renamed to `IncorrectlyDefined`, and `IncorrectDefinitions` is the error used for the `Defines` assertion.
 - The `PartialPaths::find_all_partial_paths_in_file` method has been replaced by `PartialPaths::find_minimal_partial_path_set_in_file`, which computes a smaller set. The `ForwardPartialPathStitcher::find_locally_maximal_partial_path_set` function can be used to compute the set previously returned by `find_all_partial_paths_in_file` from the minimal partial path set.
+
+### Removed
+
+- The method `StackGraph::get_file_unchecked` is removed. Use the new `StackGraph::get_file` instead.
 
 ## v0.10.2 -- 2023-01-10
 

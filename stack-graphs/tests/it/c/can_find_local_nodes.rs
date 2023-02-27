@@ -29,7 +29,7 @@ use crate::test_graphs;
 
 fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str]) {
     let rust_graph = unsafe { &(*graph.graph).inner };
-    let file = rust_graph.get_file_unchecked(file);
+    let file = rust_graph.get_file(file).expect("Missing file");
 
     let partials = sg_partial_path_arena_new();
     let path_list = sg_partial_path_list_new();
