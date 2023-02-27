@@ -13,6 +13,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+#[cfg(debug_assertions)]
 use std::time::Instant;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 

@@ -2363,6 +2363,8 @@ impl PartialPath {
 }
 
 impl Node {
+    /// Update the given partial path pre- and postconditions with the effect of
+    /// appending this node to that partial path.
     fn apply_to_partial_stacks(
         &self,
         graph: &StackGraph,
@@ -2461,6 +2463,144 @@ impl Node {
             Self::Scope(_) => {}
         }
         Ok(())
+    }
+
+    /// Ensure the given closed precondition stacks are half-open for this end node.
+    ///
+    /// Partial paths have closed (cf. a closed interval) pre- and postconditions, which means
+    /// the start node is reflected in the precondition, and the end node is reflected in the
+    /// postcondition. For example, a path starting with a pop node, has a precondition starting
+    /// with the popped symbol. Similarly, a ending with a push node, has a postcondition ending
+    /// with the pushed symbol.
+    ///
+    /// When concatenating two partial paths, their closed pre- and postconditions are not compatible,
+    /// because the effect of the join node (i.e., the node shared between the two paths) is present
+    /// in both the right and the left path. If two paths join at a push node, the right postcondition
+    /// contains the pushed symbol, while the left precondition does not contain it, behaving as if the
+    /// symbol was pushed twice. Similarly, when joining at a pop node, the right precondition contains
+    /// the popped symbol, while the right postcondition will not anymore, because it was already popped.
+    /// Unifying closed pre- and postconditions can result in incorrect concatenation results.
+    ///
+    /// We can make pre- and postconditions compatible again by making them half-open (cf. open intervals,
+    /// but half because we only undo the effect of some node types). A precondition is half-open if it
+    /// does not reflect the effect if a start pop node, Similarly, a postcondition is half-open if it
+    /// does not reflect the effect of an end push node. Unifying half-open pre- and postconditions results
+    /// in the correct behavior for path concatenation.
+    fn halfopen_closed_partial_precondition(
+        &self,
+        partials: &mut PartialPaths,
+        symbol_stack: &mut PartialSymbolStack,
+        scope_stack: &mut PartialScopeStack,
+    ) {
+        match self {
+            Node::DropScopes(_) => {
+                *scope_stack = PartialScopeStack::empty();
+            }
+            Node::JumpTo(_) => {}
+            Node::PopScopedSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+                *scope_stack = symbol.scopes.into_option().unwrap();
+            }
+            Node::PopSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Node::PushScopedSymbol(_) => {}
+            Node::PushSymbol(_) => {}
+            Node::Root(_) => {}
+            Node::Scope(_) => {}
+        }
+    }
+
+    /// Ensure the given closed postcondition stacks are half-open for this start node.
+    ///
+    /// Partial paths have closed (cf. a closed interval) pre- and postconditions, which means
+    /// the start node is reflected in the precondition, and the end node is reflected in the
+    /// postcondition. For example, a path starting with a pop node, has a precondition starting
+    /// with the popped symbol. Similarly, a ending with a push node, has a postcondition ending
+    /// with the pushed symbol.
+    ///
+    /// When concatenating two partial paths, their closed pre- and postconditions are not compatible,
+    /// because the effect of the join node (i.e., the node shared between the two paths) is present
+    /// in both the right and the left path. If two paths join at a push node, the right postcondition
+    /// contains the pushed symbol, while the left precondition does not contain it, behaving as if the
+    /// symbol was pushed twice. Similarly, when joining at a pop node, the right precondition contains
+    /// the popped symbol, while the right postcondition will not anymore, because it was already popped.
+    /// Unifying closed pre- and postconditions can result in incorrect concatenation results.
+    ///
+    /// We can make pre- and postconditions compatible again by making them half-open (cf. open intervals,
+    /// but half because we only undo the effect of some node types). A precondition is half-open if it
+    /// does not reflect the effect if a start pop node, Similarly, a postcondition is half-open if it
+    /// does not reflect the effect of an end push node. Unifying half-open pre- and postconditions results
+    /// in the correct behavior for path concatenation.
+    fn halfopen_closed_partial_postcondition(
+        &self,
+        partials: &mut PartialPaths,
+        symbol_stack: &mut PartialSymbolStack,
+        _scope_stack: &mut PartialScopeStack,
+    ) {
+        match self {
+            Self::DropScopes(_) => {}
+            Self::JumpTo(_) => {}
+            Self::PopScopedSymbol(_) => {}
+            Self::PopSymbol(_) => {}
+            Self::PushScopedSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Self::PushSymbol(node) => {
+                let symbol = symbol_stack.pop_front(partials).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Self::Root(_) => {}
+            Self::Scope(_) => {}
+        }
+    }
+
+    /// Ensure the given closed postcondition stacks are half-open for this start node.
+    ///
+    /// Partial paths have closed (cf. a closed interval) pre- and postconditions, which means
+    /// the start node is reflected in the precondition, and the end node is reflected in the
+    /// postcondition. For example, a path starting with a pop node, has a precondition starting
+    /// with the popped symbol. Similarly, a ending with a push node, has a postcondition ending
+    /// with the pushed symbol.
+    ///
+    /// When concatenating two partial paths, their closed pre- and postconditions are not compatible,
+    /// because the effect of the join node (i.e., the node shared between the two paths) is present
+    /// in both the right and the left path. If two paths join at a push node, the right postcondition
+    /// contains the pushed symbol, while the left precondition does not contain it, behaving as if the
+    /// symbol was pushed twice. Similarly, when joining at a pop node, the right precondition contains
+    /// the popped symbol, while the right postcondition will not anymore, because it was already popped.
+    /// Unifying closed pre- and postconditions can result in incorrect concatenation results.
+    ///
+    /// We can make pre- and postconditions compatible again by making them half-open (cf. open intervals,
+    /// but half because we only undo the effect of some node types). A precondition is half-open if it
+    /// does not reflect the effect if a start pop node, Similarly, a postcondition is half-open if it
+    /// does not reflect the effect of an end push node. Unifying half-open pre- and postconditions results
+    /// in the correct behavior for path concatenation.
+    fn halfopen_closed_postcondition(
+        &self,
+        paths: &mut Paths,
+        symbol_stack: &mut SymbolStack,
+        _scope_stack: &mut ScopeStack,
+    ) {
+        match self {
+            Self::DropScopes(_) => {}
+            Self::JumpTo(_) => {}
+            Self::PopScopedSymbol(_) => {}
+            Self::PopSymbol(_) => {}
+            Self::PushScopedSymbol(node) => {
+                let symbol = symbol_stack.pop_front(paths).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Self::PushSymbol(node) => {
+                let symbol = symbol_stack.pop_front(paths).unwrap();
+                debug_assert_eq!(symbol.symbol, node.symbol);
+            }
+            Self::Root(_) => {}
+            Self::Scope(_) => {}
+        }
     }
 }
 
@@ -2569,57 +2709,32 @@ impl Path {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
-        // If the join node operates on the stack, the effect is present in both sides.
-        // For correct joining, we must undo the effect on one of the sides. We match
-        // the end node of the lhs, and the start node of the rhs separately, depending
-        // on whether we must manipulate the lhs postcondition or rhs precondition,
-        // respectively. The reason we cannot use only one of the lhs end or rhs start
-        // node is that the variables used in them may differ.
-        let mut lhs_symbol_stack = self.symbol_stack;
-        let lhs_scope_stack = self.scope_stack;
+        // Ensure the right post- and left precondition are half-open, so we can unify them.
+        let mut lhs_symbol_stack_postcondition = self.symbol_stack;
+        let mut lhs_scope_stack_postcondition = self.scope_stack;
         let mut rhs_symbol_stack_precondition = partial_path.symbol_stack_precondition;
         let mut rhs_scope_stack_precondition = partial_path.scope_stack_precondition;
-        match &graph[self.end_node] {
-            Node::DropScopes(_) => {}
-            Node::JumpTo(_) => {}
-            Node::PopScopedSymbol(_) => {}
-            Node::PopSymbol(_) => {}
-            Node::PushScopedSymbol(_) => {
-                lhs_symbol_stack.pop_front(paths).unwrap();
-            }
-            Node::PushSymbol(_) => {
-                lhs_symbol_stack.pop_front(paths).unwrap();
-            }
-            Node::Root(_) => {}
-            Node::Scope(_) => {}
-        }
-        match &graph[partial_path.start_node] {
-            Node::DropScopes(_) => {
-                rhs_scope_stack_precondition = PartialScopeStack::empty();
-            }
-            Node::JumpTo(_) => {}
-            Node::PopScopedSymbol(_) => {
-                let symbol = rhs_symbol_stack_precondition.pop_front(partials).unwrap();
-                rhs_scope_stack_precondition = symbol.scopes.into_option().unwrap();
-            }
-            Node::PopSymbol(_) => {
-                rhs_symbol_stack_precondition.pop_front(partials).unwrap();
-            }
-            Node::PushScopedSymbol(_) => {}
-            Node::PushSymbol(_) => {}
-            Node::Root(_) => {}
-            Node::Scope(_) => {}
-        }
+        graph[self.end_node].halfopen_closed_postcondition(
+            paths,
+            &mut lhs_symbol_stack_postcondition,
+            &mut lhs_scope_stack_postcondition,
+        );
+        graph[partial_path.start_node].halfopen_closed_partial_precondition(
+            partials,
+            &mut rhs_symbol_stack_precondition,
+            &mut rhs_scope_stack_precondition,
+        );
 
         let mut symbol_bindings = SymbolStackBindings::new();
         let mut scope_bindings = ScopeStackBindings::new();
 
-        rhs_scope_stack_precondition.match_stack(lhs_scope_stack, &mut scope_bindings)?;
+        rhs_scope_stack_precondition
+            .match_stack(lhs_scope_stack_postcondition, &mut scope_bindings)?;
         rhs_symbol_stack_precondition.match_stack(
             graph,
             paths,
             partials,
-            lhs_symbol_stack,
+            lhs_symbol_stack_postcondition,
             &mut symbol_bindings,
             &mut scope_bindings,
         )?;
@@ -2673,47 +2788,21 @@ impl PartialPath {
             return Err(PathResolutionError::IncorrectSourceNode);
         }
 
-        // If the join node operates on the stack, the effect is present in both sides.
-        // For correct joining, we must undo the effect on one of the sides. We match
-        // the end node of the lhs, and the start node of the rhs separately, depending
-        // on whether we must manipulate the lhs postcondition or rhs precondition,
-        // respectively. The reason we cannot use only one of the lhs end or rhs start
-        // node is that the variables used in them may differ.
+        // Ensure the right post- and left precondition are half-open, so we can unify them.
         let mut lhs_symbol_stack_postcondition = lhs.symbol_stack_postcondition;
-        let lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
+        let mut lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
         let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
         let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
-        match &graph[lhs.end_node] {
-            Node::DropScopes(_) => {}
-            Node::JumpTo(_) => {}
-            Node::PopScopedSymbol(_) => {}
-            Node::PopSymbol(_) => {}
-            Node::PushScopedSymbol(_) => {
-                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
-            }
-            Node::PushSymbol(_) => {
-                lhs_symbol_stack_postcondition.pop_front(partials).unwrap();
-            }
-            Node::Root(_) => {}
-            Node::Scope(_) => {}
-        }
-        match &graph[rhs.start_node] {
-            Node::DropScopes(_) => {
-                rhs_scope_stack_precondition = PartialScopeStack::empty();
-            }
-            Node::JumpTo(_) => {}
-            Node::PopScopedSymbol(_) => {
-                let symbol = rhs_symbol_stack_precondition.pop_front(partials).unwrap();
-                rhs_scope_stack_precondition = symbol.scopes.into_option().unwrap();
-            }
-            Node::PopSymbol(_) => {
-                rhs_symbol_stack_precondition.pop_front(partials).unwrap();
-            }
-            Node::PushScopedSymbol(_) => {}
-            Node::PushSymbol(_) => {}
-            Node::Root(_) => {}
-            Node::Scope(_) => {}
-        }
+        graph[lhs.end_node].halfopen_closed_partial_postcondition(
+            partials,
+            &mut lhs_symbol_stack_postcondition,
+            &mut lhs_scope_stack_postcondition,
+        );
+        graph[rhs.start_node].halfopen_closed_partial_precondition(
+            partials,
+            &mut rhs_symbol_stack_precondition,
+            &mut rhs_scope_stack_precondition,
+        );
 
         let mut symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
