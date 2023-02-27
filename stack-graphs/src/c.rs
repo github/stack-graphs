@@ -1577,7 +1577,7 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
     partials
-        .find_minimal_partial_paths_set_in_file(
+        .find_minimal_partial_path_set_in_file(
             graph,
             file,
             &AtomicUsizeCancellationFlag(cancellation_flag),

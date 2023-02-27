@@ -37,22 +37,6 @@ use crate::StackGraphLanguage;
 
 use super::util::FileStatusLogger;
 
-/// Flag to control output
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
-pub enum OutputMode {
-    Always,
-    OnFailure,
-}
-
-impl OutputMode {
-    fn test(&self, failure: bool) -> bool {
-        match self {
-            Self::Always => true,
-            Self::OnFailure => failure,
-        }
-    }
-}
-
 /// Run tests
 #[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
@@ -143,9 +127,28 @@ pub struct TestArgs {
         long,
         arg_enum,
         default_value_t = OutputMode::OnFailure,
-        require_equals = true,
     )]
     pub output_mode: OutputMode,
+
+    /// Do not load builtins for tests.
+    #[clap(long)]
+    pub no_builtins: bool,
+}
+
+/// Flag to control output
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+pub enum OutputMode {
+    Always,
+    OnFailure,
+}
+
+impl OutputMode {
+    fn test(&self, failure: bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::OnFailure => failure,
+        }
+    }
 }
 
 impl TestArgs {
@@ -159,6 +162,7 @@ impl TestArgs {
             save_paths: None,
             save_visualization: None,
             output_mode: OutputMode::OnFailure,
+            no_builtins: false,
         }
     }
 
@@ -230,8 +234,10 @@ impl TestArgs {
 
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
-        self.load_builtins_into(&lc, &mut test.graph)
-            .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
+        if !self.no_builtins {
+            self.load_builtins_into(&lc, &mut test.graph)
+                .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
+        }
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
             if let Some(fa) = test_fragment
@@ -274,6 +280,16 @@ impl TestArgs {
         }
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
+        for file in test.graph.iter_files() {
+            partials.find_minimal_partial_path_set_in_file(
+                &test.graph,
+                file,
+                &(cancellation_flag as &dyn CancellationFlag),
+                |g, ps, p| {
+                    db.add_partial_path(g, ps, p);
+                },
+            )?;
+        }
         let result = test.run(&mut partials, &mut db, cancellation_flag)?;
         let success = self.handle_result(&result, &mut file_status)?;
         if self.output_mode.test(!success) {

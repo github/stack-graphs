@@ -33,7 +33,7 @@ fn check_root_partial_paths(
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
     partials
-        .find_minimal_partial_paths_set_in_file(
+        .find_minimal_partial_path_set_in_file(
             graph,
             file,
             &NoCancellation,

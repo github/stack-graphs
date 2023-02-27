@@ -25,7 +25,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
     // Generate partial paths for everything in the database.
     for file in graph.iter_files() {
         partials
-            .find_minimal_partial_paths_set_in_file(
+            .find_minimal_partial_path_set_in_file(
                 graph,
                 file,
                 &NoCancellation,
