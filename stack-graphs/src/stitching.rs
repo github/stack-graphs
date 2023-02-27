@@ -121,6 +121,8 @@ impl Database {
 
         // If the partial path starts at the root node, index it by its symbol stack precondition.
         if graph[start_node].is_root() {
+            // The join node is root, so there's no need to use half-open symbol stacks here, as we
+            // do for [`PartialPath::concatenate`][].
             let key = SymbolStackKey::from_partial_symbol_stack(
                 partials,
                 self,
@@ -587,6 +589,8 @@ impl PathStitcher {
         copious_debugging!("--> Candidate path {}", path.display(graph, paths));
         self.candidate_paths.clear();
         if graph[path.end_node].is_root() {
+            // The join node is root, so there's no need to use half-open symbol stacks here, as we
+            // do for [`PartialPath::concatenate`][].
             let key = SymbolStackKey::from_symbol_stack(paths, db, path.symbol_stack);
             db.find_candidate_partial_paths_from_root(
                 graph,
@@ -923,6 +927,8 @@ impl ForwardPartialPathStitcher {
     ) -> usize {
         self.candidate_partial_paths.clear();
         if graph[partial_path.end_node].is_root() {
+            // The join node is root, so there's no need to use half-open symbol stacks here, as we
+            // do for [`PartialPath::concatenate`][].
             let key = SymbolStackKey::from_partial_symbol_stack(
                 partials,
                 db,
