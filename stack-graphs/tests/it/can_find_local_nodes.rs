@@ -16,7 +16,7 @@ use stack_graphs::NoCancellation;
 use crate::test_graphs;
 
 fn check_local_nodes(graph: &StackGraph, file: &str, expected_local_nodes: &[&str]) {
-    let file = graph.get_file_unchecked(file);
+    let file = graph.get_file(file).expect("Missing file");
     let mut partials = PartialPaths::new();
     let mut database = Database::new();
     partials

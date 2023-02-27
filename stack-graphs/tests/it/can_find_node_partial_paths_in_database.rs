@@ -23,7 +23,7 @@ fn check_node_partial_paths(
     id: (&str, u32),
     expected_partial_paths: &[&str],
 ) {
-    let file = graph.get_file_unchecked(id.0);
+    let file = graph.get_file(id.0).expect("Missing file");
     let id = NodeID::new_in_file(file, id.1);
     let node = graph.node_for_id(id).expect("Cannot find node");
     let mut partials = PartialPaths::new();

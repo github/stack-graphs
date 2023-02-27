@@ -28,7 +28,7 @@ fn check_root_partial_paths(
     precondition: &[&str],
     expected_partial_paths: &[&str],
 ) {
-    let file = graph.get_file_unchecked(file);
+    let file = graph.get_file(file).expect("Missing file");
     let mut paths = Paths::new();
     let mut partials = PartialPaths::new();
     let mut db = Database::new();

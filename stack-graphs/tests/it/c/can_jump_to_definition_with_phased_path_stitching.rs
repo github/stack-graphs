@@ -107,7 +107,7 @@ impl StorageLayer {
 
 fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_paths: &[&str]) {
     let rust_graph = unsafe { &(*graph.graph).inner };
-    let file = rust_graph.get_file_unchecked(file);
+    let file = rust_graph.get_file(file).expect("Missing file");
     let paths = sg_path_arena_new();
     let rust_paths = unsafe { &mut (*paths).inner };
     let partials = sg_partial_path_arena_new();

@@ -359,9 +359,9 @@ impl StackGraph {
 
     /// Returns the file with a particular name.  Panics if there is no file with the requested
     /// name.
-    pub fn get_file_unchecked<S: AsRef<str> + ?Sized>(&self, name: &S) -> Handle<File> {
+    pub fn get_file<S: AsRef<str> + ?Sized>(&self, name: &S) -> Option<Handle<File>> {
         let name = name.as_ref();
-        self.file_handles.get(name).copied().expect("Missing file")
+        self.file_handles.get(name).copied()
     }
 }
 
