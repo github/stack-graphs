@@ -44,6 +44,7 @@ fn utf16_len(string: &str) -> usize {
 /// All of the position information that we have about a character in a source file
 #[repr(C)]
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Position {
     /// The 0-indexed line number containing the character
     pub line: usize,
@@ -52,9 +53,11 @@ pub struct Position {
     pub column: Offset,
     /// The UTF-8 byte indexes (within the file) of the start and end of the line containing the
     /// character
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub containing_line: Range<usize>,
     /// The UTF-8 byte indexes (within the file) of the start and end of the line containing the
     /// character, with any leading and trailing whitespace removed
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub trimmed_line: Range<usize>,
 }
 
@@ -106,6 +109,7 @@ impl PartialOrd<tree_sitter::Point> for Position {
 /// All of the position information that we have about a range of content in a source file
 #[repr(C)]
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Span {
     pub start: Position,
     pub end: Position,
@@ -141,6 +145,7 @@ impl PartialOrd for Span {
 ///
 /// All offsets are 0-indexed.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Offset {
     /// The number of UTF-8-encoded bytes appearing before this character in the string
     pub utf8_offset: usize,
