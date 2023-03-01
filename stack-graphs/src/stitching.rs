@@ -50,6 +50,7 @@ use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
+use crate::cycles::SimilarPathDetector;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
@@ -484,6 +485,7 @@ pub struct PathStitcher {
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
     appended_paths: Appendables<OwnedOrDatabasePath>,
+    similar_path_detector: SimilarPathDetector<Path>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -535,6 +537,7 @@ impl PathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
+            similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -631,6 +634,15 @@ impl PathStitcher {
                 copious_debugging!("        is invalid: cyclic");
                 continue;
             }
+            if self.similar_path_detector.has_similar_path(
+                graph,
+                paths,
+                &path,
+                |ps, left, right| left.equals(ps, right),
+            ) {
+                copious_debugging!("        is invalid: too many similar");
+                continue;
+            }
             copious_debugging!("        is {}", new_path.display(graph, paths));
             self.next_iteration.0.push_back(new_path);
             self.next_iteration.1.push_back(new_cycle_detector);
@@ -677,6 +689,10 @@ impl PathStitcher {
 
         #[cfg(feature = "copious-debugging")]
         {
+            copious_debugging!(
+                "    Max similar path bucket size: {}",
+                self.similar_path_detector.max_bucket_size()
+            );
             copious_debugging!("==> End phase {}", self.phase_number);
             self.phase_number += 1;
         }
@@ -756,6 +772,7 @@ pub struct ForwardPartialPathStitcher {
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
     appended_paths: Appendables<OwnedOrDatabasePath>,
+    similar_path_detector: SimilarPathDetector<PartialPath>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -820,6 +837,7 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
+            similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -856,6 +874,7 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
+            similar_path_detector: SimilarPathDetector::new(),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -958,6 +977,15 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: cyclic");
                     continue;
                 }
+                if self.similar_path_detector.has_similar_path(
+                    graph,
+                    partials,
+                    &partial_path,
+                    |ps, left, right| left.equals(ps, right),
+                ) {
+                    copious_debugging!("        is invalid: too many similar");
+                    continue;
+                }
             }
             copious_debugging!("        is {}", new_partial_path.display(graph, partials));
             self.next_iteration.0.push_back(new_partial_path);
@@ -1009,6 +1037,10 @@ impl ForwardPartialPathStitcher {
 
         #[cfg(feature = "copious-debugging")]
         {
+            copious_debugging!(
+                "    Max similar path bucket size: {}",
+                self.similar_path_detector.max_bucket_size()
+            );
             copious_debugging!("==> End phase {}", self.phase_number);
             self.phase_number += 1;
         }

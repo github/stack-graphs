@@ -30,6 +30,8 @@
 //! any time.
 
 use enumset::EnumSet;
+use smallvec::SmallVec;
+use std::collections::HashMap;
 
 use crate::arena::Handle;
 use crate::arena::List;
@@ -40,9 +42,109 @@ use crate::graph::StackGraph;
 use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
+use crate::paths::Path;
 use crate::paths::PathResolutionError;
+use crate::paths::Paths;
 use crate::stitching::Database;
 use crate::stitching::OwnedOrDatabasePath;
+
+/// Helps detect similar paths in the path-finding algorithm.
+pub struct SimilarPathDetector<P> {
+    paths: HashMap<PathKey, SmallVec<[P; 8]>>,
+}
+
+#[doc(hidden)]
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct PathKey {
+    start_node: Handle<Node>,
+    end_node: Handle<Node>,
+    symbol_stack_precondition_len: usize,
+    scope_stack_precondition_len: usize,
+    symbol_stack_postcondition_len: usize,
+    scope_stack_postcondition_len: usize,
+}
+
+#[doc(hidden)]
+pub trait HasPathKey: Clone {
+    type Arena;
+    fn key(&self) -> PathKey;
+}
+
+impl HasPathKey for Path {
+    type Arena = Paths;
+
+    fn key(&self) -> PathKey {
+        PathKey {
+            start_node: self.start_node,
+            end_node: self.end_node,
+            symbol_stack_precondition_len: 0,
+            scope_stack_precondition_len: 0,
+            symbol_stack_postcondition_len: self.symbol_stack.len(),
+            scope_stack_postcondition_len: self.scope_stack.len(),
+        }
+    }
+}
+
+impl HasPathKey for PartialPath {
+    type Arena = PartialPaths;
+
+    fn key(&self) -> PathKey {
+        PathKey {
+            start_node: self.start_node,
+            end_node: self.end_node,
+            symbol_stack_precondition_len: self.symbol_stack_precondition.len(),
+            scope_stack_precondition_len: self.scope_stack_precondition.len(),
+            symbol_stack_postcondition_len: self.symbol_stack_postcondition.len(),
+            scope_stack_postcondition_len: self.scope_stack_postcondition.len(),
+        }
+    }
+}
+
+impl<P> SimilarPathDetector<P>
+where
+    P: HasPathKey,
+{
+    /// Creates a new, empty cycle detector.
+    pub fn new() -> SimilarPathDetector<P> {
+        SimilarPathDetector {
+            paths: HashMap::new(),
+        }
+    }
+
+    /// Determines whether we should process this path during the path-finding algorithm.  If we have seen
+    /// a path with the same start and end node, and the same pre- and postcondition, then we return false.
+    /// Otherwise, we return true.
+    pub fn has_similar_path<Eq>(
+        &mut self,
+        graph: &StackGraph,
+        arena: &mut P::Arena,
+        path: &P,
+        eq: Eq,
+    ) -> bool
+    where
+        Eq: Fn(&mut P::Arena, &P, &P) -> bool,
+    {
+        let key = path.key();
+
+        if graph.incoming_edge_count(key.end_node) <= 1 {
+            // return false;
+        }
+
+        let possibly_similar_paths = self.paths.entry(key).or_default();
+        for other_path in possibly_similar_paths.iter() {
+            if eq(arena, path, other_path) {
+                return true;
+            }
+        }
+
+        possibly_similar_paths.push(path.clone());
+        false
+    }
+
+    pub fn max_bucket_size(&self) -> usize {
+        self.paths.iter().map(|b| b.1.len()).max().unwrap_or(0)
+    }
+}
 
 // ----------------------------------------------------------------------------
 // Cycle detector

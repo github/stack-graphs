@@ -1301,6 +1301,7 @@ impl StackGraph {
         let edges = &mut self.outgoing_edges[source];
         if let Err(index) = edges.binary_search_by_key(&sink, |o| o.sink) {
             edges.insert(index, OutgoingEdge { sink, precedence });
+            self.incoming_edges[sink] += 1;
         }
     }
 
@@ -1321,6 +1322,14 @@ impl StackGraph {
                 precedence: o.precedence,
             })),
             None => Either::Left(std::iter::empty()),
+        }
+    }
+
+    /// Returns an iterator of all of the edges that begin at a particular source node.
+    pub fn incoming_edge_count(&self, sink: Handle<Node>) -> usize {
+        match self.incoming_edges.get(sink) {
+            Some(count) => *count,
+            None => 0,
         }
     }
 }
@@ -1410,6 +1419,7 @@ pub struct StackGraph {
     pub(crate) nodes: Arena<Node>,
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
+    incoming_edges: SupplementalArena<Node, usize>,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
     pub(crate) debug_info: SupplementalArena<Node, DebugInfo>,
 }
@@ -1588,6 +1598,7 @@ impl Default for StackGraph {
             nodes,
             source_info: SupplementalArena::new(),
             node_id_handles: NodeIDHandles::new(),
+            incoming_edges: SupplementalArena::new(),
             outgoing_edges: SupplementalArena::new(),
             debug_info: SupplementalArena::new(),
         }
