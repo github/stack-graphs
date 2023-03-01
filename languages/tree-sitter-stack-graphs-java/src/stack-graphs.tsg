@@ -357,6 +357,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type.lexical_scope -> @this.lexical_scope
 }
 
+(interface_declaration
+  type_parameters: (type_parameters
+    (type_parameter
+      (type_identifier) @type_identifier))) @this {
+  node type_ident
+  attr (type_ident) node_definition = @type_identifier
+  edge @this.defs -> type_ident
+}
+
 (interface_body) @this {
   node @this.defs
   node @this.lexical_scope
