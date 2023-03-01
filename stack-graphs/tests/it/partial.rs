@@ -675,5 +675,23 @@ fn can_append_partial_paths() -> Result<(), PathResolutionError> {
         "<%1> ($1) [test(7) push scoped baz test(6)] -> [jump to scope] <baz/([test(6)],$1),%1> ($1)",
     );
 
+    // verify that without stack variables in the precondition, the precondition cannot grow because of concatenation
+    {
+        let left = &[scope0];
+        let right = &[scope0, bar_def];
+
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut l = create_partial_path_and_edges(&mut g, &mut ps, left).expect("");
+        l.eliminate_precondition_stack_variables(&mut ps);
+        let mut r = create_partial_path_and_edges(&mut g, &mut ps, right).expect("");
+
+        r.ensure_no_overlapping_variables(&mut ps, &l);
+        let result = l.concatenate(&g, &mut ps, &r);
+        result.expect_err("");
+    }
+
     Ok(())
 }

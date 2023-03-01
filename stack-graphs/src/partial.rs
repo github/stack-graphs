@@ -2302,6 +2302,45 @@ impl PartialPath {
             .with_offset(scope_variable_offset);
     }
 
+    /// Replaces stack variables in the precondition with empty stacks.
+    pub fn eliminate_precondition_stack_variables(&mut self, partials: &mut PartialPaths) {
+        let mut symbol_bindings = PartialSymbolStackBindings::new();
+        let mut scope_bindings = PartialScopeStackBindings::new();
+        if let Some(symbol_variable) = self.symbol_stack_precondition.variable() {
+            symbol_bindings
+                .add(
+                    partials,
+                    symbol_variable,
+                    PartialSymbolStack::empty(),
+                    &mut scope_bindings,
+                )
+                .unwrap();
+        }
+        if let Some(scope_variable) = self.scope_stack_precondition.variable() {
+            scope_bindings
+                .add(partials, scope_variable, PartialScopeStack::empty())
+                .unwrap();
+        }
+
+        self.symbol_stack_precondition = self
+            .symbol_stack_precondition
+            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
+            .unwrap();
+        self.scope_stack_precondition = self
+            .scope_stack_precondition
+            .apply_partial_bindings(partials, &scope_bindings)
+            .unwrap();
+
+        self.symbol_stack_postcondition = self
+            .symbol_stack_postcondition
+            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
+            .unwrap();
+        self.scope_stack_postcondition = self
+            .scope_stack_postcondition
+            .apply_partial_bindings(partials, &scope_bindings)
+            .unwrap();
+    }
+
     /// Attempts to append an edge to the end of a partial path.  If the edge is not a valid
     /// extension of this partial path, we return an error describing why.
     pub fn append(
