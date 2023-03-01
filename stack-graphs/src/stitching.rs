@@ -769,7 +769,6 @@ pub struct ForwardPartialPathStitcher {
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
-    should_extend: fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
 }
 
 impl ForwardPartialPathStitcher {
@@ -819,10 +818,10 @@ impl ForwardPartialPathStitcher {
             .iter()
             .copied()
             .map(|handle| {
-                (
-                    db[handle].clone(),
-                    AppendingCycleDetector::from(&mut appended_paths, handle.into()),
-                )
+                let mut p = db[handle].clone();
+                p.eliminate_precondition_stack_variables(partials);
+                let c = AppendingCycleDetector::from(&mut appended_paths, handle.into());
+                (p, c)
             })
             .unzip();
         copious_debugging!("==> End phase 0");
@@ -836,7 +835,6 @@ impl ForwardPartialPathStitcher {
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
-            should_extend: |_, _, _| true,
         }
     }
 
@@ -851,14 +849,15 @@ impl ForwardPartialPathStitcher {
     /// [`process_next_phase`]: #method.process_next_phase
     pub fn from_partial_paths(
         _graph: &StackGraph,
-        _partials: &mut PartialPaths,
+        partials: &mut PartialPaths,
         _db: &mut Database,
         initial_partial_paths: Vec<PartialPath>,
     ) -> ForwardPartialPathStitcher {
         let mut appended_paths = Appendables::new();
         let next_iteration = initial_partial_paths
             .into_iter()
-            .map(|p| {
+            .map(|mut p| {
+                p.eliminate_precondition_stack_variables(partials);
                 let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
                 (p, c)
             })
@@ -873,7 +872,6 @@ impl ForwardPartialPathStitcher {
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
-            should_extend: |_, _, _| true,
         }
     }
 
@@ -904,14 +902,6 @@ impl ForwardPartialPathStitcher {
     /// paths found in the previous phase, with no additional bound.
     pub fn set_max_work_per_phase(&mut self, max_work_per_phase: usize) {
         self.max_work_per_phase = max_work_per_phase;
-    }
-
-    /// Sets a condition that determines if a partial path is a candidate that should be extended.
-    pub fn set_should_extend(
-        &mut self,
-        should_extend: fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
-    ) {
-        self.should_extend = should_extend;
     }
 
     /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
@@ -1022,10 +1012,6 @@ impl ForwardPartialPathStitcher {
                 "--> Candidate partial path {}",
                 partial_path.display(graph, partials)
             );
-            if !(self.should_extend)(graph, partials, &partial_path) {
-                copious_debugging!("    Should not extend");
-                continue;
-            }
             if !self
                 .similar_path_detector
                 .should_process_path(&partial_path, |probe| {
@@ -1073,7 +1059,6 @@ impl ForwardPartialPathStitcher {
     {
         let mut stitcher =
             ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
-        stitcher.set_should_extend(|g, _, p| p.starts_at_reference(g));
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             let complete_partial_paths = stitcher
