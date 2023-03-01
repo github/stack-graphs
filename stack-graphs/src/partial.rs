@@ -2417,23 +2417,40 @@ impl PartialPath {
         if !graph[self.end_node].is_jump_to() {
             return Ok(());
         }
+
         let scope_variable = match self.scope_stack_postcondition.variable() {
             Some(scope_variable) => scope_variable,
             None => return Err(PathResolutionError::ScopeStackUnsatisfied),
         };
         let mut scope_stack = PartialScopeStack::from_variable(scope_variable);
         scope_stack.push_front(partials, node);
+
+        let symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
         scope_bindings
             .add(partials, scope_variable, scope_stack)
             .unwrap();
-        self.scope_stack_precondition
+
+        self.symbol_stack_precondition = self
+            .symbol_stack_precondition
+            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
+            .unwrap();
+        self.scope_stack_precondition = self
+            .scope_stack_precondition
             .apply_partial_bindings(partials, &scope_bindings)
             .unwrap();
-        self.scope_stack_postcondition
+
+        self.symbol_stack_postcondition = self
+            .symbol_stack_postcondition
+            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
+            .unwrap();
+        self.scope_stack_postcondition = self
+            .scope_stack_postcondition
             .apply_partial_bindings(partials, &scope_bindings)
             .unwrap();
+
         self.end_node = node;
+
         Ok(())
     }
 
