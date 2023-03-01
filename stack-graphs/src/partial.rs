@@ -2440,15 +2440,6 @@ impl PartialPath {
             .apply_partial_bindings(partials, &scope_bindings)
             .unwrap();
 
-        self.symbol_stack_postcondition = self
-            .symbol_stack_postcondition
-            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
-            .unwrap();
-        self.scope_stack_postcondition = self
-            .scope_stack_postcondition
-            .apply_partial_bindings(partials, &scope_bindings)
-            .unwrap();
-
         self.end_node = node;
 
         Ok(())
