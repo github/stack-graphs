@@ -484,7 +484,7 @@ fn can_serialize_graph() {
             ]
         }
     );
-    assert_eq!(actual, expected);
+    assert_eq!(expected, actual);
 }
 
 #[test]
@@ -1808,7 +1808,7 @@ fn can_serialize_paths() {
             }
         ]
     );
-    assert_eq!(actual, expected);
+    assert_eq!(expected, actual);
 }
 
 #[test]
@@ -2107,5 +2107,5 @@ fn can_serialize_partial_paths() {
             }
         ]
     );
-    assert_eq!(actual, expected);
+    assert_eq!(expected, actual);
 }

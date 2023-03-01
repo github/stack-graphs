@@ -62,7 +62,7 @@ fn can_apply_offset_to_partial_symbol_stacks() {
         let with_offset =
             stack.with_offset(&mut partials, symbol_variable_offset, scope_variable_offset);
         let actual = with_offset.display(&graph, &mut partials).to_string();
-        assert_eq!(actual, expected);
+        assert_eq!(expected, actual);
     }
 
     verify((&[], None), 0, 0, "");
@@ -128,11 +128,11 @@ fn can_unify_partial_symbol_stacks() -> Result<(), PathResolutionError> {
             &mut scope_bindings,
         )?;
         let unified = unified.display(&graph, &mut partials).to_string();
-        assert_eq!(unified, expected_unification);
+        assert_eq!(expected_unification, unified);
         let symbol_bindings = symbol_bindings.display(&graph, &mut partials).to_string();
-        assert_eq!(symbol_bindings, expected_symbol_bindings);
+        assert_eq!(expected_symbol_bindings, symbol_bindings);
         let scope_bindings = scope_bindings.display(&graph, &mut partials).to_string();
-        assert_eq!(scope_bindings, expected_scope_bindings);
+        assert_eq!(expected_scope_bindings, scope_bindings);
         Ok(())
     }
 
@@ -339,9 +339,9 @@ fn can_unify_partial_scope_stacks() -> Result<(), PathResolutionError> {
         let mut bindings = PartialScopeStackBindings::new();
         let unified = lhs.unify(&mut partials, rhs, &mut bindings)?;
         let unified = unified.display(&graph, &mut partials).to_string();
-        assert_eq!(unified, expected_unification);
+        assert_eq!(expected_unification, unified);
         let bindings = bindings.display(&graph, &mut partials).to_string();
-        assert_eq!(bindings, expected_bindings);
+        assert_eq!(expected_bindings, bindings);
         Ok(())
     }
 
@@ -465,7 +465,7 @@ fn can_create_partial_path_from_node() {
         let mut partials = PartialPaths::new();
         let path = PartialPath::from_node(graph, &mut partials, node);
         let actual = path.display(&graph, &mut partials).to_string();
-        assert_eq!(actual, expected);
+        assert_eq!(expected, actual);
     }
 
     verify(
@@ -570,7 +570,7 @@ fn can_append_partial_paths() -> Result<(), PathResolutionError> {
         r.ensure_no_overlapping_variables(&mut ps, &l);
         l.concatenate(&g, &mut ps, &r)?;
         let actual = l.display(&g, &mut ps).to_string();
-        assert_eq!(actual, expected);
+        assert_eq!(expected, actual);
 
         Ok(())
     }
