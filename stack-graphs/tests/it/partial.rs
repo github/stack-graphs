@@ -517,41 +517,18 @@ fn can_create_partial_path_from_node() {
 fn can_append_partial_paths() -> Result<(), PathResolutionError> {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").expect("");
-
     let jump_to_scope_node = StackGraph::jump_to_node();
-
-    let scope0_id = graph.new_node_id(file);
-    let scope0 = graph.add_scope_node(scope0_id, false).unwrap();
-
-    let scope1_id = graph.new_node_id(file);
-    let scope1 = graph.add_scope_node(scope1_id, false).unwrap();
-
-    let foo = graph.add_symbol("foo");
-    let foo_ref_id = graph.new_node_id(file);
-    let foo_ref = graph.add_push_symbol_node(foo_ref_id, foo, false).unwrap();
-    let foo_def_id = graph.new_node_id(file);
-    let foo_def = graph.add_pop_symbol_node(foo_def_id, foo, false).unwrap();
-
-    let bar = graph.add_symbol("bar");
-    let bar_ref_id = graph.new_node_id(file);
-    let bar_ref = graph.add_push_symbol_node(bar_ref_id, bar, false).unwrap();
-    let bar_def_id = graph.new_node_id(file);
-    let bar_def = graph.add_pop_symbol_node(bar_def_id, bar, false).unwrap();
-
-    let exported_scope_id = graph.new_node_id(file);
-    graph.add_scope_node(exported_scope_id, true);
-    let baz = graph.add_symbol("baz");
-    let baz_ref_id = graph.new_node_id(file);
-    let baz_ref = graph
-        .add_push_scoped_symbol_node(baz_ref_id, baz, exported_scope_id, false)
-        .unwrap();
-    let baz_def_id = graph.new_node_id(file);
-    let baz_def = graph
-        .add_pop_scoped_symbol_node(baz_def_id, baz, false)
-        .unwrap();
-
-    let drop_scopes_id = graph.new_node_id(file);
-    let drop_scopes = graph.add_drop_scopes_node(drop_scopes_id).unwrap();
+    let scope0 = create_scope_node(&mut graph, file, false);
+    let scope1 = create_scope_node(&mut graph, file, false);
+    let foo_ref = create_push_symbol_node(&mut graph, file, "foo", false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+    let bar_ref = create_push_symbol_node(&mut graph, file, "bar", false);
+    let bar_def = create_pop_symbol_node(&mut graph, file, "bar", false);
+    let exported_scope = create_scope_node(&mut graph, file, true);
+    let exported_scope_id = graph[exported_scope].id();
+    let baz_ref = create_push_scoped_symbol_node(&mut graph, file, "baz", exported_scope_id, false);
+    let baz_def = create_pop_scoped_symbol_node(&mut graph, file, "baz", false);
+    let drop_scopes = create_drop_scopes_node(&mut graph, file);
 
     fn run(
         graph: &StackGraph,
