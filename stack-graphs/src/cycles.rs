@@ -216,14 +216,14 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
             // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
             while let Some(appendage) = prefix_appendages.pop_front(appendables) {
-                prefix_path.resolve_to(graph, partials, appendage.start_node(ctx))?;
+                prefix_path.resolve_to_node(graph, partials, appendage.start_node(ctx))?;
                 appendage.append_to(graph, partials, ctx, &mut prefix_path)?;
             }
 
             // build cyclic path
             let cyclic_path = maybe_cyclic_path
                 .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
-            prefix_path.resolve_to(graph, partials, cyclic_path.start_node)?;
+            prefix_path.resolve_to_node(graph, partials, cyclic_path.start_node)?;
             prefix_path.ensure_no_overlapping_variables(partials, &cyclic_path);
             prefix_path.concatenate(graph, partials, &cyclic_path)?;
             if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {

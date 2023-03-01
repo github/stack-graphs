@@ -2371,15 +2371,15 @@ impl PartialPath {
             },
         );
 
-        self.resolve(graph, partials)?;
+        self.resolve_from_postcondition(graph, partials)?;
 
         Ok(())
     }
 
-    /// Attempts to resolve any _jump to scope_ node at the end of a partial path.  If the partial
-    /// path does not end in a _jump to scope_ node, we do nothing.  If it does, and we cannot
-    /// resolve it, then we return an error describing why.
-    pub fn resolve(
+    /// Attempts to resolve any _jump to scope_ node at the end of a partial path from the postcondition
+    /// scope stack.  If the partial path does not end in a _jump to scope_ node, we do nothing.  If it
+    /// does, and we cannot resolve it, then we return an error describing why.
+    pub fn resolve_from_postcondition(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2405,10 +2405,11 @@ impl PartialPath {
         Ok(())
     }
 
-    /// Attempts to resolve any _jump to scope_ node at the end of a partial path to the given node.
-    /// If the partial path does not end in a _jump to scope_ node, we do nothing.  If it does, and we
-    /// cannot resolve it, then we return an error describing why.
-    pub fn resolve_to(
+    /// Resolve any _jump to scope_ node at the end of a partial path to the given node, updating the
+    /// precondition to include the given node.  If the partial path does not end in a _jump to scope_
+    /// node, we do nothing.  If it does, and we cannot resolve it, then we return an error describing
+    /// why.
+    pub fn resolve_to_node(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2971,7 +2972,7 @@ impl PartialPath {
         }
         lhs.end_node = rhs.end_node;
 
-        lhs.resolve(graph, partials)?;
+        lhs.resolve_from_postcondition(graph, partials)?;
 
         Ok(())
     }

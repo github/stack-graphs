@@ -672,3 +672,66 @@ fn can_append_partial_paths() -> Result<(), PathResolutionError> {
 
     Ok(())
 }
+
+#[test]
+fn can_resolve_to_node() -> Result<(), PathResolutionError> {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").expect("");
+
+    let jump_to_scope_node = StackGraph::jump_to_node();
+    let exported_scope = create_scope_node(&mut graph, file, true);
+    let baz_def = create_pop_scoped_symbol_node(&mut graph, file, "baz", false);
+
+    // resolved node ends up in precondition scope stack
+    {
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut p =
+            create_partial_path_and_edges(&mut g, &mut ps, &[jump_to_scope_node]).expect("");
+
+        p.resolve_to_node(&g, &mut ps, exported_scope).expect("");
+        assert_eq!(
+            Some(exported_scope),
+            p.scope_stack_precondition.pop_front(&mut ps)
+        );
+    }
+
+    // precondition is fixed, and resolving fails
+    {
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut p =
+            create_partial_path_and_edges(&mut g, &mut ps, &[jump_to_scope_node]).expect("");
+
+        p.eliminate_precondition_stack_variables(&mut ps);
+        p.resolve_to_node(&g, &mut ps, exported_scope)
+            .expect_err("");
+    }
+
+    // resolved node ends up in scoped symbol in precondition symbol stack
+    // resolving succeeds even though the scope stack is finite
+    {
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut p = create_partial_path_and_edges(&mut g, &mut ps, &[baz_def, jump_to_scope_node])
+            .expect("");
+
+        p.eliminate_precondition_stack_variables(&mut ps);
+        p.resolve_to_node(&g, &mut ps, exported_scope).expect("");
+        assert_eq!(
+            Some(exported_scope),
+            p.symbol_stack_precondition
+                .pop_front(&mut ps)
+                .and_then(|s| s.scopes.into_option())
+                .and_then(|mut st| st.pop_front(&mut ps))
+        );
+    }
+
+    Ok(())
+}
