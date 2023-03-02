@@ -1,4 +1,6 @@
-use super::Filter;
+use std::collections::HashMap;
+
+use crate::{arena::Handle, graph::File, json::Filter};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -9,8 +11,194 @@ pub struct StackGraph {
 }
 
 impl StackGraph {
-    pub fn reconstruct(&self) -> crate::graph::StackGraph {
-        todo!()
+    pub fn load_into(&self, graph: &mut crate::graph::StackGraph) -> Result<(), ()> {
+        // load files into the stack-graph, create a mapping between file <-> handle
+        if self
+            .files
+            .data
+            .iter()
+            .any(|f| graph.get_file(f.as_str()).is_some())
+        {
+            return Err(());
+        }
+        let mut file_handle_map: HashMap<&str, Handle<File>> = HashMap::default();
+        for f in self.files.data.iter() {
+            let handle = graph.add_file(f.as_str()).unwrap();
+            file_handle_map.insert(f.as_str(), handle);
+        }
+
+        // load nodes into stack-graph
+        for n in self.nodes.data.as_slice() {
+            match n {
+                Node::DropScopes {
+                    id:
+                        NodeID {
+                            file: Some(f),
+                            local_id,
+                        },
+                    ..
+                } => {
+                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
+                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
+                        graph.add_drop_scopes_node(node_id);
+                    }
+                }
+                Node::JumpTo { .. } => {}
+                Node::PopScopedSymbol {
+                    id:
+                        NodeID {
+                            file: Some(f),
+                            local_id,
+                        },
+                    symbol,
+                    is_definition,
+                    ..
+                } => {
+                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
+                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
+                        let symbol_handle = graph.add_symbol(symbol.as_str());
+                        graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition);
+                    }
+                }
+                Node::PopSymbol {
+                    id:
+                        NodeID {
+                            file: Some(f),
+                            local_id,
+                        },
+                    symbol,
+                    is_definition,
+                    ..
+                } => {
+                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
+                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
+                        let symbol_handle = graph.add_symbol(symbol.as_str());
+                        graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition);
+                    }
+                }
+                Node::PushScopedSymbol {
+                    id:
+                        NodeID {
+                            file: Some(f),
+                            local_id,
+                        },
+                    symbol,
+                    scope:
+                        NodeID {
+                            file: Some(scope_f),
+                            local_id: scope_local_id,
+                        },
+                    is_reference,
+                    ..
+                } => {
+                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
+                        if let Some(scope_file_handle) = file_handle_map.get(scope_f.as_str()) {
+                            let node_id =
+                                crate::graph::NodeID::new_in_file(*file_handle, *local_id);
+
+                            let scope_id = crate::graph::NodeID::new_in_file(
+                                *scope_file_handle,
+                                *scope_local_id,
+                            );
+
+                            let symbol_handle = graph.add_symbol(symbol.as_str());
+
+                            graph.add_push_scoped_symbol_node(
+                                node_id,
+                                symbol_handle,
+                                scope_id,
+                                *is_reference,
+                            );
+                        }
+                    }
+                }
+                Node::PushSymbol {
+                    id:
+                        NodeID {
+                            file: Some(f),
+                            local_id,
+                        },
+                    symbol,
+                    is_reference,
+                    ..
+                } => {
+                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
+                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
+                        let symbol_handle = graph.add_symbol(symbol.as_str());
+                        graph.add_push_symbol_node(node_id, symbol_handle, *is_reference);
+                    }
+                }
+                Node::Root { .. } => {}
+                Node::Scope {
+                    id:
+                        NodeID {
+                            file: Some(f),
+                            local_id,
+                        },
+                    is_exported,
+                    ..
+                } => {
+                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
+                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
+                        graph.add_scope_node(node_id, *is_exported);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // load edges into stack-graph
+        for Edge {
+            source,
+            sink,
+            precedence,
+        } in self.edges.data.as_slice()
+        {
+            let source_file_handle = source
+                .file
+                .as_ref()
+                .and_then(|f| file_handle_map.get(f.as_str()));
+            let sink_file_handle = sink
+                .file
+                .as_ref()
+                .and_then(|f| file_handle_map.get(f.as_str()));
+            let convert = |n: &NodeID| {
+                if n.is_root() {
+                    crate::graph::NodeID::root()
+                } else if n.is_jump_to() {
+                    crate::graph::NodeID::jump_to()
+                } else {
+                    panic!()
+                }
+            };
+            let (source_id, sink_id) = match (source_file_handle, sink_file_handle) {
+                (Some(a), Some(b)) => {
+                    let source_node_id = crate::graph::NodeID::new_in_file(*a, source.local_id);
+                    let sink_node_id = crate::graph::NodeID::new_in_file(*b, source.local_id);
+                    (source_node_id, sink_node_id)
+                }
+                (Some(a), None) => {
+                    let source_node_id = crate::graph::NodeID::new_in_file(*a, source.local_id);
+                    let sink_node_id = convert(&sink);
+                    (source_node_id, sink_node_id)
+                }
+                (None, Some(b)) => {
+                    let source_node_id = convert(&source);
+                    let sink_node_id = crate::graph::NodeID::new_in_file(*b, source.local_id);
+                    (source_node_id, sink_node_id)
+                }
+                (None, None) => {
+                    let source_node_id = convert(&source);
+                    let sink_node_id = convert(&sink);
+                    (source_node_id, sink_node_id)
+                }
+            };
+
+            if let (Some(a), Some(b)) = (graph.node_for_id(source_id), graph.node_for_id(sink_id)) {
+                graph.add_edge(a, b, *precedence);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -27,23 +215,21 @@ pub struct Nodes {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Node {
-    #[serde(rename = "drop_scopes")]
     DropScopes {
         id: NodeID,
         source_info: Option<SourceInfo>,
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "jump_to")]
+    #[serde(rename = "jump_to_scope")]
     JumpTo {
         id: NodeID,
         source_info: Option<SourceInfo>,
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "pop_scoped_symbol")]
     PopScopedSymbol {
         id: NodeID,
         symbol: String,
@@ -52,7 +238,6 @@ pub enum Node {
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "pop_symbol")]
     PopSymbol {
         id: NodeID,
         symbol: String,
@@ -61,7 +246,6 @@ pub enum Node {
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "push_scoped_symbol")]
     PushScopedSymbol {
         id: NodeID,
         symbol: String,
@@ -71,7 +255,6 @@ pub enum Node {
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "push_symbol")]
     PushSymbol {
         id: NodeID,
         symbol: String,
@@ -80,14 +263,12 @@ pub enum Node {
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "root")]
     Root {
         id: NodeID,
         source_info: Option<SourceInfo>,
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "scope")]
     Scope {
         id: NodeID,
         is_exported: bool,
@@ -118,6 +299,16 @@ pub struct DebugEntry {
 pub struct NodeID {
     file: Option<String>,
     local_id: u32,
+}
+
+impl NodeID {
+    fn is_root(&self) -> bool {
+        self.local_id == crate::graph::NodeID::root().local_id()
+    }
+
+    fn is_jump_to(&self) -> bool {
+        self.local_id == crate::graph::NodeID::jump_to().local_id()
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -165,7 +356,7 @@ impl crate::graph::StackGraph {
     fn filter_source_info<'a>(
         &self,
         _filter: &'a dyn Filter,
-        handle: super::Handle<super::Node>,
+        handle: Handle<super::Node>,
     ) -> Option<SourceInfo> {
         self.source_info(handle).map(|info| SourceInfo {
             span: info.span.clone(),
@@ -176,7 +367,7 @@ impl crate::graph::StackGraph {
     fn filter_debug_info<'a>(
         &self,
         _filter: &'a dyn Filter,
-        handle: super::Handle<super::Node>,
+        handle: Handle<super::Node>,
     ) -> Option<DebugInfo> {
         self.debug_info(handle).map(|info| DebugInfo {
             data: info
@@ -382,5 +573,57 @@ mod test {
         let observed = serde_json::from_value::<super::StackGraph>(json_data).unwrap();
 
         assert_eq!(observed, expected);
+    }
+
+    #[test]
+    fn reconstruct() {
+        let json_data = serde_json::json!({
+        "files": [
+            "index.ts"
+        ],
+        "nodes": [{
+            "type": "root",
+            "id": {
+                "local_id": 1
+            },
+            "source_info": {
+                "span": {
+                    "start": {
+                        "line": 0,
+                        "column": {
+                            "utf8_offset": 0,
+                            "utf16_offset": 0,
+                            "grapheme_offset": 0
+                        }
+                    },
+                    "end": {
+                        "line": 0,
+                        "column": {
+                            "utf8_offset": 0,
+                            "utf16_offset": 0,
+                            "grapheme_offset": 0
+                        }
+                    }
+                }
+            },
+            "debug_info": []
+        }],
+        "edges": [{
+            "source": {
+                "local_id": 1
+            },
+            "sink": {
+                "file": "index.ts",
+                "local_id": 0
+            },
+            "precedence": 0
+        }]});
+        let observed = serde_json::from_value::<super::StackGraph>(json_data).unwrap();
+        let mut sg = crate::graph::StackGraph::new();
+        observed.load_into(&mut sg).unwrap();
+
+        // always 2 nodes: root and jump
+        assert_eq!(sg.iter_nodes().count(), 2);
+        assert_eq!(sg.iter_files().count(), 1);
     }
 }
