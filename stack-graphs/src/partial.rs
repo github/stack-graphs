@@ -2493,7 +2493,8 @@ impl PartialPath {
                 &new_path,
                 |ps, left, right| left.equals(ps, right),
             ) {
-                copious_debugging!("    * too many similar");
+                copious_debugging!("         * too many similar");
+                continue;
             }
             let mut new_cycle_detector = path_cycle_detector.clone();
             new_cycle_detector.append(edges, extension);

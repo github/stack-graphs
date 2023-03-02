@@ -623,6 +623,7 @@ impl PathStitcher {
                 copious_debugging!("        is invalid: {:?}", err);
                 continue;
             }
+            copious_debugging!("        is {}", new_path.display(graph, paths));
             new_cycle_detector.append(&mut self.appended_paths, extension.into());
             let cycles = new_cycle_detector
                 .is_cyclic(graph, partials, db, &mut self.appended_paths)
@@ -637,13 +638,12 @@ impl PathStitcher {
             if self.similar_path_detector.has_similar_path(
                 graph,
                 paths,
-                &path,
+                &new_path,
                 |ps, left, right| left.equals(ps, right),
             ) {
                 copious_debugging!("        is invalid: too many similar");
                 continue;
             }
-            copious_debugging!("        is {}", new_path.display(graph, paths));
             self.next_iteration.0.push_back(new_path);
             self.next_iteration.1.push_back(new_cycle_detector);
         }
@@ -966,6 +966,7 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
+                copious_debugging!("        is {}", new_partial_path.display(graph, partials));
                 new_cycle_detector.append(&mut self.appended_paths, extension.into());
                 let cycles = new_cycle_detector
                     .is_cyclic(graph, partials, db, &mut self.appended_paths)
@@ -980,14 +981,13 @@ impl ForwardPartialPathStitcher {
                 if self.similar_path_detector.has_similar_path(
                     graph,
                     partials,
-                    &partial_path,
+                    &new_partial_path,
                     |ps, left, right| left.equals(ps, right),
                 ) {
                     copious_debugging!("        is invalid: too many similar");
                     continue;
                 }
             }
-            copious_debugging!("        is {}", new_partial_path.display(graph, partials));
             self.next_iteration.0.push_back(new_partial_path);
             self.next_iteration.1.push_back(new_cycle_detector);
         }

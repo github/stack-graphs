@@ -141,6 +141,7 @@ where
         false
     }
 
+    #[cfg(feature = "copious-debugging")]
     pub fn max_bucket_size(&self) -> usize {
         self.paths.iter().map(|b| b.1.len()).max().unwrap_or(0)
     }
