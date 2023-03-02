@@ -150,6 +150,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @class.type -> ref
 }
 
+(class_declaration
+  superclass: (superclass
+    (generic_type
+      (type_identifier)) @superclass_name)) @class {
+    edge @superclass_name.lexical_scope -> @class.lexical_scope
+}
+
 
 (class_declaration (type_parameters)) @class {
   node @class.type_parameters
@@ -361,7 +368,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   type_parameters: (type_parameters
     (type_parameter
       (type_identifier) @type_identifier))
-  body:(_) @body) @this {
+  body: (_) @body) @this {
   node type_ident
   attr (type_ident) node_definition = @type_identifier
   edge @body.lexical_scope -> type_ident

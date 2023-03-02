@@ -1,6 +1,22 @@
-class TestClass extends SecondTestClass {
-                        // ^ defined: 5
+class String {
+    public int length() {}
+};
+
+class HashMap<K, V> {
+    public Set<MapEntry<K, V>> entrySet() {}
+    //                  ^ defined: 5
 }
 
-class SecondTestClass {
+class LRUCache<K, V>
+    extends HashMap<K, V> {
+    //      ^ defined: 5
+    //              ^ defined: 10
+    //                 ^ defined: 10
+}
+
+class MyMap extends LRUCache<String, String> {
+    public int go() {
+        return this.entrySet().iterator().next().getKey().length();
+        //                                                 ^ defined: 2
+    }
 }
