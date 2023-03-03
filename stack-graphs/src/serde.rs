@@ -1,152 +1,157 @@
-use std::collections::HashMap;
+use crate::{arena::Handle, json::Filter};
 
-use crate::{arena::Handle, graph::File, json::Filter};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct StackGraph {
     files: Files,
     nodes: Nodes,
     edges: Edges,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum Error {
+    #[error("failed to load file `{0}`")]
+    FileNotFound(String),
+
+    #[error("duplicate file `{0}`")]
+    FileAlreadyPresent(String),
+
+    #[error("failed to locate node `{0}` in graph")]
+    NodeNotFound(u32),
+
+    #[error("no file data for node `{0}`")]
+    NoFileData(u32),
+}
+
 impl StackGraph {
-    pub fn load_into(&self, graph: &mut crate::graph::StackGraph) -> Result<(), ()> {
-        // load files into the stack-graph, create a mapping between file <-> handle
-        if self
+    pub fn from_graph<'a>(graph: &crate::graph::StackGraph, filter: &'a dyn Filter) -> Self {
+        let files = graph.filter_files(filter);
+        let nodes = graph.filter_nodes(filter);
+        let edges = graph.filter_edges(filter);
+        Self {
+            files,
+            nodes,
+            edges,
+        }
+    }
+
+    pub fn load_into(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
+        self.load_files(graph)?;
+        self.load_nodes(graph)?;
+        self.load_edges(graph)?;
+        Ok(())
+    }
+
+    fn load_files(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
+        // we check if any of the files we are about to introduce, are
+        // already present in this graph, to avoid accidental merges
+        if let Some(f) = self
             .files
             .data
             .iter()
-            .any(|f| graph.get_file(f.as_str()).is_some())
+            .find(|f| graph.get_file(f.as_str()).is_some())
         {
-            return Err(());
-        }
-        let mut file_handle_map: HashMap<&str, Handle<File>> = HashMap::default();
-        for f in self.files.data.iter() {
-            let handle = graph.add_file(f.as_str()).unwrap();
-            file_handle_map.insert(f.as_str(), handle);
+            return Err(Error::FileAlreadyPresent(f.to_owned()));
         }
 
-        // load nodes into stack-graph
+        for f in self.files.data.iter() {
+            graph.add_file(f.as_str()).unwrap();
+        }
+
+        Ok(())
+    }
+
+    fn load_nodes(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
+        let not_found = |f: &str| Error::FileNotFound(f.to_owned());
+        let no_file_data = |id| Error::NoFileData(id);
+
         for n in self.nodes.data.as_slice() {
             match n {
-                Node::DropScopes {
-                    id:
-                        NodeID {
-                            file: Some(f),
-                            local_id,
-                        },
-                    ..
-                } => {
-                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
-                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
-                        graph.add_drop_scopes_node(node_id);
-                    }
+                Node::DropScopes { id, .. } => {
+                    let file = id.file().ok_or(no_file_data(id.local_id))?;
+                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
+                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    graph.add_drop_scopes_node(node_id);
                 }
-                Node::JumpTo { .. } => {}
                 Node::PopScopedSymbol {
-                    id:
-                        NodeID {
-                            file: Some(f),
-                            local_id,
-                        },
+                    id,
                     symbol,
                     is_definition,
                     ..
                 } => {
-                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
-                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
-                        let symbol_handle = graph.add_symbol(symbol.as_str());
-                        graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition);
-                    }
+                    let file = id.file().ok_or(no_file_data(id.local_id))?;
+                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
+                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let symbol_handle = graph.add_symbol(symbol.as_str());
+                    graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition);
                 }
                 Node::PopSymbol {
-                    id:
-                        NodeID {
-                            file: Some(f),
-                            local_id,
-                        },
+                    id,
                     symbol,
                     is_definition,
                     ..
                 } => {
-                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
-                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
-                        let symbol_handle = graph.add_symbol(symbol.as_str());
-                        graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition);
-                    }
+                    let file = id.file().ok_or(no_file_data(id.local_id))?;
+                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
+                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let symbol_handle = graph.add_symbol(symbol.as_str());
+                    graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition);
                 }
                 Node::PushScopedSymbol {
-                    id:
-                        NodeID {
-                            file: Some(f),
-                            local_id,
-                        },
+                    id,
                     symbol,
-                    scope:
-                        NodeID {
-                            file: Some(scope_f),
-                            local_id: scope_local_id,
-                        },
+                    scope,
                     is_reference,
                     ..
                 } => {
-                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
-                        if let Some(scope_file_handle) = file_handle_map.get(scope_f.as_str()) {
-                            let node_id =
-                                crate::graph::NodeID::new_in_file(*file_handle, *local_id);
+                    let file = id.file().ok_or(no_file_data(id.local_id))?;
+                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
+                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
 
-                            let scope_id = crate::graph::NodeID::new_in_file(
-                                *scope_file_handle,
-                                *scope_local_id,
-                            );
+                    let scope_file = id.file().ok_or(no_file_data(scope.local_id))?;
+                    let scope_file_handle =
+                        graph.get_file(scope_file).ok_or(not_found(scope_file))?;
+                    let scope_id =
+                        crate::graph::NodeID::new_in_file(scope_file_handle, scope.local_id);
 
-                            let symbol_handle = graph.add_symbol(symbol.as_str());
+                    let symbol_handle = graph.add_symbol(symbol.as_str());
 
-                            graph.add_push_scoped_symbol_node(
-                                node_id,
-                                symbol_handle,
-                                scope_id,
-                                *is_reference,
-                            );
-                        }
-                    }
+                    graph.add_push_scoped_symbol_node(
+                        node_id,
+                        symbol_handle,
+                        scope_id,
+                        *is_reference,
+                    );
                 }
                 Node::PushSymbol {
-                    id:
-                        NodeID {
-                            file: Some(f),
-                            local_id,
-                        },
+                    id,
                     symbol,
                     is_reference,
                     ..
                 } => {
-                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
-                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
-                        let symbol_handle = graph.add_symbol(symbol.as_str());
-                        graph.add_push_symbol_node(node_id, symbol_handle, *is_reference);
-                    }
+                    let file = id.file().ok_or(no_file_data(id.local_id))?;
+                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
+                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let symbol_handle = graph.add_symbol(symbol.as_str());
+                    graph.add_push_symbol_node(node_id, symbol_handle, *is_reference);
                 }
-                Node::Root { .. } => {}
                 Node::Scope {
-                    id:
-                        NodeID {
-                            file: Some(f),
-                            local_id,
-                        },
-                    is_exported,
-                    ..
+                    id, is_exported, ..
                 } => {
-                    if let Some(file_handle) = file_handle_map.get(f.as_str()) {
-                        let node_id = crate::graph::NodeID::new_in_file(*file_handle, *local_id);
-                        graph.add_scope_node(node_id, *is_exported);
-                    }
+                    let file = id.file().ok_or(no_file_data(id.local_id))?;
+                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
+                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    graph.add_scope_node(node_id, *is_exported);
                 }
-                _ => {}
+                Node::JumpToScope { .. } | Node::Root { .. } => {}
             }
         }
+        Ok(())
+    }
 
+    fn load_edges(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
         // load edges into stack-graph
         for Edge {
             source,
@@ -154,14 +159,9 @@ impl StackGraph {
             precedence,
         } in self.edges.data.as_slice()
         {
-            let source_file_handle = source
-                .file
-                .as_ref()
-                .and_then(|f| file_handle_map.get(f.as_str()));
-            let sink_file_handle = sink
-                .file
-                .as_ref()
-                .and_then(|f| file_handle_map.get(f.as_str()));
+            let source_file_handle = source.file().and_then(|f| graph.get_file(f));
+            let sink_file_handle = sink.file().and_then(|f| graph.get_file(f));
+
             let convert = |n: &NodeID| {
                 if n.is_root() {
                     crate::graph::NodeID::root()
@@ -173,18 +173,18 @@ impl StackGraph {
             };
             let (source_id, sink_id) = match (source_file_handle, sink_file_handle) {
                 (Some(a), Some(b)) => {
-                    let source_node_id = crate::graph::NodeID::new_in_file(*a, source.local_id);
-                    let sink_node_id = crate::graph::NodeID::new_in_file(*b, source.local_id);
+                    let source_node_id = crate::graph::NodeID::new_in_file(a, source.local_id);
+                    let sink_node_id = crate::graph::NodeID::new_in_file(b, source.local_id);
                     (source_node_id, sink_node_id)
                 }
                 (Some(a), None) => {
-                    let source_node_id = crate::graph::NodeID::new_in_file(*a, source.local_id);
+                    let source_node_id = crate::graph::NodeID::new_in_file(a, source.local_id);
                     let sink_node_id = convert(&sink);
                     (source_node_id, sink_node_id)
                 }
                 (None, Some(b)) => {
                     let source_node_id = convert(&source);
-                    let sink_node_id = crate::graph::NodeID::new_in_file(*b, source.local_id);
+                    let sink_node_id = crate::graph::NodeID::new_in_file(b, source.local_id);
                     (source_node_id, sink_node_id)
                 }
                 (None, None) => {
@@ -194,21 +194,23 @@ impl StackGraph {
                 }
             };
 
-            if let (Some(a), Some(b)) = (graph.node_for_id(source_id), graph.node_for_id(sink_id)) {
-                graph.add_edge(a, b, *precedence);
+            if let (Some(source_node), Some(sink_node)) =
+                (graph.node_for_id(source_id), graph.node_for_id(sink_id))
+            {
+                graph.add_edge(source_node, sink_node, *precedence);
             }
         }
         Ok(())
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 #[serde(transparent)]
 pub struct Files {
     data: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 #[serde(transparent)]
 pub struct Nodes {
     data: Vec<Node>,
@@ -223,8 +225,7 @@ pub enum Node {
         debug_info: Option<DebugInfo>,
     },
 
-    #[serde(rename = "jump_to_scope")]
-    JumpTo {
+    JumpToScope {
         id: NodeID,
         source_info: Option<SourceInfo>,
         debug_info: Option<DebugInfo>,
@@ -309,9 +310,13 @@ impl NodeID {
     fn is_jump_to(&self) -> bool {
         self.local_id == crate::graph::NodeID::jump_to().local_id()
     }
+
+    fn file(&self) -> Option<&str> {
+        self.file.as_ref().map(|f| f.as_str())
+    }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 #[serde(transparent)]
 pub struct Edges {
     data: Vec<Edge>,
@@ -325,18 +330,6 @@ pub struct Edge {
 }
 
 impl crate::graph::StackGraph {
-    pub fn apply_filter<'a>(&self, filter: &'a dyn Filter) -> StackGraph {
-        let files = self.filter_files(filter);
-        let nodes = self.filter_nodes(filter);
-        let edges = self.filter_edges(filter);
-
-        StackGraph {
-            files,
-            nodes,
-            edges,
-        }
-    }
-
     fn filter_files<'a>(&self, filter: &'a dyn Filter) -> Files {
         Files {
             data: self
@@ -347,7 +340,7 @@ impl crate::graph::StackGraph {
         }
     }
 
-    fn filter_node<'a>(&self, _filter: &'a dyn Filter, id: super::NodeID) -> NodeID {
+    fn filter_node<'a>(&self, _filter: &'a dyn Filter, id: crate::graph::NodeID) -> NodeID {
         let file = id.file().map(|idx| self[idx].name().to_owned());
         let local_id = id.local_id();
         NodeID { file, local_id }
@@ -356,7 +349,7 @@ impl crate::graph::StackGraph {
     fn filter_source_info<'a>(
         &self,
         _filter: &'a dyn Filter,
-        handle: Handle<super::Node>,
+        handle: Handle<crate::graph::Node>,
     ) -> Option<SourceInfo> {
         self.source_info(handle).map(|info| SourceInfo {
             span: info.span.clone(),
@@ -367,7 +360,7 @@ impl crate::graph::StackGraph {
     fn filter_debug_info<'a>(
         &self,
         _filter: &'a dyn Filter,
-        handle: Handle<super::Node>,
+        handle: Handle<crate::graph::Node>,
     ) -> Option<DebugInfo> {
         self.debug_info(handle).map(|info| DebugInfo {
             data: info
@@ -392,31 +385,31 @@ impl crate::graph::StackGraph {
                     let debug_info = self.filter_debug_info(filter, handle);
 
                     match node {
-                        super::Node::DropScopes(_node) => Node::DropScopes {
+                        crate::graph::Node::DropScopes(_node) => Node::DropScopes {
                             id,
                             source_info,
                             debug_info,
                         },
-                        super::Node::JumpTo(_node) => Node::JumpTo {
+                        crate::graph::Node::JumpTo(_node) => Node::JumpToScope {
                             id,
                             source_info,
                             debug_info,
                         },
-                        super::Node::PopScopedSymbol(node) => Node::PopScopedSymbol {
-                            id,
-                            symbol: self[node.symbol].to_owned(),
-                            is_definition: node.is_definition,
-                            source_info,
-                            debug_info,
-                        },
-                        super::Node::PopSymbol(node) => Node::PopSymbol {
+                        crate::graph::Node::PopScopedSymbol(node) => Node::PopScopedSymbol {
                             id,
                             symbol: self[node.symbol].to_owned(),
                             is_definition: node.is_definition,
                             source_info,
                             debug_info,
                         },
-                        super::Node::PushScopedSymbol(node) => Node::PushScopedSymbol {
+                        crate::graph::Node::PopSymbol(node) => Node::PopSymbol {
+                            id,
+                            symbol: self[node.symbol].to_owned(),
+                            is_definition: node.is_definition,
+                            source_info,
+                            debug_info,
+                        },
+                        crate::graph::Node::PushScopedSymbol(node) => Node::PushScopedSymbol {
                             id,
                             symbol: self[node.symbol].to_owned(),
                             scope: self.filter_node(filter, node.scope),
@@ -424,19 +417,19 @@ impl crate::graph::StackGraph {
                             source_info,
                             debug_info,
                         },
-                        super::Node::PushSymbol(node) => Node::PushSymbol {
+                        crate::graph::Node::PushSymbol(node) => Node::PushSymbol {
                             id,
                             symbol: self[node.symbol].to_owned(),
                             is_reference: node.is_reference,
                             source_info,
                             debug_info,
                         },
-                        super::Node::Root(_node) => Node::Root {
+                        crate::graph::Node::Root(_node) => Node::Root {
                             id,
                             source_info,
                             debug_info,
                         },
-                        super::Node::Scope(node) => Node::Scope {
+                        crate::graph::Node::Scope(node) => Node::Scope {
                             id,
                             is_exported: node.is_exported,
                             source_info,
@@ -625,5 +618,26 @@ mod test {
         // always 2 nodes: root and jump
         assert_eq!(sg.iter_nodes().count(), 2);
         assert_eq!(sg.iter_files().count(), 1);
+    }
+
+    #[test]
+    fn load_fail_accidental_merge() {
+        let source = StackGraph {
+            files: Files {
+                data: vec!["index.ts".to_owned(), "App.tsx".to_owned()],
+            },
+            ..Default::default()
+        };
+
+        let mut target = crate::graph::StackGraph::new();
+        target.add_file("App.tsx").unwrap();
+
+        assert_eq!(
+            source.load_into(&mut target).unwrap_err(),
+            Error::FileAlreadyPresent("App.tsx".to_owned())
+        );
+
+        // ensure that source and target graphs were not partially merged
+        assert_eq!(target.iter_files().count(), 1);
     }
 }

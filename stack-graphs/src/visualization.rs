@@ -35,7 +35,7 @@ impl StackGraph {
         filter: &dyn Filter,
     ) -> Result<String, JsonError> {
         let filter = VisualizationFilter(filter);
-        let graph = self.to_json(&filter).to_string()?;
+        let graph = serde_json::to_string(&self.to_serializable())?;
         let paths = db.to_json(self, partials, &filter).to_string()?;
         let html = format!(
             r#"

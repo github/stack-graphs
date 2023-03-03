@@ -37,9 +37,6 @@ use crate::partial::ScopeStackVariable;
 use crate::partial::SymbolStackVariable;
 use crate::stitching::Database;
 
-#[path = "filtered_stack_graph.rs"]
-mod filtered_stack_graph;
-
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub struct JsonError(#[from] serde_json::error::Error);
@@ -202,6 +199,14 @@ impl<'a, T> InStackGraph<'a, T> {
 impl<'a> StackGraph {
     pub fn to_json(&'a self, f: &'a dyn Filter) -> JsonStackGraph {
         JsonStackGraph(self, f)
+    }
+
+    pub fn to_serializable(&self) -> crate::serde::StackGraph {
+        self.to_serializable_with_filter(&NoFilter)
+    }
+
+    pub fn to_serializable_with_filter(&self, f: &'a dyn Filter) -> crate::serde::StackGraph {
+        crate::serde::StackGraph::from_graph(self, f)
     }
 }
 
