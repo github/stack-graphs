@@ -2555,12 +2555,16 @@ impl Node {
             }
             Node::JumpTo(_) => {}
             Node::PopScopedSymbol(node) => {
-                let symbol = symbol_stack.pop_front(partials).unwrap();
+                let symbol = symbol_stack
+                    .pop_front(partials)
+                    .expect("missing symbol for pop scoped symbol node in precondition");
                 debug_assert_eq!(symbol.symbol, node.symbol);
                 *scope_stack = symbol.scopes.into_option().unwrap();
             }
             Node::PopSymbol(node) => {
-                let symbol = symbol_stack.pop_front(partials).unwrap();
+                let symbol = symbol_stack
+                    .pop_front(partials)
+                    .expect("missing symbol for pop symbol node in precondition");
                 debug_assert_eq!(symbol.symbol, node.symbol);
             }
             Node::PushScopedSymbol(_) => {}
@@ -2603,11 +2607,15 @@ impl Node {
             Self::PopScopedSymbol(_) => {}
             Self::PopSymbol(_) => {}
             Self::PushScopedSymbol(node) => {
-                let symbol = symbol_stack.pop_front(partials).unwrap();
+                let symbol = symbol_stack
+                    .pop_front(partials)
+                    .expect("missing symbol for push scoped symbol node in postcondition");
                 debug_assert_eq!(symbol.symbol, node.symbol);
             }
             Self::PushSymbol(node) => {
-                let symbol = symbol_stack.pop_front(partials).unwrap();
+                let symbol = symbol_stack
+                    .pop_front(partials)
+                    .expect("missing symbol for push symbol node in postcondition");
                 debug_assert_eq!(symbol.symbol, node.symbol);
             }
             Self::Root(_) => {}

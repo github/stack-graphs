@@ -208,10 +208,10 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
             while let Some(appendage) = prefix_appendages.pop_front(appendables) {
                 prefix_path
                     .resolve_to(graph, partials, appendage.start_node(ctx))
-                    .unwrap();
+                    .expect("resolving cycle prefix path failed");
                 appendage
                     .append_to(graph, partials, ctx, &mut prefix_path)
-                    .unwrap();
+                    .expect("appending cycle prefix path failed");
             }
 
             // build cyclic path
@@ -219,11 +219,11 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
                 .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
             prefix_path
                 .resolve_to(graph, partials, cyclic_path.start_node)
-                .unwrap();
+                .expect("resolving cyclic path failed");
             prefix_path.ensure_no_overlapping_variables(partials, &cyclic_path);
             prefix_path
                 .concatenate(graph, partials, &cyclic_path)
-                .unwrap();
+                .expect("concatenating cyclic path failed ");
             if !prefix_path.is_productive(graph, partials) {
                 return Err(PathResolutionError::DisallowedCycle);
             }
