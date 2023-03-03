@@ -722,6 +722,8 @@ impl PathStitcher {
 pub struct ForwardPartialPathStitcher {
     candidate_partial_paths: Vec<Handle<PartialPath>>,
     queue: VecDeque<(PartialPath, AppendingCycleDetector<OwnedOrDatabasePath>)>,
+    // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
+    // can be cheaply exposed through the C API as a continuous memory block
     next_iteration: (
         VecDeque<PartialPath>,
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
