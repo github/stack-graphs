@@ -48,7 +48,7 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
-use crate::cycles::Appendages;
+use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Node;
@@ -726,7 +726,7 @@ pub struct ForwardPartialPathStitcher {
         VecDeque<PartialPath>,
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
-    appended_paths: Appendages<OwnedOrDatabasePath>,
+    appended_paths: Appendables<OwnedOrDatabasePath>,
     similar_path_detector: SimilarPathDetector<PartialPath>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
@@ -776,7 +776,7 @@ impl ForwardPartialPathStitcher {
                 );
             }
         }
-        let mut appended_paths = Appendages::new();
+        let mut appended_paths = Appendables::new();
         let next_iteration = candidate_partial_paths
             .iter()
             .copied()
@@ -817,7 +817,7 @@ impl ForwardPartialPathStitcher {
         _db: &mut Database,
         initial_partial_paths: Vec<PartialPath>,
     ) -> ForwardPartialPathStitcher {
-        let mut appended_paths = Appendages::new();
+        let mut appended_paths = Appendables::new();
         let next_iteration = initial_partial_paths
             .into_iter()
             .map(|p| {

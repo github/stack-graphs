@@ -5,7 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use stack_graphs::cycles::Appendages;
+use stack_graphs::cycles::Appendables;
 use stack_graphs::cycles::AppendingCycleDetector;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
@@ -147,7 +147,7 @@ fn finding_simple_identity_cycle_is_detected() {
 
     // test edge cycle detector
     {
-        let mut edges = Appendages::new();
+        let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
         let ctx = &mut ();
         assert!(cd
@@ -198,7 +198,7 @@ fn stitching_simple_identity_cycle_is_detected() {
 
     // test partial path cycle detector
     {
-        let mut paths = Appendages::new();
+        let mut paths = Appendables::new();
         let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
             AppendingCycleDetector::from(&mut paths, p0.into());
         assert!(cd
@@ -228,7 +228,7 @@ fn finding_composite_identity_cycle_is_detected() {
 
     // test edge cycle detector
     {
-        let mut edges = Appendages::new();
+        let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
         let ctx = &mut ();
         assert!(cd
@@ -303,7 +303,7 @@ fn stitching_composite_identity_cycle_is_detected() {
 
     // test joining cycle detector
     {
-        let mut paths = Appendages::new();
+        let mut paths = Appendables::new();
         let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
             AppendingCycleDetector::from(&mut paths, p0.into());
         assert!(cd

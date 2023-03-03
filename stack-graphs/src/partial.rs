@@ -45,7 +45,7 @@ use smallvec::SmallVec;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
-use crate::cycles::Appendages;
+use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
@@ -2383,7 +2383,7 @@ impl PartialPath {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         file: Handle<File>,
-        edges: &mut Appendages<Edge>,
+        edges: &mut Appendables<Edge>,
         path_cycle_detector: AppendingCycleDetector<Edge>,
         result: &mut R,
     ) {
@@ -2700,7 +2700,7 @@ impl PartialPaths {
         copious_debugging!("Find all partial paths in {}", graph[file]);
         let mut similar_path_detector = SimilarPathDetector::new();
         let mut queue = VecDeque::new();
-        let mut edges = Appendages::new();
+        let mut edges = Appendables::new();
         queue.extend(
             graph
                 .nodes_for_file(file)

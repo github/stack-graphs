@@ -158,7 +158,7 @@ pub struct AppendingCycleDetector<A> {
     appendages: List<A>,
 }
 
-pub type Appendages<A> = ListArena<A>;
+pub type Appendables<A> = ListArena<A>;
 
 impl<A: Appendable + Clone> AppendingCycleDetector<A> {
     pub fn new() -> Self {
@@ -167,9 +167,9 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
         }
     }
 
-    pub fn from(appendages: &mut Appendages<A>, appendage: A) -> Self {
+    pub fn from(appendables: &mut Appendables<A>, appendage: A) -> Self {
         let mut result = Self::new();
-        result.appendages.push_front(appendages, appendage);
+        result.appendages.push_front(appendables, appendage);
         result
     }
 
@@ -178,11 +178,11 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         ctx: &mut A::Ctx,
-        appendages: &mut Appendages<A>,
+        appendables: &mut Appendables<A>,
         appendage: A,
     ) -> Result<(), PathResolutionError> {
         let end_node = appendage.end_node(ctx);
-        self.appendages.push_front(appendages, appendage);
+        self.appendages.push_front(appendables, appendage);
 
         let mut maybe_cyclic_path = None;
         let mut index = self.appendages;
@@ -191,7 +191,7 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
             // find loop point
             let mut count = 0usize;
             loop {
-                match index.pop_front(appendages) {
+                match index.pop_front(appendables) {
                     Some(appendage) => {
                         count += 1;
                         if appendage.start_node(ctx) == end_node {
@@ -205,13 +205,13 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
             // get prefix edges
             let mut prefix_appendages = List::empty();
             for _ in 0..count {
-                let appendage = values.pop_front(appendages).unwrap();
-                prefix_appendages.push_front(appendages, appendage.clone());
+                let appendage = values.pop_front(appendables).unwrap();
+                prefix_appendages.push_front(appendables, appendage.clone());
             }
 
             // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
-            while let Some(appendage) = prefix_appendages.pop_front(appendages) {
+            while let Some(appendage) = prefix_appendages.pop_front(appendables) {
                 prefix_path
                     .resolve_to(graph, partials, appendage.start_node(ctx))
                     .unwrap();
