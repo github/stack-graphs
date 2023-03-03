@@ -185,28 +185,22 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
         self.appendages.push_front(appendables, appendage);
 
         let mut maybe_cyclic_path = None;
-        let mut index = self.appendages;
-        let mut values = self.appendages;
+        let mut appendages = self.appendages;
         loop {
-            // find loop point
-            let mut count = 0usize;
+            // get prefix elements
+            let mut prefix_appendages = List::empty();
             loop {
-                match index.pop_front(appendables) {
+                let appendable = appendages.pop_front(appendables).cloned();
+                match appendable {
                     Some(appendage) => {
-                        count += 1;
-                        if appendage.start_node(ctx) == end_node {
+                        let is_cycle = appendage.start_node(ctx) == end_node;
+                        prefix_appendages.push_front(appendables, appendage);
+                        if is_cycle {
                             break;
                         }
                     }
                     None => return Ok(()),
                 }
-            }
-
-            // get prefix edges
-            let mut prefix_appendages = List::empty();
-            for _ in 0..count {
-                let appendage = values.pop_front(appendables).unwrap();
-                prefix_appendages.push_front(appendables, appendage.clone());
             }
 
             // build prefix path -- prefix starts at end_node, because this is a cycle
