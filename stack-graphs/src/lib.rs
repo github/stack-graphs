@@ -55,6 +55,8 @@
 //! importantly, each “chunk” of the overall graph only depends on “local” information from the
 //! original source file.  (a.k.a., it’s incremental!)
 
+use std::time::{Duration, Instant};
+
 use thiserror::Error;
 
 pub mod arena;
@@ -81,6 +83,29 @@ pub trait CancellationFlag {
 pub struct NoCancellation;
 impl CancellationFlag for NoCancellation {
     fn check(&self, _at: &'static str) -> Result<(), CancellationError> {
+        Ok(())
+    }
+}
+
+pub struct CancelAfterDuration {
+    limit: Duration,
+    start: Instant,
+}
+
+impl CancelAfterDuration {
+    pub fn new(limit: Duration) -> Self {
+        Self {
+            limit,
+            start: Instant::now(),
+        }
+    }
+}
+
+impl CancellationFlag for CancelAfterDuration {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError> {
+        if self.start.elapsed() > self.limit {
+            return Err(CancellationError(at));
+        }
         Ok(())
     }
 }

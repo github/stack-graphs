@@ -20,8 +20,10 @@ mod can_find_root_partial_paths_in_database;
 mod can_jump_to_definition;
 mod can_jump_to_definition_with_forward_partial_path_stitching;
 mod can_jump_to_definition_with_forward_path_stitching;
+mod cycles;
 mod graph;
 #[cfg(feature = "json")]
 mod json;
 mod partial;
 mod paths;
+mod util;

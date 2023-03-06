@@ -26,7 +26,7 @@ use crate::arena::DequeArena;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
-use crate::cycles::CycleDetector;
+use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::NodeID;
@@ -716,6 +716,8 @@ impl<'a> DisplayWithPaths for &'a Path {
 /// Errors that can occur during the path resolution process.
 #[derive(Debug)]
 pub enum PathResolutionError {
+    /// The path is cyclic, and the cycle is disallowed.
+    DisallowedCycle,
     /// The path contains a _jump to scope_ node, but there are no scopes on the scope stack to
     /// jump to.
     EmptyScopeStack,
@@ -901,7 +903,7 @@ impl Paths {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
     {
-        let mut cycle_detector = CycleDetector::new();
+        let mut cycle_detector = SimilarPathDetector::new();
         let mut queue = starting_nodes
             .into_iter()
             .filter_map(|node| Path::from_node(graph, self, node))

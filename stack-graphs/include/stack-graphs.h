@@ -1072,9 +1072,9 @@ struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_n
 // must ensure that `db` contains all possible extensions of any of those initial partial paths.
 // You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
 // `previous_phase_partial_paths_length` fields.
-struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *_graph,
+struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *graph,
                                                                                              struct sg_partial_path_arena *partials,
-                                                                                             struct sg_partial_path_database *_db,
+                                                                                             struct sg_partial_path_database *db,
                                                                                              size_t count,
                                                                                              const struct sg_partial_path *initial_partial_paths);
 

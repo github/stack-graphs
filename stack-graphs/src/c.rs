@@ -1989,16 +1989,23 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
 /// `previous_phase_partial_paths_length` fields.
 #[no_mangle]
 pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
-    _graph: *const sg_stack_graph,
+    graph: *const sg_stack_graph,
     partials: *mut sg_partial_path_arena,
-    _db: *mut sg_partial_path_database,
+    db: *mut sg_partial_path_database,
     count: usize,
     initial_partial_paths: *const sg_partial_path,
 ) -> *mut sg_forward_partial_path_stitcher {
+    let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
+    let db = unsafe { &mut (*db).inner };
     let initial_partial_paths =
         unsafe { std::slice::from_raw_parts(initial_partial_paths as *const PartialPath, count) };
-    let stitcher = ForwardPartialPathStitcher::from_partial_paths(initial_partial_paths.to_vec());
+    let stitcher = ForwardPartialPathStitcher::from_partial_paths(
+        graph,
+        partials,
+        db,
+        initial_partial_paths.to_vec(),
+    );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,
     ))) as *mut _
