@@ -47,7 +47,7 @@ pub struct AssertionSource {
 }
 
 impl AssertionSource {
-    fn definitions_iter<'a>(
+    pub fn definitions_iter<'a>(
         &'a self,
         graph: &'a StackGraph,
     ) -> impl Iterator<Item = Handle<Node>> + 'a {
@@ -60,7 +60,7 @@ impl AssertionSource {
         })
     }
 
-    fn references_iter<'a>(
+    pub fn references_iter<'a>(
         &'a self,
         graph: &'a StackGraph,
     ) -> impl Iterator<Item = Handle<Node>> + 'a {
