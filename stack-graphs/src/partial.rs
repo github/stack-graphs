@@ -48,7 +48,6 @@ use crate::arena::DequeArena;
 use crate::arena::Handle;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
-use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -2465,7 +2464,6 @@ impl PartialPath {
         file: Handle<File>,
         edges: &mut Appendables<Edge>,
         path_cycle_detector: AppendingCycleDetector<Edge>,
-        similar_path_detector: &mut SimilarPathDetector<PartialPath>,
         result: &mut R,
     ) {
         let extensions = graph.outgoing_edges(self.end_node);
@@ -2487,15 +2485,9 @@ impl PartialPath {
                 copious_debugging!("         * invalid extension");
                 continue;
             }
-            if similar_path_detector.has_similar_path(
-                graph,
-                partials,
-                &new_path,
-                |ps, left, right| left.equals(ps, right),
-            ) {
-                copious_debugging!("         * too many similar");
-                continue;
-            }
+            // We assume languages do not introduce similar paths (paths between the same nodes with
+            // equivalent pre- and postconditions), so we do not guard against that here. We may need
+            // to revisit that assumption in the future.
             let mut new_cycle_detector = path_cycle_detector.clone();
             new_cycle_detector.append(edges, extension);
             result.push((new_path, new_cycle_detector));
@@ -2803,7 +2795,6 @@ impl PartialPaths {
         }
 
         copious_debugging!("Find all partial paths in {}", graph[file]);
-        let mut similar_path_detector = SimilarPathDetector::new();
         let mut queue = VecDeque::new();
         let mut edges = Appendables::new();
         queue.extend(
@@ -2839,15 +2830,10 @@ impl PartialPaths {
                     file,
                     &mut edges,
                     path_cycle_detector,
-                    &mut similar_path_detector,
                     &mut queue,
                 );
             }
         }
-        copious_debugging!(
-            " Max similar path bucket size: {}",
-            similar_path_detector.max_bucket_size()
-        );
         Ok(())
     }
 }

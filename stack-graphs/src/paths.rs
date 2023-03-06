@@ -28,7 +28,6 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
-use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::NodeID;
@@ -879,7 +878,6 @@ impl Path {
         paths: &mut Paths,
         edges: &mut Appendables<Edge>,
         path_cycle_detector: AppendingCycleDetector<Edge>,
-        similar_path_detector: &mut SimilarPathDetector<Path>,
         result: &mut R,
     ) {
         let extensions = graph.outgoing_edges(self.end_node);
@@ -891,11 +889,9 @@ impl Path {
             if new_path.append(graph, paths, extension).is_err() {
                 continue;
             }
-            if similar_path_detector.has_similar_path(graph, paths, &new_path, |ps, left, right| {
-                left.equals(ps, right)
-            }) {
-                continue;
-            }
+            // We assume languages do not introduce similar paths (paths between the same nodes with
+            // equivalent pre- and postconditions), so we do not guard against that here. We may need
+            // to revisit that assumption in the future.
             let mut new_cycle_detector = path_cycle_detector.clone();
             new_cycle_detector.append(edges, extension);
             result.push((new_path, new_cycle_detector));
@@ -924,7 +920,6 @@ impl Paths {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
     {
-        let mut similar_path_detector = SimilarPathDetector::new();
         let mut queue = starting_nodes
             .into_iter()
             .filter_map(|node| {
@@ -943,14 +938,7 @@ impl Paths {
                 .all(|c| c == Cyclicity::StrengthensPrecondition)
             {
             } else {
-                path.extend(
-                    graph,
-                    self,
-                    &mut edges,
-                    path_cycle_detector,
-                    &mut similar_path_detector,
-                    &mut queue,
-                );
+                path.extend(graph, self, &mut edges, path_cycle_detector, &mut queue);
             }
         }
         Ok(())
