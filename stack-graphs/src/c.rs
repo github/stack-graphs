@@ -1825,6 +1825,21 @@ pub extern "C" fn sg_forward_path_stitcher_new(
     Box::into_raw(Box::new(ForwardPathStitcher::new(stitcher, paths))) as *mut _
 }
 
+/// Sets whether similar path detection should be enabled during path stitching. Paths are similar
+/// if start and end node, and pre- and postconditions are the same. The presence of similar paths
+/// can lead to exponential blow up during path stitching. Similar path detection is disabled by
+/// default because of the accociated preformance cost.
+#[no_mangle]
+pub extern "C" fn sg_forward_path_stitcher_set_similar_path_detection(
+    stitcher: *mut sg_forward_path_stitcher,
+    detect_similar_paths: bool,
+) {
+    let stitcher = unsafe { &mut *(stitcher as *mut ForwardPathStitcher) };
+    stitcher
+        .stitcher
+        .set_similar_path_detection(detect_similar_paths);
+}
+
 /// Sets the maximum amount of work that can be performed during each phase of the algorithm. By
 /// bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
 /// to starve any worker threads or processes that you might be using.  If you don't call this
@@ -2009,6 +2024,21 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,
     ))) as *mut _
+}
+
+/// Sets whether similar path detection should be enabled during path stitching. Paths are similar
+/// if start and end node, and pre- and postconditions are the same. The presence of similar paths
+/// can lead to exponential blow up during path stitching. Similar path detection is disabled by
+/// default because of the accociated preformance cost.
+#[no_mangle]
+pub extern "C" fn sg_forward_partial_path_stitcher_set_similar_path_detection(
+    stitcher: *mut sg_forward_partial_path_stitcher,
+    detect_similar_paths: bool,
+) {
+    let stitcher = unsafe { &mut *(stitcher as *mut InternalForwardPartialPathStitcher) };
+    stitcher
+        .stitcher
+        .set_similar_path_detection(detect_similar_paths);
 }
 
 /// Sets the maximum amount of work that can be performed during each phase of the algorithm. By

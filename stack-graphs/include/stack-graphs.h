@@ -1024,6 +1024,13 @@ struct sg_forward_path_stitcher *sg_forward_path_stitcher_new(const struct sg_st
                                                               size_t count,
                                                               const sg_node_handle *starting_nodes);
 
+// Sets whether similar path detection should be enabled during path stitching. Paths are similar
+// if start and end node, and pre- and postconditions are the same. The presence of similar paths
+// can lead to exponential blow up during path stitching. Similar path detection is disabled by
+// default because of the accociated preformance cost.
+void sg_forward_path_stitcher_set_similar_path_detection(struct sg_forward_path_stitcher *stitcher,
+                                                         bool detect_similar_paths);
+
 // Sets the maximum amount of work that can be performed during each phase of the algorithm. By
 // bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
 // to starve any worker threads or processes that you might be using.  If you don't call this
@@ -1077,6 +1084,13 @@ struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_p
                                                                                              struct sg_partial_path_database *db,
                                                                                              size_t count,
                                                                                              const struct sg_partial_path *initial_partial_paths);
+
+// Sets whether similar path detection should be enabled during path stitching. Paths are similar
+// if start and end node, and pre- and postconditions are the same. The presence of similar paths
+// can lead to exponential blow up during path stitching. Similar path detection is disabled by
+// default because of the accociated preformance cost.
+void sg_forward_partial_path_stitcher_set_similar_path_detection(struct sg_forward_partial_path_stitcher *stitcher,
+                                                                 bool detect_similar_paths);
 
 // Sets the maximum amount of work that can be performed during each phase of the algorithm. By
 // bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm

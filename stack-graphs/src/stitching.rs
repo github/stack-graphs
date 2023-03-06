@@ -485,7 +485,7 @@ pub struct PathStitcher {
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
     appended_paths: Appendables<OwnedOrDatabasePath>,
-    similar_path_detector: SimilarPathDetector<Path>,
+    similar_path_detector: Option<SimilarPathDetector<Path>>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -537,7 +537,7 @@ impl PathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
-            similar_path_detector: SimilarPathDetector::new(),
+            similar_path_detector: None,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -563,6 +563,18 @@ impl PathStitcher {
     pub fn previous_phase_paths_slice_mut(&mut self) -> &mut [Path] {
         self.next_iteration.0.make_contiguous();
         self.next_iteration.0.as_mut_slices().0
+    }
+
+    /// Sets whether similar path detection should be enabled during path stitching. Paths are similar
+    /// if start and end node, and pre- and postconditions are the same. The presence of similar paths
+    /// can lead to exponential blow up during path stitching. Similar path detection is disabled by
+    /// default because of the accociated preformance cost.
+    pub fn set_similar_path_detection(&mut self, detect_similar_paths: bool) {
+        if detect_similar_paths {
+            self.similar_path_detector = Some(SimilarPathDetector::new());
+        } else {
+            self.similar_path_detector = None;
+        }
     }
 
     /// Sets the maximum amount of work that can be performed during each phase of the algorithm.
@@ -635,14 +647,16 @@ impl PathStitcher {
                 copious_debugging!("        is invalid: cyclic");
                 continue;
             }
-            if self.similar_path_detector.has_similar_path(
-                graph,
-                paths,
-                &new_path,
-                |ps, left, right| left.equals(ps, right),
-            ) {
-                copious_debugging!("        is invalid: too many similar");
-                continue;
+            if let Some(similar_path_detector) = &mut self.similar_path_detector {
+                if similar_path_detector.has_similar_path(
+                    graph,
+                    paths,
+                    &new_path,
+                    |ps, left, right| left.equals(ps, right),
+                ) {
+                    copious_debugging!("        is invalid: too many similar");
+                    continue;
+                }
             }
             self.next_iteration.0.push_back(new_path);
             self.next_iteration.1.push_back(new_cycle_detector);
@@ -689,10 +703,12 @@ impl PathStitcher {
 
         #[cfg(feature = "copious-debugging")]
         {
-            copious_debugging!(
-                "    Max similar path bucket size: {}",
-                self.similar_path_detector.max_bucket_size()
-            );
+            if let Some(similar_path_detector) = &self.similar_path_detector {
+                copious_debugging!(
+                    "    Max similar path bucket size: {}",
+                    similar_path_detector.max_bucket_size()
+                );
+            }
             copious_debugging!("==> End phase {}", self.phase_number);
             self.phase_number += 1;
         }
@@ -772,7 +788,7 @@ pub struct ForwardPartialPathStitcher {
         VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
     ),
     appended_paths: Appendables<OwnedOrDatabasePath>,
-    similar_path_detector: SimilarPathDetector<PartialPath>,
+    similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -837,7 +853,7 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
-            similar_path_detector: SimilarPathDetector::new(),
+            similar_path_detector: None,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -874,7 +890,7 @@ impl ForwardPartialPathStitcher {
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
-            similar_path_detector: SimilarPathDetector::new(),
+            similar_path_detector: None,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -900,6 +916,18 @@ impl ForwardPartialPathStitcher {
     pub fn previous_phase_partial_paths_slice_mut(&mut self) -> &mut [PartialPath] {
         self.next_iteration.0.make_contiguous();
         self.next_iteration.0.as_mut_slices().0
+    }
+
+    /// Sets whether similar path detection should be enabled during path stitching. Paths are similar
+    /// if start and end node, and pre- and postconditions are the same. The presence of similar paths
+    /// can lead to exponential blow up during path stitching. Similar path detection is disabled by
+    /// default because of the accociated preformance cost.
+    pub fn set_similar_path_detection(&mut self, detect_similar_paths: bool) {
+        if detect_similar_paths {
+            self.similar_path_detector = Some(SimilarPathDetector::new());
+        } else {
+            self.similar_path_detector = None;
+        }
     }
 
     /// Sets the maximum amount of work that can be performed during each phase of the algorithm.
@@ -978,14 +1006,16 @@ impl ForwardPartialPathStitcher {
                     copious_debugging!("        is invalid: cyclic");
                     continue;
                 }
-                if self.similar_path_detector.has_similar_path(
-                    graph,
-                    partials,
-                    &new_partial_path,
-                    |ps, left, right| left.equals(ps, right),
-                ) {
-                    copious_debugging!("        is invalid: too many similar");
-                    continue;
+                if let Some(similar_path_detector) = &mut self.similar_path_detector {
+                    if similar_path_detector.has_similar_path(
+                        graph,
+                        partials,
+                        &new_partial_path,
+                        |ps, left, right| left.equals(ps, right),
+                    ) {
+                        copious_debugging!("        is invalid: too many similar");
+                        continue;
+                    }
                 }
             }
             self.next_iteration.0.push_back(new_partial_path);
@@ -1037,10 +1067,12 @@ impl ForwardPartialPathStitcher {
 
         #[cfg(feature = "copious-debugging")]
         {
-            copious_debugging!(
-                "    Max similar path bucket size: {}",
-                self.similar_path_detector.max_bucket_size()
-            );
+            if let Some(similar_path_detector) = &self.similar_path_detector {
+                copious_debugging!(
+                    "    Max similar path bucket size: {}",
+                    similar_path_detector.max_bucket_size()
+                );
+            }
             copious_debugging!("==> End phase {}", self.phase_number);
             self.phase_number += 1;
         }
