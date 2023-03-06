@@ -72,6 +72,22 @@ impl AssertionSource {
                     .unwrap_or(false)
         })
     }
+
+    pub fn display<'a>(&'a self, graph: &'a StackGraph) -> impl std::fmt::Display + 'a {
+        struct Displayer<'a>(&'a AssertionSource, &'a StackGraph);
+        impl std::fmt::Display for Displayer<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}:{}:{}",
+                    self.1[self.0.file],
+                    self.0.position.line + 1,
+                    self.0.position.column.grapheme_offset + 1
+                )
+            }
+        }
+        Displayer(self, graph)
+    }
 }
 
 /// Target line of an assertion
