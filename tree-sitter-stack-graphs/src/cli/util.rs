@@ -7,6 +7,10 @@
 
 use anyhow::anyhow;
 use colored::Colorize;
+use lsp_positions::PositionedSubstring;
+use lsp_positions::SpanCalculator;
+use stack_graphs::assert::AssertionSource;
+use stack_graphs::graph::StackGraph;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::Write;
@@ -112,7 +116,7 @@ impl PathSpec {
 }
 
 impl std::str::FromStr for PathSpec {
-    type Err = clap::Error;
+    type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self { spec: s.into() })
     }
@@ -121,6 +125,88 @@ impl std::str::FromStr for PathSpec {
 impl From<&str> for PathSpec {
     fn from(s: &str) -> Self {
         Self { spec: s.into() }
+    }
+}
+
+#[derive(Clone, Debug)]
+/// A source position.
+pub struct SourcePosition {
+    /// File path
+    pub path: PathBuf,
+    /// Position line (0-based)
+    pub line: usize,
+    /// Position column (0-based)
+    pub column: usize,
+}
+
+impl SourcePosition {
+    pub fn to_assertion_source<'a>(
+        &self,
+        graph: &StackGraph,
+        lines: impl Iterator<Item = PositionedSubstring<'a>>,
+        span_calculator: &mut SpanCalculator,
+    ) -> anyhow::Result<AssertionSource> {
+        let file = match graph.get_file(&self.path.to_string_lossy()) {
+            Some(file) => file,
+            None => return Err(anyhow!("")),
+        };
+        let (line_no, line) = match lines.enumerate().nth(self.line) {
+            Some(result) => result,
+            None => return Err(anyhow!("Missing line {}", self.line + 1)),
+        };
+        let position =
+            span_calculator.for_line_and_grapheme(line_no, line.utf8_bounds.start, self.column);
+        Ok(AssertionSource { file, position })
+    }
+}
+
+impl std::fmt::Display for SourcePosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}:{}",
+            self.path.display(),
+            self.line + 1,
+            self.column + 1
+        )
+    }
+}
+
+impl std::str::FromStr for SourcePosition {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut values = s.split(':');
+        let path = match values.next() {
+            Some(path) => PathBuf::from(path),
+            None => return Err(anyhow!("Missing path")),
+        };
+        let line = match values.next() {
+            Some(line) => {
+                let line = usize::from_str(line)
+                    .map_err(|_| anyhow!("Expected line number, got {}", line))?;
+                if line == 0 {
+                    return Err(anyhow!("Line numbers are 1-based, got 0"));
+                }
+                line - 1
+            }
+            None => return Err(anyhow!("Missing line number")),
+        };
+        let column = match values.next() {
+            Some(column) => {
+                let column = usize::from_str(column)
+                    .map_err(|_| anyhow!("Expected column number, got {}", column))?;
+                if column == 0 {
+                    return Err(anyhow!("column numbers are 1-based, got 0"));
+                }
+                column - 1
+            }
+            None => return Err(anyhow!("Missing column number")),
+        };
+        if values.next().is_some() {
+            return Err(anyhow!("Found unexpected components"));
+        }
+        Ok(Self { path, line, column })
     }
 }
 
