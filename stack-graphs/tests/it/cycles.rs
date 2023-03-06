@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use enumset::enum_set;
 use stack_graphs::cycles::Appendables;
 use stack_graphs::cycles::AppendingCycleDetector;
 use stack_graphs::graph::StackGraph;
@@ -182,7 +183,7 @@ fn finding_simple_identity_cycle_is_detected() {
         }
         cd.append(&mut edges, edge(foo_def, r, 0));
         assert_eq!(
-            vec![Cyclicity::StrengthensPostcondition],
+            enum_set![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
                 .unwrap()
         );
@@ -227,7 +228,7 @@ fn stitching_simple_identity_cycle_is_detected() {
             AppendingCycleDetector::from(&mut paths, p0.into());
         cd.append(&mut paths, p1.into());
         assert_eq!(
-            vec![Cyclicity::StrengthensPostcondition],
+            enum_set![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)
                 .unwrap()
         );
@@ -275,7 +276,7 @@ fn finding_composite_identity_cycle_is_detected() {
         }
         cd.append(&mut edges, edge(bar_ref, s, 0));
         assert_eq!(
-            vec![Cyclicity::StrengthensPostcondition],
+            enum_set![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
                 .unwrap()
         );
@@ -323,7 +324,7 @@ fn stitching_composite_identity_cycle_is_detected() {
             AppendingCycleDetector::from(&mut paths, p0.into());
         cd.append(&mut paths, p1.into());
         assert_eq!(
-            vec![Cyclicity::StrengthensPostcondition],
+            enum_set![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)
                 .unwrap()
         );

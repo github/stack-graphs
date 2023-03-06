@@ -40,6 +40,7 @@ use std::num::NonZeroU32;
 
 use controlled_option::ControlledOption;
 use controlled_option::Niche;
+use enumset::EnumSetType;
 use smallvec::SmallVec;
 
 use crate::arena::Deque;
@@ -2229,7 +2230,7 @@ impl PartialPath {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, EnumSetType)]
 pub enum Cyclicity {
     /// The path can be freely concatenated to itself.
     Free,

@@ -31,6 +31,7 @@
 
 use std::collections::HashMap;
 
+use enumset::EnumSet;
 use smallvec::SmallVec;
 
 use crate::arena::Handle;
@@ -186,8 +187,8 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
         partials: &mut PartialPaths,
         ctx: &mut A::Ctx,
         appendables: &mut Appendables<A>,
-    ) -> Result<Vec<Cyclicity>, PathResolutionError> {
-        let mut cycles = Vec::new();
+    ) -> Result<EnumSet<Cyclicity>, PathResolutionError> {
+        let mut cycles = EnumSet::new();
 
         let end_node = match self.appendages.clone().pop_front(appendables) {
             Some(appendage) => appendage.end_node(ctx),
@@ -227,7 +228,7 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
             prefix_path.ensure_no_overlapping_variables(partials, &cyclic_path);
             prefix_path.concatenate(graph, partials, &cyclic_path)?;
             if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
-                cycles.push(cyclicity);
+                cycles |= cyclicity;
             }
             maybe_cyclic_path = Some(prefix_path);
         }
