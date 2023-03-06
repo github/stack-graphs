@@ -93,6 +93,9 @@ impl AnalyzeArgs {
             self.wait_for_input()?;
         }
         let mut seen_mark = false;
+        let mut graph = StackGraph::new();
+        let mut partials = PartialPaths::new();
+        let mut db = Database::new();
         for source_path in &self.source_paths {
             if source_path.is_dir() {
                 let source_root = source_path;
@@ -109,6 +112,9 @@ impl AnalyzeArgs {
                         source_path,
                         loader,
                         &mut seen_mark,
+                        &mut graph,
+                        &mut partials,
+                        &mut db,
                     )?;
                 }
             } else {
@@ -116,7 +122,15 @@ impl AnalyzeArgs {
                 if self.should_skip(source_path, &mut seen_mark) {
                     continue;
                 }
-                self.analyze_file_with_context(source_root, source_path, loader, &mut seen_mark)?;
+                self.analyze_file_with_context(
+                    source_root,
+                    source_path,
+                    loader,
+                    &mut seen_mark,
+                    &mut graph,
+                    &mut partials,
+                    &mut db,
+                )?;
             }
         }
         Ok(())
@@ -137,8 +151,11 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
         seen_mark: &mut bool,
+        graph: &mut StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
     ) -> anyhow::Result<()> {
-        self.analyze_file(source_root, source_path, loader, seen_mark)
+        self.analyze_file(source_root, source_path, loader, seen_mark, graph, partials, db)
             .with_context(|| format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display()))
     }
 
@@ -148,6 +165,9 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
         seen_mark: &mut bool,
+        graph: &mut StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
 
@@ -175,7 +195,6 @@ impl AnalyzeArgs {
 
         file_status.processing()?;
 
-        let mut graph = StackGraph::new();
         let file = match graph.add_file(&source_path.to_string_lossy()) {
             Ok(file) => file,
             Err(_) => return Err(anyhow!("Duplicate file {}", source_path.display())),
@@ -187,7 +206,7 @@ impl AnalyzeArgs {
             .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
         {
             fa.build_stack_graph_into(
-                &mut graph,
+                graph,
                 file,
                 &relative_source_path,
                 &source,
@@ -198,7 +217,7 @@ impl AnalyzeArgs {
         } else {
             let globals = Variables::new();
             lc.sgl.build_stack_graph_into(
-                &mut graph,
+                graph,
                 file,
                 &source,
                 &globals,
@@ -222,8 +241,6 @@ impl AnalyzeArgs {
             Ok(_) => {}
         };
 
-        let mut partials = PartialPaths::new();
-        let mut db = Database::new();
         match partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
@@ -240,6 +257,7 @@ impl AnalyzeArgs {
         }
 
         file_status.ok("success")?;
+
         Ok(())
     }
 
