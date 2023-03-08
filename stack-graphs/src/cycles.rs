@@ -116,7 +116,7 @@ where
     /// Otherwise, we return true.
     pub fn has_similar_path<Eq>(
         &mut self,
-        graph: &StackGraph,
+        _graph: &StackGraph,
         arena: &mut P::Arena,
         path: &P,
         eq: Eq,
@@ -125,10 +125,6 @@ where
         Eq: Fn(&mut P::Arena, &P, &P) -> bool,
     {
         let key = path.key();
-
-        if graph.incoming_edge_count(key.end_node) <= 1 {
-            // return false;
-        }
 
         let possibly_similar_paths = self.paths.entry(key).or_default();
         for other_path in possibly_similar_paths.iter() {
