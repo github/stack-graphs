@@ -31,6 +31,7 @@
 
 use std::collections::HashMap;
 
+use enumset::EnumSet;
 use smallvec::SmallVec;
 
 use crate::arena::Handle;
@@ -39,6 +40,7 @@ use crate::arena::ListArena;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
+use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::Path;
@@ -173,16 +175,25 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
         result
     }
 
-    pub fn append(
-        &mut self,
+    pub fn append(&mut self, appendables: &mut Appendables<A>, appendage: A) {
+        self.appendages.push_front(appendables, appendage);
+    }
+
+    /// Tests if the path is cyclic. Returns a vector indicating the kind of cycles that were found.
+    /// If appending or concatenating all fragments succeeds, this function will never raise and error.
+    pub fn is_cyclic(
+        &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
         ctx: &mut A::Ctx,
         appendables: &mut Appendables<A>,
-        appendage: A,
-    ) -> Result<(), PathResolutionError> {
-        let end_node = appendage.end_node(ctx);
-        self.appendages.push_front(appendables, appendage);
+    ) -> Result<EnumSet<Cyclicity>, PathResolutionError> {
+        let mut cycles = EnumSet::new();
+
+        let end_node = match self.appendages.clone().pop_front(appendables) {
+            Some(appendage) => appendage.end_node(ctx),
+            None => return Ok(cycles),
+        };
 
         let mut maybe_cyclic_path = None;
         let mut appendages = self.appendages;
@@ -199,33 +210,25 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
                             break;
                         }
                     }
-                    None => return Ok(()),
+                    None => return Ok(cycles),
                 }
             }
 
             // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
             while let Some(appendage) = prefix_appendages.pop_front(appendables) {
-                prefix_path
-                    .resolve_to(graph, partials, appendage.start_node(ctx))
-                    .expect("resolving cycle prefix path failed");
-                appendage
-                    .append_to(graph, partials, ctx, &mut prefix_path)
-                    .expect("appending cycle prefix path failed");
+                prefix_path.resolve_to_node(graph, partials, appendage.start_node(ctx))?;
+                appendage.append_to(graph, partials, ctx, &mut prefix_path)?;
             }
 
             // build cyclic path
             let cyclic_path = maybe_cyclic_path
                 .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
-            prefix_path
-                .resolve_to(graph, partials, cyclic_path.start_node)
-                .expect("resolving cyclic path failed");
+            prefix_path.resolve_to_node(graph, partials, cyclic_path.start_node)?;
             prefix_path.ensure_no_overlapping_variables(partials, &cyclic_path);
-            prefix_path
-                .concatenate(graph, partials, &cyclic_path)
-                .expect("concatenating cyclic path failed ");
-            if !prefix_path.is_productive(graph, partials) {
-                return Err(PathResolutionError::DisallowedCycle);
+            prefix_path.concatenate(graph, partials, &cyclic_path)?;
+            if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
+                cycles |= cyclicity;
             }
             maybe_cyclic_path = Some(prefix_path);
         }

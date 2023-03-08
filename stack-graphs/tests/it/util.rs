@@ -26,6 +26,11 @@ pub(crate) type NiceScopedSymbol<'a> = (&'a str, Option<NiceScopeStack<'a>>);
 pub(crate) type NiceScopeStack<'a> = (&'a [u32], Option<ScopeStackVariable>);
 pub(crate) type NicePartialPath<'a> = &'a [Handle<Node>];
 
+pub(crate) fn create_drop_scopes_node(graph: &mut StackGraph, file: Handle<File>) -> Handle<Node> {
+    let id = graph.new_node_id(file);
+    graph.add_drop_scopes_node(id).unwrap()
+}
+
 pub(crate) fn create_scope_node(
     graph: &mut StackGraph,
     file: Handle<File>,
@@ -48,6 +53,20 @@ pub(crate) fn create_push_symbol_node(
         .unwrap()
 }
 
+pub(crate) fn create_push_scoped_symbol_node(
+    graph: &mut StackGraph,
+    file: Handle<File>,
+    symbol: &str,
+    scope: NodeID,
+    is_reference: bool,
+) -> Handle<Node> {
+    let id = graph.new_node_id(file);
+    let symbol = graph.add_symbol(symbol);
+    graph
+        .add_push_scoped_symbol_node(id, symbol, scope, is_reference)
+        .unwrap()
+}
+
 pub(crate) fn create_pop_symbol_node(
     graph: &mut StackGraph,
     file: Handle<File>,
@@ -58,6 +77,19 @@ pub(crate) fn create_pop_symbol_node(
     let symbol = graph.add_symbol(symbol);
     graph
         .add_pop_symbol_node(id, symbol, is_definition)
+        .unwrap()
+}
+
+pub(crate) fn create_pop_scoped_symbol_node(
+    graph: &mut StackGraph,
+    file: Handle<File>,
+    symbol: &str,
+    is_definition: bool,
+) -> Handle<Node> {
+    let id = graph.new_node_id(file);
+    let symbol = graph.add_symbol(symbol);
+    graph
+        .add_pop_scoped_symbol_node(id, symbol, is_definition)
         .unwrap()
 }
 

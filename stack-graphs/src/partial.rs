@@ -40,6 +40,7 @@ use std::num::NonZeroU32;
 
 use controlled_option::ControlledOption;
 use controlled_option::Niche;
+use enumset::EnumSetType;
 use smallvec::SmallVec;
 
 use crate::arena::Deque;
@@ -2069,13 +2070,14 @@ impl PartialPath {
         graph[self.end_node].is_jump_to()
     }
 
-    /// Returns whether a partial path is "productive" --- that is, it is not cyclic, or its
-    /// pre- and postcondition are incompatible.
-    pub fn is_productive(&self, graph: &StackGraph, partials: &mut PartialPaths) -> bool {
+    /// Returns whether a partial path is cyclic---that is, it starts and ends at the same node,
+    /// and its postcondition is compatible with its precondition.  If the path is cyclic, a
+    /// tuple is returned indicating whether cycle requires strengthening the pre- or postcondition.
+    pub fn is_cyclic(&self, graph: &StackGraph, partials: &mut PartialPaths) -> Option<Cyclicity> {
         // StackGraph ensures that there are no nodes with duplicate IDs, so we can do a simple
         // comparison of node handles here.
         if self.start_node != self.end_node {
-            return true;
+            return None;
         }
 
         let lhs = self;
@@ -2084,7 +2086,7 @@ impl PartialPath {
 
         let join = match Self::compute_join(graph, partials, lhs, &rhs) {
             Ok(join) => join,
-            Err(_) => return true,
+            Err(_) => return None,
         };
 
         if lhs
@@ -2092,22 +2094,28 @@ impl PartialPath {
             .variable
             .into_option()
             .map_or(false, |v| join.symbol_bindings.get(v).iter().len() > 0)
+            || lhs
+                .scope_stack_precondition
+                .variable
+                .into_option()
+                .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
         {
-            // symbol stack precondition strengthened
-            return true;
-        }
-
-        if lhs
-            .scope_stack_precondition
+            Some(Cyclicity::StrengthensPrecondition)
+        } else if rhs
+            .symbol_stack_postcondition
             .variable
             .into_option()
-            .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
+            .map_or(false, |v| join.symbol_bindings.get(v).iter().len() > 0)
+            || rhs
+                .scope_stack_postcondition
+                .variable
+                .into_option()
+                .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
         {
-            // scope stack precondition strengthened
-            return true;
+            Some(Cyclicity::StrengthensPostcondition)
+        } else {
+            Some(Cyclicity::Free)
         }
-
-        false
     }
 
     /// Ensures that the content of this partial path is available in both forwards and backwards
@@ -2222,6 +2230,16 @@ impl PartialPath {
     }
 }
 
+#[derive(Debug, EnumSetType)]
+pub enum Cyclicity {
+    /// The path can be freely concatenated to itself.
+    Free,
+    /// Concatenating the path to itself strengthens the precondition---symbols are eliminated from the stack.
+    StrengthensPrecondition,
+    /// Concatenating the path to itself strengthens the postcondition---symbols are introduced on the stack.
+    StrengthensPostcondition,
+}
+
 impl<'a> DisplayWithPartialPaths for &'a PartialPath {
     fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
         self.symbol_stack_precondition
@@ -2285,6 +2303,45 @@ impl PartialPath {
             .with_offset(scope_variable_offset);
     }
 
+    /// Replaces stack variables in the precondition with empty stacks.
+    pub fn eliminate_precondition_stack_variables(&mut self, partials: &mut PartialPaths) {
+        let mut symbol_bindings = PartialSymbolStackBindings::new();
+        let mut scope_bindings = PartialScopeStackBindings::new();
+        if let Some(symbol_variable) = self.symbol_stack_precondition.variable() {
+            symbol_bindings
+                .add(
+                    partials,
+                    symbol_variable,
+                    PartialSymbolStack::empty(),
+                    &mut scope_bindings,
+                )
+                .unwrap();
+        }
+        if let Some(scope_variable) = self.scope_stack_precondition.variable() {
+            scope_bindings
+                .add(partials, scope_variable, PartialScopeStack::empty())
+                .unwrap();
+        }
+
+        self.symbol_stack_precondition = self
+            .symbol_stack_precondition
+            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
+            .unwrap();
+        self.scope_stack_precondition = self
+            .scope_stack_precondition
+            .apply_partial_bindings(partials, &scope_bindings)
+            .unwrap();
+
+        self.symbol_stack_postcondition = self
+            .symbol_stack_postcondition
+            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
+            .unwrap();
+        self.scope_stack_postcondition = self
+            .scope_stack_postcondition
+            .apply_partial_bindings(partials, &scope_bindings)
+            .unwrap();
+    }
+
     /// Attempts to append an edge to the end of a partial path.  If the edge is not a valid
     /// extension of this partial path, we return an error describing why.
     pub fn append(
@@ -2315,15 +2372,15 @@ impl PartialPath {
             },
         );
 
-        self.resolve(graph, partials)?;
+        self.resolve_from_postcondition(graph, partials)?;
 
         Ok(())
     }
 
-    /// Attempts to resolve any _jump to scope_ node at the end of a partial path.  If the partial
-    /// path does not end in a _jump to scope_ node, we do nothing.  If it does, and we cannot
-    /// resolve it, then we return an error describing why.
-    pub fn resolve(
+    /// Attempts to resolve any _jump to scope_ node at the end of a partial path from the postcondition
+    /// scope stack.  If the partial path does not end in a _jump to scope_ node, we do nothing.  If it
+    /// does, and we cannot resolve it, then we return an error describing why.
+    pub fn resolve_from_postcondition(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2349,10 +2406,11 @@ impl PartialPath {
         Ok(())
     }
 
-    /// Attempts to resolve any _jump to scope_ node at the end of a partial path to the given node.
-    /// If the partial path does not end in a _jump to scope_ node, we do nothing.  If it does, and we
-    /// cannot resolve it, then we return an error describing why.
-    pub fn resolve_to(
+    /// Resolve any _jump to scope_ node at the end of a partial path to the given node, updating the
+    /// precondition to include the given node.  If the partial path does not end in a _jump to scope_
+    /// node, we do nothing.  If it does, and we cannot resolve it, then we return an error describing
+    /// why.
+    pub fn resolve_to_node(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -2361,11 +2419,31 @@ impl PartialPath {
         if !graph[self.end_node].is_jump_to() {
             return Ok(());
         }
-        if self.scope_stack_postcondition.contains_scopes() {
-            return Err(PathResolutionError::ScopeStackUnsatisfied); // this path was not properly resolved
-        }
-        self.scope_stack_precondition.push_back(partials, node);
+
+        let scope_variable = match self.scope_stack_postcondition.variable() {
+            Some(scope_variable) => scope_variable,
+            None => return Err(PathResolutionError::ScopeStackUnsatisfied),
+        };
+        let mut scope_stack = PartialScopeStack::from_variable(scope_variable);
+        scope_stack.push_front(partials, node);
+
+        let symbol_bindings = PartialSymbolStackBindings::new();
+        let mut scope_bindings = PartialScopeStackBindings::new();
+        scope_bindings
+            .add(partials, scope_variable, scope_stack)
+            .unwrap();
+
+        self.symbol_stack_precondition = self
+            .symbol_stack_precondition
+            .apply_partial_bindings(partials, &symbol_bindings, &scope_bindings)
+            .unwrap();
+        self.scope_stack_precondition = self
+            .scope_stack_precondition
+            .apply_partial_bindings(partials, &scope_bindings)
+            .unwrap();
+
         self.end_node = node;
+
         Ok(())
     }
 
@@ -2407,13 +2485,7 @@ impl PartialPath {
                 copious_debugging!("         * invalid extension");
                 continue;
             }
-            if new_cycle_detector
-                .append(graph, partials, &mut (), edges, extension)
-                .is_err()
-            {
-                copious_debugging!("         * cycle");
-                continue;
-            }
+            new_cycle_detector.append(edges, extension);
             result.push((new_path, new_cycle_detector));
         }
     }
@@ -2550,9 +2622,7 @@ impl Node {
         scope_stack: &mut PartialScopeStack,
     ) {
         match self {
-            Node::DropScopes(_) => {
-                *scope_stack = PartialScopeStack::empty();
-            }
+            Node::DropScopes(_) => {}
             Node::JumpTo(_) => {}
             Node::PopScopedSymbol(node) => {
                 let symbol = symbol_stack
@@ -2676,10 +2746,6 @@ impl PartialPaths {
     ///  (a) is minimal, no path can be constructed by stitching other paths in the set, and
     ///  (b) covers all complete paths, from references to definitions, when used for path stitching
     ///
-    /// Callers are advised _not_ to filter this set in the visitor using functions like
-    /// [`PartialPath::is_productive`][] as that may interfere with implementation changes of this
-    /// function.
-    ///
     /// This function will not return until all reachable partial paths have been processed, so
     /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
     /// stored in some other storage system, and want more control over lazily loading only the
@@ -2734,6 +2800,12 @@ impl PartialPaths {
                     copious_debugging!("    * visit");
                     visit(graph, self, path);
                 }
+            } else if !path_cycle_detector
+                .is_cyclic(graph, self, &mut (), &mut edges)
+                .expect("cyclic test failed when finding partial paths")
+                .is_empty()
+            {
+                copious_debugging!("    * cycle");
             } else {
                 copious_debugging!("    * extend");
                 path.extend_from_file(
@@ -2901,7 +2973,7 @@ impl PartialPath {
         }
         lhs.end_node = rhs.end_node;
 
-        lhs.resolve(graph, partials)?;
+        lhs.resolve_from_postcondition(graph, partials)?;
 
         Ok(())
     }

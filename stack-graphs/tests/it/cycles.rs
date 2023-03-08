@@ -5,9 +5,11 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use enumset::enum_set;
 use stack_graphs::cycles::Appendables;
 use stack_graphs::cycles::AppendingCycleDetector;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::partial::Cyclicity;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::OwnedOrDatabasePath;
@@ -15,6 +17,8 @@ use stack_graphs::CancelAfterDuration;
 use std::time::Duration;
 
 use crate::util::*;
+
+const TEST_TIMEOUT: Duration = Duration::from_secs(3);
 
 // ----------------------------------------------------------------------------
 // productive paths
@@ -31,11 +35,11 @@ fn renaming_path_is_productive() {
     let p = create_partial_path_and_edges(&mut graph, &mut partials, &[s, foo_def, bar_ref, s])
         .unwrap();
 
-    assert!(p.is_productive(&graph, &mut partials));
+    assert!(matches!(p.is_cyclic(&graph, &mut partials), None));
 }
 
 #[test]
-fn renaming_root_path_is_productive() {
+fn renaming_root_path_is_not_cyclic() {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").unwrap();
     let s = StackGraph::root_node();
@@ -46,11 +50,11 @@ fn renaming_root_path_is_productive() {
     let p = create_partial_path_and_edges(&mut graph, &mut partials, &[s, foo_def, bar_ref, s])
         .unwrap();
 
-    assert!(p.is_productive(&graph, &mut partials));
+    assert_eq!(None, p.is_cyclic(&graph, &mut partials));
 }
 
 #[test]
-fn introducing_path_is_unproductive() {
+fn introducing_path_is_cyclic() {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").unwrap();
     let s = create_scope_node(&mut graph, file, false);
@@ -59,11 +63,14 @@ fn introducing_path_is_unproductive() {
     let mut partials = PartialPaths::new();
     let p = create_partial_path_and_edges(&mut graph, &mut partials, &[s, bar_ref, s]).unwrap();
 
-    assert!(!p.is_productive(&graph, &mut partials));
+    assert_eq!(
+        Some(Cyclicity::StrengthensPostcondition),
+        p.is_cyclic(&graph, &mut partials)
+    );
 }
 
 #[test]
-fn eliminating_path_is_productive() {
+fn eliminating_path_is_cyclic() {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").unwrap();
     let s = create_scope_node(&mut graph, file, false);
@@ -72,11 +79,14 @@ fn eliminating_path_is_productive() {
     let mut partials = PartialPaths::new();
     let p = create_partial_path_and_edges(&mut graph, &mut partials, &[s, foo_def, s]).unwrap();
 
-    assert!(p.is_productive(&graph, &mut partials));
+    assert_eq!(
+        Some(Cyclicity::StrengthensPrecondition),
+        p.is_cyclic(&graph, &mut partials)
+    );
 }
 
 #[test]
-fn identity_path_is_unproductive() {
+fn identity_path_is_cyclic() {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").unwrap();
     let s = create_scope_node(&mut graph, file, false);
@@ -87,11 +97,14 @@ fn identity_path_is_unproductive() {
     let p = create_partial_path_and_edges(&mut graph, &mut partials, &[s, bar_def, bar_ref, s])
         .unwrap();
 
-    assert!(!p.is_productive(&graph, &mut partials));
+    assert_eq!(
+        Some(Cyclicity::StrengthensPostcondition),
+        p.is_cyclic(&graph, &mut partials)
+    );
 }
 
 #[test]
-fn one_step_forward_two_steps_back_path_is_unproductive() {
+fn one_step_forward_two_steps_back_path_is_cyclic() {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").unwrap();
     let s = create_scope_node(&mut graph, file, false);
@@ -107,11 +120,14 @@ fn one_step_forward_two_steps_back_path_is_unproductive() {
     )
     .unwrap();
 
-    assert!(!p.is_productive(&graph, &mut partials));
+    assert_eq!(
+        Some(Cyclicity::StrengthensPostcondition),
+        p.is_cyclic(&graph, &mut partials)
+    );
 }
 
 #[test]
-fn two_steps_forward_one_step_back_path_is_productive() {
+fn two_steps_forward_one_step_back_path_is_cyclic() {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").unwrap();
     let s = create_scope_node(&mut graph, file, false);
@@ -127,7 +143,10 @@ fn two_steps_forward_one_step_back_path_is_productive() {
     )
     .unwrap();
 
-    assert!(p.is_productive(&graph, &mut partials));
+    assert_eq!(
+        Some(Cyclicity::StrengthensPrecondition),
+        p.is_cyclic(&graph, &mut partials)
+    );
 }
 
 // ----------------------------------------------------------------------------
@@ -150,24 +169,30 @@ fn finding_simple_identity_cycle_is_detected() {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
         let ctx = &mut ();
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(r, foo_ref, 0))
-            .is_ok());
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(foo_ref, s, 0))
-            .is_ok());
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(s, foo_def, 0))
-            .is_ok());
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(foo_def, r, 0))
-            .is_err());
+
+        for edge in &[
+            edge(r, foo_ref, 0),
+            edge(foo_ref, s, 0),
+            edge(s, foo_def, 0),
+        ] {
+            cd.append(&mut edges, *edge);
+            assert!(cd
+                .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
+                .is_empty());
+        }
+        cd.append(&mut edges, edge(foo_def, r, 0));
+        assert_eq!(
+            enum_set![Cyclicity::StrengthensPostcondition],
+            cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
+        );
     }
 
     // test termination of path finding
     {
         let mut path_count = 0usize;
-        let cancellation_flag = CancelAfterDuration::new(Duration::from_secs(10));
+        let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
         let result = partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
@@ -175,7 +200,7 @@ fn finding_simple_identity_cycle_is_detected() {
             |_, _, _| path_count += 1,
         );
         assert!(result.is_ok());
-        assert_eq!(0, path_count);
+        assert_eq!(1, path_count);
     }
 }
 
@@ -201,9 +226,12 @@ fn stitching_simple_identity_cycle_is_detected() {
         let mut paths = Appendables::new();
         let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
             AppendingCycleDetector::from(&mut paths, p0.into());
-        assert!(cd
-            .append(&graph, &mut partials, &mut db, &mut paths, p1.into())
-            .is_err());
+        cd.append(&mut paths, p1.into());
+        assert_eq!(
+            enum_set![Cyclicity::StrengthensPostcondition],
+            cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)
+                .unwrap()
+        );
     }
 }
 
@@ -231,45 +259,33 @@ fn finding_composite_identity_cycle_is_detected() {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
         let ctx = &mut ();
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(r, s, 0))
-            .is_ok());
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(s, bar_def, 0))
-            .is_ok());
-        assert!(cd
-            .append(
-                &graph,
-                &mut partials,
-                ctx,
-                &mut edges,
-                edge(bar_def, foo_ref, 0)
-            )
-            .is_ok());
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(foo_ref, s, 0))
-            .is_ok());
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(s, foo_def, 0))
-            .is_ok());
-        assert!(cd
-            .append(
-                &graph,
-                &mut partials,
-                ctx,
-                &mut edges,
-                edge(foo_def, bar_ref, 0)
-            )
-            .is_ok());
-        assert!(cd
-            .append(&graph, &mut partials, ctx, &mut edges, edge(bar_ref, s, 0))
-            .is_err());
+        for edge in &[
+            edge(r, s, 0),
+            edge(r, s, 0),
+            edge(s, bar_def, 0),
+            edge(bar_def, foo_ref, 0),
+            edge(foo_ref, s, 0),
+            edge(s, foo_def, 0),
+            edge(foo_def, bar_ref, 0),
+        ] {
+            cd.append(&mut edges, *edge);
+            assert!(cd
+                .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
+                .is_empty());
+        }
+        cd.append(&mut edges, edge(bar_ref, s, 0));
+        assert_eq!(
+            enum_set![Cyclicity::StrengthensPostcondition],
+            cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .unwrap()
+        );
     }
 
     // test termination of path finding
     {
         let mut path_count = 0usize;
-        let cancellation_flag = CancelAfterDuration::new(Duration::from_secs(10));
+        let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
         let result = partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
@@ -277,7 +293,7 @@ fn finding_composite_identity_cycle_is_detected() {
             |_, _, _| path_count += 1,
         );
         assert!(result.is_ok());
-        assert_eq!(2, path_count);
+        assert_eq!(3, path_count);
     }
 }
 
@@ -306,8 +322,37 @@ fn stitching_composite_identity_cycle_is_detected() {
         let mut paths = Appendables::new();
         let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
             AppendingCycleDetector::from(&mut paths, p0.into());
-        assert!(cd
-            .append(&graph, &mut partials, &mut db, &mut paths, p1.into())
-            .is_err());
+        cd.append(&mut paths, p1.into());
+        assert_eq!(
+            enum_set![Cyclicity::StrengthensPostcondition],
+            cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)
+                .unwrap()
+        );
+    }
+}
+
+#[test]
+fn appending_eliminating_cycle_terminates() {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").unwrap();
+    let r = StackGraph::root_node();
+    let s = create_scope_node(&mut graph, file, false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+
+    let mut partials = PartialPaths::new();
+    create_partial_path_and_edges(&mut graph, &mut partials, &[r, s, foo_def, s, r]).unwrap();
+
+    // test termination of path finding
+    {
+        let mut path_count = 0usize;
+        let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
+        let result = partials.find_minimal_partial_path_set_in_file(
+            &graph,
+            file,
+            &cancellation_flag,
+            |_, _, _| path_count += 1,
+        );
+        assert!(result.is_ok());
+        assert_eq!(1, path_count);
     }
 }

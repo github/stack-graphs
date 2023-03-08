@@ -62,7 +62,7 @@ fn can_apply_offset_to_partial_symbol_stacks() {
         let with_offset =
             stack.with_offset(&mut partials, symbol_variable_offset, scope_variable_offset);
         let actual = with_offset.display(&graph, &mut partials).to_string();
-        assert_eq!(actual, expected);
+        assert_eq!(expected, actual);
     }
 
     verify((&[], None), 0, 0, "");
@@ -128,11 +128,11 @@ fn can_unify_partial_symbol_stacks() -> Result<(), PathResolutionError> {
             &mut scope_bindings,
         )?;
         let unified = unified.display(&graph, &mut partials).to_string();
-        assert_eq!(unified, expected_unification);
+        assert_eq!(expected_unification, unified);
         let symbol_bindings = symbol_bindings.display(&graph, &mut partials).to_string();
-        assert_eq!(symbol_bindings, expected_symbol_bindings);
+        assert_eq!(expected_symbol_bindings, symbol_bindings);
         let scope_bindings = scope_bindings.display(&graph, &mut partials).to_string();
-        assert_eq!(scope_bindings, expected_scope_bindings);
+        assert_eq!(expected_scope_bindings, scope_bindings);
         Ok(())
     }
 
@@ -339,9 +339,9 @@ fn can_unify_partial_scope_stacks() -> Result<(), PathResolutionError> {
         let mut bindings = PartialScopeStackBindings::new();
         let unified = lhs.unify(&mut partials, rhs, &mut bindings)?;
         let unified = unified.display(&graph, &mut partials).to_string();
-        assert_eq!(unified, expected_unification);
+        assert_eq!(expected_unification, unified);
         let bindings = bindings.display(&graph, &mut partials).to_string();
-        assert_eq!(bindings, expected_bindings);
+        assert_eq!(expected_bindings, bindings);
         Ok(())
     }
 
@@ -465,7 +465,7 @@ fn can_create_partial_path_from_node() {
         let mut partials = PartialPaths::new();
         let path = PartialPath::from_node(graph, &mut partials, node);
         let actual = path.display(&graph, &mut partials).to_string();
-        assert_eq!(actual, expected);
+        assert_eq!(expected, actual);
     }
 
     verify(
@@ -517,41 +517,18 @@ fn can_create_partial_path_from_node() {
 fn can_append_partial_paths() -> Result<(), PathResolutionError> {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").expect("");
-
     let jump_to_scope_node = StackGraph::jump_to_node();
-
-    let scope0_id = graph.new_node_id(file);
-    let scope0 = graph.add_scope_node(scope0_id, false).unwrap();
-
-    let scope1_id = graph.new_node_id(file);
-    let scope1 = graph.add_scope_node(scope1_id, false).unwrap();
-
-    let foo = graph.add_symbol("foo");
-    let foo_ref_id = graph.new_node_id(file);
-    let foo_ref = graph.add_push_symbol_node(foo_ref_id, foo, false).unwrap();
-    let foo_def_id = graph.new_node_id(file);
-    let foo_def = graph.add_pop_symbol_node(foo_def_id, foo, false).unwrap();
-
-    let bar = graph.add_symbol("bar");
-    let bar_ref_id = graph.new_node_id(file);
-    let bar_ref = graph.add_push_symbol_node(bar_ref_id, bar, false).unwrap();
-    let bar_def_id = graph.new_node_id(file);
-    let bar_def = graph.add_pop_symbol_node(bar_def_id, bar, false).unwrap();
-
-    let exported_scope_id = graph.new_node_id(file);
-    graph.add_scope_node(exported_scope_id, true);
-    let baz = graph.add_symbol("baz");
-    let baz_ref_id = graph.new_node_id(file);
-    let baz_ref = graph
-        .add_push_scoped_symbol_node(baz_ref_id, baz, exported_scope_id, false)
-        .unwrap();
-    let baz_def_id = graph.new_node_id(file);
-    let baz_def = graph
-        .add_pop_scoped_symbol_node(baz_def_id, baz, false)
-        .unwrap();
-
-    let drop_scopes_id = graph.new_node_id(file);
-    let drop_scopes = graph.add_drop_scopes_node(drop_scopes_id).unwrap();
+    let scope0 = create_scope_node(&mut graph, file, false);
+    let scope1 = create_scope_node(&mut graph, file, false);
+    let foo_ref = create_push_symbol_node(&mut graph, file, "foo", false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+    let bar_ref = create_push_symbol_node(&mut graph, file, "bar", false);
+    let bar_def = create_pop_symbol_node(&mut graph, file, "bar", false);
+    let exported_scope = create_scope_node(&mut graph, file, true);
+    let exported_scope_id = graph[exported_scope].id();
+    let baz_ref = create_push_scoped_symbol_node(&mut graph, file, "baz", exported_scope_id, false);
+    let baz_def = create_pop_scoped_symbol_node(&mut graph, file, "baz", false);
+    let drop_scopes = create_drop_scopes_node(&mut graph, file);
 
     fn run(
         graph: &StackGraph,
@@ -570,7 +547,7 @@ fn can_append_partial_paths() -> Result<(), PathResolutionError> {
         r.ensure_no_overlapping_variables(&mut ps, &l);
         l.concatenate(&g, &mut ps, &r)?;
         let actual = l.display(&g, &mut ps).to_string();
-        assert_eq!(actual, expected);
+        assert_eq!(expected, actual);
 
         Ok(())
     }
@@ -674,6 +651,87 @@ fn can_append_partial_paths() -> Result<(), PathResolutionError> {
         &[scope0, jump_to_scope_node],
         "<%1> ($1) [test(7) push scoped baz test(6)] -> [jump to scope] <baz/([test(6)],$1),%1> ($1)",
     );
+
+    // verify that without stack variables in the precondition, the precondition cannot grow because of concatenation
+    {
+        let left = &[scope0];
+        let right = &[scope0, bar_def];
+
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut l = create_partial_path_and_edges(&mut g, &mut ps, left).expect("");
+        l.eliminate_precondition_stack_variables(&mut ps);
+        let mut r = create_partial_path_and_edges(&mut g, &mut ps, right).expect("");
+
+        r.ensure_no_overlapping_variables(&mut ps, &l);
+        let result = l.concatenate(&g, &mut ps, &r);
+        result.expect_err("");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn can_resolve_to_node() -> Result<(), PathResolutionError> {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").expect("");
+
+    let jump_to_scope_node = StackGraph::jump_to_node();
+    let exported_scope = create_scope_node(&mut graph, file, true);
+    let baz_def = create_pop_scoped_symbol_node(&mut graph, file, "baz", false);
+
+    // resolved node ends up in precondition scope stack
+    {
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut p =
+            create_partial_path_and_edges(&mut g, &mut ps, &[jump_to_scope_node]).expect("");
+
+        p.resolve_to_node(&g, &mut ps, exported_scope).expect("");
+        assert_eq!(
+            Some(exported_scope),
+            p.scope_stack_precondition.pop_front(&mut ps)
+        );
+    }
+
+    // precondition is fixed, and resolving fails
+    {
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut p =
+            create_partial_path_and_edges(&mut g, &mut ps, &[jump_to_scope_node]).expect("");
+
+        p.eliminate_precondition_stack_variables(&mut ps);
+        p.resolve_to_node(&g, &mut ps, exported_scope)
+            .expect_err("");
+    }
+
+    // resolved node ends up in scoped symbol in precondition symbol stack
+    // resolving succeeds even though the scope stack is finite
+    {
+        let mut g = StackGraph::new();
+        g.add_from_graph(&graph).expect("");
+
+        let mut ps = PartialPaths::new();
+        let mut p = create_partial_path_and_edges(&mut g, &mut ps, &[baz_def, jump_to_scope_node])
+            .expect("");
+
+        p.eliminate_precondition_stack_variables(&mut ps);
+        p.resolve_to_node(&g, &mut ps, exported_scope).expect("");
+        assert_eq!(
+            Some(exported_scope),
+            p.symbol_stack_precondition
+                .pop_front(&mut ps)
+                .and_then(|s| s.scopes.into_option())
+                .and_then(|mut st| st.pop_front(&mut ps))
+        );
+    }
 
     Ok(())
 }
