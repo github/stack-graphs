@@ -2873,28 +2873,32 @@ impl Path {
         let mut lhs_scope_stack_postcondition = self.scope_stack;
         let mut rhs_symbol_stack_precondition = partial_path.symbol_stack_precondition;
         let mut rhs_scope_stack_precondition = partial_path.scope_stack_precondition;
-        if let Err(e) = graph[self.end_node].halfopen_closed_postcondition(
-            paths,
-            &mut lhs_symbol_stack_postcondition,
-            &mut lhs_scope_stack_postcondition,
-        ) {
-            panic!(
-                "failed to halfopen postcondition of {}: {:?}",
-                self.display(graph, paths),
-                e
-            );
-        }
-        if let Err(e) = graph[partial_path.start_node].halfopen_closed_partial_precondition(
-            partials,
-            &mut rhs_symbol_stack_precondition,
-            &mut rhs_scope_stack_precondition,
-        ) {
-            panic!(
-                "failed to halfopen precondition of {}: {:?}",
-                self.display(graph, paths),
-                e
-            );
-        };
+        graph[self.end_node]
+            .halfopen_closed_postcondition(
+                paths,
+                &mut lhs_symbol_stack_postcondition,
+                &mut lhs_scope_stack_postcondition,
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "failed to halfopen postcondition of {}: {:?}",
+                    self.display(graph, paths),
+                    e
+                )
+            });
+        graph[partial_path.start_node]
+            .halfopen_closed_partial_precondition(
+                partials,
+                &mut rhs_symbol_stack_precondition,
+                &mut rhs_scope_stack_precondition,
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "failed to halfopen precondition of {}: {:?}",
+                    self.display(graph, paths),
+                    e
+                );
+            });
 
         let mut symbol_bindings = SymbolStackBindings::new();
         let mut scope_bindings = ScopeStackBindings::new();
@@ -3023,28 +3027,32 @@ impl PartialPath {
         let mut lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
         let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
         let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
-        if let Err(e) = graph[lhs.end_node].halfopen_closed_partial_postcondition(
-            partials,
-            &mut lhs_symbol_stack_postcondition,
-            &mut lhs_scope_stack_postcondition,
-        ) {
-            panic!(
-                "failed to halfopen postcondition of {}: {:?}",
-                lhs.display(graph, partials),
-                e
-            );
-        }
-        if let Err(e) = graph[rhs.start_node].halfopen_closed_partial_precondition(
-            partials,
-            &mut rhs_symbol_stack_precondition,
-            &mut rhs_scope_stack_precondition,
-        ) {
-            panic!(
-                "failed to halfopen postcondition of {}: {:?}",
-                rhs.display(graph, partials),
-                e
-            );
-        };
+        graph[lhs.end_node]
+            .halfopen_closed_partial_postcondition(
+                partials,
+                &mut lhs_symbol_stack_postcondition,
+                &mut lhs_scope_stack_postcondition,
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "failed to halfopen postcondition of {}: {:?}",
+                    lhs.display(graph, partials),
+                    e
+                );
+            });
+        graph[rhs.start_node]
+            .halfopen_closed_partial_precondition(
+                partials,
+                &mut rhs_symbol_stack_precondition,
+                &mut rhs_scope_stack_precondition,
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "failed to halfopen postcondition of {}: {:?}",
+                    rhs.display(graph, partials),
+                    e
+                );
+            });
 
         let mut symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
