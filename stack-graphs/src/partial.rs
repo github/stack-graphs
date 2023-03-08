@@ -1818,9 +1818,7 @@ impl PartialPath {
     /// Returns whether a partial path represents the end of a name binding from a reference to a
     /// definition.
     pub fn ends_at_definition(&self, graph: &StackGraph) -> bool {
-        graph[self.end_node].is_definition()
-            && self.symbol_stack_postcondition.can_match_empty()
-            && self.scope_stack_postcondition.can_match_empty()
+        graph[self.end_node].is_definition() && self.symbol_stack_postcondition.can_match_empty()
     }
 
     /// A _complete_ partial path represents a full name binding that resolves a reference to a
