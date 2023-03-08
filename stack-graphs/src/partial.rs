@@ -2620,28 +2620,33 @@ impl Node {
         partials: &mut PartialPaths,
         symbol_stack: &mut PartialSymbolStack,
         scope_stack: &mut PartialScopeStack,
-    ) {
+    ) -> Result<(), PathResolutionError> {
         match self {
             Node::DropScopes(_) => {}
             Node::JumpTo(_) => {}
             Node::PopScopedSymbol(node) => {
                 let symbol = symbol_stack
                     .pop_front(partials)
-                    .expect("missing symbol for pop scoped symbol node in precondition");
-                debug_assert_eq!(symbol.symbol, node.symbol);
+                    .ok_or(PathResolutionError::EmptySymbolStack)?;
+                if symbol.symbol != node.symbol {
+                    return Err(PathResolutionError::IncorrectPoppedSymbol);
+                }
                 *scope_stack = symbol.scopes.into_option().unwrap();
             }
             Node::PopSymbol(node) => {
                 let symbol = symbol_stack
                     .pop_front(partials)
-                    .expect("missing symbol for pop symbol node in precondition");
-                debug_assert_eq!(symbol.symbol, node.symbol);
+                    .ok_or(PathResolutionError::EmptySymbolStack)?;
+                if symbol.symbol != node.symbol {
+                    return Err(PathResolutionError::IncorrectPoppedSymbol);
+                }
             }
             Node::PushScopedSymbol(_) => {}
             Node::PushSymbol(_) => {}
             Node::Root(_) => {}
             Node::Scope(_) => {}
-        }
+        };
+        Ok(())
     }
 
     /// Ensure the given closed postcondition stacks are half-open for this start node.
@@ -2670,7 +2675,7 @@ impl Node {
         partials: &mut PartialPaths,
         symbol_stack: &mut PartialSymbolStack,
         _scope_stack: &mut PartialScopeStack,
-    ) {
+    ) -> Result<(), PathResolutionError> {
         match self {
             Self::DropScopes(_) => {}
             Self::JumpTo(_) => {}
@@ -2679,18 +2684,23 @@ impl Node {
             Self::PushScopedSymbol(node) => {
                 let symbol = symbol_stack
                     .pop_front(partials)
-                    .expect("missing symbol for push scoped symbol node in postcondition");
-                debug_assert_eq!(symbol.symbol, node.symbol);
+                    .ok_or(PathResolutionError::EmptySymbolStack)?;
+                if symbol.symbol != node.symbol {
+                    return Err(PathResolutionError::IncorrectPoppedSymbol);
+                }
             }
             Self::PushSymbol(node) => {
                 let symbol = symbol_stack
                     .pop_front(partials)
-                    .expect("missing symbol for push symbol node in postcondition");
-                debug_assert_eq!(symbol.symbol, node.symbol);
+                    .ok_or(PathResolutionError::EmptySymbolStack)?;
+                if symbol.symbol != node.symbol {
+                    return Err(PathResolutionError::IncorrectPoppedSymbol);
+                }
             }
             Self::Root(_) => {}
             Self::Scope(_) => {}
-        }
+        };
+        Ok(())
     }
 
     /// Ensure the given closed postcondition stacks are half-open for this start node.
@@ -2719,23 +2729,32 @@ impl Node {
         paths: &mut Paths,
         symbol_stack: &mut SymbolStack,
         _scope_stack: &mut ScopeStack,
-    ) {
+    ) -> Result<(), PathResolutionError> {
         match self {
             Self::DropScopes(_) => {}
             Self::JumpTo(_) => {}
             Self::PopScopedSymbol(_) => {}
             Self::PopSymbol(_) => {}
             Self::PushScopedSymbol(node) => {
-                let symbol = symbol_stack.pop_front(paths).unwrap();
-                debug_assert_eq!(symbol.symbol, node.symbol);
+                let symbol = symbol_stack
+                    .pop_front(paths)
+                    .ok_or(PathResolutionError::EmptySymbolStack)?;
+                if symbol.symbol != node.symbol {
+                    return Err(PathResolutionError::IncorrectPoppedSymbol);
+                }
             }
             Self::PushSymbol(node) => {
-                let symbol = symbol_stack.pop_front(paths).unwrap();
-                debug_assert_eq!(symbol.symbol, node.symbol);
+                let symbol = symbol_stack
+                    .pop_front(paths)
+                    .ok_or(PathResolutionError::EmptySymbolStack)?;
+                if symbol.symbol != node.symbol {
+                    return Err(PathResolutionError::IncorrectPoppedSymbol);
+                }
             }
             Self::Root(_) => {}
             Self::Scope(_) => {}
-        }
+        };
+        Ok(())
     }
 }
 
@@ -2857,16 +2876,28 @@ impl Path {
         let mut lhs_scope_stack_postcondition = self.scope_stack;
         let mut rhs_symbol_stack_precondition = partial_path.symbol_stack_precondition;
         let mut rhs_scope_stack_precondition = partial_path.scope_stack_precondition;
-        graph[self.end_node].halfopen_closed_postcondition(
+        if let Err(e) = graph[self.end_node].halfopen_closed_postcondition(
             paths,
             &mut lhs_symbol_stack_postcondition,
             &mut lhs_scope_stack_postcondition,
-        );
-        graph[partial_path.start_node].halfopen_closed_partial_precondition(
+        ) {
+            panic!(
+                "failed to halfopen postcondition of {}: {:?}",
+                self.display(graph, paths),
+                e
+            );
+        }
+        if let Err(e) = graph[partial_path.start_node].halfopen_closed_partial_precondition(
             partials,
             &mut rhs_symbol_stack_precondition,
             &mut rhs_scope_stack_precondition,
-        );
+        ) {
+            panic!(
+                "failed to halfopen precondition of {}: {:?}",
+                self.display(graph, paths),
+                e
+            );
+        };
 
         let mut symbol_bindings = SymbolStackBindings::new();
         let mut scope_bindings = ScopeStackBindings::new();
@@ -2995,16 +3026,28 @@ impl PartialPath {
         let mut lhs_scope_stack_postcondition = lhs.scope_stack_postcondition;
         let mut rhs_symbol_stack_precondition = rhs.symbol_stack_precondition;
         let mut rhs_scope_stack_precondition = rhs.scope_stack_precondition;
-        graph[lhs.end_node].halfopen_closed_partial_postcondition(
+        if let Err(e) = graph[lhs.end_node].halfopen_closed_partial_postcondition(
             partials,
             &mut lhs_symbol_stack_postcondition,
             &mut lhs_scope_stack_postcondition,
-        );
-        graph[rhs.start_node].halfopen_closed_partial_precondition(
+        ) {
+            panic!(
+                "failed to halfopen postcondition of {}: {:?}",
+                lhs.display(graph, partials),
+                e
+            );
+        }
+        if let Err(e) = graph[rhs.start_node].halfopen_closed_partial_precondition(
             partials,
             &mut rhs_symbol_stack_precondition,
             &mut rhs_scope_stack_precondition,
-        );
+        ) {
+            panic!(
+                "failed to halfopen postcondition of {}: {:?}",
+                rhs.display(graph, partials),
+                e
+            );
+        };
 
         let mut symbol_bindings = PartialSymbolStackBindings::new();
         let mut scope_bindings = PartialScopeStackBindings::new();
