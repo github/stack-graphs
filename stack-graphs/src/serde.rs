@@ -1,9 +1,12 @@
-use crate::{arena::Handle, json::Filter};
+use crate::{
+    arena::Handle,
+    json::{Filter, NoFilter},
+};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 pub struct StackGraph {
     files: Files,
     nodes: Nodes,
@@ -23,10 +26,17 @@ pub enum Error {
 
     #[error("no file data for node `{0}`")]
     NoFileData(u32),
+
+    #[error("node `{0}` is an invalid node")]
+    InvalidNode(u32),
 }
 
 impl StackGraph {
-    pub fn from_graph<'a>(graph: &crate::graph::StackGraph, filter: &'a dyn Filter) -> Self {
+    pub fn from_graph<'a>(graph: &crate::graph::StackGraph) -> Self {
+        Self::from_graph_filter(graph, &NoFilter)
+    }
+
+    pub fn from_graph_filter<'a>(graph: &crate::graph::StackGraph, filter: &'a dyn Filter) -> Self {
         let files = graph.filter_files(filter);
         let nodes = graph.filter_nodes(filter);
         let edges = graph.filter_edges(filter);
@@ -64,15 +74,10 @@ impl StackGraph {
     }
 
     fn load_nodes(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
-        let not_found = |f: &str| Error::FileNotFound(f.to_owned());
-        let no_file_data = |id| Error::NoFileData(id);
-
         for n in self.nodes.data.as_slice() {
             match n {
                 Node::DropScopes { id, .. } => {
-                    let file = id.file().ok_or(no_file_data(id.local_id))?;
-                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
-                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let node_id = id.into_node_id(graph)?;
                     graph.add_drop_scopes_node(node_id);
                 }
                 Node::PopScopedSymbol {
@@ -81,9 +86,7 @@ impl StackGraph {
                     is_definition,
                     ..
                 } => {
-                    let file = id.file().ok_or(no_file_data(id.local_id))?;
-                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
-                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let node_id = id.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
                     graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition);
                 }
@@ -93,9 +96,7 @@ impl StackGraph {
                     is_definition,
                     ..
                 } => {
-                    let file = id.file().ok_or(no_file_data(id.local_id))?;
-                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
-                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let node_id = id.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
                     graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition);
                 }
@@ -106,16 +107,8 @@ impl StackGraph {
                     is_reference,
                     ..
                 } => {
-                    let file = id.file().ok_or(no_file_data(id.local_id))?;
-                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
-                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
-
-                    let scope_file = id.file().ok_or(no_file_data(scope.local_id))?;
-                    let scope_file_handle =
-                        graph.get_file(scope_file).ok_or(not_found(scope_file))?;
-                    let scope_id =
-                        crate::graph::NodeID::new_in_file(scope_file_handle, scope.local_id);
-
+                    let node_id = id.into_node_id(graph)?;
+                    let scope_id = scope.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
 
                     graph.add_push_scoped_symbol_node(
@@ -131,18 +124,14 @@ impl StackGraph {
                     is_reference,
                     ..
                 } => {
-                    let file = id.file().ok_or(no_file_data(id.local_id))?;
-                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
-                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let node_id = id.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
                     graph.add_push_symbol_node(node_id, symbol_handle, *is_reference);
                 }
                 Node::Scope {
                     id, is_exported, ..
                 } => {
-                    let file = id.file().ok_or(no_file_data(id.local_id))?;
-                    let file_handle = graph.get_file(file).ok_or(not_found(file))?;
-                    let node_id = crate::graph::NodeID::new_in_file(file_handle, id.local_id);
+                    let node_id = id.into_node_id(graph)?;
                     graph.add_scope_node(node_id, *is_exported);
                 }
                 Node::JumpToScope { .. } | Node::Root { .. } => {}
@@ -159,64 +148,35 @@ impl StackGraph {
             precedence,
         } in self.edges.data.as_slice()
         {
-            let source_file_handle = source.file().and_then(|f| graph.get_file(f));
-            let sink_file_handle = sink.file().and_then(|f| graph.get_file(f));
+            let source_id = source.into_node_id(graph)?;
+            let sink_id = sink.into_node_id(graph)?;
 
-            let convert = |n: &NodeID| {
-                if n.is_root() {
-                    crate::graph::NodeID::root()
-                } else if n.is_jump_to() {
-                    crate::graph::NodeID::jump_to()
-                } else {
-                    panic!()
-                }
-            };
-            let (source_id, sink_id) = match (source_file_handle, sink_file_handle) {
-                (Some(a), Some(b)) => {
-                    let source_node_id = crate::graph::NodeID::new_in_file(a, source.local_id);
-                    let sink_node_id = crate::graph::NodeID::new_in_file(b, source.local_id);
-                    (source_node_id, sink_node_id)
-                }
-                (Some(a), None) => {
-                    let source_node_id = crate::graph::NodeID::new_in_file(a, source.local_id);
-                    let sink_node_id = convert(&sink);
-                    (source_node_id, sink_node_id)
-                }
-                (None, Some(b)) => {
-                    let source_node_id = convert(&source);
-                    let sink_node_id = crate::graph::NodeID::new_in_file(b, source.local_id);
-                    (source_node_id, sink_node_id)
-                }
-                (None, None) => {
-                    let source_node_id = convert(&source);
-                    let sink_node_id = convert(&sink);
-                    (source_node_id, sink_node_id)
-                }
-            };
+            let source_handle = graph
+                .node_for_id(source_id)
+                .ok_or(Error::InvalidNode(source.local_id))?;
+            let sink_handle = graph
+                .node_for_id(sink_id)
+                .ok_or(Error::InvalidNode(sink.local_id))?;
 
-            if let (Some(source_node), Some(sink_node)) =
-                (graph.node_for_id(source_id), graph.node_for_id(sink_id))
-            {
-                graph.add_edge(source_node, sink_node, *precedence);
-            }
+            graph.add_edge(source_handle, sink_handle, *precedence);
         }
         Ok(())
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 #[serde(transparent)]
 pub struct Files {
     data: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 #[serde(transparent)]
 pub struct Nodes {
     data: Vec<Node>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Node {
     DropScopes {
@@ -278,28 +238,48 @@ pub enum Node {
     },
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct SourceInfo {
     span: lsp_positions::Span,
     syntax_type: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 #[serde(transparent)]
 pub struct DebugInfo {
     data: Vec<DebugEntry>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct DebugEntry {
     key: String,
     value: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct NodeID {
     file: Option<String>,
     local_id: u32,
+}
+
+impl NodeID {
+    fn into_node_id(
+        &self,
+        graph: &crate::graph::StackGraph,
+    ) -> Result<crate::graph::NodeID, Error> {
+        if let Some(file) = self.file.as_ref() {
+            let handle = graph
+                .get_file(file.as_str())
+                .ok_or(Error::FileNotFound(file.to_owned()))?;
+            Ok(crate::graph::NodeID::new_in_file(handle, self.local_id))
+        } else if self.is_root() {
+            Ok(crate::graph::NodeID::root())
+        } else if self.is_jump_to() {
+            Ok(crate::graph::NodeID::jump_to())
+        } else {
+            Err(Error::InvalidNode(self.local_id))
+        }
+    }
 }
 
 impl NodeID {
@@ -310,19 +290,15 @@ impl NodeID {
     fn is_jump_to(&self) -> bool {
         self.local_id == crate::graph::NodeID::jump_to().local_id()
     }
-
-    fn file(&self) -> Option<&str> {
-        self.file.as_ref().map(|f| f.as_str())
-    }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 #[serde(transparent)]
 pub struct Edges {
     data: Vec<Edge>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct Edge {
     source: NodeID,
     sink: NodeID,
@@ -570,53 +546,124 @@ mod test {
 
     #[test]
     fn reconstruct() {
-        let json_data = serde_json::json!({
-        "files": [
-            "index.ts"
-        ],
-        "nodes": [{
-            "type": "root",
-            "id": {
-                "local_id": 1
-            },
-            "source_info": {
-                "span": {
-                    "start": {
+        let json_data = serde_json::json!(
+            {
+              "files": [
+                "index.ts"
+              ],
+              "nodes": [
+                {
+                  "type": "root",
+                  "id": {
+                    "local_id": 1
+                  },
+                  "source_info": {
+                    "span": {
+                      "start": {
                         "line": 0,
                         "column": {
-                            "utf8_offset": 0,
-                            "utf16_offset": 0,
-                            "grapheme_offset": 0
+                          "utf8_offset": 0,
+                          "utf16_offset": 0,
+                          "grapheme_offset": 0
                         }
-                    },
-                    "end": {
+                      },
+                      "end": {
                         "line": 0,
                         "column": {
-                            "utf8_offset": 0,
-                            "utf16_offset": 0,
-                            "grapheme_offset": 0
+                          "utf8_offset": 0,
+                          "utf16_offset": 0,
+                          "grapheme_offset": 0
                         }
+                      }
                     }
+                  },
+                  "debug_info": []
+                },
+                {
+                  "type": "jump_to_scope",
+                  "id": {
+                    "local_id": 2
+                  },
+                  "source_info": {
+                    "span": {
+                      "start": {
+                        "line": 0,
+                        "column": {
+                          "utf8_offset": 0,
+                          "utf16_offset": 0,
+                          "grapheme_offset": 0
+                        }
+                      },
+                      "end": {
+                        "line": 0,
+                        "column": {
+                          "utf8_offset": 0,
+                          "utf16_offset": 0,
+                          "grapheme_offset": 0
+                        }
+                      }
+                    }
+                  },
+                  "debug_info": []
+                },
+                {
+                  "type": "scope",
+                  "is_exported": false,
+                  "id": {
+                    "file": "index.ts",
+                    "local_id": 0
+                  },
+                  "source_info": {
+                    "span": {
+                      "start": {
+                        "line": 0,
+                        "column": {
+                          "utf8_offset": 0,
+                          "utf16_offset": 0,
+                          "grapheme_offset": 0
+                        }
+                      },
+                      "end": {
+                        "line": 0,
+                        "column": {
+                          "utf8_offset": 0,
+                          "utf16_offset": 0,
+                          "grapheme_offset": 0
+                        }
+                      }
+                    }
+                  },
+                  "debug_info": [
+                    {
+                      "key": "tsg_variable",
+                      "value": "@prog.defs"
+                    },
+                    {
+                      "key": "tsg_location",
+                      "value": "(225, 14)"
+                    }
+                  ]
                 }
-            },
-            "debug_info": []
-        }],
-        "edges": [{
-            "source": {
-                "local_id": 1
-            },
-            "sink": {
-                "file": "index.ts",
-                "local_id": 0
-            },
-            "precedence": 0
-        }]});
+              ],
+              "edges": [
+                {
+                  "source": {
+                    "local_id": 1
+                  },
+                  "sink": {
+                    "file": "index.ts",
+                    "local_id": 0
+                  },
+                  "precedence": 0
+                }
+              ]
+            }
+        );
         let observed = serde_json::from_value::<super::StackGraph>(json_data).unwrap();
         let mut sg = crate::graph::StackGraph::new();
         observed.load_into(&mut sg).unwrap();
 
-        // always 2 nodes: root and jump
-        assert_eq!(sg.iter_nodes().count(), 2);
+        assert_eq!(sg.iter_nodes().count(), 3);
         assert_eq!(sg.iter_files().count(), 1);
     }
 

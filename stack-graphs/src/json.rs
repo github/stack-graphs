@@ -202,11 +202,11 @@ impl<'a> StackGraph {
     }
 
     pub fn to_serializable(&self) -> crate::serde::StackGraph {
-        self.to_serializable_with_filter(&NoFilter)
+        self.to_serializable_filter(&NoFilter)
     }
 
-    pub fn to_serializable_with_filter(&self, f: &'a dyn Filter) -> crate::serde::StackGraph {
-        crate::serde::StackGraph::from_graph(self, f)
+    pub fn to_serializable_filter(&self, f: &'a dyn Filter) -> crate::serde::StackGraph {
+        crate::serde::StackGraph::from_graph_filter(self, f)
     }
 }
 
