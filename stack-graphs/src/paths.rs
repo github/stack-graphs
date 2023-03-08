@@ -28,7 +28,6 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
-use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::NodeID;
@@ -494,7 +493,9 @@ impl PathEdgeList {
     pub fn shadows(mut self, paths: &mut Paths, mut other: PathEdgeList) -> bool {
         while let Some(self_edge) = self.pop_front(paths) {
             if let Some(other_edge) = other.pop_front(paths) {
-                if self_edge.shadows(other_edge) {
+                if self_edge.source_node_id != other_edge.source_node_id {
+                    return false;
+                } else if self_edge.shadows(other_edge) {
                     return true;
                 }
             } else {
@@ -883,12 +884,15 @@ impl Path {
         result.reserve(extensions.size_hint().0);
         for extension in extensions {
             let mut new_path = self.clone();
-            let mut new_cycle_detector = path_cycle_detector.clone();
             // If there are errors adding this edge to the path, or resolving the resulting path,
             // just skip the edge — it's not a fatal error.
             if new_path.append(graph, paths, extension).is_err() {
                 continue;
             }
+            // We assume languages do not introduce similar paths (paths between the same nodes with
+            // equivalent pre- and postconditions), so we do not guard against that here. We may need
+            // to revisit that assumption in the future.
+            let mut new_cycle_detector = path_cycle_detector.clone();
             new_cycle_detector.append(edges, extension);
             result.push((new_path, new_cycle_detector));
         }
@@ -916,7 +920,6 @@ impl Paths {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut Paths, Path),
     {
-        let mut similar_path_detector_detector = SimilarPathDetector::new();
         let mut queue = starting_nodes
             .into_iter()
             .filter_map(|node| {
@@ -927,13 +930,7 @@ impl Paths {
         let mut edges = Appendables::new();
         while let Some((path, path_cycle_detector)) = queue.pop_front() {
             cancellation_flag.check("finding paths")?;
-            if !similar_path_detector_detector
-                .should_process_path(&path, |probe| probe.cmp(graph, self, &path))
-            {
-                continue;
-            } else {
-                visit(graph, self, path.clone());
-            }
+            visit(graph, self, path.clone());
             if !path_cycle_detector
                 .is_cyclic(graph, &mut partials, &mut (), &mut edges)
                 .expect("cyclic test failed when finding paths")
