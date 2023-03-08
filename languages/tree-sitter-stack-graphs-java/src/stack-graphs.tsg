@@ -620,6 +620,41 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
+(method_declaration
+ parameters:
+ (formal_parameters
+  (formal_parameter
+   type: (generic_type
+     (type_arguments
+      (type_identifier) @type))))
+ body:
+ (block
+  (switch_expression
+   condition: (_)
+   body: (switch_block
+     (switch_block_statement_group
+      (switch_label
+       (identifier))
+      @label))
+  )) @stmt) {
+
+  node ident
+  attr (ident) node_reference = @type
+
+  node ref__typeof
+  attr(ref__typeof) push_symbol = "."
+  node implicit_this__typeof
+  attr(implicit_this__typeof) push_symbol = ":"
+
+  edge implicit_this__typeof -> @label.lexical_scope
+  edge @label.lexical_scope -> ref__typeof
+  edge ref__typeof -> implicit_this__typeof
+  edge implicit_this__typeof -> ident
+
+  edge ident -> @stmt.after_scope
+}
+
+
 (switch_block) @this {
   node @this.lexical_scope
 }
