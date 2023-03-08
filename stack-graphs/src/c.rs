@@ -28,16 +28,8 @@ use crate::partial::PartialPaths;
 use crate::partial::PartialScopeStack;
 use crate::partial::PartialScopedSymbol;
 use crate::partial::PartialSymbolStack;
-use crate::paths::Path;
-use crate::paths::PathEdge;
-use crate::paths::PathEdgeList;
-use crate::paths::Paths;
-use crate::paths::ScopeStack;
-use crate::paths::ScopedSymbol;
-use crate::paths::SymbolStack;
 use crate::stitching::Database;
 use crate::stitching::ForwardPartialPathStitcher;
-use crate::stitching::PathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -58,25 +50,6 @@ pub extern "C" fn sg_stack_graph_new() -> *mut sg_stack_graph {
 #[no_mangle]
 pub extern "C" fn sg_stack_graph_free(graph: *mut sg_stack_graph) {
     drop(unsafe { Box::from_raw(graph) })
-}
-
-/// Manages the state of a collection of paths built up as part of the path-finding algorithm.
-pub struct sg_path_arena {
-    pub inner: Paths,
-}
-
-/// Creates a new, initially empty path arena.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_new() -> *mut sg_path_arena {
-    Box::into_raw(Box::new(sg_path_arena {
-        inner: Paths::new(),
-    }))
-}
-
-/// Frees a path arena, and all of its contents.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_free(paths: *mut sg_path_arena) {
-    drop(unsafe { Box::from_raw(paths) })
 }
 
 /// Manages the state of a collection of partial paths to be used in the path-stitching algorithm.
@@ -764,378 +737,6 @@ pub extern "C" fn sg_stack_graph_add_source_infos(
 }
 
 //-------------------------------------------------------------------------------------------------
-// Symbol stacks
-
-/// A symbol with a possibly empty list of exported scopes attached to it.
-#[repr(C)]
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub struct sg_scoped_symbol {
-    pub symbol: sg_symbol_handle,
-    pub scopes: sg_scope_stack,
-}
-
-impl Into<ScopedSymbol> for sg_scoped_symbol {
-    fn into(self) -> ScopedSymbol {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-/// A sequence of symbols that describe what we are currently looking for while in the middle of
-/// the path-finding algorithm.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
-pub struct sg_symbol_stack {
-    /// The handle of the first element in the symbol stack, or SG_LIST_EMPTY_HANDLE if the list is
-    /// empty, or 0 if the list is null.
-    pub cells: sg_symbol_stack_cell_handle,
-    pub length: u32,
-}
-
-impl From<SymbolStack> for sg_symbol_stack {
-    fn from(stack: SymbolStack) -> sg_symbol_stack {
-        unsafe { std::mem::transmute(stack) }
-    }
-}
-
-/// A handle to an element of a symbol stack.  A zero handle represents a missing symbol stack.  A
-/// UINT32_MAX handle represents an empty symbol stack.
-pub type sg_symbol_stack_cell_handle = u32;
-
-/// An element of a symbol stack.
-#[repr(C)]
-pub struct sg_symbol_stack_cell {
-    /// The scoped symbol at this position in the symbol stack.
-    pub head: sg_scoped_symbol,
-    /// The handle of the next element in the symbol stack, or SG_LIST_EMPTY_HANDLE if this is the
-    /// last element.
-    pub tail: sg_symbol_stack_cell_handle,
-}
-
-/// The array of all of the symbol stack content in a path arena.
-#[repr(C)]
-pub struct sg_symbol_stack_cells {
-    pub cells: *const sg_symbol_stack_cell,
-    pub count: usize,
-}
-
-/// Returns a reference to the array of symbol stack content in a path arena.  The resulting array
-/// pointer is only valid until the next call to any function that mutates the path arena.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_symbol_stack_cells(
-    paths: *const sg_path_arena,
-) -> sg_symbol_stack_cells {
-    let paths = unsafe { &(*paths).inner };
-    sg_symbol_stack_cells {
-        cells: paths.symbol_stacks.as_ptr() as *const sg_symbol_stack_cell,
-        count: paths.symbol_stacks.len(),
-    }
-}
-
-/// Adds new symbol stacks to the path arena.  `count` is the number of symbol stacks you want to
-/// create.  The content of each symbol stack comes from two arrays.  The `lengths` array must have
-/// `count` elements, and provides the number of symbols in each symbol stack.  The `symbols` array
-/// contains the contents of each of these symbol stacks in one contiguous array.  Its length must
-/// be the sum of all of the counts in the `lengths` array.
-///
-/// You must also provide an `out` array, which must also have room for `count` elements.  We will
-/// fill this array in with the `sg_symbol_stack` instances for each symbol stack that is created.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_add_symbol_stacks(
-    paths: *mut sg_path_arena,
-    count: usize,
-    mut symbols: *const sg_scoped_symbol,
-    lengths: *const usize,
-    out: *mut sg_symbol_stack,
-) {
-    let paths = unsafe { &mut (*paths).inner };
-    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
-    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
-    for i in 0..count {
-        let length = lengths[i];
-        let symbols_slice = unsafe { std::slice::from_raw_parts(symbols, length) };
-        let mut stack = SymbolStack::empty();
-        for j in (0..length).rev() {
-            let symbol = symbols_slice[j].into();
-            stack.push_front(paths, symbol);
-        }
-        out[i] = stack.into();
-        unsafe { symbols = symbols.add(length) };
-    }
-}
-
-//-------------------------------------------------------------------------------------------------
-// Scope stacks
-
-/// A sequence of exported scopes, used to pass name-binding context around a stack graph.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
-pub struct sg_scope_stack {
-    /// The handle of the first element in the scope stack, or SG_LIST_EMPTY_HANDLE if the list is
-    /// empty, or 0 if the list is null.
-    pub cells: sg_scope_stack_cell_handle,
-    pub length: u32,
-}
-
-impl From<ScopeStack> for sg_scope_stack {
-    fn from(stack: ScopeStack) -> sg_scope_stack {
-        unsafe { std::mem::transmute(stack) }
-    }
-}
-
-/// A handle to an element of a scope stack.  A zero handle represents a missing scope stack.  A
-/// UINT32_MAX handle represents an empty scope stack.
-pub type sg_scope_stack_cell_handle = u32;
-
-/// An element of a scope stack.
-#[repr(C)]
-pub struct sg_scope_stack_cell {
-    /// The exported scope at this position in the scope stack.
-    pub head: sg_node_handle,
-    /// The handle of the next element in the scope stack, or SG_LIST_EMPTY_HANDLE if this is the
-    /// last element.
-    pub tail: sg_scope_stack_cell_handle,
-}
-
-/// The array of all of the scope stack content in a path arena.
-#[repr(C)]
-pub struct sg_scope_stack_cells {
-    pub cells: *const sg_scope_stack_cell,
-    pub count: usize,
-}
-
-/// Returns a reference to the array of scope stack content in a path arena.  The resulting array
-/// pointer is only valid until the next call to any function that mutates the path arena.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_scope_stack_cells(
-    paths: *const sg_path_arena,
-) -> sg_scope_stack_cells {
-    let paths = unsafe { &(*paths).inner };
-    sg_scope_stack_cells {
-        cells: paths.scope_stacks.as_ptr() as *const sg_scope_stack_cell,
-        count: paths.scope_stacks.len(),
-    }
-}
-
-/// Adds new scope stacks to the path arena.  `count` is the number of scope stacks you want to
-/// create.  The content of each scope stack comes from two arrays.  The `lengths` array must have
-/// `count` elements, and provides the number of scopes in each scope stack.  The `scopes` array
-/// contains the contents of each of these scope stacks in one contiguous array.  Its length must
-/// be the sum of all of the counts in the `lengths` array.
-///
-/// You must also provide an `out` array, which must also have room for `count` elements.  We will
-/// fill this array in with the `sg_scope_stack` instances for each scope stack that is created.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_add_scope_stacks(
-    paths: *mut sg_path_arena,
-    count: usize,
-    mut scopes: *const sg_node_handle,
-    lengths: *const usize,
-    out: *mut sg_scope_stack,
-) {
-    let paths = unsafe { &mut (*paths).inner };
-    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
-    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
-    for i in 0..count {
-        let length = lengths[i];
-        let scopes_slice = unsafe { std::slice::from_raw_parts(scopes, length) };
-        let mut stack = ScopeStack::empty();
-        for j in (0..length).rev() {
-            let node = scopes_slice[j].into();
-            stack.push_front(paths, node);
-        }
-        out[i] = stack.into();
-        unsafe { scopes = scopes.add(length) };
-    }
-}
-
-//-------------------------------------------------------------------------------------------------
-// Edge lists
-
-/// Details about one of the edges in a name-binding path
-#[repr(C)]
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub struct sg_path_edge {
-    pub source_node_id: sg_node_id,
-    pub precedence: i32,
-}
-
-impl Into<PathEdge> for sg_path_edge {
-    fn into(self) -> PathEdge {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-/// The edges in a path keep track of precedence information so that we can correctly handle
-/// shadowed definitions.
-#[repr(C)]
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
-pub struct sg_path_edge_list {
-    /// The handle of the first element in the edge list, or SG_LIST_EMPTY_HANDLE if the list is
-    /// empty, or 0 if the list is null.
-    pub cells: sg_path_edge_list_cell_handle,
-    pub direction: sg_deque_direction,
-    pub length: u32,
-}
-
-impl From<PathEdgeList> for sg_path_edge_list {
-    fn from(edges: PathEdgeList) -> sg_path_edge_list {
-        unsafe { std::mem::transmute(edges) }
-    }
-}
-
-/// A handle to an element of a path edge list.  A zero handle represents a missing path edge list.
-/// A UINT32_MAX handle represents an empty path edge list.
-pub type sg_path_edge_list_cell_handle = u32;
-
-/// An element of a path edge list.
-#[repr(C)]
-pub struct sg_path_edge_list_cell {
-    /// The path edge at this position in the path edge list.
-    pub head: sg_path_edge,
-    /// The handle of the next element in the path edge list, or SG_LIST_EMPTY_HANDLE if this is
-    /// the last element.
-    pub tail: sg_path_edge_list_cell_handle,
-    /// The handle of the reversal of this list.
-    pub reversed: sg_path_edge_list_cell_handle,
-}
-
-/// The array of all of the path edge list content in a path arena.
-#[repr(C)]
-pub struct sg_path_edge_list_cells {
-    pub cells: *const sg_path_edge_list_cell,
-    pub count: usize,
-}
-
-/// Returns a reference to the array of path edge list content in a path arena.  The resulting
-/// array pointer is only valid until the next call to any function that mutates the path arena.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_path_edge_list_cells(
-    paths: *const sg_path_arena,
-) -> sg_path_edge_list_cells {
-    let paths = unsafe { &(*paths).inner };
-    sg_path_edge_list_cells {
-        cells: paths.path_edges.as_ptr() as *const sg_path_edge_list_cell,
-        count: paths.path_edges.len(),
-    }
-}
-
-/// Adds new path edge lists to the path arena.  `count` is the number of path edge lists you want
-/// to create.  The content of each path edge list comes from two arrays.  The `lengths` array must
-/// have `count` elements, and provides the number of edges in each path edge list.  The `edges`
-/// array contains the contents of each of these path edge lists in one contiguous array.  Its
-/// length must be the sum of all of the counts in the `lengths` array.
-///
-/// You must also provide an `out` array, which must also have room for `count` elements.  We will
-/// fill this array in with the `sg_path_edge_list` instances for each path edge list that is
-/// created.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_add_path_edge_lists(
-    paths: *mut sg_path_arena,
-    count: usize,
-    mut edges: *const sg_path_edge,
-    lengths: *const usize,
-    out: *mut sg_path_edge_list,
-) {
-    let paths = unsafe { &mut (*paths).inner };
-    let lengths = unsafe { std::slice::from_raw_parts(lengths, count) };
-    let out = unsafe { std::slice::from_raw_parts_mut(out, count) };
-    for i in 0..count {
-        let length = lengths[i];
-        let edges_slice = unsafe { std::slice::from_raw_parts(edges, length) };
-        let mut list = PathEdgeList::empty();
-        for j in 0..length {
-            let edge: PathEdge = edges_slice[j].into();
-            list.push_back(paths, edge);
-        }
-        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
-        // before we return ensures that it will also be available in forwards order.
-        let _ = list.iter(paths);
-        out[i] = list.into();
-        unsafe { edges = edges.add(length) };
-    }
-}
-
-//-------------------------------------------------------------------------------------------------
-// Paths
-
-/// A sequence of edges from a stack graph.  A _complete_ path represents a full name binding in a
-/// source language.
-#[repr(C)]
-pub struct sg_path {
-    pub start_node: sg_node_handle,
-    pub end_node: sg_node_handle,
-    pub symbol_stack: sg_symbol_stack,
-    pub scope_stack: sg_scope_stack,
-    pub edges: sg_path_edge_list,
-}
-
-/// A list of paths found by the path-finding algorithm.
-#[derive(Default)]
-pub struct sg_path_list {
-    paths: Vec<Path>,
-}
-
-/// Creates a new, empty sg_path_list.
-#[no_mangle]
-pub extern "C" fn sg_path_list_new() -> *mut sg_path_list {
-    Box::into_raw(Box::new(sg_path_list::default()))
-}
-
-#[no_mangle]
-pub extern "C" fn sg_path_list_free(path_list: *mut sg_path_list) {
-    drop(unsafe { Box::from_raw(path_list) });
-}
-
-#[no_mangle]
-pub extern "C" fn sg_path_list_count(path_list: *const sg_path_list) -> usize {
-    let path_list = unsafe { &*path_list };
-    path_list.paths.len()
-}
-
-#[no_mangle]
-pub extern "C" fn sg_path_list_paths(path_list: *const sg_path_list) -> *const sg_path {
-    let path_list = unsafe { &*path_list };
-    path_list.paths.as_ptr() as *const _
-}
-
-/// Finds all complete paths reachable from a set of starting nodes, placing the result into the
-/// `path_list` output parameter.  You must free the path list when you are done with it by calling
-/// `sg_path_list_done`.
-///
-/// This function will not return until all reachable paths have been processed, so `graph` must
-/// already contain a complete stack graph.  If you have a very large stack graph stored in some
-/// other storage system, and want more control over lazily loading only the necessary pieces, then
-/// you should use sg_forward_path_stitcher.
-#[no_mangle]
-pub extern "C" fn sg_path_arena_find_all_complete_paths(
-    graph: *const sg_stack_graph,
-    paths: *mut sg_path_arena,
-    starting_node_count: usize,
-    starting_nodes: *const sg_node_handle,
-    path_list: *mut sg_path_list,
-    cancellation_flag: *const usize,
-) -> sg_result {
-    let graph = unsafe { &(*graph).inner };
-    let paths = unsafe { &mut (*paths).inner };
-    let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, starting_node_count) };
-    let path_list = unsafe { &mut *path_list };
-    let cancellation_flag: Option<&AtomicUsize> =
-        unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
-    paths
-        .find_all_paths(
-            graph,
-            starting_nodes.iter().copied().map(sg_node_handle::into),
-            &AtomicUsizeCancellationFlag(cancellation_flag),
-            |graph, _paths, path| {
-                if path.is_complete(graph) {
-                    path_list.paths.push(path);
-                }
-            },
-        )
-        .into()
-}
-
-//-------------------------------------------------------------------------------------------------
 // Partial symbol stacks
 
 /// Represents an unknown list of scoped symbols.
@@ -1305,9 +906,9 @@ pub struct sg_partial_scope_stack_cell {
     pub head: sg_node_handle,
     /// The handle of the next element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if this
     /// is the last element.
-    pub tail: sg_path_edge_list_cell_handle,
+    pub tail: sg_partial_scope_stack_cell_handle,
     /// The handle of the reversal of this partial scope stack.
-    pub reversed: sg_path_edge_list_cell_handle,
+    pub reversed: sg_partial_scope_stack_cell_handle,
 }
 
 /// The array of all of the partial scope stack content in a partial path arena.
@@ -1589,6 +1190,43 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
         .into()
 }
 
+/// Finds all complete paths reachable from a set of starting nodes, placing the result into the
+/// `path_list` output parameter.  You must free the path list when you are done with it by calling
+/// `sg_path_list_done`.
+///
+/// This function will not return until all reachable paths have been processed, so `graph` must
+/// already contain a complete stack graph.  If you have a very large stack graph stored in some
+/// other storage system, and want more control over lazily loading only the necessary pieces, then
+/// you should use sg_forward_path_stitcher.
+#[no_mangle]
+pub extern "C" fn sg_partial_path_arena_find_all_complete_paths(
+    graph: *const sg_stack_graph,
+    partials: *mut sg_partial_path_arena,
+    starting_node_count: usize,
+    starting_nodes: *const sg_node_handle,
+    path_list: *mut sg_partial_path_list,
+    cancellation_flag: *const usize,
+) -> sg_result {
+    let graph = unsafe { &(*graph).inner };
+    let partials = unsafe { &mut (*partials).inner };
+    let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, starting_node_count) };
+    let path_list = unsafe { &mut *path_list };
+    let cancellation_flag: Option<&AtomicUsize> =
+        unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
+    partials
+        .find_all_complete_paths(
+            graph,
+            starting_nodes.iter().copied().map(sg_node_handle::into),
+            &AtomicUsizeCancellationFlag(cancellation_flag),
+            |graph, _partials, path| {
+                if path.is_complete(graph) {
+                    path_list.partial_paths.push(path);
+                }
+            },
+        )
+        .into()
+}
+
 /// A handle to a partial path in a partial path database.  A zero handle represents a missing
 /// partial path.
 pub type sg_partial_path_handle = u32;
@@ -1716,175 +1354,6 @@ pub extern "C" fn sg_partial_path_database_local_nodes(
         elements: db.local_nodes.as_ptr(),
         length: db.local_nodes.len(),
     }
-}
-
-//-------------------------------------------------------------------------------------------------
-// Path stitching
-
-/// Implements a phased forward path-stitching algorithm.
-///
-/// Our overall goal is to start with a set of _seed_ paths, and to repeatedly extend each path by
-/// appending a compatible partial path onto the end of it.  (If there are multiple compatible
-/// partial paths, we append each of them separately, resulting in more than one extension for the
-/// current path.)
-///
-/// We perform this processing in _phases_.  At the start of each phase, we have a _current set_ of
-/// paths that need to be processed.  As we extend those paths, we add the extensions to the set of
-/// paths to process in the _next_ phase.  Phases are processed one at a time, each time you invoke
-/// `sg_forward_path_stitcher_process_next_phase`.
-///
-/// After each phase has completed, the `previous_phase_paths` and `previous_phase_paths_length`
-/// fields give you all of the paths that were discovered during that phase.  That gives you a
-/// chance to add to the `sg_partial_path_database` all of the partial paths that we might need to
-/// extend those paths with before invoking the next phase.
-#[repr(C)]
-pub struct sg_forward_path_stitcher {
-    /// The new candidate paths that were discovered in the most recent phase.
-    pub previous_phase_paths: *const sg_path,
-    /// The number of new candidate paths that were discovered in the most recent phase.  If this
-    /// is 0, then the path stitching algorithm is complete.
-    pub previous_phase_paths_length: usize,
-    /// Whether the stitching algorithm is complete.  You should keep calling
-    /// `sg_forward_path_stitcher_process_next_phase` until this field is true.
-    pub is_complete: bool,
-}
-
-// This is the Rust equivalent of a common C trick, where you have two versions of a struct — a
-// publicly visible one and a private one containing internal implementation details.  In our case,
-// `sg_forward_path_stitcher` is the public struct, and `ForwardPathStitcher` is the internal one.
-// The main requirement is that the private struct must start with a copy of all of the fields in
-// the public struct — ensuring that those fields occur at the same offset in both.  The private
-// struct can contain additional (private) fields, but they must appear _after_ all of the publicly
-// visible fields.
-//
-// In our case, we do this because we don't want to expose the existence or details of the
-// PathStitcher type via the C API.
-#[repr(C)]
-struct ForwardPathStitcher {
-    previous_phase_paths: *const Path,
-    previous_phase_paths_length: usize,
-    is_complete: bool,
-    stitcher: PathStitcher,
-}
-
-impl ForwardPathStitcher {
-    fn new(stitcher: PathStitcher, paths: &mut Paths) -> ForwardPathStitcher {
-        let mut this = ForwardPathStitcher {
-            previous_phase_paths: std::ptr::null(),
-            previous_phase_paths_length: 0,
-            is_complete: false,
-            stitcher,
-        };
-        this.update_previous_phase_paths(paths);
-        this
-    }
-
-    fn update_previous_phase_paths(&mut self, paths: &mut Paths) {
-        for path in self.stitcher.previous_phase_paths_slice_mut() {
-            // Each path's edge list comes out in backwards order.  Requesting a forwards iterator
-            // before we return ensures that it will also be available in forwards order.
-            let _ = path.edges.iter(paths);
-        }
-        let slice = self.stitcher.previous_phase_paths_slice();
-        self.previous_phase_paths = slice.as_ptr();
-        self.previous_phase_paths_length = slice.len();
-        self.is_complete = self.stitcher.is_complete();
-    }
-}
-
-/// Creates a new forward path stitcher that is "seeded" with a set of starting stack graph nodes.
-///
-/// Before calling this method, you must ensure that `db` contains all of the possible partial
-/// paths that start with any of your requested starting nodes.
-///
-/// Before calling `sg_forward_path_stitcher_process_next_phase` for the first time, you must
-/// ensure that `db` contains all possible extensions of any of those initial paths.  You can
-/// retrieve a list of those extensions via the `previous_phase_paths` and
-/// `previous_phase_paths_length` fields.
-#[no_mangle]
-pub extern "C" fn sg_forward_path_stitcher_new(
-    graph: *const sg_stack_graph,
-    paths: *mut sg_path_arena,
-    partials: *mut sg_partial_path_arena,
-    db: *mut sg_partial_path_database,
-    count: usize,
-    starting_nodes: *const sg_node_handle,
-) -> *mut sg_forward_path_stitcher {
-    let graph = unsafe { &(*graph).inner };
-    let paths = unsafe { &mut (*paths).inner };
-    let partials = unsafe { &mut (*partials).inner };
-    let db = unsafe { &mut (*db).inner };
-    let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, count) };
-    let stitcher = PathStitcher::new(
-        graph,
-        paths,
-        partials,
-        db,
-        starting_nodes.iter().copied().map(sg_node_handle::into),
-    );
-    Box::into_raw(Box::new(ForwardPathStitcher::new(stitcher, paths))) as *mut _
-}
-
-/// Sets whether similar path detection should be enabled during path stitching. Paths are similar
-/// if start and end node, and pre- and postconditions are the same. The presence of similar paths
-/// can lead to exponential blow up during path stitching. Similar path detection is disabled by
-/// default because of the accociated preformance cost.
-#[no_mangle]
-pub extern "C" fn sg_forward_path_stitcher_set_similar_path_detection(
-    stitcher: *mut sg_forward_path_stitcher,
-    detect_similar_paths: bool,
-) {
-    let stitcher = unsafe { &mut *(stitcher as *mut ForwardPathStitcher) };
-    stitcher
-        .stitcher
-        .set_similar_path_detection(detect_similar_paths);
-}
-
-/// Sets the maximum amount of work that can be performed during each phase of the algorithm. By
-/// bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
-/// to starve any worker threads or processes that you might be using.  If you don't call this
-/// method, then we allow ourselves to process all of the extensions of all of the paths found in
-/// the previous phase, with no additional bound.
-#[no_mangle]
-pub extern "C" fn sg_forward_path_stitcher_set_max_work_per_phase(
-    stitcher: *mut sg_forward_path_stitcher,
-    max_work: usize,
-) {
-    let stitcher = unsafe { &mut *(stitcher as *mut ForwardPathStitcher) };
-    stitcher.stitcher.set_max_work_per_phase(max_work);
-}
-
-/// Runs the next phase of the path-stitching algorithm.  We will have built up a set of
-/// incomplete paths during the _previous_ phase.  Before calling this function, you must
-/// ensure that `db` contains all of the possible partial paths that we might want to extend
-/// any of those paths with.
-///
-/// After this method returns, you can retrieve a list of the (possibly incomplete) paths that were
-/// encountered during this phase via the `previous_phase_paths` and `previous_phase_paths_length`
-/// fields.
-#[no_mangle]
-pub extern "C" fn sg_forward_path_stitcher_process_next_phase(
-    graph: *const sg_stack_graph,
-    paths: *mut sg_path_arena,
-    partials: *mut sg_partial_path_arena,
-    db: *mut sg_partial_path_database,
-    stitcher: *mut sg_forward_path_stitcher,
-) {
-    let graph = unsafe { &(*graph).inner };
-    let paths = unsafe { &mut (*paths).inner };
-    let partials = unsafe { &mut (*partials).inner };
-    let db = unsafe { &mut (*db).inner };
-    let stitcher = unsafe { &mut *(stitcher as *mut ForwardPathStitcher) };
-    stitcher
-        .stitcher
-        .process_next_phase(graph, paths, partials, db);
-    stitcher.update_previous_phase_paths(paths);
-}
-
-/// Frees a forward path stitcher.
-#[no_mangle]
-pub extern "C" fn sg_forward_path_stitcher_free(stitcher: *mut sg_forward_path_stitcher) {
-    drop(unsafe { Box::from_raw(stitcher as *mut ForwardPathStitcher) });
 }
 
 //-------------------------------------------------------------------------------------------------

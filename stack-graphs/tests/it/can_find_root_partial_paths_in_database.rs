@@ -13,9 +13,8 @@ use stack_graphs::arena::Handle;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
-use stack_graphs::paths::Paths;
-use stack_graphs::paths::ScopedSymbol;
-use stack_graphs::paths::SymbolStack;
+use stack_graphs::partial::PartialScopedSymbol;
+use stack_graphs::partial::PartialSymbolStack;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::SymbolStackKey;
 use stack_graphs::NoCancellation;
@@ -29,7 +28,6 @@ fn check_root_partial_paths(
     expected_partial_paths: &[&str],
 ) {
     let file = graph.get_file(file).expect("Missing file");
-    let mut paths = Paths::new();
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
     partials
@@ -43,18 +41,18 @@ fn check_root_partial_paths(
         )
         .expect("should never be cancelled");
 
-    let mut symbol_stack = SymbolStack::empty();
+    let mut symbol_stack = PartialSymbolStack::empty();
     for symbol in precondition.iter().rev() {
         let symbol = graph.add_symbol(symbol);
-        let scoped_symbol = ScopedSymbol {
+        let scoped_symbol = PartialScopedSymbol {
             symbol,
             scopes: ControlledOption::none(),
         };
-        symbol_stack.push_front(&mut paths, scoped_symbol);
+        symbol_stack.push_front(&mut partials, scoped_symbol);
     }
 
     let mut results = Vec::<Handle<PartialPath>>::new();
-    let key = SymbolStackKey::from_symbol_stack(&mut paths, &mut db, symbol_stack);
+    let key = SymbolStackKey::from_partial_symbol_stack(&mut partials, &mut db, symbol_stack);
     db.find_candidate_partial_paths_from_root(graph, &mut partials, Some(key), &mut results);
 
     let actual_partial_paths = results

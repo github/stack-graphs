@@ -55,13 +55,7 @@ use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::paths::Extend;
-use crate::paths::Path;
-use crate::paths::PathEdge;
 use crate::paths::PathResolutionError;
-use crate::paths::Paths;
-use crate::paths::ScopeStack;
-use crate::paths::ScopedSymbol;
-use crate::paths::SymbolStack;
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
 use crate::CancellationError;
@@ -294,96 +288,6 @@ impl TryFrom<u32> for ScopeStackVariable {
 }
 
 //-------------------------------------------------------------------------------------------------
-// Symbol stack bindings
-
-/// A mapping from symbol stack variables to symbol stacks.
-pub struct SymbolStackBindings {
-    bindings: SmallVec<[Option<SymbolStack>; 4]>,
-}
-
-impl SymbolStackBindings {
-    /// Creates a new, empty set of symbol stack bindings.
-    pub fn new() -> SymbolStackBindings {
-        SymbolStackBindings {
-            bindings: SmallVec::new(),
-        }
-    }
-
-    /// Returns the symbol stack that a particular symbol stack variable matched.  Returns an error
-    /// if that variable didn't match anything.
-    pub fn get(&self, variable: SymbolStackVariable) -> Result<SymbolStack, PathResolutionError> {
-        let index = variable.as_usize();
-        if self.bindings.len() < index {
-            return Err(PathResolutionError::UnboundSymbolStackVariable);
-        }
-        self.bindings[index - 1].ok_or(PathResolutionError::UnboundSymbolStackVariable)
-    }
-
-    /// Adds a new binding from a symbol stack variable to the symbol stack that it matched.
-    /// Returns an error if you try to bind a particular variable more than once.
-    pub fn add(
-        &mut self,
-        variable: SymbolStackVariable,
-        symbols: SymbolStack,
-    ) -> Result<(), PathResolutionError> {
-        let index = variable.as_usize();
-        if self.bindings.len() < index {
-            self.bindings.resize_with(index, || None);
-        }
-        if self.bindings[index - 1].is_some() {
-            return Err(PathResolutionError::IncompatibleSymbolStackVariables);
-        }
-        self.bindings[index - 1] = Some(symbols);
-        Ok(())
-    }
-}
-
-//-------------------------------------------------------------------------------------------------
-// Scope stack bindings
-
-/// A mapping from scope stack variables to scope stacks.
-pub struct ScopeStackBindings {
-    bindings: SmallVec<[Option<ScopeStack>; 4]>,
-}
-
-impl ScopeStackBindings {
-    /// Creates a new, empty set of scope stack bindings.
-    pub fn new() -> ScopeStackBindings {
-        ScopeStackBindings {
-            bindings: SmallVec::new(),
-        }
-    }
-
-    /// Returns the scope stack that a particular scope stack variable matched.  Returns an error
-    /// if that variable didn't match anything.
-    pub fn get(&self, variable: ScopeStackVariable) -> Result<ScopeStack, PathResolutionError> {
-        let index = variable.as_usize();
-        if self.bindings.len() < index {
-            return Err(PathResolutionError::UnboundScopeStackVariable);
-        }
-        self.bindings[index - 1].ok_or(PathResolutionError::UnboundScopeStackVariable)
-    }
-
-    /// Adds a new binding from a scope stack variable to the scope stack that it matched.  Returns
-    /// an error if you try to bind a particular variable more than once.
-    pub fn add(
-        &mut self,
-        variable: ScopeStackVariable,
-        scopes: ScopeStack,
-    ) -> Result<(), PathResolutionError> {
-        let index = variable.as_usize();
-        if self.bindings.len() < index {
-            self.bindings.resize_with(index, || None);
-        }
-        if self.bindings[index - 1].is_some() {
-            return Err(PathResolutionError::IncompatibleScopeStackVariables);
-        }
-        self.bindings[index - 1] = Some(scopes);
-        Ok(())
-    }
-}
-
-//-------------------------------------------------------------------------------------------------
 // Partial symbol stacks
 
 /// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
@@ -410,27 +314,6 @@ impl PartialScopedSymbol {
             .map(|stack| stack.with_offset(scope_variable_offset));
         self.scopes = ControlledOption::from_option(scopes);
         self
-    }
-
-    /// Matches this precondition symbol against a scoped symbol, unifying its contents with an
-    /// existing set of bindings.
-    pub fn match_symbol(
-        self,
-        graph: &StackGraph,
-        symbol: ScopedSymbol,
-        scope_bindings: &mut ScopeStackBindings,
-    ) -> Result<(), PathResolutionError> {
-        if graph[self.symbol] != graph[symbol.symbol] {
-            return Err(PathResolutionError::SymbolStackUnsatisfied);
-        }
-        if !equals_option(
-            self.scopes.into_option(),
-            symbol.scopes.into_option(),
-            |pre, sym| pre.match_stack(sym, scope_bindings).is_ok(),
-        ) {
-            return Err(PathResolutionError::SymbolStackUnsatisfied);
-        }
-        Ok(())
     }
 
     /// Matches this precondition symbol against another, unifying its contents with an existing
@@ -476,23 +359,6 @@ impl PartialScopedSymbol {
         }
 
         true
-    }
-
-    /// Applies a set of bindings to this partial scoped symbol, producing a new scoped symbol.
-    pub fn apply_bindings(
-        self,
-        paths: &mut Paths,
-        partials: &mut PartialPaths,
-        scope_bindings: &ScopeStackBindings,
-    ) -> Result<ScopedSymbol, PathResolutionError> {
-        let scopes = match self.scopes.into_option() {
-            Some(scopes) => Some(scopes.apply_bindings(paths, partials, scope_bindings)?),
-            None => None,
-        };
-        Ok(ScopedSymbol {
-            symbol: self.symbol,
-            scopes: scopes.into(),
-        })
     }
 
     /// Applies a set of bindings to this partial scoped symbol, producing a new scoped symbol.
@@ -712,38 +578,6 @@ impl PartialSymbolStack {
         display_with(self, graph, partials)
     }
 
-    /// Matches this precondition against a symbol stack, stashing away the unmatched portion of
-    /// the stack in the bindings.
-    pub fn match_stack(
-        mut self,
-        graph: &StackGraph,
-        paths: &Paths,
-        partial_paths: &mut PartialPaths,
-        mut stack: SymbolStack,
-        symbol_bindings: &mut SymbolStackBindings,
-        scope_bindings: &mut ScopeStackBindings,
-    ) -> Result<(), PathResolutionError> {
-        // First verify that every symbol in the precondition has a corresponding matching symbol
-        // in the symbol stack.
-        while let Some(precondition_symbol) = self.pop_front(partial_paths) {
-            match stack.pop_front(paths) {
-                // This will update scope_bindings if the precondition symbol has an attached scope
-                // stack variable.
-                Some(symbol) => precondition_symbol.match_symbol(graph, symbol, scope_bindings)?,
-                // The precondition is longer than the symbol stack, which is an error.
-                None => return Err(PathResolutionError::SymbolStackUnsatisfied),
-            }
-        }
-
-        // If there's anything remaining on the symbol stack, there must be a symbol stack variable
-        // that can capture those symbols.
-        match self.variable.into_option() {
-            Some(variable) => symbol_bindings.add(variable, stack),
-            None if !stack.is_empty() => Err(PathResolutionError::SymbolStackUnsatisfied),
-            _ => Ok(()),
-        }
-    }
-
     /// Returns whether two partial symbol stacks "match".  They must be the same length, and each
     /// respective partial scoped symbol must match.
     pub fn matches(mut self, partials: &mut PartialPaths, mut other: PartialSymbolStack) -> bool {
@@ -762,25 +596,6 @@ impl PartialSymbolStack {
             return false;
         }
         self.variable.into_option() == other.variable.into_option()
-    }
-
-    /// Applies a set of bindings to this partial symbol stack, producing a new symbol stack.
-    pub fn apply_bindings(
-        mut self,
-        paths: &mut Paths,
-        partials: &mut PartialPaths,
-        symbol_bindings: &SymbolStackBindings,
-        scope_bindings: &ScopeStackBindings,
-    ) -> Result<SymbolStack, PathResolutionError> {
-        let mut result = match self.variable.into_option() {
-            Some(variable) => symbol_bindings.get(variable)?,
-            None => SymbolStack::empty(),
-        };
-        while let Some(partial_symbol) = self.pop_back(partials) {
-            let symbol = partial_symbol.apply_bindings(paths, partials, scope_bindings)?;
-            result.push_front(paths, symbol);
-        }
-        Ok(result)
     }
 
     /// Applies a set of bindings to this partial symbol stack, producing a new partial symbol
@@ -1159,24 +974,6 @@ impl PartialScopeStack {
         self
     }
 
-    /// Matches this partial scope stack against a scope stack, unifying any scope stack variables
-    /// with an existing set of bindings.
-    pub fn match_stack(
-        &self,
-        stack: ScopeStack,
-        bindings: &mut ScopeStackBindings,
-    ) -> Result<(), PathResolutionError> {
-        // TODO: We realized that we're assuming, but not checking, that the partial scope stack's
-        // scope prefix is empty.  No current test cases fail with this assumption, but we should
-        // validate this more carefully.
-        assert!(self.scopes.is_empty());
-        match self.variable.into_option() {
-            Some(variable) => bindings.add(variable, stack),
-            None if !stack.is_empty() => Err(PathResolutionError::ScopeStackUnsatisfied),
-            _ => Ok(()),
-        }
-    }
-
     /// Returns whether two partial scope stacks match exactly the same set of scope stacks.
     pub fn matches(mut self, partials: &mut PartialPaths, mut other: PartialScopeStack) -> bool {
         while let Some(self_element) = self.pop_front(partials) {
@@ -1194,24 +991,6 @@ impl PartialScopeStack {
             return false;
         }
         self.variable.into_option() == other.variable.into_option()
-    }
-
-    /// Applies a set of scope stack bindings to this partial scope stack, producing a new scope
-    /// stack.
-    pub fn apply_bindings(
-        mut self,
-        paths: &mut Paths,
-        partials: &mut PartialPaths,
-        bindings: &ScopeStackBindings,
-    ) -> Result<ScopeStack, PathResolutionError> {
-        let mut result = match self.variable.into_option() {
-            Some(variable) => bindings.get(variable)?,
-            None => ScopeStack::empty(),
-        };
-        while let Some(scope) = self.pop_back(partials) {
-            result.push_front(paths, scope);
-        }
-        Ok(result)
     }
 
     /// Applies a set of partial scope stack bindings to this partial scope stack, producing a new
@@ -1689,15 +1468,6 @@ impl<'a> DisplayWithPartialPaths for &'a mut PartialScopeStackBindings {
 pub struct PartialPathEdge {
     pub source_node_id: NodeID,
     pub precedence: i32,
-}
-
-impl From<PartialPathEdge> for PathEdge {
-    fn from(other: PartialPathEdge) -> PathEdge {
-        PathEdge {
-            source_node_id: other.source_node_id,
-            precedence: other.precedence,
-        }
-    }
 }
 
 impl PartialPathEdge {
@@ -2448,20 +2218,20 @@ impl PartialPath {
         Ok(())
     }
 
-    /// Attempts to extend one partial path as part of the partial-path-finding algorithm, using
-    /// only outgoing edges that belong to a particular file.  When calling this function, you are
-    /// responsible for ensuring that `graph` already contains data for all of the possible edges
+    /// Attempts to extend one partial path as part of the partial-path-finding algorithm. If a file
+    /// is provided, only outgoing edges that belong to that file are used.  When calling this function,
+    /// you are responsible for ensuring that `graph` already contains data for all of the possible edges
     /// that we might want to extend `path` with.
     ///
     /// The resulting extended partial paths will be added to `result`.  We have you pass that in
     /// as a parameter, instead of building it up ourselves, so that you have control over which
     /// particular collection type to use, and so that you can reuse result collections across
     /// multiple calls.
-    pub fn extend_from_file<R: Extend<(PartialPath, AppendingCycleDetector<Edge>)>>(
+    fn extend<R: Extend<(PartialPath, AppendingCycleDetector<Edge>)>>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        file: Handle<File>,
+        file: Option<Handle<File>>,
         edges: &mut Appendables<Edge>,
         path_cycle_detector: AppendingCycleDetector<Edge>,
         result: &mut R,
@@ -2474,9 +2244,11 @@ impl PartialPath {
                 extension.source.display(graph),
                 extension.sink.display(graph)
             );
-            if !graph[extension.sink].is_in_file(file) {
-                copious_debugging!("         * outside file");
-                continue;
+            if let Some(file) = file {
+                if !graph[extension.sink].is_in_file(file) {
+                    copious_debugging!("         * outside file");
+                    continue;
+                }
             }
             let mut new_path = self.clone();
             // If there are errors adding this edge to the partial path, or resolving the resulting
@@ -2706,60 +2478,6 @@ impl Node {
         };
         Ok(())
     }
-
-    /// Ensure the given closed postcondition stacks are half-open for this start node.
-    ///
-    /// Partial paths have closed (cf. a closed interval) pre- and postconditions, which means
-    /// the start node is reflected in the precondition, and the end node is reflected in the
-    /// postcondition. For example, a path starting with a pop node, has a precondition starting
-    /// with the popped symbol. Similarly, a ending with a push node, has a postcondition ending
-    /// with the pushed symbol.
-    ///
-    /// When concatenating two partial paths, their closed pre- and postconditions are not compatible,
-    /// because the effect of the join node (i.e., the node shared between the two paths) is present
-    /// in both the right and the left path. If two paths join at a push node, the right postcondition
-    /// contains the pushed symbol, while the left precondition does not contain it, behaving as if the
-    /// symbol was pushed twice. Similarly, when joining at a pop node, the right precondition contains
-    /// the popped symbol, while the right postcondition will not anymore, because it was already popped.
-    /// Unifying closed pre- and postconditions can result in incorrect concatenation results.
-    ///
-    /// We can make pre- and postconditions compatible again by making them half-open (cf. open intervals,
-    /// but half because we only undo the effect of some node types). A precondition is half-open if it
-    /// does not reflect the effect if a start pop node, Similarly, a postcondition is half-open if it
-    /// does not reflect the effect of an end push node. Unifying half-open pre- and postconditions results
-    /// in the correct behavior for path concatenation.
-    fn halfopen_closed_postcondition(
-        &self,
-        paths: &mut Paths,
-        symbol_stack: &mut SymbolStack,
-        _scope_stack: &mut ScopeStack,
-    ) -> Result<(), PathResolutionError> {
-        match self {
-            Self::DropScopes(_) => {}
-            Self::JumpTo(_) => {}
-            Self::PopScopedSymbol(_) => {}
-            Self::PopSymbol(_) => {}
-            Self::PushScopedSymbol(node) => {
-                let symbol = symbol_stack
-                    .pop_front(paths)
-                    .ok_or(PathResolutionError::EmptySymbolStack)?;
-                if symbol.symbol != node.symbol {
-                    return Err(PathResolutionError::IncorrectPoppedSymbol);
-                }
-            }
-            Self::PushSymbol(node) => {
-                let symbol = symbol_stack
-                    .pop_front(paths)
-                    .ok_or(PathResolutionError::EmptySymbolStack)?;
-                if symbol.symbol != node.symbol {
-                    return Err(PathResolutionError::IncorrectPoppedSymbol);
-                }
-            }
-            Self::Root(_) => {}
-            Self::Scope(_) => {}
-        };
-        Ok(())
-    }
 }
 
 impl PartialPaths {
@@ -2824,10 +2542,10 @@ impl PartialPaths {
                 copious_debugging!("    * cycle");
             } else {
                 copious_debugging!("    * extend");
-                path.extend_from_file(
+                path.extend(
                     graph,
                     self,
-                    file,
+                    Some(file),
                     &mut edges,
                     path_cycle_detector,
                     &mut queue,
@@ -2836,104 +2554,64 @@ impl PartialPaths {
         }
         Ok(())
     }
-}
 
-//-------------------------------------------------------------------------------------------------
-// Extending paths with partial paths
-
-impl Path {
-    /// Promotes a partial path to a path.
-    pub fn from_partial_path(
-        graph: &StackGraph,
-        paths: &mut Paths,
-        partials: &mut PartialPaths,
-        partial_path: &PartialPath,
-    ) -> Option<Path> {
-        let mut path = Path::from_node(graph, paths, partial_path.start_node)?;
-        path.append_partial_path(graph, paths, partials, partial_path)
-            .ok()?;
-        Some(path)
-    }
-
-    /// Attempts to append a partial path to the end of a path.  If the partial path is not
-    /// compatible with this path, we return an error describing why.
-    pub fn append_partial_path(
+    /// Finds all complete paths reachable from a set of starting nodes, calling the `visit` closure
+    /// for each one.
+    ///
+    /// This function will not return until all reachable paths have been processed, so `graph`
+    /// must already contain a complete stack graph.  If you have a very large stack graph stored
+    /// in some other storage system, and want more control over lazily loading only the necessary
+    /// pieces, then you should code up your own loop that calls [`Path::extend`][] manually.
+    ///
+    /// [`Path::extend`]: struct.Path.html#method.extend
+    pub fn find_all_complete_paths<I, F>(
         &mut self,
         graph: &StackGraph,
-        paths: &mut Paths,
-        partials: &mut PartialPaths,
-        partial_path: &PartialPath,
-    ) -> Result<(), PathResolutionError> {
-        if partial_path.start_node != self.end_node {
-            return Err(PathResolutionError::IncorrectSourceNode);
-        }
-
-        // Ensure the right post- and left precondition are half-open, so we can unify them.
-        let mut lhs_symbol_stack_postcondition = self.symbol_stack;
-        let mut lhs_scope_stack_postcondition = self.scope_stack;
-        let mut rhs_symbol_stack_precondition = partial_path.symbol_stack_precondition;
-        let mut rhs_scope_stack_precondition = partial_path.scope_stack_precondition;
-        graph[self.end_node]
-            .halfopen_closed_postcondition(
-                paths,
-                &mut lhs_symbol_stack_postcondition,
-                &mut lhs_scope_stack_postcondition,
-            )
-            .unwrap_or_else(|e| {
-                panic!(
-                    "failed to halfopen postcondition of {}: {:?}",
-                    self.display(graph, paths),
-                    e
-                )
-            });
-        graph[partial_path.start_node]
-            .halfopen_closed_partial_precondition(
-                partials,
-                &mut rhs_symbol_stack_precondition,
-                &mut rhs_scope_stack_precondition,
-            )
-            .unwrap_or_else(|e| {
-                panic!(
-                    "failed to halfopen precondition of {}: {:?}",
-                    self.display(graph, paths),
-                    e
+        starting_nodes: I,
+        cancellation_flag: &dyn CancellationFlag,
+        mut visit: F,
+    ) -> Result<(), CancellationError>
+    where
+        I: IntoIterator<Item = Handle<Node>>,
+        F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
+    {
+        copious_debugging!("Find all complete paths from nodes");
+        let mut queue = starting_nodes
+            .into_iter()
+            .filter(|node| graph[*node].is_reference())
+            .map(|node| {
+                let mut p = PartialPath::from_node(graph, self, node);
+                p.eliminate_precondition_stack_variables(self);
+                (p, AppendingCycleDetector::new())
+            })
+            .collect::<VecDeque<_>>();
+        let mut partials = PartialPaths::new();
+        let mut edges = Appendables::new();
+        while let Some((path, path_cycle_detector)) = queue.pop_front() {
+            cancellation_flag.check("finding complete paths")?;
+            if path.is_complete(graph) {
+                copious_debugging!("    * visit");
+                visit(graph, self, path.clone());
+            }
+            if !path_cycle_detector
+                .is_cyclic(graph, &mut partials, &mut (), &mut edges)
+                .expect("cyclic test failed when finding complete paths")
+                .into_iter()
+                .all(|c| c == Cyclicity::StrengthensPrecondition)
+            {
+                copious_debugging!("    * cycle");
+            } else {
+                copious_debugging!("    * extend");
+                path.extend(
+                    graph,
+                    self,
+                    None,
+                    &mut edges,
+                    path_cycle_detector,
+                    &mut queue,
                 );
-            });
-
-        let mut symbol_bindings = SymbolStackBindings::new();
-        let mut scope_bindings = ScopeStackBindings::new();
-
-        rhs_scope_stack_precondition
-            .match_stack(lhs_scope_stack_postcondition, &mut scope_bindings)?;
-        rhs_symbol_stack_precondition.match_stack(
-            graph,
-            paths,
-            partials,
-            lhs_symbol_stack_postcondition,
-            &mut symbol_bindings,
-            &mut scope_bindings,
-        )?;
-
-        self.symbol_stack = partial_path.symbol_stack_postcondition.apply_bindings(
-            paths,
-            partials,
-            &symbol_bindings,
-            &scope_bindings,
-        )?;
-        self.scope_stack = partial_path.scope_stack_postcondition.apply_bindings(
-            paths,
-            partials,
-            &scope_bindings,
-        )?;
-
-        let mut edges = partial_path.edges;
-        while let Some(edge) = edges.pop_front(partials) {
-            self.edges.push_back(paths, edge.into());
+            }
         }
-        self.end_node = partial_path.end_node;
-
-        self.resolve(graph, paths)?;
-
         Ok(())
     }
 }
