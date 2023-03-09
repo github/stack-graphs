@@ -42,9 +42,7 @@ use crate::graph::StackGraph;
 use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
-use crate::paths::Path;
 use crate::paths::PathResolutionError;
-use crate::paths::Paths;
 use crate::stitching::Database;
 use crate::stitching::OwnedOrDatabasePath;
 
@@ -68,21 +66,6 @@ pub struct PathKey {
 pub trait HasPathKey: Clone {
     type Arena;
     fn key(&self) -> PathKey;
-}
-
-impl HasPathKey for Path {
-    type Arena = Paths;
-
-    fn key(&self) -> PathKey {
-        PathKey {
-            start_node: self.start_node,
-            end_node: self.end_node,
-            symbol_stack_precondition_len: 0,
-            scope_stack_precondition_len: 0,
-            symbol_stack_postcondition_len: self.symbol_stack.len(),
-            scope_stack_postcondition_len: self.scope_stack.len(),
-        }
-    }
 }
 
 impl HasPathKey for PartialPath {

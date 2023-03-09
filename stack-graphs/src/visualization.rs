@@ -13,8 +13,6 @@ use crate::json::Filter;
 use crate::json::JsonError;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
-use crate::paths::Path;
-use crate::paths::Paths;
 use crate::stitching::Database;
 
 static CSS: &'static str = include_str!("visualization/visualization.css");
@@ -114,13 +112,6 @@ impl Filter for VisualizationFilter<'_> {
 
     fn include_edge(&self, graph: &StackGraph, source: &Handle<Node>, sink: &Handle<Node>) -> bool {
         self.0.include_edge(graph, source, sink)
-    }
-
-    fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool {
-        self.0.include_path(graph, paths, path)
-            && !path.edges.is_empty()
-            && path.starts_at_reference(graph)
-            && (path.ends_at_definition(graph) || path.ends_in_jump(graph))
     }
 
     fn include_partial_path(

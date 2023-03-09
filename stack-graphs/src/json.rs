@@ -35,15 +35,7 @@ use crate::partial::PartialScopedSymbol;
 use crate::partial::PartialSymbolStack;
 use crate::partial::ScopeStackVariable;
 use crate::partial::SymbolStackVariable;
-use crate::paths::Path;
-use crate::paths::PathEdge;
-use crate::paths::PathEdgeList;
-use crate::paths::Paths;
-use crate::paths::ScopeStack;
-use crate::paths::ScopedSymbol;
-use crate::paths::SymbolStack;
 use crate::stitching::Database;
-use crate::NoCancellation;
 
 #[derive(Debug, Error)]
 #[error(transparent)]
@@ -63,10 +55,6 @@ pub trait Filter {
     /// Return whether the given edge must be included.
     /// Edges via excluded nodes are always excluded.
     fn include_edge(&self, graph: &StackGraph, source: &Handle<Node>, sink: &Handle<Node>) -> bool;
-
-    /// Return whether the given path must be included.
-    /// Paths via excluded nodes or edges are always excluded.
-    fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool;
 
     /// Return whether the given path must be included.
     /// Paths via excluded nodes or edges are always excluded.
@@ -96,10 +84,6 @@ where
         _source: &Handle<Node>,
         _sink: &Handle<Node>,
     ) -> bool {
-        true
-    }
-
-    fn include_path(&self, _graph: &StackGraph, _paths: &Paths, _path: &Path) -> bool {
         true
     }
 
@@ -134,16 +118,6 @@ impl Filter for ImplicationFilter<'_> {
         self.include_node(graph, source)
             && self.include_node(graph, sink)
             && self.0.include_edge(graph, source, sink)
-    }
-
-    fn include_path(&self, graph: &StackGraph, paths: &Paths, path: &Path) -> bool {
-        path.edges
-            .iter_unordered(paths)
-            .map(|e| graph.node_for_id(e.source_node_id).unwrap())
-            .chain(std::iter::once(path.end_node))
-            .tuple_windows()
-            .all(|(source, sink)| self.include_edge(graph, &source, &sink))
-            && self.0.include_path(graph, paths, path)
     }
 
     fn include_partial_path(
@@ -188,10 +162,6 @@ impl Filter for NoFilter {
         _source: &Handle<Node>,
         _sink: &Handle<Node>,
     ) -> bool {
-        true
-    }
-
-    fn include_path(&self, _graph: &StackGraph, _paths: &Paths, _path: &Path) -> bool {
         true
     }
 
@@ -580,190 +550,7 @@ impl Serialize for InStackGraph<'_, &Offset> {
         ser.end()
     }
 }
-//-----------------------------------------------------------------------------
-// Paths
 
-struct InPaths<'a, T>(&'a StackGraph, &'a Paths, T);
-
-impl<'a, T> InPaths<'a, T> {
-    fn with<U>(&'a self, u: U) -> InPaths<'a, U> {
-        InPaths(self.0, self.1, u)
-    }
-
-    fn in_stack_graph(&'a self) -> InStackGraph<'a, T>
-    where
-        T: Copy,
-    {
-        InStackGraph(self.0, self.2, &NoFilter)
-    }
-}
-
-impl<'a> Paths {
-    pub fn to_json(&'a mut self, graph: &'a StackGraph, f: &'a dyn Filter) -> JsonPaths<'_> {
-        JsonPaths(graph, self, f)
-    }
-}
-
-pub struct JsonPaths<'a>(&'a StackGraph, &'a mut Paths, &'a dyn Filter);
-
-impl<'a> JsonPaths<'a> {
-    pub fn to_value(&mut self) -> Result<Value, JsonError> {
-        let paths = self.to_path_vec();
-        Ok(serde_json::to_value(&InPaths(self.0, self.1, &paths))?)
-    }
-
-    pub fn to_string(&mut self) -> Result<String, JsonError> {
-        let paths = self.to_path_vec();
-        Ok(serde_json::to_string(&InPaths(self.0, self.1, &paths))?)
-    }
-
-    pub fn to_string_pretty(&mut self) -> Result<String, JsonError> {
-        let paths = self.to_path_vec();
-        Ok(serde_json::to_string_pretty(&InPaths(
-            self.0, self.1, &paths,
-        ))?)
-    }
-
-    fn to_path_vec(&mut self) -> Vec<Path> {
-        let graph = self.0;
-        let filter = ImplicationFilter(self.2);
-        let mut path_vec = Vec::new();
-        self.1
-            .find_all_paths(graph, graph.iter_nodes(), &NoCancellation, |g, ps, p| {
-                if filter.include_path(g, ps, &p) {
-                    let mut p = p;
-                    p.edges.ensure_forwards(ps);
-                    path_vec.push(p);
-                }
-            })
-            .expect("should never be cancelled");
-        path_vec
-    }
-}
-
-impl Serialize for InPaths<'_, &Vec<Path>> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let paths = self.2;
-
-        let mut ser = serializer.serialize_seq(paths.len().into())?;
-        for path in paths {
-            ser.serialize_element(&self.with(path))?;
-        }
-        ser.end()
-    }
-}
-
-impl Serialize for InPaths<'_, &Path> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let graph = self.0;
-        let path = self.2;
-
-        let mut ser = serializer.serialize_struct("path", 5)?;
-        ser.serialize_field(
-            "start_node",
-            &self.in_stack_graph().with(&graph[path.start_node].id()),
-        )?;
-        ser.serialize_field(
-            "end_node",
-            &self.in_stack_graph().with(&graph[path.end_node].id()),
-        )?;
-        ser.serialize_field("symbol_stack", &self.with(&path.symbol_stack))?;
-        ser.serialize_field("scope_stack", &self.with(&path.scope_stack))?;
-        ser.serialize_field("edges", &self.with(&path.edges))?;
-        ser.end()
-    }
-}
-
-impl Serialize for InPaths<'_, &SymbolStack> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let paths = self.1;
-        let symbol_stack = self.2;
-
-        let mut ser = serializer.serialize_seq(symbol_stack.len().into())?;
-        for scoped_symbol in symbol_stack.iter(paths) {
-            ser.serialize_element(&self.with(&scoped_symbol))?;
-        }
-        ser.end()
-    }
-}
-
-impl Serialize for InPaths<'_, &ScopedSymbol> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let graph = self.0;
-        let scoped_symbol = self.2;
-
-        let mut len = 1;
-        if scoped_symbol.scopes.is_some() {
-            len += 1;
-        }
-
-        let mut ser = serializer.serialize_struct("scoped_symbol", len)?;
-        ser.serialize_field("symbol", &graph[scoped_symbol.symbol])?;
-        if let Some(scopes) = scoped_symbol.scopes.into_option() {
-            ser.serialize_field("scopes", &self.with(&scopes))?;
-        }
-        ser.end()
-    }
-}
-
-impl Serialize for InPaths<'_, &ScopeStack> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let graph = self.0;
-        let paths = self.1;
-        let scope_stack = self.2;
-
-        let mut ser = serializer.serialize_seq(scope_stack.len().into())?;
-        for node in scope_stack.iter(paths) {
-            ser.serialize_element(&self.in_stack_graph().with(&graph[node].id()))?;
-        }
-        ser.end()
-    }
-}
-
-impl Serialize for InPaths<'_, &PathEdgeList> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let paths = self.1;
-        let edge_list = self.2;
-
-        let mut ser = serializer.serialize_seq(edge_list.len().into())?;
-        for edge in edge_list.iter_unordered(paths) {
-            ser.serialize_element(&self.with(&edge))?;
-        }
-        ser.end()
-    }
-}
-
-impl Serialize for InPaths<'_, &PathEdge> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let edge = self.2;
-
-        let mut ser = serializer.serialize_struct("path_edge", 2)?;
-        ser.serialize_field("source", &self.in_stack_graph().with(&edge.source_node_id))?;
-        ser.serialize_field("precedence", &edge.precedence)?;
-        ser.end()
-    }
-}
 //-----------------------------------------------------------------------------
 // Database
 

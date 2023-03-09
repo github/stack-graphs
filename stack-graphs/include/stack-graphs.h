@@ -76,12 +76,6 @@ struct sg_partial_path_database;
 // A list of paths found by the path-finding algorithm.
 struct sg_partial_path_list;
 
-// Manages the state of a collection of paths built up as part of the path-finding algorithm.
-struct sg_path_arena;
-
-// A list of paths found by the path-finding algorithm.
-struct sg_path_list;
-
 // Contains all of the nodes and edges that make up a stack graph.
 struct sg_stack_graph;
 
@@ -287,114 +281,6 @@ struct sg_node_source_info {
     struct sg_source_info source_info;
 };
 
-// A handle to an element of a scope stack.  A zero handle represents a missing scope stack.  A
-// UINT32_MAX handle represents an empty scope stack.
-typedef uint32_t sg_scope_stack_cell_handle;
-
-// A sequence of exported scopes, used to pass name-binding context around a stack graph.
-struct sg_scope_stack {
-    // The handle of the first element in the scope stack, or SG_LIST_EMPTY_HANDLE if the list is
-    // empty, or 0 if the list is null.
-    sg_scope_stack_cell_handle cells;
-    uint32_t length;
-};
-
-// A symbol with a possibly empty list of exported scopes attached to it.
-struct sg_scoped_symbol {
-    sg_symbol_handle symbol;
-    struct sg_scope_stack scopes;
-};
-
-// A handle to an element of a symbol stack.  A zero handle represents a missing symbol stack.  A
-// UINT32_MAX handle represents an empty symbol stack.
-typedef uint32_t sg_symbol_stack_cell_handle;
-
-// An element of a symbol stack.
-struct sg_symbol_stack_cell {
-    // The scoped symbol at this position in the symbol stack.
-    struct sg_scoped_symbol head;
-    // The handle of the next element in the symbol stack, or SG_LIST_EMPTY_HANDLE if this is the
-    // last element.
-    sg_symbol_stack_cell_handle tail;
-};
-
-// The array of all of the symbol stack content in a path arena.
-struct sg_symbol_stack_cells {
-    const struct sg_symbol_stack_cell *cells;
-    size_t count;
-};
-
-// A sequence of symbols that describe what we are currently looking for while in the middle of
-// the path-finding algorithm.
-struct sg_symbol_stack {
-    // The handle of the first element in the symbol stack, or SG_LIST_EMPTY_HANDLE if the list is
-    // empty, or 0 if the list is null.
-    sg_symbol_stack_cell_handle cells;
-    uint32_t length;
-};
-
-// An element of a scope stack.
-struct sg_scope_stack_cell {
-    // The exported scope at this position in the scope stack.
-    sg_node_handle head;
-    // The handle of the next element in the scope stack, or SG_LIST_EMPTY_HANDLE if this is the
-    // last element.
-    sg_scope_stack_cell_handle tail;
-};
-
-// The array of all of the scope stack content in a path arena.
-struct sg_scope_stack_cells {
-    const struct sg_scope_stack_cell *cells;
-    size_t count;
-};
-
-// Details about one of the edges in a name-binding path
-struct sg_path_edge {
-    struct sg_node_id source_node_id;
-    int32_t precedence;
-};
-
-// A handle to an element of a path edge list.  A zero handle represents a missing path edge list.
-// A UINT32_MAX handle represents an empty path edge list.
-typedef uint32_t sg_path_edge_list_cell_handle;
-
-// An element of a path edge list.
-struct sg_path_edge_list_cell {
-    // The path edge at this position in the path edge list.
-    struct sg_path_edge head;
-    // The handle of the next element in the path edge list, or SG_LIST_EMPTY_HANDLE if this is
-    // the last element.
-    sg_path_edge_list_cell_handle tail;
-    // The handle of the reversal of this list.
-    sg_path_edge_list_cell_handle reversed;
-};
-
-// The array of all of the path edge list content in a path arena.
-struct sg_path_edge_list_cells {
-    const struct sg_path_edge_list_cell *cells;
-    size_t count;
-};
-
-// The edges in a path keep track of precedence information so that we can correctly handle
-// shadowed definitions.
-struct sg_path_edge_list {
-    // The handle of the first element in the edge list, or SG_LIST_EMPTY_HANDLE if the list is
-    // empty, or 0 if the list is null.
-    sg_path_edge_list_cell_handle cells;
-    enum sg_deque_direction direction;
-    uint32_t length;
-};
-
-// A sequence of edges from a stack graph.  A _complete_ path represents a full name binding in a
-// source language.
-struct sg_path {
-    sg_node_handle start_node;
-    sg_node_handle end_node;
-    struct sg_symbol_stack symbol_stack;
-    struct sg_scope_stack scope_stack;
-    struct sg_path_edge_list edges;
-};
-
 // A handle to an element of a partial scope stack.  A zero handle represents a missing partial
 // scope stack.  A UINT32_MAX handle represents an empty partial scope stack.
 typedef uint32_t sg_partial_scope_stack_cell_handle;
@@ -474,9 +360,9 @@ struct sg_partial_scope_stack_cell {
     sg_node_handle head;
     // The handle of the next element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if this
     // is the last element.
-    sg_path_edge_list_cell_handle tail;
+    sg_partial_scope_stack_cell_handle tail;
     // The handle of the reversal of this partial scope stack.
-    sg_path_edge_list_cell_handle reversed;
+    sg_partial_scope_stack_cell_handle reversed;
 };
 
 // The array of all of the partial scope stack content in a partial path arena.
@@ -579,33 +465,6 @@ struct sg_node_handle_set {
     size_t length;
 };
 
-// Implements a phased forward path-stitching algorithm.
-//
-// Our overall goal is to start with a set of _seed_ paths, and to repeatedly extend each path by
-// appending a compatible partial path onto the end of it.  (If there are multiple compatible
-// partial paths, we append each of them separately, resulting in more than one extension for the
-// current path.)
-//
-// We perform this processing in _phases_.  At the start of each phase, we have a _current set_ of
-// paths that need to be processed.  As we extend those paths, we add the extensions to the set of
-// paths to process in the _next_ phase.  Phases are processed one at a time, each time you invoke
-// `sg_forward_path_stitcher_process_next_phase`.
-//
-// After each phase has completed, the `previous_phase_paths` and `previous_phase_paths_length`
-// fields give you all of the paths that were discovered during that phase.  That gives you a
-// chance to add to the `sg_partial_path_database` all of the partial paths that we might need to
-// extend those paths with before invoking the next phase.
-struct sg_forward_path_stitcher {
-    // The new candidate paths that were discovered in the most recent phase.
-    const struct sg_path *previous_phase_paths;
-    // The number of new candidate paths that were discovered in the most recent phase.  If this
-    // is 0, then the path stitching algorithm is complete.
-    size_t previous_phase_paths_length;
-    // Whether the stitching algorithm is complete.  You should keep calling
-    // `sg_forward_path_stitcher_process_next_phase` until this field is true.
-    bool is_complete;
-};
-
 // Implements a phased forward partial path stitching algorithm.
 //
 // Our overall goal is to start with a set of _seed_ partial paths, and to repeatedly extend each
@@ -648,12 +507,6 @@ struct sg_stack_graph *sg_stack_graph_new(void);
 
 // Frees a stack graph, and all of its contents.
 void sg_stack_graph_free(struct sg_stack_graph *graph);
-
-// Creates a new, initially empty path arena.
-struct sg_path_arena *sg_path_arena_new(void);
-
-// Frees a path arena, and all of its contents.
-void sg_path_arena_free(struct sg_path_arena *paths);
 
 // Creates a new, initially empty partial path arena.
 struct sg_partial_path_arena *sg_partial_path_arena_new(void);
@@ -789,85 +642,6 @@ void sg_stack_graph_add_source_infos(struct sg_stack_graph *graph,
                                      size_t count,
                                      const struct sg_node_source_info *infos);
 
-// Returns a reference to the array of symbol stack content in a path arena.  The resulting array
-// pointer is only valid until the next call to any function that mutates the path arena.
-struct sg_symbol_stack_cells sg_path_arena_symbol_stack_cells(const struct sg_path_arena *paths);
-
-// Adds new symbol stacks to the path arena.  `count` is the number of symbol stacks you want to
-// create.  The content of each symbol stack comes from two arrays.  The `lengths` array must have
-// `count` elements, and provides the number of symbols in each symbol stack.  The `symbols` array
-// contains the contents of each of these symbol stacks in one contiguous array.  Its length must
-// be the sum of all of the counts in the `lengths` array.
-//
-// You must also provide an `out` array, which must also have room for `count` elements.  We will
-// fill this array in with the `sg_symbol_stack` instances for each symbol stack that is created.
-void sg_path_arena_add_symbol_stacks(struct sg_path_arena *paths,
-                                     size_t count,
-                                     const struct sg_scoped_symbol *symbols,
-                                     const size_t *lengths,
-                                     struct sg_symbol_stack *out);
-
-// Returns a reference to the array of scope stack content in a path arena.  The resulting array
-// pointer is only valid until the next call to any function that mutates the path arena.
-struct sg_scope_stack_cells sg_path_arena_scope_stack_cells(const struct sg_path_arena *paths);
-
-// Adds new scope stacks to the path arena.  `count` is the number of scope stacks you want to
-// create.  The content of each scope stack comes from two arrays.  The `lengths` array must have
-// `count` elements, and provides the number of scopes in each scope stack.  The `scopes` array
-// contains the contents of each of these scope stacks in one contiguous array.  Its length must
-// be the sum of all of the counts in the `lengths` array.
-//
-// You must also provide an `out` array, which must also have room for `count` elements.  We will
-// fill this array in with the `sg_scope_stack` instances for each scope stack that is created.
-void sg_path_arena_add_scope_stacks(struct sg_path_arena *paths,
-                                    size_t count,
-                                    const sg_node_handle *scopes,
-                                    const size_t *lengths,
-                                    struct sg_scope_stack *out);
-
-// Returns a reference to the array of path edge list content in a path arena.  The resulting
-// array pointer is only valid until the next call to any function that mutates the path arena.
-struct sg_path_edge_list_cells sg_path_arena_path_edge_list_cells(const struct sg_path_arena *paths);
-
-// Adds new path edge lists to the path arena.  `count` is the number of path edge lists you want
-// to create.  The content of each path edge list comes from two arrays.  The `lengths` array must
-// have `count` elements, and provides the number of edges in each path edge list.  The `edges`
-// array contains the contents of each of these path edge lists in one contiguous array.  Its
-// length must be the sum of all of the counts in the `lengths` array.
-//
-// You must also provide an `out` array, which must also have room for `count` elements.  We will
-// fill this array in with the `sg_path_edge_list` instances for each path edge list that is
-// created.
-void sg_path_arena_add_path_edge_lists(struct sg_path_arena *paths,
-                                       size_t count,
-                                       const struct sg_path_edge *edges,
-                                       const size_t *lengths,
-                                       struct sg_path_edge_list *out);
-
-// Creates a new, empty sg_path_list.
-struct sg_path_list *sg_path_list_new(void);
-
-void sg_path_list_free(struct sg_path_list *path_list);
-
-size_t sg_path_list_count(const struct sg_path_list *path_list);
-
-const struct sg_path *sg_path_list_paths(const struct sg_path_list *path_list);
-
-// Finds all complete paths reachable from a set of starting nodes, placing the result into the
-// `path_list` output parameter.  You must free the path list when you are done with it by calling
-// `sg_path_list_done`.
-//
-// This function will not return until all reachable paths have been processed, so `graph` must
-// already contain a complete stack graph.  If you have a very large stack graph stored in some
-// other storage system, and want more control over lazily loading only the necessary pieces, then
-// you should use sg_forward_path_stitcher.
-enum sg_result sg_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
-                                                     struct sg_path_arena *paths,
-                                                     size_t starting_node_count,
-                                                     const sg_node_handle *starting_nodes,
-                                                     struct sg_path_list *path_list,
-                                                     const size_t *cancellation_flag);
-
 // Returns a reference to the array of partial symbol stack content in a partial path arena.  The
 // resulting array pointer is only valid until the next call to any function that mutates the path
 // arena.
@@ -958,6 +732,21 @@ enum sg_result sg_partial_path_arena_find_partial_paths_in_file(const struct sg_
                                                                 struct sg_partial_path_list *partial_path_list,
                                                                 const size_t *cancellation_flag);
 
+// Finds all complete paths reachable from a set of starting nodes, placing the result into the
+// `path_list` output parameter.  You must free the path list when you are done with it by calling
+// `sg_path_list_done`.
+//
+// This function will not return until all reachable paths have been processed, so `graph` must
+// already contain a complete stack graph.  If you have a very large stack graph stored in some
+// other storage system, and want more control over lazily loading only the necessary pieces, then
+// you should use sg_forward_path_stitcher.
+enum sg_result sg_partial_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
+                                                             struct sg_partial_path_arena *partials,
+                                                             size_t starting_node_count,
+                                                             const sg_node_handle *starting_nodes,
+                                                             struct sg_partial_path_list *path_list,
+                                                             const size_t *cancellation_flag);
+
 // Returns a reference to the array of partial path data in this partial path database.  The
 // resulting array pointer is only valid until the next call to any function that mutates the
 // partial path database.
@@ -1007,54 +796,6 @@ void sg_partial_path_database_mark_local_nodes(struct sg_partial_path_database *
 // of partial paths.  The resulting set is only valid until the next call to any function that
 // mutates the partial path database.
 struct sg_node_handle_set sg_partial_path_database_local_nodes(const struct sg_partial_path_database *db);
-
-// Creates a new forward path stitcher that is "seeded" with a set of starting stack graph nodes.
-//
-// Before calling this method, you must ensure that `db` contains all of the possible partial
-// paths that start with any of your requested starting nodes.
-//
-// Before calling `sg_forward_path_stitcher_process_next_phase` for the first time, you must
-// ensure that `db` contains all possible extensions of any of those initial paths.  You can
-// retrieve a list of those extensions via the `previous_phase_paths` and
-// `previous_phase_paths_length` fields.
-struct sg_forward_path_stitcher *sg_forward_path_stitcher_new(const struct sg_stack_graph *graph,
-                                                              struct sg_path_arena *paths,
-                                                              struct sg_partial_path_arena *partials,
-                                                              struct sg_partial_path_database *db,
-                                                              size_t count,
-                                                              const sg_node_handle *starting_nodes);
-
-// Sets whether similar path detection should be enabled during path stitching. Paths are similar
-// if start and end node, and pre- and postconditions are the same. The presence of similar paths
-// can lead to exponential blow up during path stitching. Similar path detection is disabled by
-// default because of the accociated preformance cost.
-void sg_forward_path_stitcher_set_similar_path_detection(struct sg_forward_path_stitcher *stitcher,
-                                                         bool detect_similar_paths);
-
-// Sets the maximum amount of work that can be performed during each phase of the algorithm. By
-// bounding our work this way, you can ensure that it's not possible for our CPU-bound algorithm
-// to starve any worker threads or processes that you might be using.  If you don't call this
-// method, then we allow ourselves to process all of the extensions of all of the paths found in
-// the previous phase, with no additional bound.
-void sg_forward_path_stitcher_set_max_work_per_phase(struct sg_forward_path_stitcher *stitcher,
-                                                     size_t max_work);
-
-// Runs the next phase of the path-stitching algorithm.  We will have built up a set of
-// incomplete paths during the _previous_ phase.  Before calling this function, you must
-// ensure that `db` contains all of the possible partial paths that we might want to extend
-// any of those paths with.
-//
-// After this method returns, you can retrieve a list of the (possibly incomplete) paths that were
-// encountered during this phase via the `previous_phase_paths` and `previous_phase_paths_length`
-// fields.
-void sg_forward_path_stitcher_process_next_phase(const struct sg_stack_graph *graph,
-                                                 struct sg_path_arena *paths,
-                                                 struct sg_partial_path_arena *partials,
-                                                 struct sg_partial_path_database *db,
-                                                 struct sg_forward_path_stitcher *stitcher);
-
-// Frees a forward path stitcher.
-void sg_forward_path_stitcher_free(struct sg_forward_path_stitcher *stitcher);
 
 // Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
 // nodes.
