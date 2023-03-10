@@ -75,10 +75,10 @@ impl StackGraph {
 
     fn load_nodes(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
         for n in self.nodes.data.as_slice() {
-            match n {
+            let handle = match n {
                 Node::DropScopes { id, .. } => {
                     let node_id = id.into_node_id(graph)?;
-                    graph.add_drop_scopes_node(node_id);
+                    graph.add_drop_scopes_node(node_id)
                 }
                 Node::PopScopedSymbol {
                     id,
@@ -88,7 +88,7 @@ impl StackGraph {
                 } => {
                     let node_id = id.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
-                    graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition);
+                    graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition)
                 }
                 Node::PopSymbol {
                     id,
@@ -98,7 +98,7 @@ impl StackGraph {
                 } => {
                     let node_id = id.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
-                    graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition);
+                    graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition)
                 }
                 Node::PushScopedSymbol {
                     id,
@@ -110,13 +110,12 @@ impl StackGraph {
                     let node_id = id.into_node_id(graph)?;
                     let scope_id = scope.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
-
                     graph.add_push_scoped_symbol_node(
                         node_id,
                         symbol_handle,
                         scope_id,
                         *is_reference,
-                    );
+                    )
                 }
                 Node::PushSymbol {
                     id,
@@ -126,15 +125,26 @@ impl StackGraph {
                 } => {
                     let node_id = id.into_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(symbol.as_str());
-                    graph.add_push_symbol_node(node_id, symbol_handle, *is_reference);
+                    graph.add_push_symbol_node(node_id, symbol_handle, *is_reference)
                 }
                 Node::Scope {
                     id, is_exported, ..
                 } => {
                     let node_id = id.into_node_id(graph)?;
-                    graph.add_scope_node(node_id, *is_exported);
+                    graph.add_scope_node(node_id, *is_exported)
                 }
-                Node::JumpToScope { .. } | Node::Root { .. } => {}
+                Node::JumpToScope { .. } | Node::Root { .. } => None,
+            };
+
+            if let (Some(handle), Some(source_info)) = (handle, n.source_info()) {
+                *graph.source_info_mut(handle) = crate::graph::SourceInfo {
+                    span: source_info.span.clone(),
+                    syntax_type: source_info
+                        .syntax_type
+                        .as_ref()
+                        .map(|st| graph.add_string(st.as_str())),
+                    ..Default::default()
+                };
             }
         }
         Ok(())
@@ -236,6 +246,22 @@ pub enum Node {
         source_info: Option<SourceInfo>,
         debug_info: Option<DebugInfo>,
     },
+}
+
+impl Node {
+    fn source_info(&self) -> Option<&SourceInfo> {
+        match self {
+            Self::DropScopes { source_info, .. } => source_info,
+            Self::JumpToScope { source_info, .. } => source_info,
+            Self::PopScopedSymbol { source_info, .. } => source_info,
+            Self::PopSymbol { source_info, .. } => source_info,
+            Self::PushScopedSymbol { source_info, .. } => source_info,
+            Self::PushSymbol { source_info, .. } => source_info,
+            Self::Root { source_info, .. } => source_info,
+            Self::Scope { source_info, .. } => source_info,
+        }
+        .as_ref()
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
