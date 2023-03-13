@@ -44,10 +44,10 @@ use enumset::EnumSetType;
 use smallvec::SmallVec;
 
 use crate::arena::Deque;
-use crate::arena::DequeArena;
+use crate::arena::DequeCell;
 use crate::arena::Handle;
 use crate::arena::ReversibleList;
-use crate::arena::ReversibleListArena;
+use crate::arena::VecArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::graph::Edge;
@@ -2672,17 +2672,17 @@ struct Join {
 /// Manages the state of a collection of partial paths built up as part of the partial-path-finding
 /// algorithm or path-stitching algorithm.
 pub struct PartialPaths {
-    pub(crate) partial_symbol_stacks: ReversibleListArena<PartialScopedSymbol>,
-    pub(crate) partial_scope_stacks: ReversibleListArena<Handle<Node>>,
-    pub(crate) partial_path_edges: DequeArena<PartialPathEdge>,
+    pub(crate) partial_symbol_stacks: VecArena<DequeCell<PartialScopedSymbol>>,
+    pub(crate) partial_scope_stacks: VecArena<DequeCell<Handle<Node>>>,
+    pub(crate) partial_path_edges: VecArena<DequeCell<PartialPathEdge>>,
 }
 
 impl PartialPaths {
     pub fn new() -> PartialPaths {
         PartialPaths {
-            partial_symbol_stacks: ReversibleList::new_arena(),
-            partial_scope_stacks: ReversibleList::new_arena(),
-            partial_path_edges: Deque::new_arena(),
+            partial_symbol_stacks: VecArena::new(),
+            partial_scope_stacks: VecArena::new(),
+            partial_path_edges: VecArena::new(),
         }
     }
 }

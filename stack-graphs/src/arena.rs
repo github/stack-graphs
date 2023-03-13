@@ -716,11 +716,9 @@ pub struct ReversibleListCell<T> {
     reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
 }
 
-pub type ReversibleListArena<T> = VecArena<ReversibleListCell<T>>;
-
 impl<T> ReversibleList<T> {
     /// Creates a new arena that will manage lists of this type.
-    pub fn new_arena() -> ReversibleListArena<T> {
+    pub fn new_arena() -> impl Arena<ReversibleListCell<T>> {
         VecArena::new()
     }
 
@@ -738,7 +736,7 @@ impl<T> ReversibleList<T> {
     }
 
     /// Returns whether we have already calculated the reversal of this list.
-    pub fn have_reversal(&self, arena: &ReversibleListArena<T>) -> bool {
+    pub fn have_reversal(&self, arena: &impl Arena<ReversibleListCell<T>>) -> bool {
         if self.is_empty() {
             // The empty list is already reversed.
             return true;
@@ -747,13 +745,13 @@ impl<T> ReversibleList<T> {
     }
 
     /// Pushes a new element onto the front of this list.
-    pub fn push_front(&mut self, arena: &mut ReversibleListArena<T>, head: T) {
+    pub fn push_front(&mut self, arena: &mut impl Arena<ReversibleListCell<T>>, head: T) {
         self.cells = arena.add(ReversibleListCell::new(head, self.cells, None));
     }
 
     /// Removes and returns the element at the front of this list.  If the list is empty, returns
     /// `None`.
-    pub fn pop_front<'a>(&mut self, arena: &'a ReversibleListArena<T>) -> Option<&'a T> {
+    pub fn pop_front<'a>(&mut self, arena: &'a impl Arena<ReversibleListCell<T>>) -> Option<&'a T> {
         if self.is_empty() {
             return None;
         }
@@ -765,7 +763,10 @@ impl<T> ReversibleList<T> {
 
 impl<'a, T: 'a> ReversibleList<T> {
     /// Returns an iterator over the elements of this list.
-    pub fn iter(mut self, arena: &'a ReversibleListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter(
+        mut self,
+        arena: &'a impl Arena<ReversibleListCell<T>>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
         std::iter::from_fn(move || self.pop_front(arena))
     }
 }
@@ -777,7 +778,7 @@ where
     /// Reverses the list.  Since we're already caching everything in an arena, we make sure to
     /// only calculate the reversal once, returning it as-is if you call this function multiple
     /// times.
-    pub fn reverse(&mut self, arena: &mut ReversibleListArena<T>) {
+    pub fn reverse(&mut self, arena: &mut impl Arena<ReversibleListCell<T>>) {
         if self.is_empty() {
             return;
         }
@@ -788,7 +789,7 @@ where
     /// Ensures that the reversal of this list is available.  It can be useful to precalculate this
     /// when you have mutable access to the arena, so that you can then reverse and un-reverse the
     /// list later when you only have shared access to it.
-    pub fn ensure_reversal_available(&self, arena: &mut ReversibleListArena<T>) {
+    pub fn ensure_reversal_available(&self, arena: &mut impl Arena<ReversibleListCell<T>>) {
         // First check to see if the list has already been reversed.
         if self.is_empty() {
             // The empty list is already reversed.
@@ -807,7 +808,7 @@ where
 impl<T> ReversibleList<T> {
     /// Reverses the list, assuming that the reversal has already been computed.  If it hasn't we
     /// return an error.
-    pub fn reverse_reused(&mut self, arena: &ReversibleListArena<T>) -> Result<(), ()> {
+    pub fn reverse_reused(&mut self, arena: &impl Arena<ReversibleListCell<T>>) -> Result<(), ()> {
         if self.is_empty() {
             // The empty list is already reversed.
             return Ok(());
@@ -845,7 +846,7 @@ where
 {
     fn reverse(
         forwards: Handle<ReversibleListCell<T>>,
-        arena: &mut ReversibleListArena<T>,
+        arena: &mut impl Arena<ReversibleListCell<T>>,
     ) -> Handle<ReversibleListCell<T>> {
         let mut reversed = ReversibleListCell::empty_handle();
         let mut current = forwards;
@@ -872,7 +873,7 @@ where
 impl<T> ReversibleList<T> {
     pub fn equals_with<F>(
         mut self,
-        arena: &ReversibleListArena<T>,
+        arena: &impl Arena<ReversibleListCell<T>>,
         mut other: ReversibleList<T>,
         mut eq: F,
     ) -> bool
@@ -891,7 +892,7 @@ impl<T> ReversibleList<T> {
 
     pub fn cmp_with<F>(
         mut self,
-        arena: &ReversibleListArena<T>,
+        arena: &impl Arena<ReversibleListCell<T>>,
         mut other: ReversibleList<T>,
         mut cmp: F,
     ) -> std::cmp::Ordering
@@ -915,7 +916,11 @@ impl<T> ReversibleList<T>
 where
     T: Eq,
 {
-    pub fn equals(self, arena: &ReversibleListArena<T>, other: ReversibleList<T>) -> bool {
+    pub fn equals(
+        self,
+        arena: &impl Arena<ReversibleListCell<T>>,
+        other: ReversibleList<T>,
+    ) -> bool {
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
@@ -926,7 +931,7 @@ where
 {
     pub fn cmp(
         self,
-        arena: &ReversibleListArena<T>,
+        arena: &impl Arena<ReversibleListCell<T>>,
         other: ReversibleList<T>,
     ) -> std::cmp::Ordering {
         self.cmp_with(arena, other, |a, b| a.cmp(b))
@@ -947,6 +952,8 @@ impl<T> Copy for ReversibleList<T> {}
 
 //-------------------------------------------------------------------------------------------------
 // Arena-allocated deque
+
+pub type DequeCell<T> = ReversibleListCell<T>;
 
 /// An arena-allocated deque.
 ///
@@ -986,12 +993,9 @@ impl std::ops::Not for DequeDirection {
     }
 }
 
-// An arena that's used to manage `Deque<T>` instances.
-pub type DequeArena<T> = ReversibleListArena<T>;
-
 impl<T> Deque<T> {
-    /// Creates a new `DequeArena` that will manage deques of this type.
-    pub fn new_arena() -> DequeArena<T> {
+    /// Creates a new arena that will manage deques of this type.
+    pub fn new_arena() -> impl Arena<DequeCell<T>> {
         VecArena::new()
     }
 
@@ -1014,7 +1018,7 @@ impl<T> Deque<T> {
     }
 
     /// Returns whether we have already calculated the reversal of this deque.
-    pub fn have_reversal(&self, arena: &DequeArena<T>) -> bool {
+    pub fn have_reversal(&self, arena: &impl Arena<DequeCell<T>>) -> bool {
         self.list.have_reversal(arena)
     }
 
@@ -1025,12 +1029,17 @@ impl<T> Deque<T> {
     fn is_forwards(&self) -> bool {
         matches!(self.direction, DequeDirection::Forwards)
     }
+}
 
+impl<'a, T: 'a> Deque<T> {
     /// Returns an iterator over the contents of this deque, with no guarantee about the ordering of
     /// the elements.  (By not caring about the ordering of the elements, you can call this method
     /// regardless of which direction the deque's elements are currently stored.  And that, in
     /// turn, means that we only need shared access to the arena, and not mutable access to it.)
-    pub fn iter_unordered<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter_unordered(
+        &self,
+        arena: &'a impl Arena<DequeCell<T>>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
         self.list.iter(arena)
     }
 }
@@ -1040,7 +1049,7 @@ where
     T: Clone,
 {
     /// Ensures that this deque has computed its backwards-facing list of elements.
-    pub fn ensure_backwards(&mut self, arena: &mut DequeArena<T>) {
+    pub fn ensure_backwards(&mut self, arena: &mut impl Arena<DequeCell<T>>) {
         if self.is_backwards() {
             return;
         }
@@ -1049,7 +1058,7 @@ where
     }
 
     /// Ensures that this deque has computed its forwards-facing list of elements.
-    pub fn ensure_forwards(&mut self, arena: &mut DequeArena<T>) {
+    pub fn ensure_forwards(&mut self, arena: &mut impl Arena<DequeCell<T>>) {
         if self.is_forwards() {
             return;
         }
@@ -1058,62 +1067,45 @@ where
     }
 
     /// Ensures that this deque has computed both directions of elements.
-    pub fn ensure_both_directions(&self, arena: &mut DequeArena<T>) {
+    pub fn ensure_both_directions(&self, arena: &mut impl Arena<DequeCell<T>>) {
         self.list.ensure_reversal_available(arena);
     }
 
     /// Pushes a new element onto the front of this deque.
-    pub fn push_front(&mut self, arena: &mut DequeArena<T>, element: T) {
+    pub fn push_front(&mut self, arena: &mut impl Arena<DequeCell<T>>, element: T) {
         self.ensure_forwards(arena);
         self.list.push_front(arena, element);
     }
 
     /// Pushes a new element onto the back of this deque.
-    pub fn push_back(&mut self, arena: &mut DequeArena<T>, element: T) {
+    pub fn push_back(&mut self, arena: &mut impl Arena<DequeCell<T>>, element: T) {
         self.ensure_backwards(arena);
         self.list.push_front(arena, element);
     }
 
     /// Removes and returns the element from the front of this deque.  If the deque is empty,
     /// returns `None`.
-    pub fn pop_front<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+    pub fn pop_front<'a>(&mut self, arena: &'a mut impl Arena<DequeCell<T>>) -> Option<&'a T> {
         self.ensure_forwards(arena);
         self.list.pop_front(arena)
     }
 
     /// Removes and returns the element from the back of this deque.  If the deque is empty,
     /// returns `None`.
-    pub fn pop_back<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+    pub fn pop_back<'a>(&mut self, arena: &'a mut impl Arena<DequeCell<T>>) -> Option<&'a T> {
         self.ensure_backwards(arena);
         self.list.pop_front(arena)
-    }
-
-    /// Returns an iterator over the contents of this deque in a forwards direction.
-    pub fn iter<'a>(&self, arena: &'a mut DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
-        let mut list = self.list;
-        if self.is_backwards() {
-            list.reverse(arena);
-        }
-        list.iter(arena)
-    }
-
-    /// Returns an iterator over the contents of this deque in a backwards direction.
-    pub fn iter_reversed<'a>(
-        &self,
-        arena: &'a mut DequeArena<T>,
-    ) -> impl Iterator<Item = &'a T> + 'a {
-        let mut list = self.list;
-        if self.is_forwards() {
-            list.reverse(arena);
-        }
-        list.iter(arena)
     }
 
     /// Ensures that both deques are stored in the same direction.  It doesn't matter _which_
     /// direction, as long as they're the same, so do the minimum amount of work to bring this
     /// about.  (In particular, if we've already calculated the reversal of one of the deques,
     /// reverse that one.)
-    fn ensure_same_direction(&mut self, arena: &mut DequeArena<T>, other: &mut Deque<T>) {
+    fn ensure_same_direction(
+        &mut self,
+        arena: &mut impl Arena<DequeCell<T>>,
+        other: &mut Deque<T>,
+    ) {
         if self.direction == other.direction {
             return;
         }
@@ -1127,11 +1119,45 @@ where
     }
 }
 
+impl<'a, T: 'a> Deque<T>
+where
+    T: Clone,
+{
+    /// Returns an iterator over the contents of this deque in a forwards direction.
+    pub fn iter(
+        &self,
+        arena: &'a mut impl Arena<DequeCell<T>>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_backwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a backwards direction.
+    pub fn iter_reversed(
+        &self,
+        arena: &'a mut impl Arena<DequeCell<T>>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_forwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+}
+
 impl<T> Deque<T>
 where
     T: Clone,
 {
-    pub fn equals_with<F>(mut self, arena: &mut DequeArena<T>, mut other: Deque<T>, eq: F) -> bool
+    pub fn equals_with<F>(
+        mut self,
+        arena: &mut impl Arena<DequeCell<T>>,
+        mut other: Deque<T>,
+        eq: F,
+    ) -> bool
     where
         F: FnMut(&T, &T) -> bool,
     {
@@ -1141,7 +1167,7 @@ where
 
     pub fn cmp_with<F>(
         mut self,
-        arena: &mut DequeArena<T>,
+        arena: &mut impl Arena<DequeCell<T>>,
         mut other: Deque<T>,
         cmp: F,
     ) -> std::cmp::Ordering
@@ -1160,7 +1186,7 @@ impl<T> Deque<T>
 where
     T: Clone + Eq,
 {
-    pub fn equals(self, arena: &mut DequeArena<T>, other: Deque<T>) -> bool {
+    pub fn equals(self, arena: &mut impl Arena<DequeCell<T>>, other: Deque<T>) -> bool {
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
@@ -1169,18 +1195,21 @@ impl<T> Deque<T>
 where
     T: Clone + Ord,
 {
-    pub fn cmp(self, arena: &mut DequeArena<T>, other: Deque<T>) -> std::cmp::Ordering {
+    pub fn cmp(self, arena: &mut impl Arena<DequeCell<T>>, other: Deque<T>) -> std::cmp::Ordering {
         self.cmp_with(arena, other, |a, b| a.cmp(b))
     }
 }
 
-impl<T> Deque<T> {
+impl<'a, T: 'a> Deque<T> {
     /// Returns an iterator over the contents of this deque in a forwards direction, assuming that
     /// we have already computed its forwards-facing list of elements via [`ensure_forwards`][].
     /// Panics if we haven't already computed it.
     ///
     /// [`ensure_forwards`]: #method.ensure_forwards
-    pub fn iter_reused<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter_reused(
+        &self,
+        arena: &'a impl Arena<DequeCell<T>>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
         let mut list = self.list;
         if self.is_backwards() {
             list.reverse_reused(arena)
@@ -1194,9 +1223,9 @@ impl<T> Deque<T> {
     /// Panics if we haven't already computed it.
     ///
     /// [`ensure_backwards`]: #method.ensure_backwards
-    pub fn iter_reversed_reused<'a>(
+    pub fn iter_reversed_reused(
         &self,
-        arena: &'a DequeArena<T>,
+        arena: &'a impl Arena<DequeCell<T>>,
     ) -> impl Iterator<Item = &'a T> + 'a {
         let mut list = self.list;
         if self.is_forwards() {

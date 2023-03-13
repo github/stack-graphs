@@ -7,12 +7,12 @@
 
 use stack_graphs::arena::Arena;
 use stack_graphs::arena::Deque;
-use stack_graphs::arena::DequeArena;
+use stack_graphs::arena::DequeCell;
 use stack_graphs::arena::HashArena;
 use stack_graphs::arena::List;
 use stack_graphs::arena::ListArena;
 use stack_graphs::arena::ReversibleList;
-use stack_graphs::arena::ReversibleListArena;
+use stack_graphs::arena::ReversibleListCell;
 use stack_graphs::arena::SupplementalArena;
 use stack_graphs::arena::VecArena;
 
@@ -91,7 +91,10 @@ fn can_compare_lists() {
 
 #[test]
 fn can_create_reversible_lists() {
-    fn collect(list: &ReversibleList<u32>, arena: &ReversibleListArena<u32>) -> Vec<u32> {
+    fn collect(
+        list: &ReversibleList<u32>,
+        arena: &impl Arena<ReversibleListCell<u32>>,
+    ) -> Vec<u32> {
         list.iter(arena).copied().collect()
     }
 
@@ -148,13 +151,13 @@ fn can_compare_reversible_lists() {
 
 #[test]
 fn can_create_deques() {
-    fn collect(deque: &Deque<u32>, arena: &mut DequeArena<u32>) -> Vec<u32> {
+    fn collect(deque: &Deque<u32>, arena: &mut impl Arena<DequeCell<u32>>) -> Vec<u32> {
         deque.iter(arena).copied().collect()
     }
-    fn collect_reused(deque: &Deque<u32>, arena: &DequeArena<u32>) -> Vec<u32> {
+    fn collect_reused(deque: &Deque<u32>, arena: &impl Arena<DequeCell<u32>>) -> Vec<u32> {
         deque.iter_reused(arena).copied().collect()
     }
-    fn collect_rev(deque: &Deque<u32>, arena: &mut DequeArena<u32>) -> Vec<u32> {
+    fn collect_rev(deque: &Deque<u32>, arena: &mut impl Arena<DequeCell<u32>>) -> Vec<u32> {
         deque.iter_reversed(arena).copied().collect()
     }
 
@@ -192,20 +195,20 @@ fn can_compare_deques() {
     let mut arena = Deque::new_arena();
     // Build up deques in both directions so that our comparisons have to test the "reverse if
     // needed" logic.
-    let from_slice_forwards = |slice: &[u32], arena: &mut DequeArena<u32>| {
+    fn from_slice_forwards(slice: &[u32], arena: &mut impl Arena<DequeCell<u32>>) -> Deque<u32> {
         let mut deque = Deque::empty();
         for element in slice.iter() {
             deque.push_back(arena, *element);
         }
         deque
-    };
-    let from_slice_backwards = |slice: &[u32], arena: &mut DequeArena<u32>| {
+    }
+    fn from_slice_backwards(slice: &[u32], arena: &mut impl Arena<DequeCell<u32>>) -> Deque<u32> {
         let mut deque = Deque::empty();
         for element in slice.iter().rev() {
             deque.push_front(arena, *element);
         }
         deque
-    };
+    }
     let deque0 = from_slice_forwards(&[], &mut arena);
     let mut deque1 = from_slice_backwards(&[1], &mut arena);
     let deque2 = from_slice_forwards(&[2], &mut arena);
