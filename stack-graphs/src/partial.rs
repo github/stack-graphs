@@ -158,8 +158,8 @@ where
 
 /// Represents an unknown list of scoped symbols.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Niche, Ord, PartialEq, PartialOrd)]
-pub struct SymbolStackVariable(#[niche] NonZeroU32);
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SymbolStackVariable(NonZeroU32);
 
 impl SymbolStackVariable {
     pub fn new(variable: u32) -> Option<SymbolStackVariable> {
@@ -218,13 +218,37 @@ impl TryFrom<u32> for SymbolStackVariable {
     }
 }
 
+impl Niche for SymbolStackVariable {
+    type Output = u32;
+
+    #[inline]
+    fn none() -> Self::Output {
+        0
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        *value == 0
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        value.as_u32()
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(value) })
+    }
+}
+
 //-------------------------------------------------------------------------------------------------
 // Scope stack variables
 
 /// Represents an unknown list of exported scopes.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Niche, Ord, PartialEq, PartialOrd)]
-pub struct ScopeStackVariable(#[niche] NonZeroU32);
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ScopeStackVariable(NonZeroU32);
 
 impl ScopeStackVariable {
     pub fn new(variable: u32) -> Option<ScopeStackVariable> {
@@ -286,6 +310,30 @@ impl TryFrom<u32> for ScopeStackVariable {
     fn try_from(value: u32) -> Result<ScopeStackVariable, ()> {
         let value = NonZeroU32::new(value).ok_or(())?;
         Ok(ScopeStackVariable(value))
+    }
+}
+
+impl Niche for ScopeStackVariable {
+    type Output = u32;
+
+    #[inline]
+    fn none() -> Self::Output {
+        0
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        *value == 0
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        value.as_u32()
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(value) })
     }
 }
 
@@ -855,7 +903,7 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
 /// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
 /// exported scopes, along with an optional scope stack variable.
 #[repr(C)]
-#[derive(Clone, Copy, Niche)]
+#[derive(Clone, Copy, Eq, Hash, Niche, PartialEq)]
 pub struct PartialScopeStack {
     #[niche]
     scopes: ReversibleList<Handle<Node>>,

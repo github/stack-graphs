@@ -546,7 +546,7 @@ impl<T> Default for HandleSet<T> {
 /// linked list implementation _should_ be cache-friendly, since the individual cells are allocated
 /// out of an arena.
 #[repr(C)]
-#[derive(Niche)]
+#[derive(Eq, Hash, Niche, PartialEq)]
 pub struct List<T> {
     // The value of this handle will be EMPTY_LIST_HANDLE if the list is empty.  For an
     // Option<List<T>>, the value will be zero (via the Option<NonZero> optimization) if the list
@@ -557,6 +557,7 @@ pub struct List<T> {
 
 #[doc(hidden)]
 #[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ListCell<T> {
     head: T,
     // The value of this handle will be EMPTY_LIST_HANDLE if this is the last element of the list.
@@ -707,7 +708,7 @@ impl<T> Copy for List<T> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
-#[derive(Niche)]
+#[derive(Eq, Hash, Niche, PartialEq)]
 pub struct ReversibleList<T> {
     #[niche]
     cells: Handle<ReversibleListCell<T>>,
@@ -715,10 +716,24 @@ pub struct ReversibleList<T> {
 
 #[repr(C)]
 #[doc(hidden)]
+#[derive(Clone, Eq)]
 pub struct ReversibleListCell<T> {
     head: T,
     tail: Handle<ReversibleListCell<T>>,
     reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
+}
+
+impl<T: Hash> Hash for ReversibleListCell<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.head.hash(state);
+        self.tail.hash(state);
+    }
+}
+
+impl<T: Eq> PartialEq for ReversibleListCell<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.head == other.head && self.tail == other.tail
+    }
 }
 
 pub trait ReversibleListArena<T>: Arena<ReversibleListCell<T>> {}
@@ -980,6 +995,7 @@ impl<T, A> DequeArena<T> for A where A: Arena<DequeCell<T>> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
 pub struct Deque<T> {
     list: ReversibleList<T>,
     direction: DequeDirection,
