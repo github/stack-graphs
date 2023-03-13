@@ -13,10 +13,3 @@ class LRUCache<K, V>
     //              ^ defined: 10
     //                 ^ defined: 10
 }
-
-class MyMap extends LRUCache<String, String> {
-    public int go() {
-        return this.entrySet().iterator().next().getKey().length();
-        //                                                 ^ defined: 2
-    }
-}
