@@ -10,7 +10,7 @@ use stack_graphs::arena::Deque;
 use stack_graphs::arena::DequeCell;
 use stack_graphs::arena::HashArena;
 use stack_graphs::arena::List;
-use stack_graphs::arena::ListArena;
+use stack_graphs::arena::ListCell;
 use stack_graphs::arena::ReversibleList;
 use stack_graphs::arena::ReversibleListCell;
 use stack_graphs::arena::SupplementalArena;
@@ -47,7 +47,7 @@ fn can_allocate_in_supplemental_arena() {
 
 #[test]
 fn can_create_lists() {
-    fn collect(list: &List<u32>, arena: &ListArena<u32>) -> Vec<u32> {
+    fn collect(list: &List<u32>, arena: &impl Arena<ListCell<u32>>) -> Vec<u32> {
         list.iter(arena).copied().collect()
     }
 

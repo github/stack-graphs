@@ -565,16 +565,10 @@ pub struct ListCell<T> {
 
 const EMPTY_LIST_HANDLE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(u32::MAX) };
 
-// An arena that's used to manage `List<T>` instances.
-//
-// (Note that the arena doesn't store `List<T>` itself; it stores the `ListCell<T>`s that the lists
-// are made of.)
-pub type ListArena<T> = VecArena<ListCell<T>>;
-
 impl<T> List<T> {
-    /// Creates a new `ListArena` that will manage lists of this type.
-    pub fn new_arena() -> ListArena<T> {
-        ListArena::new()
+    /// Creates a new arena that will manage lists of this type.
+    pub fn new_arena() -> impl Arena<ListCell<T>> {
+        VecArena::new()
     }
 
     /// Returns whether this list is empty.
@@ -600,7 +594,7 @@ impl<T> List<T> {
     }
 
     /// Pushes a new element onto the front of this list.
-    pub fn push_front(&mut self, arena: &mut ListArena<T>, head: T) {
+    pub fn push_front(&mut self, arena: &mut impl Arena<ListCell<T>>, head: T) {
         self.cells = arena.add(ListCell {
             head,
             tail: self.cells,
@@ -609,7 +603,7 @@ impl<T> List<T> {
 
     /// Removes and returns the element at the front of this list.  If the list is empty, returns
     /// `None`.
-    pub fn pop_front<'a>(&mut self, arena: &'a ListArena<T>) -> Option<&'a T> {
+    pub fn pop_front<'a>(&mut self, arena: &'a impl Arena<ListCell<T>>) -> Option<&'a T> {
         if self.is_empty() {
             return None;
         }
@@ -617,15 +611,22 @@ impl<T> List<T> {
         self.cells = cell.tail;
         Some(&cell.head)
     }
+}
 
+impl<'a, T: 'a> List<T> {
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(mut self, arena: &'a ListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter(mut self, arena: &'a impl Arena<ListCell<T>>) -> impl Iterator<Item = &'a T> + 'a {
         std::iter::from_fn(move || self.pop_front(arena))
     }
 }
 
 impl<T> List<T> {
-    pub fn equals_with<F>(mut self, arena: &ListArena<T>, mut other: List<T>, mut eq: F) -> bool
+    pub fn equals_with<F>(
+        mut self,
+        arena: &impl Arena<ListCell<T>>,
+        mut other: List<T>,
+        mut eq: F,
+    ) -> bool
     where
         F: FnMut(&T, &T) -> bool,
     {
@@ -641,7 +642,7 @@ impl<T> List<T> {
 
     pub fn cmp_with<F>(
         mut self,
-        arena: &ListArena<T>,
+        arena: &impl Arena<ListCell<T>>,
         mut other: List<T>,
         mut cmp: F,
     ) -> std::cmp::Ordering
@@ -665,7 +666,7 @@ impl<T> List<T>
 where
     T: Eq,
 {
-    pub fn equals(self, arena: &ListArena<T>, other: List<T>) -> bool {
+    pub fn equals(self, arena: &impl Arena<ListCell<T>>, other: List<T>) -> bool {
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
@@ -674,7 +675,7 @@ impl<T> List<T>
 where
     T: Ord,
 {
-    pub fn cmp(self, arena: &ListArena<T>, other: List<T>) -> std::cmp::Ordering {
+    pub fn cmp(self, arena: &impl Arena<ListCell<T>>, other: List<T>) -> std::cmp::Ordering {
         self.cmp_with(arena, other, |a, b| a.cmp(b))
     }
 }

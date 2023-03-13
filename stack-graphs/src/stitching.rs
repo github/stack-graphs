@@ -45,7 +45,6 @@ use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::HandleSet;
 use crate::arena::List;
-use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
 use crate::arena::VecArena;
@@ -77,7 +76,7 @@ use crate::CancellationFlag;
 pub struct Database {
     pub(crate) partial_paths: VecArena<PartialPath>,
     pub(crate) local_nodes: HandleSet<Node>,
-    symbol_stack_keys: ListArena<Handle<Symbol>>,
+    symbol_stack_keys: VecArena<ListCell<Handle<Symbol>>>,
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
     root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
@@ -89,7 +88,7 @@ impl Database {
         Database {
             partial_paths: VecArena::new(),
             local_nodes: HandleSet::new(),
-            symbol_stack_keys: List::new_arena(),
+            symbol_stack_keys: VecArena::new(),
             symbol_stack_key_cache: HashMap::new(),
             paths_by_start_node: SupplementalArena::new(),
             root_paths_by_precondition: SupplementalArena::new(),
