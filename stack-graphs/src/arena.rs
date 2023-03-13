@@ -716,16 +716,12 @@ pub struct ReversibleListCell<T> {
     reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
 }
 
-// An arena that's used to manage `ReversibleList<T>` instances.
-//
-// (Note that the arena doesn't store `ReversibleList<T>` itself; it stores the
-// `ReversibleListCell<T>`s that the lists are made of.)
 pub type ReversibleListArena<T> = VecArena<ReversibleListCell<T>>;
 
 impl<T> ReversibleList<T> {
-    /// Creates a new `ReversibleListArena` that will manage lists of this type.
+    /// Creates a new arena that will manage lists of this type.
     pub fn new_arena() -> ReversibleListArena<T> {
-        ReversibleListArena::new()
+        VecArena::new()
     }
 
     /// Returns whether this list is empty.
@@ -765,12 +761,11 @@ impl<T> ReversibleList<T> {
         self.cells = cell.tail;
         Some(&cell.head)
     }
+}
 
+impl<'a, T: 'a> ReversibleList<T> {
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(
-        mut self,
-        arena: &'a ReversibleListArena<T>,
-    ) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter(mut self, arena: &'a ReversibleListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
         std::iter::from_fn(move || self.pop_front(arena))
     }
 }
@@ -997,7 +992,7 @@ pub type DequeArena<T> = ReversibleListArena<T>;
 impl<T> Deque<T> {
     /// Creates a new `DequeArena` that will manage deques of this type.
     pub fn new_arena() -> DequeArena<T> {
-        ReversibleList::new_arena()
+        VecArena::new()
     }
 
     /// Returns whether this deque is empty.
