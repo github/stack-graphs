@@ -8,6 +8,7 @@
 use stack_graphs::arena::Arena;
 use stack_graphs::arena::Deque;
 use stack_graphs::arena::DequeArena;
+use stack_graphs::arena::InterningArena;
 use stack_graphs::arena::List;
 use stack_graphs::arena::ListArena;
 use stack_graphs::arena::ReversibleList;
@@ -228,4 +229,18 @@ fn can_compare_deques() {
     deque1.ensure_backwards(&mut arena);
     deque10.ensure_backwards(&mut arena);
     assert_eq!(deque1.cmp(&mut arena, deque10), Ordering::Less);
+}
+
+#[test]
+fn can_allocate_in_interning_arena() {
+    let mut arena = InterningArena::new();
+    let hello1 = arena.add("hello".to_string());
+    let hello2 = arena.add("hello".to_string());
+    let there = arena.add("there".to_string());
+    assert_eq!(hello1, hello2);
+    assert_ne!(hello1, there);
+    assert_ne!(hello2, there);
+    assert_eq!(arena.get(hello1), arena.get(hello2));
+    assert_ne!(arena.get(hello1), arena.get(there));
+    assert_ne!(arena.get(hello2), arena.get(there));
 }

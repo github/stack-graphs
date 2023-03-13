@@ -30,6 +30,8 @@
 //! [`StackGraph`]: ../graph/struct.StackGraph.html
 
 use std::cell::Cell;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -195,7 +197,7 @@ impl<T> Arena<T> {
     pub fn get(&self, handle: Handle<T>) -> &T {
         unsafe { std::mem::transmute(&self.items[handle.as_usize()]) }
     }
-    ///
+
     /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
     /// it.
     pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
@@ -219,6 +221,66 @@ impl<T> Arena<T> {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.items.len()
+    }
+}
+
+/// An interning arena allocation.  Equal handles means equal elements.
+pub struct InterningArena<T>
+where
+    T: Clone + Eq + Hash,
+{
+    arena: Arena<T>,
+    index: HashMap<T, Handle<T>>,
+}
+
+impl<T> InterningArena<T>
+where
+    T: Clone + Eq + Hash,
+{
+    /// Creates a new interning arena.
+    pub fn new() -> Self {
+        Self {
+            arena: Arena::new(),
+            index: HashMap::new(),
+        }
+    }
+
+    /// Adds a new instance to this arena, returning a stable handle to it.
+    ///
+    /// Note that we deduplicate instances of `T`.  If you add two instances that
+    /// have the same content, you will get identical handles for each one.
+    pub fn add(&mut self, item: T) -> Handle<T> {
+        match self.index.entry(item) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let handle = self.arena.add(entry.key().clone());
+                entry.insert(handle);
+                handle
+            }
+        }
+    }
+
+    /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
+    pub fn get(&self, handle: Handle<T>) -> &T {
+        self.arena.get(handle)
+    }
+
+    /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
+    /// it.
+    pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
+        self.arena.get_mut(handle)
+    }
+
+    /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
+    /// retain a reference to the arena!)
+    pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
+        self.arena.iter_handles()
+    }
+
+    /// Returns the number of instances stored in this arena.
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.arena.len()
     }
 }
 
