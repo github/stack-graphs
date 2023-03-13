@@ -136,15 +136,31 @@ impl StackGraph {
                 Node::JumpToScope { .. } | Node::Root { .. } => None,
             };
 
-            if let (Some(handle), Some(source_info)) = (handle, n.source_info()) {
-                *graph.source_info_mut(handle) = crate::graph::SourceInfo {
-                    span: source_info.span.clone(),
-                    syntax_type: source_info
-                        .syntax_type
-                        .as_ref()
-                        .map(|st| graph.add_string(st.as_str())),
-                    ..Default::default()
-                };
+            if let Some(handle) = handle {
+                // load source-info of each node
+                if let Some(source_info) = n.source_info() {
+                    *graph.source_info_mut(handle) = crate::graph::SourceInfo {
+                        span: source_info.span.clone(),
+                        syntax_type: source_info
+                            .syntax_type
+                            .as_ref()
+                            .map(|st| graph.add_string(st.as_str())),
+                        ..Default::default()
+                    };
+                }
+
+                // load debug-info of each node
+                if let Some(debug_info) = n.debug_info() {
+                    *graph.debug_info_mut(handle) = debug_info.data.iter().fold(
+                        crate::graph::DebugInfo::default(),
+                        |mut info, entry| {
+                            let key = graph.add_string(entry.key.as_str());
+                            let value = graph.add_string(entry.value.as_str());
+                            info.add(key, value);
+                            info
+                        },
+                    );
+                }
             }
         }
         Ok(())
@@ -259,6 +275,20 @@ impl Node {
             Self::PushSymbol { source_info, .. } => source_info,
             Self::Root { source_info, .. } => source_info,
             Self::Scope { source_info, .. } => source_info,
+        }
+        .as_ref()
+    }
+
+    fn debug_info(&self) -> Option<&DebugInfo> {
+        match self {
+            Self::DropScopes { debug_info, .. } => debug_info,
+            Self::JumpToScope { debug_info, .. } => debug_info,
+            Self::PopScopedSymbol { debug_info, .. } => debug_info,
+            Self::PopSymbol { debug_info, .. } => debug_info,
+            Self::PushScopedSymbol { debug_info, .. } => debug_info,
+            Self::PushSymbol { debug_info, .. } => debug_info,
+            Self::Root { debug_info, .. } => debug_info,
+            Self::Scope { debug_info, .. } => debug_info,
         }
         .as_ref()
     }

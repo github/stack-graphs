@@ -16,7 +16,6 @@ edition = "2018"
 copious-debugging = []
 serde = ["dep:serde", "lsp-positions/serde"]
 json = ["serde", "serde_json", "lsp-positions/serde"]
-tree-sitter = ["lsp-positions/tree-sitter"]
 
 [lib]
 # All of our tests are in the tests/it "integration" test executable.
