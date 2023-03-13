@@ -8,16 +8,17 @@
 use stack_graphs::arena::Arena;
 use stack_graphs::arena::Deque;
 use stack_graphs::arena::DequeArena;
-use stack_graphs::arena::InterningArena;
+use stack_graphs::arena::HashArena;
 use stack_graphs::arena::List;
 use stack_graphs::arena::ListArena;
 use stack_graphs::arena::ReversibleList;
 use stack_graphs::arena::ReversibleListArena;
 use stack_graphs::arena::SupplementalArena;
+use stack_graphs::arena::VecArena;
 
 #[test]
 fn can_allocate_in_arena() {
-    let mut arena = Arena::new();
+    let mut arena = VecArena::new();
     let hello1 = arena.add("hello".to_string());
     let hello2 = arena.add("hello".to_string());
     let there = arena.add("there".to_string());
@@ -31,7 +32,7 @@ fn can_allocate_in_arena() {
 
 #[test]
 fn can_allocate_in_supplemental_arena() {
-    let mut arena = Arena::<u32>::new();
+    let mut arena = VecArena::<u32>::new();
     let h1 = arena.add(1);
     let h2 = arena.add(2);
     let h3 = arena.add(3);
@@ -233,7 +234,7 @@ fn can_compare_deques() {
 
 #[test]
 fn can_allocate_in_interning_arena() {
-    let mut arena = InterningArena::new();
+    let mut arena = HashArena::new();
     let hello1 = arena.add("hello".to_string());
     let hello2 = arena.add("hello".to_string());
     let there = arena.add("there".to_string());

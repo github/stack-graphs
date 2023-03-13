@@ -48,6 +48,7 @@ use crate::arena::List;
 use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
+use crate::arena::VecArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
@@ -74,7 +75,7 @@ use crate::CancellationFlag;
 /// partial paths that are actually needed, placing them into a `Database` instance as they're
 /// needed.
 pub struct Database {
-    pub(crate) partial_paths: Arena<PartialPath>,
+    pub(crate) partial_paths: VecArena<PartialPath>,
     pub(crate) local_nodes: HandleSet<Node>,
     symbol_stack_keys: ListArena<Handle<Symbol>>,
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
@@ -86,7 +87,7 @@ impl Database {
     /// Creates a new, empty database.
     pub fn new() -> Database {
         Database {
-            partial_paths: Arena::new(),
+            partial_paths: VecArena::new(),
             local_nodes: HandleSet::new(),
             symbol_stack_keys: List::new_arena(),
             symbol_stack_key_cache: HashMap::new(),

@@ -14,6 +14,7 @@ use std::sync::atomic::AtomicUsize;
 
 use libc::c_char;
 
+use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::graph::File;
 use crate::graph::InternedString;

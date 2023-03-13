@@ -40,6 +40,7 @@ use std::mem::MaybeUninit;
 use std::num::NonZeroU32;
 use std::ops::Index;
 use std::ops::IndexMut;
+use std::ops::Range;
 
 use bitvec::vec::BitVec;
 use controlled_option::Niche;
@@ -159,14 +160,62 @@ impl<T> PartialOrd for Handle<T> {
 unsafe impl<T> Send for Handle<T> {}
 unsafe impl<T> Sync for Handle<T> {}
 
+pub struct Handles<T> {
+    range: Range<usize>,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> Iterator for Handles<T> {
+    type Item = Handle<T>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.range
+            .next()
+            .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    }
+}
+
+impl<T> From<Range<usize>> for Handles<T> {
+    fn from(range: Range<usize>) -> Self {
+        Handles {
+            range,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+pub trait Arena<T> {
+    /// Adds a new instance to this arena, returning a stable handle to it.
+    fn add(&mut self, item: T) -> Handle<T>;
+
+    /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
+    fn get(&self, handle: Handle<T>) -> &T;
+
+    /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
+    /// it.
+    fn get_mut(&mut self, handle: Handle<T>) -> &mut T;
+
+    /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
+    /// retain a reference to the arena!)
+    fn iter_handles(&self) -> Handles<T>;
+
+    /// Returns a pointer to this arena's storage.
+    fn as_ptr(&self) -> *const T;
+
+    /// Returns the number of instances stored in this arena.
+    fn len(&self) -> usize;
+}
+
 /// Manages the life cycle of instances of type `T`.  You can allocate new instances of `T` from
 /// the arena.  All of the instances managed by this arena will be dropped as a single operation
 /// when the arena itself is dropped.
-pub struct Arena<T> {
+///
+/// Note that we do not deduplicate instances of `T` in any way.  If you add two instances that
+/// have the same content, you will get distinct handles for each one.
+pub struct VecArena<T> {
     items: Vec<MaybeUninit<T>>,
 }
 
-impl<T> Drop for Arena<T> {
+impl<T> Drop for VecArena<T> {
     fn drop(&mut self) {
         unsafe {
             let items = std::mem::transmute::<_, &mut [T]>(&mut self.items[1..]) as *mut [T];
@@ -175,81 +224,71 @@ impl<T> Drop for Arena<T> {
     }
 }
 
-impl<T> Arena<T> {
+impl<T> VecArena<T> {
     /// Creates a new arena.
-    pub fn new() -> Arena<T> {
-        Arena {
+    pub fn new() -> VecArena<T> {
+        VecArena {
             items: vec![MaybeUninit::uninit()],
         }
     }
+}
 
-    /// Adds a new instance to this arena, returning a stable handle to it.
-    ///
-    /// Note that we do not deduplicate instances of `T` in any way.  If you add two instances that
-    /// have the same content, you will get distinct handles for each one.
-    pub fn add(&mut self, item: T) -> Handle<T> {
+impl<T> Arena<T> for VecArena<T> {
+    fn add(&mut self, item: T) -> Handle<T> {
         let index = self.items.len() as u32;
         self.items.push(MaybeUninit::new(item));
         Handle::new(unsafe { NonZeroU32::new_unchecked(index) })
     }
 
-    /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
-    pub fn get(&self, handle: Handle<T>) -> &T {
+    fn get(&self, handle: Handle<T>) -> &T {
         unsafe { std::mem::transmute(&self.items[handle.as_usize()]) }
     }
 
-    /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
-    /// it.
-    pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
+    fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
         unsafe { std::mem::transmute(&mut self.items[handle.as_usize()]) }
     }
 
-    /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
-    /// retain a reference to the arena!)
-    pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
-        (1..self.items.len())
-            .into_iter()
-            .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    fn iter_handles(&self) -> Handles<T> {
+        (1..self.items.len()).into()
     }
 
-    /// Returns a pointer to this arena's storage.
-    pub(crate) fn as_ptr(&self) -> *const T {
+    fn as_ptr(&self) -> *const T {
         self.items.as_ptr() as *const T
     }
 
-    /// Returns the number of instances stored in this arena.
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.items.len()
     }
 }
 
 /// An interning arena allocation.  Equal handles means equal elements.
-pub struct InterningArena<T>
+pub struct HashArena<T>
 where
     T: Clone + Eq + Hash,
 {
-    arena: Arena<T>,
+    arena: VecArena<T>,
     index: HashMap<T, Handle<T>>,
 }
 
-impl<T> InterningArena<T>
+impl<T> HashArena<T>
 where
     T: Clone + Eq + Hash,
 {
     /// Creates a new interning arena.
     pub fn new() -> Self {
         Self {
-            arena: Arena::new(),
+            arena: VecArena::new(),
             index: HashMap::new(),
         }
     }
+}
 
-    /// Adds a new instance to this arena, returning a stable handle to it.
-    ///
-    /// Note that we deduplicate instances of `T`.  If you add two instances that
-    /// have the same content, you will get identical handles for each one.
-    pub fn add(&mut self, item: T) -> Handle<T> {
+impl<T> Arena<T> for HashArena<T>
+where
+    T: Clone + Eq + Hash,
+{
+    fn add(&mut self, item: T) -> Handle<T> {
         match self.index.entry(item) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
@@ -260,26 +299,24 @@ where
         }
     }
 
-    /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
-    pub fn get(&self, handle: Handle<T>) -> &T {
+    fn get(&self, handle: Handle<T>) -> &T {
         self.arena.get(handle)
     }
 
-    /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
-    /// it.
-    pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
+    fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
         self.arena.get_mut(handle)
     }
 
-    /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
-    /// retain a reference to the arena!)
-    pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
+    fn iter_handles(&self) -> Handles<T> {
         self.arena.iter_handles()
     }
 
-    /// Returns the number of instances stored in this arena.
+    fn as_ptr(&self) -> *const T {
+        self.arena.as_ptr()
+    }
+
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.arena.len()
     }
 }
@@ -299,8 +336,9 @@ where
 /// ```
 /// # use stack_graphs::arena::Arena;
 /// # use stack_graphs::arena::SupplementalArena;
+/// # use stack_graphs::arena::VecArena;
 /// // We need an Arena to create handles.
-/// let mut arena = Arena::<u32>::new();
+/// let mut arena = VecArena::<u32>::new();
 /// let handle = arena.add(1);
 ///
 /// let mut supplemental = SupplementalArena::<u32, String>::new();
@@ -344,8 +382,8 @@ impl<H, T> SupplementalArena<H, T> {
 
     /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental
     /// data for all of the instances that have already been allocated in a (regular) arena.
-    pub fn with_capacity(arena: &Arena<H>) -> SupplementalArena<H, T> {
-        let mut items = Vec::with_capacity(arena.items.len());
+    pub fn with_capacity(arena: impl Arena<H>) -> SupplementalArena<H, T> {
+        let mut items = Vec::with_capacity(arena.len());
         items[0] = MaybeUninit::uninit();
         SupplementalArena {
             items,
@@ -531,7 +569,7 @@ const EMPTY_LIST_HANDLE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(u32::MA
 //
 // (Note that the arena doesn't store `List<T>` itself; it stores the `ListCell<T>`s that the lists
 // are made of.)
-pub type ListArena<T> = Arena<ListCell<T>>;
+pub type ListArena<T> = VecArena<ListCell<T>>;
 
 impl<T> List<T> {
     /// Creates a new `ListArena` that will manage lists of this type.
@@ -682,7 +720,7 @@ pub struct ReversibleListCell<T> {
 //
 // (Note that the arena doesn't store `ReversibleList<T>` itself; it stores the
 // `ReversibleListCell<T>`s that the lists are made of.)
-pub type ReversibleListArena<T> = Arena<ReversibleListCell<T>>;
+pub type ReversibleListArena<T> = VecArena<ReversibleListCell<T>>;
 
 impl<T> ReversibleList<T> {
     /// Creates a new `ReversibleListArena` that will manage lists of this type.
