@@ -1,9 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;
 ;; Global Variables
 
-global FILE_PATH
-global ROOT_NODE
+global FILE_PATH           ; project relative path of this file
+global PROJECT_NAME = ""   ; project name, used to isolate different projects in the same stack graph
+
 global JUMP_TO_SCOPE_NODE
+global ROOT_NODE
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 ;; Attribute Shorthands
