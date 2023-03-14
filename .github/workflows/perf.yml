@@ -1,0 +1,87 @@
+name: Performance
+on:
+  pull_request:
+    paths:
+      - 'stack-graphs/**'
+
+jobs:
+  test-rust:
+    runs-on: ubuntu-latest
+    env:
+      BIN: tree-sitter-stack-graphs-typescript
+      BASE_DIR: base
+      BASE_MASSIF_OUT: base.massif
+      HEAD_DIR: head
+      HEAD_MASSIF_OUT: head.massif
+      TEST_DIR: test
+    steps:
+      - name: Install Rust environment
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: stable
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            ${{ env.BASE_DIR }}/target
+            ${{ env.HEAD_DIR }}/target
+          key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.OS }}-cargo-
+      - name: Install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+
+      - name: Checkout code (base)
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: ${{ env.BASE_DIR }}
+      - name: Build CLI (base)
+        run: cargo build --package ${{ env.BIN }} --features cli --release
+        working-directory: ${{ env.BASE_DIR }}
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: true
+
+      - name: Checkout code (head)
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: ${{ env.HEAD_DIR }}
+      - name: Build CLI (head)
+        run: cargo build --package ${{ env.BIN }} --features cli --release
+        working-directory: ${{ env.HEAD_DIR }}
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: true
+
+      - name: Checkout code (test)
+        uses: actions/checkout@v3
+        with:
+          repository: microsoft/TypeScript
+          ref: v4.9.5
+          path: ${{ env.TEST_DIR }}
+      - name: Profile memory (base)
+        run: valgrind --tool=massif --massif-out-file=${{ env.BASE_MASSIF_OUT }} ${{ env.BASE_DIR }}/target/release/${{ env.BIN }} -- analyze --max-file-time=30 ${{ env.TEST_DIR }}
+      - name: Profile memory (head)
+        run: valgrind --tool=massif --massif-out-file=${{ env.HEAD_MASSIF_OUT }} ${{ env.HEAD_DIR }}/target/release/${{ env.BIN }} -- analyze --max-file-time=30 ${{ env.TEST_DIR }}
+
+      - name: Generate Report
+        id: perf-report
+        run: |
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "text<<$EOF" >> $GITHUB_OUTPUT
+          ${{ env.HEAD_DIR }}/script/ci-perf-report ${{ env.BASE_MASSIF_OUT }} ${{ env.HEAD_MASSIF_OUT }} 'Comparing base ${{ github.event.pull_request.base.repo.owner }}/${{ github.event.pull_request.base.repo.name }}@${{ github.event.pull_request.base.sha }} with head ${{ github.event.pull_request.head.repo.owner }}/${{ github.event.pull_request.head.repo.name }}@${{ github.event.pull_request.head.sha }} by running `${{ env.BIN }} analyze --max-file-time=30` on https://github.com/microsoft/TypeScript/tree/v4.9.5/src/compiler.' >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+
+      - name: Post Comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '${{ steps.perf-report.outputs.text }}'
+            })
