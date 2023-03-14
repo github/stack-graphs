@@ -14,6 +14,7 @@ jobs:
       HEAD_DIR: head
       HEAD_MASSIF_OUT: head.massif
       TEST_DIR: test
+      TEST_SRC: ${{ env.TEST_DIR }}/src/compiler
       REPORT_BODY: perf-report.json
     steps:
       - name: Install Rust environment
@@ -69,14 +70,14 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.BASE_MASSIF_OUT }} \
             ${{ env.BASE_DIR }}/target/release/${{ env.BIN }} \
-              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/src/compiler
+              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_SRC }}
       - name: Profile memory (head)
         run: |
           valgrind \
             --tool=massif \
             --massif-out-file=${{ env.HEAD_MASSIF_OUT }} \
             ${{ env.HEAD_DIR }}/target/release/${{ env.BIN }} \
-              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/src/compiler
+              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_SRC }}
 
       - name: Generate report
         id: perf-report
