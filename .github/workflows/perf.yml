@@ -14,7 +14,7 @@ jobs:
       HEAD_DIR: head
       HEAD_MASSIF_OUT: head.massif
       TEST_DIR: test
-      TEST_SRC: ${{ env.TEST_DIR }}/src/compiler
+      TEST_SRC: ${{ env.TEST_DIR }}/src/compiler/binder.ts
       REPORT_BODY: perf-report.json
     steps:
       - name: Install Rust environment
