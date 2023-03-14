@@ -3,15 +3,15 @@ on:
   pull_request:
     paths:
       - 'stack-graphs/**'
-  env:
-    BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
-    BASE_SHA: ${{ github.event.pull_request.base.sha }}
-    HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
-    HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-    BIN: tree-sitter-stack-graphs-typescript
-    TEST_DIR: perf
-    TEST_SRC: ${{ env.TEST_DIR }}/src/compiler/binder.ts
-    MASSIF_OUT: perf.out
+env:
+  BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  BIN: tree-sitter-stack-graphs-typescript
+  TEST_DIR: perf
+  TEST_SRC: ${{ env.TEST_DIR }}/src/compiler/binder.ts
+  MASSIF_OUT: perf.out
 
 jobs:
   base-perf:
