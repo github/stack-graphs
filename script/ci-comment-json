@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -eu
+
+printf '{"body":"'
+cat | awk -v ORS='\\n' '1'
+printf '"}'
