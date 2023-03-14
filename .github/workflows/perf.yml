@@ -10,7 +10,7 @@ env:
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   BIN: tree-sitter-stack-graphs-typescript
   TEST_DIR: perf
-  TEST_SRC: ${{ env.TEST_DIR }}/src/compiler/binder.ts
+  TEST_SRC: src/compiler/binder.ts
   MASSIF_OUT: perf.out
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             target/release/${{ env.BIN }} \
-              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_SRC }}
+              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
       - name: Set output
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
@@ -104,7 +104,7 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.SRC_DIR }}/target/release/${{ env.BIN }} \
-              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_SRC }}
+              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
       - name: Set output
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | head64)
