@@ -16,6 +16,8 @@ env:
 jobs:
   base-perf:
     runs-on: ubuntu-latest
+    outputs:
+      massif-out: ${{ steps.set-output.outputs.massif-out }}
     steps:
       - name: Install Rust environment
         uses: hecrj/setup-rust-action@v1
@@ -57,6 +59,7 @@ jobs:
             target/release/${{ env.BIN }} \
               analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
       - name: Set output
+        id: set-output
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "massif-out<<$EOF" >> $GITHUB_OUTPUT
@@ -65,6 +68,8 @@ jobs:
 
   head-perf:
     runs-on: ubuntu-latest
+    outputs:
+      massif-out: ${{ steps.set-output.outputs.massif-out }}
     steps:
       - name: Install Rust environment
         uses: hecrj/setup-rust-action@v1
@@ -106,6 +111,7 @@ jobs:
             target/release/${{ env.BIN }} \
               analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
       - name: Set output
+        id: set-output
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "massif-out<<$EOF" >> $GITHUB_OUTPUT
