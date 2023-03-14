@@ -5,6 +5,9 @@ set -eu
 graph_w=72
 graph_h=12
 
+summary_end=$((graph_h + 10))
+details_start=$((graph_h + 11))
+
 if [ $# -lt 2 ]; then
     echo "Usage: $0 MASSIF_OUT_BEFORE MASSIF_OUT_AFTER DESC?" 1>&2
     exit 1
@@ -19,6 +22,9 @@ if [ $# -gt 0 ]; then
     shift 1
 fi
 
+before_info="$(ms_print --x="$graph_w" --y="$graph_h" "$massif_before")"
+after_info="$(ms_print --x="$graph_w" --y="$graph_h" "$massif_after")"
+
 printf '## Performance Result\n'
 printf '\n'
 if [ -n "$desc" ]; then
@@ -28,11 +34,23 @@ fi
 printf '### Before\n'
 printf '\n'
 printf '```\n'
-ms_print --x="$graph_w" --y="$graph_h" "$massif_before"
+printf '%s\n' "$before_info" | head -n +$summary_end
 printf '```\n'
+printf '\n'
+printf '<details>\n'
+printf '```\n'
+printf '%s\n' "$before_info" | tail -n +$details_start
+printf '```\n'
+printf '</details>\n'
 printf '\n'
 printf '### After\n'
 printf '\n'
 printf '```\n'
-ms_print --x="$graph_w" --y="$graph_h" "$massif_after"
+printf '%s\n' "$after_info" | head -n +$summary_end
 printf '```\n'
+printf '\n'
+printf '<details>\n'
+printf '```\n'
+printf '%s\n' "$after_info" | tail -n +$details_start
+printf '```\n'
+printf '</details>\n'
