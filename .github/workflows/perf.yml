@@ -128,6 +128,10 @@ jobs:
       HEAD_MASSIF_OUT: head-perf.out
       REPORT_COMMENT: perf-report.json
     steps:
+      - name: Install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Store base result
