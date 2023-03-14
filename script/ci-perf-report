@@ -28,11 +28,11 @@ fi
 printf '### Before\n'
 printf '\n'
 printf '```\n'
-echo ms_print --x="$graph_w" --y="$graph_h" "$massif_before"
+ms_print --x="$graph_w" --y="$graph_h" "$massif_before"
 printf '```\n'
 printf '\n'
 printf '### After\n'
 printf '\n'
 printf '```\n'
-echo ms_print --x="$graph_w" --y="$graph_h" "$massif_after"
+ms_print --x="$graph_w" --y="$graph_h" "$massif_after"
 printf '```\n'
