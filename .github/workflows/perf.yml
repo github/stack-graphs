@@ -127,11 +127,13 @@ jobs:
       - name: Store base result
         uses: DamianReeves/write-file-action@v1.2
         path: ${{ env.BASE_MASSIF_OUT }}
-        contents: ${{ steps.base-perf.outputs.massif-out }}
+        contents: |
+          ${{ steps.base-perf.outputs.massif-out }}
       - name: Store head result
         uses: DamianReeves/write-file-action@v1.2
         path: ${{ env.HEAD_MASSIF_OUT }}
-        contents: ${{ steps.head-perf.outputs.massif-out }}
+        contents: |
+          ${{ steps.head-perf.outputs.massif-out }}
       - name: Generate report
         run: |
           script/ci-perf-report-md \
