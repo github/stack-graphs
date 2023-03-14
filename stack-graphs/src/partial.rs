@@ -36,6 +36,7 @@
 use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::hash::Hash;
 use std::num::NonZeroU32;
 
 use controlled_option::ControlledOption;
@@ -305,14 +306,6 @@ impl Into<u32> for ScopeStackVariable {
     }
 }
 
-impl TryFrom<u32> for ScopeStackVariable {
-    type Error = ();
-    fn try_from(value: u32) -> Result<ScopeStackVariable, ()> {
-        let value = NonZeroU32::new(value).ok_or(())?;
-        Ok(ScopeStackVariable(value))
-    }
-}
-
 impl Niche for ScopeStackVariable {
     type Output = u32;
 
@@ -337,12 +330,20 @@ impl Niche for ScopeStackVariable {
     }
 }
 
+impl TryFrom<u32> for ScopeStackVariable {
+    type Error = ();
+    fn try_from(value: u32) -> Result<ScopeStackVariable, ()> {
+        let value = NonZeroU32::new(value).ok_or(())?;
+        Ok(ScopeStackVariable(value))
+    }
+}
+
 //-------------------------------------------------------------------------------------------------
 // Partial symbol stacks
 
 /// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PartialScopedSymbol {
     pub symbol: Handle<Symbol>,
     // Note that not having an attached scope list is _different_ than having an empty attached
@@ -490,9 +491,8 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 /// A pattern that might match against a symbol stack.  Consists of a (possibly empty) list of
 /// partial scoped symbols, along with an optional symbol stack variable.
 #[repr(C)]
-#[derive(Clone, Copy, Niche)]
+#[derive(Clone, Copy)]
 pub struct PartialSymbolStack {
-    #[niche]
     symbols: ReversibleList<PartialScopedSymbol>,
     length: u32,
     variable: ControlledOption<SymbolStackVariable>,
@@ -897,15 +897,60 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct NichePartialSymbolStack {
+    symbols: ControlledOption<ReversibleList<PartialScopedSymbol>>,
+    length: u32,
+    variable: ControlledOption<SymbolStackVariable>,
+}
+
+impl Niche for PartialSymbolStack {
+    type Output = NichePartialSymbolStack;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NichePartialSymbolStack {
+            symbols: ControlledOption::none(),
+            length: 0,
+            variable: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.symbols.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NichePartialSymbolStack {
+            symbols: ControlledOption::from(value.symbols),
+            length: value.length,
+            variable: value.variable,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        PartialSymbolStack {
+            symbols: value.symbols.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<PartialSymbolStack>",
+            ),
+            length: value.length,
+            variable: value.variable,
+        }
+    }
+}
+
 //-------------------------------------------------------------------------------------------------
 // Partial scope stacks
 
 /// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
 /// exported scopes, along with an optional scope stack variable.
 #[repr(C)]
-#[derive(Clone, Copy, Eq, Hash, Niche, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PartialScopeStack {
-    #[niche]
     scopes: ReversibleList<Handle<Node>>,
     length: u32,
     variable: ControlledOption<ScopeStackVariable>,
@@ -1239,6 +1284,52 @@ impl DisplayWithPartialPaths for PartialScopeStack {
             }
         }
         Ok(())
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct NichePartialScopeStack {
+    scopes: ControlledOption<ReversibleList<Handle<Node>>>,
+    length: u32,
+    variable: ControlledOption<ScopeStackVariable>,
+}
+
+impl Niche for PartialScopeStack {
+    type Output = NichePartialScopeStack;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NichePartialScopeStack {
+            scopes: ControlledOption::none(),
+            length: 0,
+            variable: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.scopes.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NichePartialScopeStack {
+            scopes: ControlledOption::from(value.scopes),
+            length: value.length,
+            variable: value.variable,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        PartialScopeStack {
+            scopes: value.scopes.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<PartialScopeStack>",
+            ),
+            length: value.length,
+            variable: value.variable,
+        }
     }
 }
 
@@ -1642,6 +1733,48 @@ impl DisplayWithPartialPaths for PartialPathEdgeList {
             edge.display_with(graph, partials, f)?;
         }
         Ok(())
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct NichePartialPathEdgeList {
+    edges: ControlledOption<Deque<PartialPathEdge>>,
+    length: u32,
+}
+
+impl Niche for PartialPathEdgeList {
+    type Output = NichePartialPathEdgeList;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NichePartialPathEdgeList {
+            edges: ControlledOption::none(),
+            length: 0,
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.edges.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NichePartialPathEdgeList {
+            edges: ControlledOption::from(value.edges),
+            length: value.length,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        PartialPathEdgeList {
+            edges: value.edges.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<PartialPathEdgeList>",
+            ),
+            length: value.length,
+        }
     }
 }
 

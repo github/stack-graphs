@@ -43,6 +43,7 @@ use std::ops::IndexMut;
 use std::ops::Range;
 
 use bitvec::vec::BitVec;
+use controlled_option::ControlledOption;
 use controlled_option::Niche;
 
 use crate::utils::cmp_option;
@@ -546,12 +547,11 @@ impl<T> Default for HandleSet<T> {
 /// linked list implementation _should_ be cache-friendly, since the individual cells are allocated
 /// out of an arena.
 #[repr(C)]
-#[derive(Eq, Hash, Niche, PartialEq)]
+#[derive(Eq, Hash, PartialEq)]
 pub struct List<T> {
     // The value of this handle will be EMPTY_LIST_HANDLE if the list is empty.  For an
     // Option<List<T>>, the value will be zero (via the Option<NonZero> optimization) if the list
     // is None.
-    #[niche]
     cells: Handle<ListCell<T>>,
 }
 
@@ -697,6 +697,53 @@ impl<T> Clone for List<T> {
 
 impl<T> Copy for List<T> {}
 
+#[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
+pub struct NicheList<T> {
+    cells: ControlledOption<Handle<ListCell<T>>>,
+}
+
+impl<T> Niche for List<T> {
+    type Output = NicheList<T>;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NicheList {
+            cells: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.cells.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NicheList {
+            cells: ControlledOption::from(value.cells),
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        List {
+            cells: value
+                .cells
+                .into_option()
+                .expect("Niche::from_some called on none value of ControlledOption<List<_>>"),
+        }
+    }
+}
+
+impl<T> Clone for NicheList<T> {
+    fn clone(&self) -> Self {
+        Self { cells: self.cells }
+    }
+}
+
+impl<T> Copy for NicheList<T> {}
+
 //-------------------------------------------------------------------------------------------------
 // Reversible arena-allocated list
 
@@ -708,9 +755,8 @@ impl<T> Copy for List<T> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
-#[derive(Eq, Hash, Niche, PartialEq)]
+#[derive(Eq, Hash, PartialEq)]
 pub struct ReversibleList<T> {
-    #[niche]
     cells: Handle<ReversibleListCell<T>>,
 }
 
@@ -969,6 +1015,52 @@ impl<T> Clone for ReversibleList<T> {
 }
 
 impl<T> Copy for ReversibleList<T> {}
+
+#[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
+pub struct NicheReversibleList<T> {
+    cells: ControlledOption<Handle<ReversibleListCell<T>>>,
+}
+
+impl<T> Niche for ReversibleList<T> {
+    type Output = NicheReversibleList<T>;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NicheReversibleList {
+            cells: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.cells.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NicheReversibleList {
+            cells: ControlledOption::from(value.cells),
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        ReversibleList {
+            cells: value.cells.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<ReversibleList<_>>",
+            ),
+        }
+    }
+}
+
+impl<T> Clone for NicheReversibleList<T> {
+    fn clone(&self) -> Self {
+        Self { cells: self.cells }
+    }
+}
+
+impl<T> Copy for NicheReversibleList<T> {}
 
 //-------------------------------------------------------------------------------------------------
 // Arena-allocated deque
@@ -1265,3 +1357,57 @@ impl<T> Clone for Deque<T> {
 }
 
 impl<T> Copy for Deque<T> {}
+
+#[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
+pub struct NicheDeque<T> {
+    list: ControlledOption<ReversibleList<T>>,
+    direction: DequeDirection,
+}
+
+impl<T> Niche for Deque<T> {
+    type Output = NicheDeque<T>;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NicheDeque {
+            list: ControlledOption::none(),
+            direction: DequeDirection::Forwards,
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.list.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NicheDeque {
+            list: ControlledOption::from(value.list),
+            direction: value.direction,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        Deque {
+            list: value
+                .list
+                .into_option()
+                .expect("Niche::from_some called on none value of ControlledOption<Deque<_>>"),
+            direction: value.direction,
+        }
+    }
+}
+
+impl<T> Clone for NicheDeque<T> {
+    fn clone(&self) -> Self {
+        Self {
+            list: self.list,
+            direction: self.direction,
+        }
+    }
+}
+
+impl<T> Copy for NicheDeque<T> {}
