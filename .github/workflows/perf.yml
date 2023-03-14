@@ -63,7 +63,7 @@ jobs:
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "massif-out<<$EOF" >> $GITHUB_OUTPUT
-          cat ${{ env.MASSIF_OUT }}
+          cat ${{ env.MASSIF_OUT }} >> $GITHUB_OUTPUT
           echo "$EOF" >> $GITHUB_OUTPUT
 
   head-perf:
@@ -115,7 +115,7 @@ jobs:
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "massif-out<<$EOF" >> $GITHUB_OUTPUT
-          cat ${{ env.MASSIF_OUT }}
+          cat ${{ env.MASSIF_OUT }} >> $GITHUB_OUTPUT
           echo "$EOF" >> $GITHUB_OUTPUT
 
   report:
