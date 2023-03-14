@@ -107,7 +107,7 @@ jobs:
               analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
       - name: Set output
         run: |
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | head64)
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "massif-out<<$EOF" >> $GITHUB_OUTPUT
           cat ${{ env.MASSIF_OUT }}
           echo "$EOF" >> $GITHUB_OUTPUT
