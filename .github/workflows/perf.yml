@@ -67,7 +67,7 @@ jobs:
       - name: Profile memory (head)
         run: valgrind --tool=massif --massif-out-file=${{ env.HEAD_MASSIF_OUT }} ${{ env.HEAD_DIR }}/target/release/${{ env.BIN }} analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}
 
-      - name: Generate Report
+      - name: Generate report
         id: perf-report
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
@@ -75,7 +75,7 @@ jobs:
           ${{ env.HEAD_DIR }}/script/ci-perf-report ${{ env.BASE_MASSIF_OUT }} ${{ env.HEAD_MASSIF_OUT }} 'Comparing base ${{ github.event.pull_request.base.repo.owner }}/${{ github.event.pull_request.base.repo.name }}@${{ github.event.pull_request.base.sha }} with head ${{ github.event.pull_request.head.repo.owner }}/${{ github.event.pull_request.head.repo.name }}@${{ github.event.pull_request.head.sha }} by running `${{ env.BIN }} analyze --max-file-time=30` on https://github.com/microsoft/TypeScript/tree/v4.9.5/src/compiler.' >> $GITHUB_OUTPUT
           echo "$EOF" >> $GITHUB_OUTPUT
 
-      - name: Post Comment
+      - name: Comment on PR
         uses: actions/github-script@v6
         with:
           script: |
