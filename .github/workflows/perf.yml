@@ -5,7 +5,7 @@ on:
       - 'stack-graphs/**'
 
 jobs:
-  test-rust:
+  test-perf:
     runs-on: ubuntu-latest
     env:
       BIN: tree-sitter-stack-graphs-typescript
