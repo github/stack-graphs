@@ -63,9 +63,9 @@ jobs:
           ref: v4.9.5
           path: ${{ env.TEST_DIR }}
       - name: Profile memory (base)
-        run: valgrind --tool=massif --massif-out-file=${{ env.BASE_MASSIF_OUT }} ${{ env.BASE_DIR }}/target/release/${{ env.BIN }} analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}
+        run: valgrind --tool=massif --massif-out-file=${{ env.BASE_MASSIF_OUT }} ${{ env.BASE_DIR }}/target/release/${{ env.BIN }} analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/src/compiler
       - name: Profile memory (head)
-        run: valgrind --tool=massif --massif-out-file=${{ env.HEAD_MASSIF_OUT }} ${{ env.HEAD_DIR }}/target/release/${{ env.BIN }} analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}
+        run: valgrind --tool=massif --massif-out-file=${{ env.HEAD_MASSIF_OUT }} ${{ env.HEAD_DIR }}/target/release/${{ env.BIN }} analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/src/compiler
 
       - name: Generate report
         id: perf-report
