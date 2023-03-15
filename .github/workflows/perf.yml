@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.BASE_MASSIF_OUT }}
-          key: ${{ runner.os }}-${{ env.BASE_REPO }}@${{ env.BASE_SHA}}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
       - name: "Checkout base code"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -127,7 +127,7 @@ jobs:
           ${{ env.HEAD_DIR }}/script/ci-perf-summary-md \
             ${{ env.BASE_MASSIF_OUT }} \
             ${{ env.HEAD_MASSIF_OUT }} \
-            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on `${{ env.TEST_SRC }}` in ${{ env.TEST_REPO }}@${{ env.TEST_REF }}. For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts.' \
+            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on [${{ env.TEST_REPO }}@${{ env.TEST_REF }}](${{ github.server_url }}/${{ env.TEST_REPO }}/tree/${{ env.TEST_REF }}). For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts.' \
           | ${{ env.HEAD_DIR }}/script/ci-comment-json > ${{ env.COMMENT_JSON }}
       - name: Upload reports
         uses: actions/upload-artifact@v3
