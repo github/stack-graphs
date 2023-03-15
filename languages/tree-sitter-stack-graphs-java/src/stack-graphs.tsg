@@ -509,12 +509,36 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
-(break_statement) @stmt {
-  ; FIXME: labels
+(break_statement (identifier) @name) @this {
+  edge @this.after_scope -> @this.before_scope
 }
 
-(continue_statement) @stmt {
-  ; FIXME: labels
+(break_statement (identifier) @name) @stmt {
+  node ref
+  node ns
+
+  attr (ref) node_reference = @name
+  edge ref -> ns
+
+  attr (ns) push_symbol = "%Label"
+
+  edge ns -> @stmt.before_scope
+}
+
+(continue_statement) @this {
+  edge @this.after_scope -> @this.before_scope
+}
+
+(continue_statement (identifier) @name) @this {
+  node ref
+  node ns
+
+  attr (ref) node_reference = @name
+  edge ref -> ns
+
+  attr (ns) push_symbol = "%Label"
+
+  edge ns -> @this.before_scope
 }
 
 (declaration) @decl {}
@@ -543,12 +567,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @stmt.after_scope -> @stmt.before_scope
 }
 
+(for_statement) @this {
+  edge @this.after_scope -> @this.before_scope
+}
+
+(for_statement !init !condition !update body: (_) @body) @this {
+  edge @body.before_scope -> @this.before_scope
+}
+
 (for_statement init: (expression) @init condition: (_) @condition update: (_) @update body: (_) @body) @stmt {
   edge @init.lexical_scope -> @stmt.before_scope
   edge @condition.lexical_scope -> @stmt.before_scope
   edge @update.lexical_scope -> @stmt.before_scope
   edge @body.before_scope -> @stmt.before_scope
-  edge @stmt.after_scope -> @stmt.before_scope
 }
 
 (for_statement init: (local_variable_declaration) @init condition: (_) @condition update: (_) @update body: (_) @body) @stmt {
@@ -556,7 +587,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @condition.lexical_scope -> @init.after_scope
   edge @update.lexical_scope -> @init.after_scope
   edge @body.before_scope -> @init.after_scope
-  edge @stmt.after_scope -> @stmt.before_scope
 }
 
 (if_statement condition: (_) @condition consequence: (_) @consequence) @stmt {
@@ -572,7 +602,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (labeled_statement (identifier) @name (statement) @child) @stmt {
   edge @child.before_scope -> @stmt.before_scope
   edge @stmt.after_scope -> @child.after_scope
-  ; FIXME: labels
+
+  node def
+  attr (def) node_definition = @name
+  node ns
+  attr (ns) pop_symbol = "%Label"
+  edge ns -> def
+
+  edge @stmt.before_scope -> ns
 }
 
 (local_variable_declaration
