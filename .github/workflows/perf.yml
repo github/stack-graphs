@@ -4,16 +4,20 @@ on:
     paths:
       - 'stack-graphs/**'
 env:
+  BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  BASE_MASSIF_OUT: base-perf.out
+  BASE_REPORT: base-perf.txt
+  BASE_ARTIFACT: base-perf-results
+  HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  HEAD_MASSIF_OUT: head-perf.out
+  HEAD_REPORT: head-perf.txt
+  HEAD_ARTIFACT: head-perf-results
   TEST_REPO: microsoft/TypeScript
   TEST_REF: v4.9.5
   TEST_DIR: test
   TEST_SRC: src/compiler
-  BASE_MASSIF_OUT: base-perf.out
-  BASE_REPORT: base-perf.txt
-  BASE_ARTIFACT: base-perf-results
-  HEAD_MASSIF_OUT: head-perf.out
-  HEAD_REPORT: head-perf.txt
-  HEAD_ARTIFACT: head-perf-results
   TSSG_TS: tree-sitter-stack-graphs-typescript
 
 jobs:
@@ -23,8 +27,6 @@ jobs:
   base-perf:
     runs-on: ubuntu-latest
     env:
-      BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
-      BASE_SHA: ${{ github.event.pull_request.base.sha }}
       BASE_DIR: base
     steps:
       #
@@ -45,6 +47,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y valgrind
       #
+      # Checkout code
+      #
+      - name: "Checkout base code"
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.BASE_REPO }}
+          ref: ${{ env.BASE_SHA }}
+          path: ${{ env.BASE_DIR }}
+      #
       # Cache results
       #
       - name: "Cache base result"
@@ -56,13 +67,6 @@ jobs:
       #
       # Build code
       #
-      - name: "Checkout base code"
-        if: steps.cache-base-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.BASE_REPO }}
-          ref: ${{ env.BASE_SHA }}
-          path: ${{ env.BASE_DIR }}
       - name: "Build base CLI"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: cargo build --package ${{ env.TSSG_TS }} --features cli --release
@@ -104,8 +108,6 @@ jobs:
   head-perf:
     runs-on: ubuntu-latest
     env:
-      HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       HEAD_DIR: head
     steps:
       #
@@ -126,6 +128,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y valgrind
       #
+      # Checkout code
+      #
+      - name: "Checkout head code"
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.HEAD_REPO }}
+          ref: ${{ env.HEAD_SHA }}
+          path: ${{ env.HEAD_DIR }}
+      #
       # Cache results
       #
       - name: "Cache head result"
@@ -137,13 +148,6 @@ jobs:
       #
       # Build code
       #
-      - name: "Checkout head code"
-        if: steps.cache-head-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.HEAD_REPO }}
-          ref: ${{ env.HEAD_SHA }}
-          path: ${{ env.HEAD_DIR }}
       - name: "Build head CLI"
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: cargo build --package ${{ env.TSSG_TS }} --features cli --release
