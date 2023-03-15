@@ -27,14 +27,18 @@ if [ -n "$desc" ]; then
     printf '%s\n' "$desc"
     printf '\n'
 fi
-printf '### Before\n'
 printf '\n'
+printf '<details>\n'
+printf '<summary>Before</summary>\n'
 printf '```\n'
 ms_print --x="$graph_w" --y="$graph_h" "$massif_before" | head -n +$summary_lines
 printf '```\n'
+printf '</details>\n'
 printf '\n'
-printf '### After\n'
 printf '\n'
+printf '<details>\n'
+printf '<summary>After</summary>\n'
 printf '```\n'
 ms_print --x="$graph_w" --y="$graph_h" "$massif_after" | head -n +$summary_lines
 printf '```\n'
+printf '</details>\n'
