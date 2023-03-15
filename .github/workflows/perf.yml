@@ -116,13 +116,19 @@ jobs:
       #
       # Create report
       #
+      - name: "Checkout head code"
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.HEAD_REPO }}
+          ref: ${{ env.HEAD_SHA }}
+          path: ${{ env.HEAD_DIR }}
       - name: Generate report
         run: |
-          script/ci-perf-report-md \
-            ${{ env.BASE_MASSIF_OUT }} \
+          ${{ env.HEAD_DIR }}/script/ci-perf-report-md \
+            ${{ env.HEAD_DIR${{ env.BASE_MASSIF_OUT }} \
             ${{ env.HEAD_MASSIF_OUT }} \
             'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on `${{ env.TEST_SRC }}` in ${{ env.TEST_REPO }}@${{ env.TEST_REF }}.' \
-          | script/ci-comment-json >> ${{ env.REPORT_COMMENT }}
+          | ${{ env.HEAD_DIR }}/script/ci-comment-json >> ${{ env.REPORT_COMMENT }}
       - name: Add report comment to PR
         run: |
           curl \
