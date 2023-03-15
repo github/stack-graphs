@@ -17,4 +17,12 @@ class A {
       //^ defined: 12
     }
   }
+
+  void h() {
+    int k = 5;
+    for (int i = 0, j = i; i < 123; k++) {
+                     // ^ defined: 23
+                                 // ^ defined: 22
+    }
+  }
 }
