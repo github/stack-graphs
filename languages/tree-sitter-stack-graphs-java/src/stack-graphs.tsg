@@ -127,7 +127,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (class_declaration
   superclass: (superclass
-    (type_identifier) @superclass_name)
+    (_) @superclass_name)
     body: (class_body) @class_body) @class {
 
     node ref
@@ -151,7 +151,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge super__expr_def__typeof -> ref
     edge @class.type -> ref
 }
-
 
 (class_declaration (type_parameters)) @class {
   node @class.type_parameters
@@ -357,6 +356,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (interface_declaration (extends_interfaces (type_list (_) @type))) @this {
   edge @type.lexical_scope -> @this.lexical_scope
+}
+
+(interface_declaration
+  type_parameters: (type_parameters
+    (type_parameter
+      (type_identifier) @type_identifier))
+  body: (_) @body) @this {
+  node type_ident
+  attr (type_ident) node_definition = @type_identifier
+  edge @body.lexical_scope -> type_ident
 }
 
 (interface_body) @this {
@@ -604,6 +613,41 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.lexical_scope -> @stmt.before_scope
   edge @stmt.after_scope -> @stmt.before_scope
 }
+
+(method_declaration
+ parameters:
+ (formal_parameters
+  (formal_parameter
+   type: (generic_type
+     (type_arguments
+      (type_identifier) @type))))
+ body:
+ (block
+  (switch_expression
+   condition: (_)
+   body: (switch_block
+     (switch_block_statement_group
+      (switch_label
+       (identifier))
+      @label))
+  )) @stmt) {
+
+  node ident
+  attr (ident) node_reference = @type
+
+  node ref__typeof
+  attr(ref__typeof) push_symbol = "."
+  node implicit_this__typeof
+  attr(implicit_this__typeof) push_symbol = ":"
+
+  edge implicit_this__typeof -> @label.lexical_scope
+  edge @label.lexical_scope -> ref__typeof
+  edge ref__typeof -> implicit_this__typeof
+  edge implicit_this__typeof -> ident
+
+  edge ident -> @stmt.after_scope
+}
+
 
 (switch_block) @this {
   node @this.lexical_scope
