@@ -32,16 +32,12 @@ jobs:
         uses: hecrj/setup-rust-action@v1
         with:
           rust-version: stable
-      - name: Cache dependencies
+      - name: Cache Rust dependencies
         uses: actions/cache@v3
         with:
           path: |
             ~/.cargo
-            ${{ env.BASE_DIR }}/target
-            ${{ env.HEAD_DIR }}/target
-          key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.OS }}-cargo-
+          key: ${{ runner.OS }}-cargo-home
       - name: Install valgrind
         run: |
           sudo apt-get update
