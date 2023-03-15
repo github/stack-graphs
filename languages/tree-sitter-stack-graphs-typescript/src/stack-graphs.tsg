@@ -5847,26 +5847,6 @@ if none @is_acc {
   ;
   attr (@gen_decl.type_abs) pop_scoped_symbol = "<>"
   edge @gen_decl.type_abs -> @gen_decl.generic_inner_type
-
-  ; FIXME   This edge enables resolving to a member while dropping the type
-  ;       application from the scope stack. This is necessary to be able to
-  ;       resolve to a member inside a generic type without consuming its type.
-  ;       Consuming the type results in either DROP or JUMP. Resolving just to
-  ;       the field does not consume the scope on the scope stack, and is not
-  ;       considered a complete path.
-  ;         I think this is an example where a semantics that allows a non-
-  ;       empty scope stack, but not symbol stack, makes more sense than re-
-  ;       quiring the complete consumption of it. One of the effects of the strict
-  ;       semantics is that an intermediate path may not resolve on its own, but does
-  ;       resolve in the context of another path.
-  ;         An example can be found in the test `types/generic-interface.ts`, where
-  ;       in the expression `x.f.v`, the reference `.f` does not resolve on its own,
-  ;       while the reference `.v`, which depend on being able to resolve `.f` does
-  ;       resolve fine.
-  edge @gen_decl.type_abs -> @gen_decl.drop_type_abs
-  ;
-  attr (@gen_decl.drop_type_abs) type = "drop_scopes"
-  edge @gen_decl.drop_type_abs -> @gen_decl.generic_inner_type
 }
 
 ;; Attributes defined on generic applications
