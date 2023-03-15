@@ -125,7 +125,7 @@ jobs:
       - name: Generate report
         run: |
           ${{ env.HEAD_DIR }}/script/ci-perf-report-md \
-            ${{ env.HEAD_DIR${{ env.BASE_MASSIF_OUT }} \
+            ${{ env.BASE_MASSIF_OUT }} \
             ${{ env.HEAD_MASSIF_OUT }} \
             'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on `${{ env.TEST_SRC }}` in ${{ env.TEST_REPO }}@${{ env.TEST_REF }}.' \
           | ${{ env.HEAD_DIR }}/script/ci-comment-json >> ${{ env.REPORT_COMMENT }}
