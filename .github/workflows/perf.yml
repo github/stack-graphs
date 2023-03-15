@@ -21,7 +21,7 @@ jobs:
       TEST_REPO: microsoft/TypeScript
       TEST_REF: v4.9.5
       TEST_DIR: test
-      TEST_SRC: src/compiler/binder.ts
+      TEST_SRC: src/compiler
       TSSG_TS: tree-sitter-stack-graphs-typescript
       COMMENT_JSON: perf-summary.json
     steps:
