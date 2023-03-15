@@ -3,27 +3,29 @@ on:
   pull_request:
     paths:
       - 'stack-graphs/**'
+env:
+  TEST_REPO: microsoft/TypeScript
+  TEST_REF: v4.9.5
+  TEST_DIR: test
+  TEST_SRC: src/compiler
+  BASE_MASSIF_OUT: base-perf.out
+  BASE_REPORT: base-perf.txt
+  BASE_ARTIFACT: base-perf-results
+  HEAD_MASSIF_OUT: head-perf.out
+  HEAD_REPORT: head-perf.txt
+  HEAD_ARTIFACT: head-perf-results
+  TSSG_TS: tree-sitter-stack-graphs-typescript
 
 jobs:
-  test-perf:
+  ##
+  ## Base performance
+  ##
+  base-perf:
     runs-on: ubuntu-latest
     env:
       BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
       BASE_DIR: base
-      BASE_MASSIF_OUT: base-perf.out
-      BASE_REPORT: base-perf.txt
-      HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      HEAD_DIR: head
-      HEAD_MASSIF_OUT: head-perf.out
-      HEAD_REPORT: head-perf.txt
-      TEST_REPO: microsoft/TypeScript
-      TEST_REF: v4.9.5
-      TEST_DIR: test
-      TEST_SRC: src/compiler
-      TSSG_TS: tree-sitter-stack-graphs-typescript
-      COMMENT_JSON: perf-summary.json
     steps:
       #
       # Install tools
@@ -43,16 +45,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y valgrind
       #
-      # Checkout test code
-      #
-      - name: Checkout test code
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.TEST_REPO }}
-          ref: ${{ env.TEST_REF }}
-          path: ${{ env.TEST_DIR }}
-      #
-      # Test base performance
+      # Cache results
       #
       - name: "Cache base result"
         id: cache-base-result
@@ -60,6 +53,9 @@ jobs:
         with:
           path: ${{ env.BASE_MASSIF_OUT }}
           key: ${{ runner.os }}-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+      #
+      # Build code
+      #
       - name: "Checkout base code"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -73,6 +69,16 @@ jobs:
         working-directory: ${{ env.BASE_DIR }}
         env:
           CARGO_PROFILE_RELEASE_DEBUG: true
+      #
+      # Test performance
+      #
+      - name: Checkout test code
+        if: steps.cache-base-result.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.TEST_REPO }}
+          ref: ${{ env.TEST_REF }}
+          path: ${{ env.TEST_DIR }}
       - name: Profile base memory
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
@@ -81,8 +87,46 @@ jobs:
             --massif-out-file=${{ env.BASE_MASSIF_OUT }} \
             ${{ env.BASE_DIR }}/target/release/${{ env.TSSG_TS }} \
               analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+          ms_print ${{ env.BASE_MASSIF_OUT }} > ${{ env.BASE_REPORT }}
       #
-      # Test head performance
+      # Upload results
+      #
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.BASE_ARTIFACT }}
+          path: |
+            ${{ env.BASE_MASSIF_OUT }}
+            ${{ env.BASE_REPORT }}
+  ##
+  ## Head performance
+  ##
+  head-perf:
+    runs-on: ubuntu-latest
+    env:
+      HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_DIR: head
+    steps:
+      #
+      # Install tools
+      #
+      - name: Install Rust environment
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: stable
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+          key: ${{ runner.OS }}-cargo-home
+      - name: Install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+      #
+      # Cache results
       #
       - name: "Cache head result"
         id: cache-head-result
@@ -90,6 +134,9 @@ jobs:
         with:
           path: ${{ env.HEAD_MASSIF_OUT }}
           key: ${{ runner.os }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA}}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+      #
+      # Build code
+      #
       - name: "Checkout head code"
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -103,6 +150,16 @@ jobs:
         working-directory: ${{ env.HEAD_DIR }}
         env:
           CARGO_PROFILE_RELEASE_DEBUG: true
+      #
+      # Test performance
+      #
+      - name: Checkout test code
+        if: steps.cache-head-result.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.TEST_REPO }}
+          ref: ${{ env.TEST_REF }}
+          path: ${{ env.TEST_DIR }}
       - name: Profile head memory
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
@@ -111,6 +168,46 @@ jobs:
             --massif-out-file=${{ env.HEAD_MASSIF_OUT }} \
             ${{ env.HEAD_DIR }}/target/release/${{ env.TSSG_TS }} \
               analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+          ms_print ${{ env.HEAD_MASSIF_OUT }} > ${{ env.HEAD_REPORT }}
+      #
+      # Upload results
+      #
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.HEAD_ARTIFACT }}
+          path: |
+            ${{ env.HEAD_MASSIF_OUT }}
+            ${{ env.HEAD_REPORT }}
+  ##
+  ## Performance summary
+  ##
+  perf-summary:
+    runs-on: ubuntu-latest
+    needs:
+      - base-perf
+      - head-perf
+    env:
+      COMMENT_JSON: perf-summary.json
+    steps:
+      #
+      # Install tools
+      #
+      - name: Install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+      #
+      # Download results
+      #
+      - name: Download base results
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.BASE_ARTIFACT }}
+      - name: Download head results
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.HEAD_ARTIFACT }}
       #
       # Create report
       #
@@ -120,24 +217,13 @@ jobs:
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
           path: ${{ env.HEAD_DIR }}
-      - name: Generate reports and summary
+      - name: Generate summary
         run: |
-          ms_print ${{ env.BASE_MASSIF_OUT }} > ${{ env.BASE_REPORT }}
-          ms_print ${{ env.HEAD_MASSIF_OUT }} > ${{ env.HEAD_REPORT }}
           ${{ env.HEAD_DIR }}/script/ci-perf-summary-md \
             ${{ env.BASE_MASSIF_OUT }} \
             ${{ env.HEAD_MASSIF_OUT }} \
             'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on [${{ env.TEST_REPO }}@${{ env.TEST_REF }}](${{ github.server_url }}/${{ env.TEST_REPO }}/tree/${{ env.TEST_REF }}). For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts.' \
           | ${{ env.HEAD_DIR }}/script/ci-comment-json > ${{ env.COMMENT_JSON }}
-      - name: Upload reports
-        uses: actions/upload-artifact@v3
-        with:
-          name: performance-reports
-          path: |
-            ${{ env.BASE_MASSIF_OUT }}
-            ${{ env.BASE_REPORT }}
-            ${{ env.HEAD_MASSIF_OUT }}
-            ${{ env.HEAD_REPORT }}
       - name: Add summary comment to PR
         run: |
           curl \
