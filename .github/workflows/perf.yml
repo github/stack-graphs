@@ -58,7 +58,7 @@ jobs:
       #
       - name: "Cache base result"
         id: cache-base-result
-        uses: actions/checkout@v3
+        uses: actions/cache@v3
         with:
           path: ${{ env.BASE_MASSIF_OUT }}
           key: ${{ runner.os }}-${{ env.BASE_REPO }}@${{ env.BASE_SHA}}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
@@ -88,7 +88,7 @@ jobs:
       #
       - name: "Cache head result"
         id: cache-head-result
-        uses: actions/checkout@v3
+        uses: actions/cache@v3
         with:
           path: ${{ env.HEAD_MASSIF_OUT }}
           key: ${{ runner.os }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA}}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
