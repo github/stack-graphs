@@ -131,7 +131,7 @@ jobs:
           ${{ env.HEAD_DIR }}/script/ci-perf-summary-md \
             ${{ env.BASE_MASSIF_OUT }} \
             ${{ env.HEAD_MASSIF_OUT }} \
-            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on `${{ env.TEST_SRC }}` in ${{ env.TEST_REPO }}@${{ env.TEST_REF }}. For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs/${{ github.job }}) artifacts.' \
+            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on `${{ env.TEST_SRC }}` in ${{ env.TEST_REPO }}@${{ env.TEST_REF }}. For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts.' \
           | ${{ env.HEAD_DIR }}/script/ci-comment-json > ${{ env.COMMENT_JSON }}
       - name: Upload reports
         uses: actions/upload-artifact@v3
