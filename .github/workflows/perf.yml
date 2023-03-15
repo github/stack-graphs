@@ -89,23 +89,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y valgrind
       #
-      # Checkout code
-      #
-      - name: "Checkout base code"
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.BASE_REPO }}
-          ref: ${{ env.BASE_SHA }}
-          path: ${{ env.BASE_DIR }}
-      #
       # Cache results
       #
       - name: "Cache base result"
         id: cache-base-result
         uses: actions/cache@v3
         with:
-          path: ${{ env.MASSIF_OUT }}
+          path: |
+            ${{ env.MASSIF_OUT }}
+            ${{ env.MASSIF_REPORT }}
           key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+      #
+      # Checkout code
+      #
+      - name: "Checkout base code"
+        if: steps.cache-base-result.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.BASE_REPO }}
+          ref: ${{ env.BASE_SHA }}
+          path: ${{ env.BASE_DIR }}
       #
       # Build code
       #
@@ -172,23 +175,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y valgrind
       #
-      # Checkout code
-      #
-      - name: "Checkout head code"
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.HEAD_REPO }}
-          ref: ${{ env.HEAD_SHA }}
-          path: ${{ env.HEAD_DIR }}
-      #
       # Cache results
       #
       - name: "Cache head result"
         id: cache-head-result
         uses: actions/cache@v3
         with:
-          path: ${{ env.MASSIF_OUT }}
+          path: |
+            ${{ env.MASSIF_OUT }}
+            ${{ env.MASSIF_REPORT }}
           key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+      #
+      # Checkout code
+      #
+      - name: "Checkout head code"
+        if: steps.cache-head-result.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.HEAD_REPO }}
+          ref: ${{ env.HEAD_SHA }}
+          path: ${{ env.HEAD_DIR }}
       #
       # Build code
       #
