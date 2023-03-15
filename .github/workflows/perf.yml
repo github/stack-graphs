@@ -288,7 +288,7 @@ jobs:
           ${{ env.SRC_DIR }}/script/ci-perf-summary-md \
             ${{ env.BASE_ARTIFACT }}/${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_ARTIFACT }}/${{ env.MASSIF_OUT }} \
-            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on [${{ env.TEST_REPO }}@${{ env.TEST_REF }}](${{ github.server_url }}/${{ env.TEST_REPO }}/tree/${{ env.TEST_REF }}). For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts. _Note that performance is tested on the last commits with changes in `stack-graphs`._' \
+            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on [${{ env.TEST_REPO }}@${{ env.TEST_REF }}](${{ github.server_url }}/${{ env.TEST_REPO }}/tree/${{ env.TEST_REF }}). For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts. _Note that performance is tested on the last commits with changes in `stack-graphs`, not on every commit._' \
           | ${{ env.SRC_DIR }}/script/ci-comment-json > ${{ env.COMMENT_JSON }}
       - name: Add summary comment to PR
         run: |
