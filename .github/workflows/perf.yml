@@ -12,16 +12,18 @@ jobs:
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
       BASE_DIR: base
       BASE_MASSIF_OUT: base-perf.out
+      BASE_REPORT: base-perf.txt
       HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       HEAD_DIR: head
       HEAD_MASSIF_OUT: head-perf.out
+      HEAD_REPORT: head-perf.txt
       TEST_REPO: microsoft/TypeScript
       TEST_REF: v4.9.5
       TEST_DIR: test
       TEST_SRC: src/compiler/binder.ts
       TSSG_TS: tree-sitter-stack-graphs-typescript
-      REPORT_COMMENT: perf-report.json
+      COMMENT_JSON: perf-summary.json
     steps:
       #
       # Install tools
@@ -122,14 +124,25 @@ jobs:
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
           path: ${{ env.HEAD_DIR }}
-      - name: Generate report
+      - name: Generate reports and summary
         run: |
-          ${{ env.HEAD_DIR }}/script/ci-perf-report-md \
+          ms_print ${{ env.BASE_MASSIF_OUT }} > ${{ env.BASE_REPORT }}
+          ms_print ${{ env.HEAD_MASSIF_OUT }} > ${{ env.HEAD_REPORT }}
+          ${{ env.HEAD_DIR }}/script/ci-perf-summary-md \
             ${{ env.BASE_MASSIF_OUT }} \
             ${{ env.HEAD_MASSIF_OUT }} \
-            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on `${{ env.TEST_SRC }}` in ${{ env.TEST_REPO }}@${{ env.TEST_REF }}.' \
-          | ${{ env.HEAD_DIR }}/script/ci-comment-json >> ${{ env.REPORT_COMMENT }}
-      - name: Add report comment to PR
+            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on `${{ env.TEST_SRC }}` in ${{ env.TEST_REPO }}@${{ env.TEST_REF }}. For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs/${{ github.job }}) artifacts.' \
+          | ${{ env.HEAD_DIR }}/script/ci-comment-json > ${{ env.COMMENT_JSON }}
+      - name: Upload reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: perf
+          path: |
+            ${{ env.BASE_MASSIF_OUT }}
+            ${{ env.BASE_REPORT }}
+            ${{ env.HEAD_MASSIF_OUT }}
+            ${{ env.HEAD_REPORT }}
+      - name: Add summary comment to PR
         run: |
           curl \
             -X POST \
@@ -137,4 +150,4 @@ jobs:
             -H "Authorization: Bearer ${{ github.TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             ${{ github.event.pull_request.comments_url }} \
-            -d '@${{ env.REPORT_COMMENT }}'
+            -d '@${{ env.COMMENT_JSON }}'
