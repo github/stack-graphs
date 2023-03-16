@@ -35,71 +35,16 @@ use crate::partial::PartialScopedSymbol;
 use crate::partial::PartialSymbolStack;
 use crate::partial::ScopeStackVariable;
 use crate::partial::SymbolStackVariable;
+pub use crate::serde::{Filter, NoFilter};
 use crate::stitching::Database;
 
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub struct JsonError(#[from] serde_json::error::Error);
 
-//-----------------------------------------------------------------------------
-// Filter
-
-pub trait Filter {
-    /// Return whether elements for the given file must be included.
-    fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool;
-
-    /// Return whether the given node must be included.
-    /// Nodes of excluded files are always excluded.
-    fn include_node(&self, graph: &StackGraph, node: &Handle<Node>) -> bool;
-
-    /// Return whether the given edge must be included.
-    /// Edges via excluded nodes are always excluded.
-    fn include_edge(&self, graph: &StackGraph, source: &Handle<Node>, sink: &Handle<Node>) -> bool;
-
-    /// Return whether the given path must be included.
-    /// Paths via excluded nodes or edges are always excluded.
-    fn include_partial_path(
-        &self,
-        graph: &StackGraph,
-        paths: &PartialPaths,
-        path: &PartialPath,
-    ) -> bool;
-}
-
-impl<F> Filter for F
-where
-    F: Fn(&StackGraph, &Handle<File>) -> bool,
-{
-    fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool {
-        self(graph, file)
-    }
-
-    fn include_node(&self, _graph: &StackGraph, _node: &Handle<Node>) -> bool {
-        true
-    }
-
-    fn include_edge(
-        &self,
-        _graph: &StackGraph,
-        _source: &Handle<Node>,
-        _sink: &Handle<Node>,
-    ) -> bool {
-        true
-    }
-
-    fn include_partial_path(
-        &self,
-        _graph: &StackGraph,
-        _paths: &PartialPaths,
-        _path: &PartialPath,
-    ) -> bool {
-        true
-    }
-}
-
 /// Filter implementation that enforces all implications of another filter.
 /// For example, that nodes frome excluded files are not included, etc.
-struct ImplicationFilter<'a>(&'a dyn Filter);
+pub(crate) struct ImplicationFilter<'a>(pub &'a dyn Filter);
 
 impl Filter for ImplicationFilter<'_> {
     fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool {
@@ -140,37 +85,6 @@ impl Filter for ImplicationFilter<'_> {
         if !all_included_edges {
             return false;
         }
-        true
-    }
-}
-
-// Filter implementation that includes everything.
-pub struct NoFilter;
-
-impl Filter for NoFilter {
-    fn include_file(&self, _graph: &StackGraph, _file: &Handle<File>) -> bool {
-        true
-    }
-
-    fn include_node(&self, _graph: &StackGraph, _node: &Handle<Node>) -> bool {
-        true
-    }
-
-    fn include_edge(
-        &self,
-        _graph: &StackGraph,
-        _source: &Handle<Node>,
-        _sink: &Handle<Node>,
-    ) -> bool {
-        true
-    }
-
-    fn include_partial_path(
-        &self,
-        _graph: &StackGraph,
-        _paths: &PartialPaths,
-        _path: &PartialPath,
-    ) -> bool {
         true
     }
 }
