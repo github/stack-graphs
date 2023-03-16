@@ -40,8 +40,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (program)@prog {
   node @prog.defs
   node @prog.lexical_scope
-  node @prog.exports
-  node @prog.globals
   edge @prog.lexical_scope -> ROOT_NODE
   edge @prog.lexical_scope -> @prog.defs
 }
@@ -87,6 +85,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @import.defs -> @name.value
 }
 
+; Import rules lifted mostly from typescript
 (program [(import_declaration)]* @import) @prog {
   var proj_scope = ROOT_NODE
 
@@ -102,9 +101,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     ;
     set proj_scope = proj_def
   }
-
-  ; expose globals
-  edge proj_scope -> @prog.globals
 
   var mod_scope = proj_scope
   if (not (is-empty @import)) {
@@ -130,8 +126,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     }
     ; make the last one a definition
     attr (mod_scope) is_definition, source_node = @prog, empty_source_span
-    ; expose exports via module definition
-    edge mod_scope -> @prog.exports
   } else {
     ; expose definitions via project scope
     edge mod_scope -> @prog.defs
@@ -1297,6 +1291,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (type_identifier) @this
 {
   edge @this.type -> @this.lexical_scope
+}
+
+(scoped_type_identifier
+  (type_identifier) @imported_class_name (type_identifier) @method_name) {
+
+  node member
+  attr (member) push_symbol = "."
+
+  edge @method_name.type -> member
+  edge member -> @imported_class_name.type
 }
 
 ;; ==========
