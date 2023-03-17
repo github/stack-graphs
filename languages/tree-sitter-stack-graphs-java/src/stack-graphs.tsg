@@ -614,29 +614,56 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (local_variable_declaration
   type: (_) @type
-  declarator: (variable_declarator
-    name: (_) @name
-  )
+  declarator: (variable_declarator) @var_decl
 ) @local_var
 {
-  node def
-  attr (def) node_definition = @name
-  edge @local_var.after_scope -> def
-  edge @local_var.after_scope -> @local_var.before_scope
-  attr (@local_var.after_scope -> @local_var.before_scope) precedence = 1
-
-  edge @type.lexical_scope -> @local_var.before_scope
-
-  node def__typeof
-  attr (def__typeof) pop_symbol = ":"
-
-  edge def -> def__typeof
-
-  edge def__typeof -> @type.type
+  edge @var_decl.def__typeof -> @type.type
 }
 
-(local_variable_declaration declarator: (variable_declarator value: (_) @value)) @this {
+(local_variable_declaration
+  type: (_) @type) @local_var {
+  edge @type.lexical_scope -> @local_var.before_scope
+}
+
+(variable_declarator value: (_) @value) @this {
   edge @value.lexical_scope -> @this.before_scope
+}
+
+(local_variable_declaration
+  declarator: (_) @last
+  . ) @local_var {
+  edge @local_var.after_scope -> @last.after_scope
+  attr (@local_var.after_scope -> @last.after_scope) precedence = 1
+}
+
+(local_variable_declaration
+  type: (_)
+  .
+  declarator: (_) @first) @local_var {
+  edge @first.before_scope -> @local_var.before_scope
+}
+
+(local_variable_declaration
+  declarator: (_) @left
+  .
+  declarator: (_) @right
+  ) @local_var {
+  edge @right.before_scope -> @left.after_scope
+}
+
+(variable_declarator
+  name: (_) @name) @var_decl {
+  node @var_decl.before_scope
+  node @var_decl.after_scope
+  node @var_decl.def__typeof
+  attr (@var_decl.def__typeof) pop_symbol = ":"
+
+  node def
+  attr (def) node_definition = @name
+  edge @var_decl.after_scope -> def
+  edge @var_decl.after_scope -> @var_decl.before_scope
+
+  edge def -> @var_decl.def__typeof
 }
 
 (return_statement (_) @expr) @stmt
