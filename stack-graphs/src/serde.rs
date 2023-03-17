@@ -103,9 +103,9 @@ mod filter {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 pub struct StackGraph {
-    files: Files,
-    nodes: Nodes,
-    edges: Edges,
+    pub files: Files,
+    pub nodes: Nodes,
+    pub edges: Edges,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -288,13 +288,13 @@ impl StackGraph {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 #[serde(transparent)]
 pub struct Files {
-    data: Vec<String>,
+    pub data: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 #[serde(transparent)]
 pub struct Nodes {
-    data: Vec<Node>,
+    pub data: Vec<Node>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -391,26 +391,26 @@ impl Node {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct SourceInfo {
-    span: lsp_positions::Span,
-    syntax_type: Option<String>,
+    pub span: lsp_positions::Span,
+    pub syntax_type: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 #[serde(transparent)]
 pub struct DebugInfo {
-    data: Vec<DebugEntry>,
+    pub data: Vec<DebugEntry>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct DebugEntry {
-    key: String,
-    value: String,
+    pub key: String,
+    pub value: String,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct NodeID {
-    file: Option<String>,
-    local_id: u32,
+    pub file: Option<String>,
+    pub local_id: u32,
 }
 
 impl NodeID {
@@ -446,14 +446,14 @@ impl NodeID {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 #[serde(transparent)]
 pub struct Edges {
-    data: Vec<Edge>,
+    pub data: Vec<Edge>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct Edge {
-    source: NodeID,
-    sink: NodeID,
-    precedence: i32,
+    pub source: NodeID,
+    pub sink: NodeID,
+    pub precedence: i32,
 }
 
 impl crate::graph::StackGraph {
@@ -584,268 +584,5 @@ impl crate::graph::StackGraph {
                 .flatten()
                 .collect::<Vec<_>>(),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    #[cfg(feature = "json")]
-    fn serde_json_stack_graph() {
-        let expected = StackGraph {
-            files: Files {
-                data: vec!["index.ts".to_owned()],
-            },
-            nodes: Nodes {
-                data: vec![Node::Root {
-                    id: NodeID {
-                        local_id: 1,
-                        file: None,
-                    },
-                    source_info: Some(SourceInfo {
-                        span: lsp_positions::Span {
-                            start: lsp_positions::Position {
-                                line: 0,
-                                column: lsp_positions::Offset {
-                                    utf8_offset: 0,
-                                    utf16_offset: 0,
-                                    grapheme_offset: 0,
-                                },
-                                containing_line: 0..0,
-                                trimmed_line: 0..0,
-                            },
-                            end: lsp_positions::Position {
-                                line: 0,
-                                column: lsp_positions::Offset {
-                                    utf8_offset: 0,
-                                    utf16_offset: 0,
-                                    grapheme_offset: 0,
-                                },
-                                containing_line: 0..0,
-                                trimmed_line: 0..0,
-                            },
-                        },
-                        syntax_type: None,
-                    }),
-                    debug_info: Some(DebugInfo { data: vec![] }),
-                }],
-            },
-            edges: Edges {
-                data: vec![Edge {
-                    source: NodeID {
-                        file: None,
-                        local_id: 1,
-                    },
-                    sink: NodeID {
-                        file: Some("index.ts".to_owned()),
-                        local_id: 0,
-                    },
-                    precedence: 0,
-                }],
-            },
-        };
-
-        let json_data = serde_json::json!({
-            "files": [
-                "index.ts"
-            ],
-            "nodes": [{
-                "type": "root",
-                "id": {
-                    "local_id": 1
-                },
-                "source_info": {
-                    "span": {
-                        "start": {
-                            "line": 0,
-                            "column": {
-                                "utf8_offset": 0,
-                                "utf16_offset": 0,
-                                "grapheme_offset": 0
-                            }
-                        },
-                        "end": {
-                            "line": 0,
-                            "column": {
-                                "utf8_offset": 0,
-                                "utf16_offset": 0,
-                                "grapheme_offset": 0
-                            }
-                        }
-                    }
-                },
-                "debug_info": []
-            }],
-            "edges": [{
-                "source": {
-                    "local_id": 1
-                },
-                "sink": {
-                    "file": "index.ts",
-                    "local_id": 0
-                },
-                "precedence": 0
-            }]
-
-        });
-
-        let observed = serde_json::from_value::<super::StackGraph>(json_data).unwrap();
-
-        assert_eq!(observed, expected);
-    }
-
-    #[test]
-    #[cfg(feature = "json")]
-    fn reconstruct() {
-        let json_data = serde_json::json!(
-            {
-              "files": [
-                "index.ts"
-              ],
-              "nodes": [
-                {
-                  "type": "root",
-                  "id": {
-                    "local_id": 1
-                  },
-                  "source_info": {
-                    "span": {
-                      "start": {
-                        "line": 0,
-                        "column": {
-                          "utf8_offset": 0,
-                          "utf16_offset": 0,
-                          "grapheme_offset": 0
-                        }
-                      },
-                      "end": {
-                        "line": 0,
-                        "column": {
-                          "utf8_offset": 0,
-                          "utf16_offset": 0,
-                          "grapheme_offset": 0
-                        }
-                      }
-                    }
-                  },
-                  "debug_info": []
-                },
-                {
-                  "type": "jump_to_scope",
-                  "id": {
-                    "local_id": 2
-                  },
-                  "source_info": {
-                    "span": {
-                      "start": {
-                        "line": 0,
-                        "column": {
-                          "utf8_offset": 0,
-                          "utf16_offset": 0,
-                          "grapheme_offset": 0
-                        }
-                      },
-                      "end": {
-                        "line": 0,
-                        "column": {
-                          "utf8_offset": 0,
-                          "utf16_offset": 0,
-                          "grapheme_offset": 0
-                        }
-                      }
-                    }
-                  },
-                  "debug_info": []
-                },
-                {
-                  "type": "scope",
-                  "is_exported": false,
-                  "id": {
-                    "file": "index.ts",
-                    "local_id": 0
-                  },
-                  "source_info": {
-                    "span": {
-                      "start": {
-                        "line": 0,
-                        "column": {
-                          "utf8_offset": 0,
-                          "utf16_offset": 0,
-                          "grapheme_offset": 0
-                        }
-                      },
-                      "end": {
-                        "line": 0,
-                        "column": {
-                          "utf8_offset": 0,
-                          "utf16_offset": 0,
-                          "grapheme_offset": 0
-                        }
-                      }
-                    }
-                  },
-                  "debug_info": [
-                    {
-                      "key": "tsg_variable",
-                      "value": "@prog.defs"
-                    },
-                    {
-                      "key": "tsg_location",
-                      "value": "(225, 14)"
-                    }
-                  ]
-                }
-              ],
-              "edges": [
-                {
-                  "source": {
-                    "local_id": 1
-                  },
-                  "sink": {
-                    "file": "index.ts",
-                    "local_id": 0
-                  },
-                  "precedence": 0
-                }
-              ]
-            }
-        );
-        let observed = serde_json::from_value::<super::StackGraph>(json_data).unwrap();
-        let mut sg = crate::graph::StackGraph::new();
-        observed.load_into(&mut sg).unwrap();
-
-        assert_eq!(sg.iter_nodes().count(), 3);
-        assert_eq!(sg.iter_files().count(), 1);
-
-        // the scope node should contain debug and source info
-        let handle = sg
-            .iter_nodes()
-            .find(|handle| matches!(sg[*handle], crate::graph::Node::Scope(..)))
-            .unwrap();
-        assert!(sg.source_info(handle).is_some());
-        assert!(sg.debug_info(handle).is_some());
-    }
-
-    #[test]
-    fn load_fail_accidental_merge() {
-        let source = StackGraph {
-            files: Files {
-                data: vec!["index.ts".to_owned(), "App.tsx".to_owned()],
-            },
-            ..Default::default()
-        };
-
-        let mut target = crate::graph::StackGraph::new();
-        target.add_file("App.tsx").unwrap();
-
-        assert_eq!(
-            source.load_into(&mut target).unwrap_err(),
-            Error::FileAlreadyPresent("App.tsx".to_owned())
-        );
-
-        // ensure that source and target graphs were not partially merged
-        assert_eq!(target.iter_files().count(), 1);
     }
 }

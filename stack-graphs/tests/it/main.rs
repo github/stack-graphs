@@ -24,4 +24,6 @@ mod graph;
 #[cfg(feature = "json")]
 mod json;
 mod partial;
+#[cfg(feature = "serde")]
+mod serde;
 mod util;
