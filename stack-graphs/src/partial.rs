@@ -491,7 +491,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 /// A pattern that might match against a symbol stack.  Consists of a (possibly empty) list of
 /// partial scoped symbols, along with an optional symbol stack variable.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PartialSymbolStack {
     symbols: ReversibleList<PartialScopedSymbol>,
     length: u32,
@@ -791,24 +791,13 @@ impl PartialSymbolStack {
         unreachable!();
     }
 
-    pub fn equals(mut self, partials: &mut PartialPaths, mut other: PartialSymbolStack) -> bool {
-        while let Some(self_symbol) = self.pop_front(partials) {
-            if let Some(other_symbol) = other.pop_front(partials) {
-                if !self_symbol.equals(partials, &other_symbol) {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-        if !other.symbols.is_empty() {
-            return false;
-        }
-        equals_option(
-            self.variable.into_option(),
-            other.variable.into_option(),
-            |a, b| a == b,
-        )
+    pub fn equals(self, _partials: &mut PartialPaths, other: PartialSymbolStack) -> bool {
+        self.symbols == other.symbols
+            && equals_option(
+                self.variable.into_option(),
+                other.variable.into_option(),
+                |a, b| a == b,
+            )
     }
 
     pub fn cmp(
@@ -1204,11 +1193,8 @@ impl PartialScopeStack {
         self.variable.into_option()
     }
 
-    pub fn equals(self, partials: &mut PartialPaths, other: PartialScopeStack) -> bool {
-        self.scopes
-            .equals_with(&mut partials.partial_scope_stacks, other.scopes, |a, b| {
-                *a == *b
-            })
+    pub fn equals(self, _partials: &mut PartialPaths, other: PartialScopeStack) -> bool {
+        self.scopes == other.scopes
             && equals_option(
                 self.variable.into_option(),
                 other.variable.into_option(),
@@ -1852,21 +1838,13 @@ impl PartialPath {
         self.edges.shadows(partials, other.edges)
     }
 
-    pub fn equals(&self, partials: &mut PartialPaths, other: &PartialPath) -> bool {
+    pub fn equals(&self, _partials: &mut PartialPaths, other: &PartialPath) -> bool {
         self.start_node == other.start_node
             && self.end_node == other.end_node
-            && self
-                .symbol_stack_precondition
-                .equals(partials, other.symbol_stack_precondition)
-            && self
-                .symbol_stack_postcondition
-                .equals(partials, other.symbol_stack_postcondition)
-            && self
-                .scope_stack_precondition
-                .equals(partials, other.scope_stack_precondition)
-            && self
-                .scope_stack_postcondition
-                .equals(partials, other.scope_stack_postcondition)
+            && self.symbol_stack_precondition == other.symbol_stack_precondition
+            && self.symbol_stack_postcondition == other.symbol_stack_postcondition
+            && self.scope_stack_precondition == other.scope_stack_precondition
+            && self.scope_stack_postcondition == other.scope_stack_postcondition
     }
 
     pub fn cmp(

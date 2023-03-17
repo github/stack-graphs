@@ -204,6 +204,10 @@ pub trait Arena<T> {
 
     /// Returns the number of instances stored in this arena.
     fn len(&self) -> usize;
+
+    /// Returns whether the values associated with the arena are equal, if this can be determined from the
+    /// handles alone. Otherwise, no value is returned.
+    fn try_equals(&self, lhs: Handle<T>, rhs: Handle<T>) -> Option<bool>;
 }
 
 /// Manages the life cycle of instances of type `T`.  You can allocate new instances of `T` from
@@ -260,6 +264,11 @@ impl<T> Arena<T> for VecArena<T> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.items.len()
+    }
+
+    #[inline]
+    fn try_equals(&self, _lhs: Handle<T>, _rhs: Handle<T>) -> Option<bool> {
+        None
     }
 }
 
@@ -319,6 +328,11 @@ where
     #[inline(always)]
     fn len(&self) -> usize {
         self.arena.len()
+    }
+
+    #[inline]
+    fn try_equals(&self, lhs: Handle<T>, rhs: Handle<T>) -> Option<bool> {
+        Some(lhs == rhs)
     }
 }
 
@@ -672,6 +686,9 @@ where
     T: Eq,
 {
     pub fn equals(self, arena: &impl ListArena<T>, other: List<T>) -> bool {
+        if let Some(equals) = arena.try_equals(self.cells, other.cells) {
+            return equals;
+        }
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
@@ -987,6 +1004,9 @@ where
     T: Eq,
 {
     pub fn equals(self, arena: &impl ReversibleListArena<T>, other: ReversibleList<T>) -> bool {
+        if let Some(equals) = arena.try_equals(self.cells, other.cells) {
+            return equals;
+        }
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
