@@ -294,7 +294,6 @@ struct sg_partial_scope_stack {
     // The handle of the first element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if the
     // list is empty, or 0 if the list is null.
     sg_partial_scope_stack_cell_handle cells;
-    enum sg_deque_direction direction;
     uint32_t length;
     // The scope stack variable representing the unknown content of a partial scope stack, or 0 if
     // the variable is missing.  (If so, this partial scope stack can only match a scope stack
@@ -345,7 +344,6 @@ struct sg_partial_symbol_stack {
     // The handle of the first element in the partial symbol stack, or SG_LIST_EMPTY_HANDLE if the
     // list is empty, or 0 if the list is null.
     sg_partial_symbol_stack_cell_handle cells;
-    enum sg_deque_direction direction;
     uint32_t length;
     // The symbol stack variable representing the unknown content of a partial symbol stack, or 0
     // if the variable is missing.  (If so, this partial symbol stack can only match a symbol

@@ -125,7 +125,7 @@ fn check_find_qualified_definitions(
     let mut partial_symbol_stack = PartialSymbolStack::empty();
     for stack_symbol in stack_symbols {
         let symbol = rust_graph.add_symbol(stack_symbol);
-        partial_symbol_stack.push_back(
+        partial_symbol_stack.push_front(
             rust_partials,
             PartialScopedSymbol {
                 symbol,
@@ -133,6 +133,7 @@ fn check_find_qualified_definitions(
             },
         );
     }
+    partial_symbol_stack.reverse(rust_partials);
 
     // Create the forward partial path stitcher.
     let initial_partial_path = PartialPath {
@@ -182,12 +183,12 @@ fn check_find_qualified_definitions(
             // Ditto for any attached scopes in the symbol stack pre- and postcondition.
             assert!(partial_path
                 .symbol_stack_precondition
-                .iter_unordered(rust_partials)
+                .iter(rust_partials)
                 .filter_map(|symbol| symbol.scopes.into_option())
                 .all(|stack| stack.have_reversal(rust_partials)));
             assert!(partial_path
                 .symbol_stack_postcondition
-                .iter_unordered(rust_partials)
+                .iter(rust_partials)
                 .filter_map(|symbol| symbol.scopes.into_option())
                 .all(|stack| stack.have_reversal(rust_partials)));
 

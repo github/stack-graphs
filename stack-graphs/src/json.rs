@@ -694,7 +694,7 @@ impl Serialize for InPartialPaths<'_, &PartialSymbolStack> {
         if symbol_stack.has_variable() {
             len += 1;
         }
-        let symbols = symbol_stack.iter_unordered(paths).collect::<Vec<_>>();
+        let symbols = symbol_stack.iter(paths).collect::<Vec<_>>();
 
         let mut ser = serializer.serialize_struct("partial_symbol_stack", len)?;
         ser.serialize_field("symbols", &self.with(&symbols))?;
@@ -765,7 +765,7 @@ impl Serialize for InPartialPaths<'_, &PartialScopeStack> {
             len += 1;
         }
         let scopes = scope_stack
-            .iter_unordered(paths)
+            .iter(paths)
             .map(|n| graph[n].id())
             .collect::<Vec<_>>();
 

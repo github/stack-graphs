@@ -46,6 +46,8 @@ use smallvec::SmallVec;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
+use crate::arena::ReversibleList;
+use crate::arena::ReversibleListArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::graph::Edge;
@@ -443,7 +445,7 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 #[derive(Clone, Copy, Niche)]
 pub struct PartialSymbolStack {
     #[niche]
-    symbols: Deque<PartialScopedSymbol>,
+    symbols: ReversibleList<PartialScopedSymbol>,
     length: u32,
     variable: ControlledOption<SymbolStackVariable>,
 }
@@ -481,7 +483,7 @@ impl PartialSymbolStack {
     /// Returns an empty partial symbol stack.
     pub fn empty() -> PartialSymbolStack {
         PartialSymbolStack {
-            symbols: Deque::empty(),
+            symbols: ReversibleList::empty(),
             length: 0,
             variable: ControlledOption::none(),
         }
@@ -490,7 +492,7 @@ impl PartialSymbolStack {
     /// Returns a partial symbol stack containing only a symbol stack variable.
     pub fn from_variable(variable: SymbolStackVariable) -> PartialSymbolStack {
         PartialSymbolStack {
-            symbols: Deque::empty(),
+            symbols: ReversibleList::empty(),
             length: 0,
             variable: ControlledOption::some(variable),
         }
@@ -519,13 +521,19 @@ impl PartialSymbolStack {
             None => Self::empty(),
         };
         while let Some(symbol) = self.pop_front(partials) {
-            result.push_back(partials, symbol.with_offset(scope_variable_offset));
+            result.push_front(partials, symbol.with_offset(scope_variable_offset));
         }
+        result.reverse(partials);
         result
     }
 
-    fn prepend(&mut self, partials: &mut PartialPaths, mut head: Deque<PartialScopedSymbol>) {
-        while let Some(head) = head.pop_back(&mut partials.partial_symbol_stacks).copied() {
+    fn prepend(
+        &mut self,
+        partials: &mut PartialPaths,
+        mut head: ReversibleList<PartialScopedSymbol>,
+    ) {
+        head.reverse(&mut partials.partial_symbol_stacks);
+        while let Some(head) = head.pop_front(&mut partials.partial_symbol_stacks).copied() {
             self.push_front(partials, head);
         }
     }
@@ -535,13 +543,6 @@ impl PartialSymbolStack {
         self.length += 1;
         self.symbols
             .push_front(&mut partials.partial_symbol_stacks, symbol);
-    }
-
-    /// Pushes a new [`PartialScopedSymbol`][] onto the back of this partial symbol stack.
-    pub fn push_back(&mut self, partials: &mut PartialPaths, symbol: PartialScopedSymbol) {
-        self.length += 1;
-        self.symbols
-            .push_back(&mut partials.partial_symbol_stacks, symbol);
     }
 
     /// Removes and returns the [`PartialScopedSymbol`][] at the front of this partial symbol
@@ -557,17 +558,8 @@ impl PartialSymbolStack {
         result
     }
 
-    /// Removes and returns the [`PartialScopedSymbol`][] at the back of this partial symbol stack.
-    /// If the stack is empty, returns `None`.
-    pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<PartialScopedSymbol> {
-        let result = self
-            .symbols
-            .pop_back(&mut partials.partial_symbol_stacks)
-            .copied();
-        if result.is_some() {
-            self.length -= 1;
-        }
-        result
+    pub fn reverse(&mut self, partials: &mut PartialPaths) {
+        self.symbols.reverse(&mut partials.partial_symbol_stacks);
     }
 
     pub fn display<'a>(
@@ -618,7 +610,8 @@ impl PartialSymbolStack {
 
         // Then prepend all of the scoped symbols that appear at the beginning of this stack,
         // applying the bindings to any attached scopes as well.
-        while let Some(partial_symbol) = self.pop_back(partials) {
+        self.reverse(partials);
+        while let Some(partial_symbol) = self.pop_front(partials) {
             let partial_symbol = partial_symbol.apply_partial_bindings(partials, scope_bindings)?;
             result.push_front(partials, partial_symbol);
         }
@@ -642,13 +635,14 @@ impl PartialSymbolStack {
         let mut lhs = self;
 
         // First, look at the shortest common prefix of lhs and rhs, and verify that they match.
-        let mut head = Deque::empty();
+        let mut head = ReversibleList::empty();
         while lhs.contains_symbols() && rhs.contains_symbols() {
             let mut lhs_front = lhs.pop_front(partials).unwrap();
             let rhs_front = rhs.pop_front(partials).unwrap();
             lhs_front.unify(partials, rhs_front, scope_bindings)?;
-            head.push_back(&mut partials.partial_symbol_stacks, lhs_front);
+            head.push_front(&mut partials.partial_symbol_stacks, lhs_front);
         }
+        head.reverse(&mut partials.partial_symbol_stacks);
 
         // Now at most one stack still has symbols.  Zero, one, or both of them have variables.
         // Let's do a case analysis on all of those possibilities.
@@ -799,38 +793,18 @@ impl PartialSymbolStack {
     /// Returns an iterator over the contents of this partial symbol stack.
     pub fn iter<'a>(
         &self,
-        partials: &'a mut PartialPaths,
-    ) -> impl Iterator<Item = PartialScopedSymbol> + 'a {
-        self.symbols
-            .iter(&mut partials.partial_symbol_stacks)
-            .copied()
-    }
-
-    /// Returns an iterator over the contents of this partial symbol stack, with no guarantee
-    /// about the ordering of the elements.
-    pub fn iter_unordered<'a>(
-        &self,
         partials: &'a PartialPaths,
     ) -> impl Iterator<Item = PartialScopedSymbol> + 'a {
-        self.symbols
-            .iter_unordered(&partials.partial_symbol_stacks)
-            .copied()
+        self.symbols.iter(&partials.partial_symbol_stacks).copied()
     }
 
     pub fn variable(&self) -> Option<SymbolStackVariable> {
-        self.variable.clone().into_option()
+        self.variable.into_option()
     }
 
-    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+    pub fn ensure_both_directions(&self, partials: &mut PartialPaths) {
         self.symbols
-            .ensure_backwards(&mut partials.partial_symbol_stacks);
-        self.symbols
-            .ensure_forwards(&mut partials.partial_symbol_stacks);
-    }
-
-    fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
-        self.symbols
-            .ensure_forwards(&mut partials.partial_symbol_stacks);
+            .ensure_reversal_available(&mut partials.partial_symbol_stacks);
     }
 
     /// Returns the largest value of any symbol stack variable in this partial symbol stack.
@@ -845,7 +819,7 @@ impl PartialSymbolStack {
     pub fn largest_scope_stack_variable(&self, partials: &PartialPaths) -> u32 {
         // We don't have to check the postconditions, because it's not valid for a postcondition to
         // refer to a variable that doesn't exist in the precondition.
-        self.iter_unordered(partials)
+        self.iter(partials)
             .filter_map(|symbol| symbol.scopes.into_option())
             .filter_map(|scopes| scopes.variable.into_option())
             .map(ScopeStackVariable::as_u32)
@@ -855,28 +829,13 @@ impl PartialSymbolStack {
 }
 
 impl DisplayWithPartialPaths for PartialSymbolStack {
-    fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
-        // Ensure that our deque is pointed forwards while we still have a mutable reference to the
-        // arena.
-        self.symbols
-            .ensure_forwards(&mut partials.partial_symbol_stacks);
-        // And then prepare each symbol in the stack.
-        let mut symbols = self.symbols;
-        while let Some(mut symbol) = symbols
-            .pop_front(&mut partials.partial_symbol_stacks)
-            .copied()
-        {
-            symbol.prepare(graph, partials);
-        }
-    }
-
     fn display_with(
         &self,
         graph: &StackGraph,
         partials: &PartialPaths,
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
-        for symbol in self.symbols.iter_reused(&partials.partial_symbol_stacks) {
+        for symbol in self.symbols.iter(&partials.partial_symbol_stacks) {
             symbol.display_with(graph, partials, f)?;
         }
         if let Some(variable) = self.variable.into_option() {
@@ -899,7 +858,7 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
 #[derive(Clone, Copy, Niche)]
 pub struct PartialScopeStack {
     #[niche]
-    scopes: Deque<Handle<Node>>,
+    scopes: ReversibleList<Handle<Node>>,
     length: u32,
     variable: ControlledOption<ScopeStackVariable>,
 }
@@ -937,7 +896,7 @@ impl PartialScopeStack {
     /// Returns an empty partial scope stack.
     pub fn empty() -> PartialScopeStack {
         PartialScopeStack {
-            scopes: Deque::empty(),
+            scopes: ReversibleList::empty(),
             length: 0,
             variable: ControlledOption::none(),
         }
@@ -946,7 +905,7 @@ impl PartialScopeStack {
     /// Returns a partial scope stack containing only a scope stack variable.
     pub fn from_variable(variable: ScopeStackVariable) -> PartialScopeStack {
         PartialScopeStack {
-            scopes: Deque::empty(),
+            scopes: ReversibleList::empty(),
             length: 0,
             variable: ControlledOption::some(variable),
         }
@@ -1011,7 +970,8 @@ impl PartialScopeStack {
         };
 
         // Then prepend all of the scopes that appear at the beginning of this stack.
-        while let Some(scope) = self.pop_back(partials) {
+        self.reverse(partials);
+        while let Some(scope) = self.pop_front(partials) {
             result.push_front(partials, scope);
         }
         Ok(result)
@@ -1128,16 +1088,6 @@ impl PartialScopeStack {
             .push_front(&mut partials.partial_scope_stacks, node);
     }
 
-    /// Pushes a new [`Node`][] onto the back of this partial scope stack.  The node must be an
-    /// _exported scope node_.
-    ///
-    /// [`Node`]: ../graph/enum.Node.html
-    pub fn push_back(&mut self, partials: &mut PartialPaths, node: Handle<Node>) {
-        self.length += 1;
-        self.scopes
-            .push_back(&mut partials.partial_scope_stacks, node);
-    }
-
     /// Removes and returns the [`Node`][] at the front of this partial scope stack.  If the stack
     /// does not contain any exported scope nodes, returns `None`.
     pub fn pop_front(&mut self, partials: &mut PartialPaths) -> Option<Handle<Node>> {
@@ -1151,17 +1101,8 @@ impl PartialScopeStack {
         result
     }
 
-    /// Removes and returns the [`Node`][] at the back of this partial scope stack.  If the stack
-    /// does not contain any exported scope nodes, returns `None`.
-    pub fn pop_back(&mut self, partials: &mut PartialPaths) -> Option<Handle<Node>> {
-        let result = self
-            .scopes
-            .pop_back(&mut partials.partial_scope_stacks)
-            .copied();
-        if result.is_some() {
-            self.length -= 1;
-        }
-        result
+    pub fn reverse(&mut self, partials: &mut PartialPaths) {
+        self.scopes.reverse(&mut partials.partial_scope_stacks)
     }
 
     /// Returns the scope stack variable at the end of this partial scope stack.  If the stack does
@@ -1200,24 +1141,8 @@ impl PartialScopeStack {
     }
 
     /// Returns an iterator over the scopes in this partial scope stack.
-    pub fn iter_scopes<'a>(
-        &self,
-        partials: &'a mut PartialPaths,
-    ) -> impl Iterator<Item = Handle<Node>> + 'a {
-        self.scopes
-            .iter(&mut partials.partial_scope_stacks)
-            .copied()
-    }
-
-    /// Returns an iterator over the contents of this partial scope stack, with no guarantee
-    /// about the ordering of the elements.
-    pub fn iter_unordered<'a>(
-        &self,
-        partials: &'a PartialPaths,
-    ) -> impl Iterator<Item = Handle<Node>> + 'a {
-        self.scopes
-            .iter_unordered(&partials.partial_scope_stacks)
-            .copied()
+    pub fn iter<'a>(&self, partials: &'a PartialPaths) -> impl Iterator<Item = Handle<Node>> + 'a {
+        self.scopes.iter(&partials.partial_scope_stacks).copied()
     }
 
     pub fn display<'a>(
@@ -1228,16 +1153,9 @@ impl PartialScopeStack {
         display_with(self, graph, partials)
     }
 
-    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+    pub fn ensure_both_directions(&self, partials: &mut PartialPaths) {
         self.scopes
-            .ensure_backwards(&mut partials.partial_scope_stacks);
-        self.scopes
-            .ensure_forwards(&mut partials.partial_scope_stacks);
-    }
-
-    fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
-        self.scopes
-            .ensure_forwards(&mut partials.partial_scope_stacks);
+            .ensure_reversal_available(&mut partials.partial_scope_stacks);
     }
 
     /// Returns the largest value of any scope stack variable in this partial scope stack.
@@ -1250,11 +1168,6 @@ impl PartialScopeStack {
 }
 
 impl DisplayWithPartialPaths for PartialScopeStack {
-    fn prepare(&mut self, _graph: &StackGraph, partials: &mut PartialPaths) {
-        self.scopes
-            .ensure_forwards(&mut partials.partial_scope_stacks);
-    }
-
     fn display_with(
         &self,
         graph: &StackGraph,
@@ -1262,7 +1175,7 @@ impl DisplayWithPartialPaths for PartialScopeStack {
         f: &mut std::fmt::Formatter,
     ) -> std::fmt::Result {
         let mut first = true;
-        for scope in self.scopes.iter_reused(&partials.partial_scope_stacks) {
+        for scope in self.scopes.iter(&partials.partial_scope_stacks) {
             if first {
                 first = false;
             } else {
@@ -1507,9 +1420,8 @@ impl DisplayWithPartialPaths for PartialPathEdge {
 /// The edges in a path keep track of precedence information so that we can correctly handle
 /// shadowed definitions.
 #[repr(C)]
-#[derive(Clone, Copy, Niche)]
+#[derive(Clone, Copy)]
 pub struct PartialPathEdgeList {
-    #[niche]
     edges: Deque<PartialPathEdge>,
     length: u32,
 }
@@ -1653,10 +1565,9 @@ impl PartialPathEdgeList {
             .copied()
     }
 
-    fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+    pub fn ensure_both_directions(&self, partials: &mut PartialPaths) {
         self.edges
-            .ensure_backwards(&mut partials.partial_path_edges);
-        self.edges.ensure_forwards(&mut partials.partial_path_edges);
+            .ensure_both_directions(&mut partials.partial_path_edges);
     }
 
     fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
@@ -1889,7 +1800,7 @@ impl PartialPath {
 
     /// Ensures that the content of this partial path is available in both forwards and backwards
     /// directions.
-    pub fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+    pub fn ensure_both_directions(&self, partials: &mut PartialPaths) {
         self.symbol_stack_precondition
             .ensure_both_directions(partials);
         self.symbol_stack_postcondition
@@ -1902,40 +1813,21 @@ impl PartialPath {
 
         let mut stack = self.symbol_stack_precondition;
         while let Some(symbol) = stack.pop_front(partials) {
-            if let Some(mut scopes) = symbol.scopes.into_option() {
+            if let Some(scopes) = symbol.scopes.into_option() {
                 scopes.ensure_both_directions(partials);
             }
         }
 
         let mut stack = self.symbol_stack_postcondition;
         while let Some(symbol) = stack.pop_front(partials) {
-            if let Some(mut scopes) = symbol.scopes.into_option() {
+            if let Some(scopes) = symbol.scopes.into_option() {
                 scopes.ensure_both_directions(partials);
             }
         }
     }
-
     /// Ensures that the content of this partial path is in forwards direction.
     pub fn ensure_forwards(&mut self, partials: &mut PartialPaths) {
-        self.symbol_stack_precondition.ensure_forwards(partials);
-        self.symbol_stack_postcondition.ensure_forwards(partials);
-        self.scope_stack_precondition.ensure_forwards(partials);
-        self.scope_stack_postcondition.ensure_forwards(partials);
         self.edges.ensure_forwards(partials);
-
-        let mut stack = self.symbol_stack_precondition;
-        while let Some(symbol) = stack.pop_front(partials) {
-            if let Some(mut scopes) = symbol.scopes.into_option() {
-                scopes.ensure_forwards(partials);
-            }
-        }
-
-        let mut stack = self.symbol_stack_postcondition;
-        while let Some(symbol) = stack.pop_front(partials) {
-            if let Some(mut scopes) = symbol.scopes.into_option() {
-                scopes.ensure_forwards(partials);
-            }
-        }
     }
 
     /// Returns the largest value of any symbol stack variable in this partial path.
@@ -2310,7 +2202,13 @@ impl Node {
                             scope_stack_variable,
                         )),
                     };
-                    symbol_stack_precondition.push_back(partials, precondition_symbol);
+                    *symbol_stack_precondition = {
+                        let mut symbol_stack_precondition = *symbol_stack_precondition;
+                        symbol_stack_precondition.reverse(partials);
+                        symbol_stack_precondition.push_front(partials, precondition_symbol);
+                        symbol_stack_precondition.reverse(partials);
+                        symbol_stack_precondition
+                    };
                     *scope_stack_postcondition =
                         PartialScopeStack::from_variable(scope_stack_variable);
                 }
@@ -2332,7 +2230,13 @@ impl Node {
                         symbol: sink.symbol,
                         scopes: ControlledOption::none(),
                     };
-                    symbol_stack_precondition.push_back(partials, precondition_symbol);
+                    *symbol_stack_precondition = {
+                        let mut symbol_stack_precondition = *symbol_stack_precondition;
+                        symbol_stack_precondition.reverse(partials);
+                        symbol_stack_precondition.push_front(partials, precondition_symbol);
+                        symbol_stack_precondition.reverse(partials);
+                        symbol_stack_precondition
+                    };
                 }
             }
             Self::PushScopedSymbol(sink) => {
@@ -2768,16 +2672,16 @@ struct Join {
 /// Manages the state of a collection of partial paths built up as part of the partial-path-finding
 /// algorithm or path-stitching algorithm.
 pub struct PartialPaths {
-    pub(crate) partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
-    pub(crate) partial_scope_stacks: DequeArena<Handle<Node>>,
+    pub(crate) partial_symbol_stacks: ReversibleListArena<PartialScopedSymbol>,
+    pub(crate) partial_scope_stacks: ReversibleListArena<Handle<Node>>,
     pub(crate) partial_path_edges: DequeArena<PartialPathEdge>,
 }
 
 impl PartialPaths {
     pub fn new() -> PartialPaths {
         PartialPaths {
-            partial_symbol_stacks: Deque::new_arena(),
-            partial_scope_stacks: Deque::new_arena(),
+            partial_symbol_stacks: ReversibleList::new_arena(),
+            partial_scope_stacks: ReversibleList::new_arena(),
             partial_path_edges: Deque::new_arena(),
         }
     }

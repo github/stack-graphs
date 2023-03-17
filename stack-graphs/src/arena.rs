@@ -693,7 +693,7 @@ where
     /// Ensures that the reversal of this list is available.  It can be useful to precalculate this
     /// when you have mutable access to the arena, so that you can then reverse and un-reverse the
     /// list later when you only have shared access to it.
-    pub fn ensure_reversal_available(&mut self, arena: &mut ReversibleListArena<T>) {
+    pub fn ensure_reversal_available(&self, arena: &mut ReversibleListArena<T>) {
         // First check to see if the list has already been reversed.
         if self.is_empty() {
             // The empty list is already reversed.
@@ -869,9 +869,7 @@ impl<T> Copy for ReversibleList<T> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
-#[derive(Niche)]
 pub struct Deque<T> {
-    #[niche]
     list: ReversibleList<T>,
     direction: DequeDirection,
 }
@@ -962,6 +960,11 @@ where
         }
         self.list.reverse(arena);
         self.direction = DequeDirection::Forwards;
+    }
+
+    /// Ensures that this deque has computed both directions of elements.
+    pub fn ensure_both_directions(&self, arena: &mut DequeArena<T>) {
+        self.list.ensure_reversal_available(arena);
     }
 
     /// Pushes a new element onto the front of this deque.

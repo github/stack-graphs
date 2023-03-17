@@ -770,7 +770,6 @@ pub struct sg_partial_symbol_stack {
     /// The handle of the first element in the partial symbol stack, or SG_LIST_EMPTY_HANDLE if the
     /// list is empty, or 0 if the list is null.
     pub cells: sg_partial_symbol_stack_cell_handle,
-    pub direction: sg_deque_direction,
     pub length: u32,
     /// The symbol stack variable representing the unknown content of a partial symbol stack, or 0
     /// if the variable is missing.  (If so, this partial symbol stack can only match a symbol
@@ -854,13 +853,12 @@ pub extern "C" fn sg_partial_path_arena_add_partial_symbol_stacks(
         } else {
             PartialSymbolStack::from_variable(variables[i].try_into().unwrap())
         };
-        for j in 0..length {
+        for j in (0..length).rev() {
             let symbol = symbols_slice[j].into();
-            stack.push_back(partials, symbol);
+            stack.push_front(partials, symbol);
         }
-        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
-        // before we return ensures that it will also be available in forwards order.
-        let _ = stack.iter(partials);
+        // We ensure that the list will also be available in reverse order.
+        stack.ensure_both_directions(partials);
         out[i] = stack.into();
         unsafe { symbols = symbols.add(length) };
     }
@@ -880,7 +878,6 @@ pub struct sg_partial_scope_stack {
     /// The handle of the first element in the partial scope stack, or SG_LIST_EMPTY_HANDLE if the
     /// list is empty, or 0 if the list is null.
     pub cells: sg_partial_scope_stack_cell_handle,
-    pub direction: sg_deque_direction,
     pub length: u32,
     /// The scope stack variable representing the unknown content of a partial scope stack, or 0 if
     /// the variable is missing.  (If so, this partial scope stack can only match a scope stack
@@ -964,13 +961,12 @@ pub extern "C" fn sg_partial_path_arena_add_partial_scope_stacks(
         } else {
             PartialScopeStack::from_variable(variables[i].try_into().unwrap())
         };
-        for j in 0..length {
+        for j in (0..length).rev() {
             let node = scopes_slice[j].into();
-            stack.push_back(partials, node);
+            stack.push_front(partials, node);
         }
-        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
-        // before we return ensures that it will also be available in forwards order.
-        let _ = stack.iter_scopes(partials);
+        // We ensure that the list will also be available in reverse order.
+        stack.ensure_both_directions(partials);
         out[i] = stack.into();
         unsafe { scopes = scopes.add(length) };
     }
@@ -1077,9 +1073,8 @@ pub extern "C" fn sg_partial_path_arena_add_partial_path_edge_lists(
             let edge: PartialPathEdge = edges_slice[j].into();
             list.push_back(partials, edge);
         }
-        // We pushed the edges onto the list in reverse order.  Requesting a forwards iterator
-        // before we return ensures that it will also be available in forwards order.
-        let _ = list.iter(partials);
+        // We ensure that the list will also be available in reverse order.
+        list.ensure_both_directions(partials);
         out[i] = list.into();
         unsafe { edges = edges.add(length) };
     }
@@ -1182,7 +1177,7 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
             graph,
             file,
             &AtomicUsizeCancellationFlag(cancellation_flag),
-            |_graph, partials, mut path| {
+            |_graph, partials, path| {
                 path.ensure_both_directions(partials);
                 partial_path_list.partial_paths.push(path);
             },

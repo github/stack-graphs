@@ -103,7 +103,7 @@ pub(crate) fn create_symbol_stack(
     } else {
         PartialSymbolStack::empty()
     };
-    for scoped_symbol in contents.0 {
+    for scoped_symbol in contents.0.iter().rev() {
         let symbol = graph.add_symbol(scoped_symbol.0);
         let scopes = scoped_symbol
             .1
@@ -112,7 +112,7 @@ pub(crate) fn create_symbol_stack(
             symbol,
             scopes: ControlledOption::from_option(scopes),
         };
-        stack.push_back(partials, scoped_symbol);
+        stack.push_front(partials, scoped_symbol);
     }
     stack
 }
@@ -128,13 +128,13 @@ pub(crate) fn create_scope_stack(
     } else {
         PartialScopeStack::empty()
     };
-    for scope in contents.0 {
+    for scope in contents.0.iter().rev() {
         let node_id = NodeID::new_in_file(file, *scope);
         let node = match graph.node_for_id(node_id) {
             Some(node) => node,
             None => graph.add_scope_node(node_id, true).unwrap(),
         };
-        stack.push_back(partials, node);
+        stack.push_front(partials, node);
     }
     stack
 }
