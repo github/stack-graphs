@@ -63,6 +63,7 @@ use smallvec::SmallVec;
 use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::SupplementalArena;
+use crate::arena::VecArena;
 
 //-------------------------------------------------------------------------------------------------
 // String content
@@ -1401,13 +1402,13 @@ impl StackGraph {
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct StackGraph {
     interned_strings: InternedStringArena,
-    pub(crate) symbols: Arena<Symbol>,
+    pub(crate) symbols: VecArena<Symbol>,
     symbol_handles: FxHashMap<&'static str, Handle<Symbol>>,
-    pub(crate) strings: Arena<InternedString>,
+    pub(crate) strings: VecArena<InternedString>,
     string_handles: FxHashMap<&'static str, Handle<InternedString>>,
-    pub(crate) files: Arena<File>,
+    pub(crate) files: VecArena<File>,
     file_handles: FxHashMap<&'static str, Handle<File>>,
-    pub(crate) nodes: Arena<Node>,
+    pub(crate) nodes: VecArena<Node>,
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
@@ -1573,17 +1574,17 @@ impl StackGraph {
 
 impl Default for StackGraph {
     fn default() -> StackGraph {
-        let mut nodes = Arena::new();
+        let mut nodes = VecArena::new();
         nodes.add(RootNode::new().into());
         nodes.add(JumpToNode::new().into());
 
         StackGraph {
             interned_strings: InternedStringArena::new(),
-            symbols: Arena::new(),
+            symbols: VecArena::new(),
             symbol_handles: FxHashMap::default(),
-            strings: Arena::new(),
+            strings: VecArena::new(),
             string_handles: FxHashMap::default(),
-            files: Arena::new(),
+            files: VecArena::new(),
             file_handles: FxHashMap::default(),
             nodes,
             source_info: SupplementalArena::new(),

@@ -35,7 +35,6 @@
 //! [`Database`]: struct.Database.html
 //! [`PathStitcher`]: struct.PathStitcher.html
 
-use std::collections::HashMap;
 use std::collections::VecDeque;
 #[cfg(feature = "copious-debugging")]
 use std::fmt::Display;
@@ -44,10 +43,11 @@ use std::ops::Index;
 use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::HandleSet;
+use crate::arena::HashArena;
 use crate::arena::List;
-use crate::arena::ListArena;
 use crate::arena::ListCell;
 use crate::arena::SupplementalArena;
+use crate::arena::VecArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
@@ -74,10 +74,9 @@ use crate::CancellationFlag;
 /// partial paths that are actually needed, placing them into a `Database` instance as they're
 /// needed.
 pub struct Database {
-    pub(crate) partial_paths: Arena<PartialPath>,
+    pub(crate) partial_paths: VecArena<PartialPath>,
     pub(crate) local_nodes: HandleSet<Node>,
-    symbol_stack_keys: ListArena<Handle<Symbol>>,
-    symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
+    symbol_stack_keys: HashArena<ListCell<Handle<Symbol>>>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
     root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
 }
@@ -86,10 +85,9 @@ impl Database {
     /// Creates a new, empty database.
     pub fn new() -> Database {
         Database {
-            partial_paths: Arena::new(),
+            partial_paths: VecArena::new(),
             local_nodes: HandleSet::new(),
-            symbol_stack_keys: List::new_arena(),
-            symbol_stack_key_cache: HashMap::new(),
+            symbol_stack_keys: HashArena::new(),
             paths_by_start_node: SupplementalArena::new(),
             root_paths_by_precondition: SupplementalArena::new(),
         }
@@ -362,18 +360,7 @@ impl SymbolStackKey {
 
     /// Pushes a new symbol onto the back of this symbol stack key.
     fn push_back(&mut self, db: &mut Database, symbol: Handle<Symbol>) {
-        let cache_key = SymbolStackCacheKey {
-            head: symbol,
-            tail: self.back_handle(),
-        };
-        if let Some(handle) = db.symbol_stack_key_cache.get(&cache_key) {
-            self.symbols = List::from_handle(*handle);
-            return;
-        }
-        // push_front because we store the key's symbols in reverse order.
         self.symbols.push_front(&mut db.symbol_stack_keys, symbol);
-        let handle = self.back_handle();
-        db.symbol_stack_key_cache.insert(cache_key, handle);
     }
 
     /// Pops a symbol from the back of this symbol stack key.

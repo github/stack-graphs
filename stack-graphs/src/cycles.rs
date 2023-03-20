@@ -35,7 +35,8 @@ use std::collections::HashMap;
 
 use crate::arena::Handle;
 use crate::arena::List;
-use crate::arena::ListArena;
+use crate::arena::ListCell;
+use crate::arena::VecArena;
 use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
@@ -148,7 +149,7 @@ pub struct AppendingCycleDetector<A> {
     appendages: List<A>,
 }
 
-pub type Appendables<A> = ListArena<A>;
+pub type Appendables<A> = VecArena<ListCell<A>>;
 
 impl<A: Appendable + Clone> AppendingCycleDetector<A> {
     pub fn new() -> Self {

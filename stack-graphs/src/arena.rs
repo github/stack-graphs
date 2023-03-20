@@ -30,6 +30,8 @@
 //! [`StackGraph`]: ../graph/struct.StackGraph.html
 
 use std::cell::Cell;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -38,8 +40,10 @@ use std::mem::MaybeUninit;
 use std::num::NonZeroU32;
 use std::ops::Index;
 use std::ops::IndexMut;
+use std::ops::Range;
 
 use bitvec::vec::BitVec;
+use controlled_option::ControlledOption;
 use controlled_option::Niche;
 
 use crate::utils::cmp_option;
@@ -157,14 +161,66 @@ impl<T> PartialOrd for Handle<T> {
 unsafe impl<T> Send for Handle<T> {}
 unsafe impl<T> Sync for Handle<T> {}
 
+pub struct Handles<T> {
+    range: Range<usize>,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> Iterator for Handles<T> {
+    type Item = Handle<T>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.range
+            .next()
+            .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    }
+}
+
+impl<T> From<Range<usize>> for Handles<T> {
+    fn from(range: Range<usize>) -> Self {
+        Handles {
+            range,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+pub trait Arena<T> {
+    /// Adds a new instance to this arena, returning a stable handle to it.
+    fn add(&mut self, item: T) -> Handle<T>;
+
+    /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
+    fn get(&self, handle: Handle<T>) -> &T;
+
+    /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
+    /// it.
+    fn get_mut(&mut self, handle: Handle<T>) -> &mut T;
+
+    /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
+    /// retain a reference to the arena!)
+    fn iter_handles(&self) -> Handles<T>;
+
+    /// Returns a pointer to this arena's storage.
+    fn as_ptr(&self) -> *const T;
+
+    /// Returns the number of instances stored in this arena.
+    fn len(&self) -> usize;
+
+    /// Returns whether the values associated with the arena are equal, if this can be determined from the
+    /// handles alone. Otherwise, no value is returned.
+    fn try_equals(&self, lhs: Handle<T>, rhs: Handle<T>) -> Option<bool>;
+}
+
 /// Manages the life cycle of instances of type `T`.  You can allocate new instances of `T` from
 /// the arena.  All of the instances managed by this arena will be dropped as a single operation
 /// when the arena itself is dropped.
-pub struct Arena<T> {
+///
+/// Note that we do not deduplicate instances of `T` in any way.  If you add two instances that
+/// have the same content, you will get distinct handles for each one.
+pub struct VecArena<T> {
     items: Vec<MaybeUninit<T>>,
 }
 
-impl<T> Drop for Arena<T> {
+impl<T> Drop for VecArena<T> {
     fn drop(&mut self) {
         unsafe {
             let items = std::mem::transmute::<_, &mut [T]>(&mut self.items[1..]) as *mut [T];
@@ -173,52 +229,110 @@ impl<T> Drop for Arena<T> {
     }
 }
 
-impl<T> Arena<T> {
+impl<T> VecArena<T> {
     /// Creates a new arena.
-    pub fn new() -> Arena<T> {
-        Arena {
+    pub fn new() -> VecArena<T> {
+        VecArena {
             items: vec![MaybeUninit::uninit()],
         }
     }
+}
 
-    /// Adds a new instance to this arena, returning a stable handle to it.
-    ///
-    /// Note that we do not deduplicate instances of `T` in any way.  If you add two instances that
-    /// have the same content, you will get distinct handles for each one.
-    pub fn add(&mut self, item: T) -> Handle<T> {
+impl<T> Arena<T> for VecArena<T> {
+    fn add(&mut self, item: T) -> Handle<T> {
         let index = self.items.len() as u32;
         self.items.push(MaybeUninit::new(item));
         Handle::new(unsafe { NonZeroU32::new_unchecked(index) })
     }
 
-    /// Dereferences a handle to an instance owned by this arena, returning a reference to it.
-    pub fn get(&self, handle: Handle<T>) -> &T {
+    fn get(&self, handle: Handle<T>) -> &T {
         unsafe { std::mem::transmute(&self.items[handle.as_usize()]) }
     }
-    ///
-    /// Dereferences a handle to an instance owned by this arena, returning a mutable reference to
-    /// it.
-    pub fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
+
+    fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
         unsafe { std::mem::transmute(&mut self.items[handle.as_usize()]) }
     }
 
-    /// Returns an iterator of all of the handles in this arena.  (Note that this iterator does not
-    /// retain a reference to the arena!)
-    pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
-        (1..self.items.len())
-            .into_iter()
-            .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
+    fn iter_handles(&self) -> Handles<T> {
+        (1..self.items.len()).into()
     }
 
-    /// Returns a pointer to this arena's storage.
-    pub(crate) fn as_ptr(&self) -> *const T {
+    fn as_ptr(&self) -> *const T {
         self.items.as_ptr() as *const T
     }
 
-    /// Returns the number of instances stored in this arena.
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.items.len()
+    }
+
+    #[inline]
+    fn try_equals(&self, _lhs: Handle<T>, _rhs: Handle<T>) -> Option<bool> {
+        None
+    }
+}
+
+/// An interning arena allocation.  Equal handles means equal elements.
+pub struct HashArena<T>
+where
+    T: Clone + Eq + Hash,
+{
+    arena: VecArena<T>,
+    index: HashMap<T, Handle<T>>,
+}
+
+impl<T> HashArena<T>
+where
+    T: Clone + Eq + Hash,
+{
+    /// Creates a new interning arena.
+    pub fn new() -> Self {
+        Self {
+            arena: VecArena::new(),
+            index: HashMap::new(),
+        }
+    }
+}
+
+impl<T> Arena<T> for HashArena<T>
+where
+    T: Clone + Eq + Hash,
+{
+    fn add(&mut self, item: T) -> Handle<T> {
+        match self.index.entry(item) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let handle = self.arena.add(entry.key().clone());
+                entry.insert(handle);
+                handle
+            }
+        }
+    }
+
+    fn get(&self, handle: Handle<T>) -> &T {
+        self.arena.get(handle)
+    }
+
+    fn get_mut(&mut self, handle: Handle<T>) -> &mut T {
+        self.arena.get_mut(handle)
+    }
+
+    fn iter_handles(&self) -> Handles<T> {
+        self.arena.iter_handles()
+    }
+
+    fn as_ptr(&self) -> *const T {
+        self.arena.as_ptr()
+    }
+
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.arena.len()
+    }
+
+    #[inline]
+    fn try_equals(&self, lhs: Handle<T>, rhs: Handle<T>) -> Option<bool> {
+        Some(lhs == rhs)
     }
 }
 
@@ -237,8 +351,9 @@ impl<T> Arena<T> {
 /// ```
 /// # use stack_graphs::arena::Arena;
 /// # use stack_graphs::arena::SupplementalArena;
+/// # use stack_graphs::arena::VecArena;
 /// // We need an Arena to create handles.
-/// let mut arena = Arena::<u32>::new();
+/// let mut arena = VecArena::<u32>::new();
 /// let handle = arena.add(1);
 ///
 /// let mut supplemental = SupplementalArena::<u32, String>::new();
@@ -282,8 +397,8 @@ impl<H, T> SupplementalArena<H, T> {
 
     /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental
     /// data for all of the instances that have already been allocated in a (regular) arena.
-    pub fn with_capacity(arena: &Arena<H>) -> SupplementalArena<H, T> {
-        let mut items = Vec::with_capacity(arena.items.len());
+    pub fn with_capacity(arena: impl Arena<H>) -> SupplementalArena<H, T> {
+        let mut items = Vec::with_capacity(arena.len());
         items[0] = MaybeUninit::uninit();
         SupplementalArena {
             items,
@@ -446,35 +561,33 @@ impl<T> Default for HandleSet<T> {
 /// linked list implementation _should_ be cache-friendly, since the individual cells are allocated
 /// out of an arena.
 #[repr(C)]
-#[derive(Niche)]
+#[derive(Eq, Hash, PartialEq)]
 pub struct List<T> {
     // The value of this handle will be EMPTY_LIST_HANDLE if the list is empty.  For an
     // Option<List<T>>, the value will be zero (via the Option<NonZero> optimization) if the list
     // is None.
-    #[niche]
     cells: Handle<ListCell<T>>,
 }
 
 #[doc(hidden)]
 #[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ListCell<T> {
     head: T,
     // The value of this handle will be EMPTY_LIST_HANDLE if this is the last element of the list.
     tail: Handle<ListCell<T>>,
 }
 
+pub trait ListArena<T>: Arena<ListCell<T>> {}
+
+impl<T, A> ListArena<T> for A where A: Arena<ListCell<T>> {}
+
 const EMPTY_LIST_HANDLE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(u32::MAX) };
 
-// An arena that's used to manage `List<T>` instances.
-//
-// (Note that the arena doesn't store `List<T>` itself; it stores the `ListCell<T>`s that the lists
-// are made of.)
-pub type ListArena<T> = Arena<ListCell<T>>;
-
 impl<T> List<T> {
-    /// Creates a new `ListArena` that will manage lists of this type.
-    pub fn new_arena() -> ListArena<T> {
-        ListArena::new()
+    /// Creates a new arena that will manage lists of this type.
+    pub fn new_arena() -> impl ListArena<T> {
+        VecArena::new()
     }
 
     /// Returns whether this list is empty.
@@ -500,7 +613,7 @@ impl<T> List<T> {
     }
 
     /// Pushes a new element onto the front of this list.
-    pub fn push_front(&mut self, arena: &mut ListArena<T>, head: T) {
+    pub fn push_front(&mut self, arena: &mut impl ListArena<T>, head: T) {
         self.cells = arena.add(ListCell {
             head,
             tail: self.cells,
@@ -509,7 +622,7 @@ impl<T> List<T> {
 
     /// Removes and returns the element at the front of this list.  If the list is empty, returns
     /// `None`.
-    pub fn pop_front<'a>(&mut self, arena: &'a ListArena<T>) -> Option<&'a T> {
+    pub fn pop_front<'a>(&mut self, arena: &'a impl ListArena<T>) -> Option<&'a T> {
         if self.is_empty() {
             return None;
         }
@@ -517,15 +630,22 @@ impl<T> List<T> {
         self.cells = cell.tail;
         Some(&cell.head)
     }
+}
 
+impl<'a, T: 'a> List<T> {
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(mut self, arena: &'a ListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter(mut self, arena: &'a impl ListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
         std::iter::from_fn(move || self.pop_front(arena))
     }
 }
 
 impl<T> List<T> {
-    pub fn equals_with<F>(mut self, arena: &ListArena<T>, mut other: List<T>, mut eq: F) -> bool
+    pub fn equals_with<F>(
+        mut self,
+        arena: &impl ListArena<T>,
+        mut other: List<T>,
+        mut eq: F,
+    ) -> bool
     where
         F: FnMut(&T, &T) -> bool,
     {
@@ -541,7 +661,7 @@ impl<T> List<T> {
 
     pub fn cmp_with<F>(
         mut self,
-        arena: &ListArena<T>,
+        arena: &impl ListArena<T>,
         mut other: List<T>,
         mut cmp: F,
     ) -> std::cmp::Ordering
@@ -565,7 +685,10 @@ impl<T> List<T>
 where
     T: Eq,
 {
-    pub fn equals(self, arena: &ListArena<T>, other: List<T>) -> bool {
+    pub fn equals(self, arena: &impl ListArena<T>, other: List<T>) -> bool {
+        if let Some(equals) = arena.try_equals(self.cells, other.cells) {
+            return equals;
+        }
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
@@ -574,7 +697,7 @@ impl<T> List<T>
 where
     T: Ord,
 {
-    pub fn cmp(self, arena: &ListArena<T>, other: List<T>) -> std::cmp::Ordering {
+    pub fn cmp(self, arena: &impl ListArena<T>, other: List<T>) -> std::cmp::Ordering {
         self.cmp_with(arena, other, |a, b| a.cmp(b))
     }
 }
@@ -591,6 +714,53 @@ impl<T> Clone for List<T> {
 
 impl<T> Copy for List<T> {}
 
+#[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
+pub struct NicheList<T> {
+    cells: ControlledOption<Handle<ListCell<T>>>,
+}
+
+impl<T> Niche for List<T> {
+    type Output = NicheList<T>;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NicheList {
+            cells: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.cells.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NicheList {
+            cells: ControlledOption::from(value.cells),
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        List {
+            cells: value
+                .cells
+                .into_option()
+                .expect("Niche::from_some called on none value of ControlledOption<List<_>>"),
+        }
+    }
+}
+
+impl<T> Clone for NicheList<T> {
+    fn clone(&self) -> Self {
+        Self { cells: self.cells }
+    }
+}
+
+impl<T> Copy for NicheList<T> {}
+
 //-------------------------------------------------------------------------------------------------
 // Reversible arena-allocated list
 
@@ -602,30 +772,41 @@ impl<T> Copy for List<T> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
-#[derive(Niche)]
+#[derive(Eq, Hash, PartialEq)]
 pub struct ReversibleList<T> {
-    #[niche]
     cells: Handle<ReversibleListCell<T>>,
 }
 
 #[repr(C)]
 #[doc(hidden)]
+#[derive(Clone, Eq)]
 pub struct ReversibleListCell<T> {
     head: T,
     tail: Handle<ReversibleListCell<T>>,
     reversed: Cell<Option<Handle<ReversibleListCell<T>>>>,
 }
 
-// An arena that's used to manage `ReversibleList<T>` instances.
-//
-// (Note that the arena doesn't store `ReversibleList<T>` itself; it stores the
-// `ReversibleListCell<T>`s that the lists are made of.)
-pub type ReversibleListArena<T> = Arena<ReversibleListCell<T>>;
+impl<T: Hash> Hash for ReversibleListCell<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.head.hash(state);
+        self.tail.hash(state);
+    }
+}
+
+impl<T: Eq> PartialEq for ReversibleListCell<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.head == other.head && self.tail == other.tail
+    }
+}
+
+pub trait ReversibleListArena<T>: Arena<ReversibleListCell<T>> {}
+
+impl<T, A> ReversibleListArena<T> for A where A: Arena<ReversibleListCell<T>> {}
 
 impl<T> ReversibleList<T> {
-    /// Creates a new `ReversibleListArena` that will manage lists of this type.
-    pub fn new_arena() -> ReversibleListArena<T> {
-        ReversibleListArena::new()
+    /// Creates a new arena that will manage lists of this type.
+    pub fn new_arena() -> impl ReversibleListArena<T> {
+        VecArena::new()
     }
 
     /// Returns whether this list is empty.
@@ -642,7 +823,7 @@ impl<T> ReversibleList<T> {
     }
 
     /// Returns whether we have already calculated the reversal of this list.
-    pub fn have_reversal(&self, arena: &ReversibleListArena<T>) -> bool {
+    pub fn have_reversal(&self, arena: &impl ReversibleListArena<T>) -> bool {
         if self.is_empty() {
             // The empty list is already reversed.
             return true;
@@ -651,13 +832,13 @@ impl<T> ReversibleList<T> {
     }
 
     /// Pushes a new element onto the front of this list.
-    pub fn push_front(&mut self, arena: &mut ReversibleListArena<T>, head: T) {
+    pub fn push_front(&mut self, arena: &mut impl ReversibleListArena<T>, head: T) {
         self.cells = arena.add(ReversibleListCell::new(head, self.cells, None));
     }
 
     /// Removes and returns the element at the front of this list.  If the list is empty, returns
     /// `None`.
-    pub fn pop_front<'a>(&mut self, arena: &'a ReversibleListArena<T>) -> Option<&'a T> {
+    pub fn pop_front<'a>(&mut self, arena: &'a impl ReversibleListArena<T>) -> Option<&'a T> {
         if self.is_empty() {
             return None;
         }
@@ -665,11 +846,13 @@ impl<T> ReversibleList<T> {
         self.cells = cell.tail;
         Some(&cell.head)
     }
+}
 
+impl<'a, T: 'a> ReversibleList<T> {
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(
+    pub fn iter(
         mut self,
-        arena: &'a ReversibleListArena<T>,
+        arena: &'a impl ReversibleListArena<T>,
     ) -> impl Iterator<Item = &'a T> + 'a {
         std::iter::from_fn(move || self.pop_front(arena))
     }
@@ -682,7 +865,7 @@ where
     /// Reverses the list.  Since we're already caching everything in an arena, we make sure to
     /// only calculate the reversal once, returning it as-is if you call this function multiple
     /// times.
-    pub fn reverse(&mut self, arena: &mut ReversibleListArena<T>) {
+    pub fn reverse(&mut self, arena: &mut impl ReversibleListArena<T>) {
         if self.is_empty() {
             return;
         }
@@ -693,7 +876,7 @@ where
     /// Ensures that the reversal of this list is available.  It can be useful to precalculate this
     /// when you have mutable access to the arena, so that you can then reverse and un-reverse the
     /// list later when you only have shared access to it.
-    pub fn ensure_reversal_available(&self, arena: &mut ReversibleListArena<T>) {
+    pub fn ensure_reversal_available(&self, arena: &mut impl ReversibleListArena<T>) {
         // First check to see if the list has already been reversed.
         if self.is_empty() {
             // The empty list is already reversed.
@@ -712,7 +895,7 @@ where
 impl<T> ReversibleList<T> {
     /// Reverses the list, assuming that the reversal has already been computed.  If it hasn't we
     /// return an error.
-    pub fn reverse_reused(&mut self, arena: &ReversibleListArena<T>) -> Result<(), ()> {
+    pub fn reverse_reused(&mut self, arena: &impl ReversibleListArena<T>) -> Result<(), ()> {
         if self.is_empty() {
             // The empty list is already reversed.
             return Ok(());
@@ -750,7 +933,7 @@ where
 {
     fn reverse(
         forwards: Handle<ReversibleListCell<T>>,
-        arena: &mut ReversibleListArena<T>,
+        arena: &mut impl ReversibleListArena<T>,
     ) -> Handle<ReversibleListCell<T>> {
         let mut reversed = ReversibleListCell::empty_handle();
         let mut current = forwards;
@@ -777,7 +960,7 @@ where
 impl<T> ReversibleList<T> {
     pub fn equals_with<F>(
         mut self,
-        arena: &ReversibleListArena<T>,
+        arena: &impl ReversibleListArena<T>,
         mut other: ReversibleList<T>,
         mut eq: F,
     ) -> bool
@@ -796,7 +979,7 @@ impl<T> ReversibleList<T> {
 
     pub fn cmp_with<F>(
         mut self,
-        arena: &ReversibleListArena<T>,
+        arena: &impl ReversibleListArena<T>,
         mut other: ReversibleList<T>,
         mut cmp: F,
     ) -> std::cmp::Ordering
@@ -820,7 +1003,10 @@ impl<T> ReversibleList<T>
 where
     T: Eq,
 {
-    pub fn equals(self, arena: &ReversibleListArena<T>, other: ReversibleList<T>) -> bool {
+    pub fn equals(self, arena: &impl ReversibleListArena<T>, other: ReversibleList<T>) -> bool {
+        if let Some(equals) = arena.try_equals(self.cells, other.cells) {
+            return equals;
+        }
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
@@ -831,7 +1017,7 @@ where
 {
     pub fn cmp(
         self,
-        arena: &ReversibleListArena<T>,
+        arena: &impl ReversibleListArena<T>,
         other: ReversibleList<T>,
     ) -> std::cmp::Ordering {
         self.cmp_with(arena, other, |a, b| a.cmp(b))
@@ -850,8 +1036,60 @@ impl<T> Clone for ReversibleList<T> {
 
 impl<T> Copy for ReversibleList<T> {}
 
+#[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
+pub struct NicheReversibleList<T> {
+    cells: ControlledOption<Handle<ReversibleListCell<T>>>,
+}
+
+impl<T> Niche for ReversibleList<T> {
+    type Output = NicheReversibleList<T>;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NicheReversibleList {
+            cells: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.cells.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NicheReversibleList {
+            cells: ControlledOption::from(value.cells),
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        ReversibleList {
+            cells: value.cells.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<ReversibleList<_>>",
+            ),
+        }
+    }
+}
+
+impl<T> Clone for NicheReversibleList<T> {
+    fn clone(&self) -> Self {
+        Self { cells: self.cells }
+    }
+}
+
+impl<T> Copy for NicheReversibleList<T> {}
+
 //-------------------------------------------------------------------------------------------------
 // Arena-allocated deque
+
+pub type DequeCell<T> = ReversibleListCell<T>;
+
+pub trait DequeArena<T>: Arena<DequeCell<T>> {}
+
+impl<T, A> DequeArena<T> for A where A: Arena<DequeCell<T>> {}
 
 /// An arena-allocated deque.
 ///
@@ -869,6 +1107,7 @@ impl<T> Copy for ReversibleList<T> {}
 ///
 /// [`List`]: struct.List.html
 #[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
 pub struct Deque<T> {
     list: ReversibleList<T>,
     direction: DequeDirection,
@@ -891,13 +1130,10 @@ impl std::ops::Not for DequeDirection {
     }
 }
 
-// An arena that's used to manage `Deque<T>` instances.
-pub type DequeArena<T> = ReversibleListArena<T>;
-
 impl<T> Deque<T> {
-    /// Creates a new `DequeArena` that will manage deques of this type.
-    pub fn new_arena() -> DequeArena<T> {
-        ReversibleList::new_arena()
+    /// Creates a new arena that will manage deques of this type.
+    pub fn new_arena() -> impl DequeArena<T> {
+        VecArena::new()
     }
 
     /// Returns whether this deque is empty.
@@ -919,7 +1155,7 @@ impl<T> Deque<T> {
     }
 
     /// Returns whether we have already calculated the reversal of this deque.
-    pub fn have_reversal(&self, arena: &DequeArena<T>) -> bool {
+    pub fn have_reversal(&self, arena: &impl DequeArena<T>) -> bool {
         self.list.have_reversal(arena)
     }
 
@@ -930,12 +1166,17 @@ impl<T> Deque<T> {
     fn is_forwards(&self) -> bool {
         matches!(self.direction, DequeDirection::Forwards)
     }
+}
 
+impl<'a, T: 'a> Deque<T> {
     /// Returns an iterator over the contents of this deque, with no guarantee about the ordering of
     /// the elements.  (By not caring about the ordering of the elements, you can call this method
     /// regardless of which direction the deque's elements are currently stored.  And that, in
     /// turn, means that we only need shared access to the arena, and not mutable access to it.)
-    pub fn iter_unordered<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter_unordered(
+        &self,
+        arena: &'a impl DequeArena<T>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
         self.list.iter(arena)
     }
 }
@@ -945,7 +1186,7 @@ where
     T: Clone,
 {
     /// Ensures that this deque has computed its backwards-facing list of elements.
-    pub fn ensure_backwards(&mut self, arena: &mut DequeArena<T>) {
+    pub fn ensure_backwards(&mut self, arena: &mut impl DequeArena<T>) {
         if self.is_backwards() {
             return;
         }
@@ -954,7 +1195,7 @@ where
     }
 
     /// Ensures that this deque has computed its forwards-facing list of elements.
-    pub fn ensure_forwards(&mut self, arena: &mut DequeArena<T>) {
+    pub fn ensure_forwards(&mut self, arena: &mut impl DequeArena<T>) {
         if self.is_forwards() {
             return;
         }
@@ -963,62 +1204,41 @@ where
     }
 
     /// Ensures that this deque has computed both directions of elements.
-    pub fn ensure_both_directions(&self, arena: &mut DequeArena<T>) {
+    pub fn ensure_both_directions(&self, arena: &mut impl Arena<DequeCell<T>>) {
         self.list.ensure_reversal_available(arena);
     }
 
     /// Pushes a new element onto the front of this deque.
-    pub fn push_front(&mut self, arena: &mut DequeArena<T>, element: T) {
+    pub fn push_front(&mut self, arena: &mut impl DequeArena<T>, element: T) {
         self.ensure_forwards(arena);
         self.list.push_front(arena, element);
     }
 
     /// Pushes a new element onto the back of this deque.
-    pub fn push_back(&mut self, arena: &mut DequeArena<T>, element: T) {
+    pub fn push_back(&mut self, arena: &mut impl DequeArena<T>, element: T) {
         self.ensure_backwards(arena);
         self.list.push_front(arena, element);
     }
 
     /// Removes and returns the element from the front of this deque.  If the deque is empty,
     /// returns `None`.
-    pub fn pop_front<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+    pub fn pop_front<'a>(&mut self, arena: &'a mut impl DequeArena<T>) -> Option<&'a T> {
         self.ensure_forwards(arena);
         self.list.pop_front(arena)
     }
 
     /// Removes and returns the element from the back of this deque.  If the deque is empty,
     /// returns `None`.
-    pub fn pop_back<'a>(&mut self, arena: &'a mut DequeArena<T>) -> Option<&'a T> {
+    pub fn pop_back<'a>(&mut self, arena: &'a mut impl DequeArena<T>) -> Option<&'a T> {
         self.ensure_backwards(arena);
         self.list.pop_front(arena)
-    }
-
-    /// Returns an iterator over the contents of this deque in a forwards direction.
-    pub fn iter<'a>(&self, arena: &'a mut DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
-        let mut list = self.list;
-        if self.is_backwards() {
-            list.reverse(arena);
-        }
-        list.iter(arena)
-    }
-
-    /// Returns an iterator over the contents of this deque in a backwards direction.
-    pub fn iter_reversed<'a>(
-        &self,
-        arena: &'a mut DequeArena<T>,
-    ) -> impl Iterator<Item = &'a T> + 'a {
-        let mut list = self.list;
-        if self.is_forwards() {
-            list.reverse(arena);
-        }
-        list.iter(arena)
     }
 
     /// Ensures that both deques are stored in the same direction.  It doesn't matter _which_
     /// direction, as long as they're the same, so do the minimum amount of work to bring this
     /// about.  (In particular, if we've already calculated the reversal of one of the deques,
     /// reverse that one.)
-    fn ensure_same_direction(&mut self, arena: &mut DequeArena<T>, other: &mut Deque<T>) {
+    fn ensure_same_direction(&mut self, arena: &mut impl DequeArena<T>, other: &mut Deque<T>) {
         if self.direction == other.direction {
             return;
         }
@@ -1032,11 +1252,42 @@ where
     }
 }
 
+impl<'a, T: 'a> Deque<T>
+where
+    T: Clone,
+{
+    /// Returns an iterator over the contents of this deque in a forwards direction.
+    pub fn iter(&self, arena: &'a mut impl DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_backwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+
+    /// Returns an iterator over the contents of this deque in a backwards direction.
+    pub fn iter_reversed(
+        &self,
+        arena: &'a mut impl DequeArena<T>,
+    ) -> impl Iterator<Item = &'a T> + 'a {
+        let mut list = self.list;
+        if self.is_forwards() {
+            list.reverse(arena);
+        }
+        list.iter(arena)
+    }
+}
+
 impl<T> Deque<T>
 where
     T: Clone,
 {
-    pub fn equals_with<F>(mut self, arena: &mut DequeArena<T>, mut other: Deque<T>, eq: F) -> bool
+    pub fn equals_with<F>(
+        mut self,
+        arena: &mut impl DequeArena<T>,
+        mut other: Deque<T>,
+        eq: F,
+    ) -> bool
     where
         F: FnMut(&T, &T) -> bool,
     {
@@ -1046,7 +1297,7 @@ where
 
     pub fn cmp_with<F>(
         mut self,
-        arena: &mut DequeArena<T>,
+        arena: &mut impl DequeArena<T>,
         mut other: Deque<T>,
         cmp: F,
     ) -> std::cmp::Ordering
@@ -1065,7 +1316,7 @@ impl<T> Deque<T>
 where
     T: Clone + Eq,
 {
-    pub fn equals(self, arena: &mut DequeArena<T>, other: Deque<T>) -> bool {
+    pub fn equals(self, arena: &mut impl DequeArena<T>, other: Deque<T>) -> bool {
         self.equals_with(arena, other, |a, b| *a == *b)
     }
 }
@@ -1074,18 +1325,18 @@ impl<T> Deque<T>
 where
     T: Clone + Ord,
 {
-    pub fn cmp(self, arena: &mut DequeArena<T>, other: Deque<T>) -> std::cmp::Ordering {
+    pub fn cmp(self, arena: &mut impl DequeArena<T>, other: Deque<T>) -> std::cmp::Ordering {
         self.cmp_with(arena, other, |a, b| a.cmp(b))
     }
 }
 
-impl<T> Deque<T> {
+impl<'a, T: 'a> Deque<T> {
     /// Returns an iterator over the contents of this deque in a forwards direction, assuming that
     /// we have already computed its forwards-facing list of elements via [`ensure_forwards`][].
     /// Panics if we haven't already computed it.
     ///
     /// [`ensure_forwards`]: #method.ensure_forwards
-    pub fn iter_reused<'a>(&self, arena: &'a DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter_reused(&self, arena: &'a impl DequeArena<T>) -> impl Iterator<Item = &'a T> + 'a {
         let mut list = self.list;
         if self.is_backwards() {
             list.reverse_reused(arena)
@@ -1099,9 +1350,9 @@ impl<T> Deque<T> {
     /// Panics if we haven't already computed it.
     ///
     /// [`ensure_backwards`]: #method.ensure_backwards
-    pub fn iter_reversed_reused<'a>(
+    pub fn iter_reversed_reused(
         &self,
-        arena: &'a DequeArena<T>,
+        arena: &'a impl DequeArena<T>,
     ) -> impl Iterator<Item = &'a T> + 'a {
         let mut list = self.list;
         if self.is_forwards() {
@@ -1126,3 +1377,57 @@ impl<T> Clone for Deque<T> {
 }
 
 impl<T> Copy for Deque<T> {}
+
+#[repr(C)]
+#[derive(Eq, Hash, PartialEq)]
+pub struct NicheDeque<T> {
+    list: ControlledOption<ReversibleList<T>>,
+    direction: DequeDirection,
+}
+
+impl<T> Niche for Deque<T> {
+    type Output = NicheDeque<T>;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NicheDeque {
+            list: ControlledOption::none(),
+            direction: DequeDirection::Forwards,
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.list.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NicheDeque {
+            list: ControlledOption::from(value.list),
+            direction: value.direction,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        Deque {
+            list: value
+                .list
+                .into_option()
+                .expect("Niche::from_some called on none value of ControlledOption<Deque<_>>"),
+            direction: value.direction,
+        }
+    }
+}
+
+impl<T> Clone for NicheDeque<T> {
+    fn clone(&self) -> Self {
+        Self {
+            list: self.list,
+            direction: self.direction,
+        }
+    }
+}
+
+impl<T> Copy for NicheDeque<T> {}

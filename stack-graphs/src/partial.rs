@@ -36,6 +36,7 @@
 use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::hash::Hash;
 use std::num::NonZeroU32;
 
 use controlled_option::ControlledOption;
@@ -44,10 +45,10 @@ use enumset::EnumSetType;
 use smallvec::SmallVec;
 
 use crate::arena::Deque;
-use crate::arena::DequeArena;
+use crate::arena::DequeCell;
 use crate::arena::Handle;
+use crate::arena::HashArena;
 use crate::arena::ReversibleList;
-use crate::arena::ReversibleListArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::graph::Edge;
@@ -158,8 +159,8 @@ where
 
 /// Represents an unknown list of scoped symbols.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Niche, Ord, PartialEq, PartialOrd)]
-pub struct SymbolStackVariable(#[niche] NonZeroU32);
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SymbolStackVariable(NonZeroU32);
 
 impl SymbolStackVariable {
     pub fn new(variable: u32) -> Option<SymbolStackVariable> {
@@ -218,13 +219,37 @@ impl TryFrom<u32> for SymbolStackVariable {
     }
 }
 
+impl Niche for SymbolStackVariable {
+    type Output = u32;
+
+    #[inline]
+    fn none() -> Self::Output {
+        0
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        *value == 0
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        value.as_u32()
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(value) })
+    }
+}
+
 //-------------------------------------------------------------------------------------------------
 // Scope stack variables
 
 /// Represents an unknown list of exported scopes.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Niche, Ord, PartialEq, PartialOrd)]
-pub struct ScopeStackVariable(#[niche] NonZeroU32);
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ScopeStackVariable(NonZeroU32);
 
 impl ScopeStackVariable {
     pub fn new(variable: u32) -> Option<ScopeStackVariable> {
@@ -281,6 +306,30 @@ impl Into<u32> for ScopeStackVariable {
     }
 }
 
+impl Niche for ScopeStackVariable {
+    type Output = u32;
+
+    #[inline]
+    fn none() -> Self::Output {
+        0
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        *value == 0
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        value.as_u32()
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(value) })
+    }
+}
+
 impl TryFrom<u32> for ScopeStackVariable {
     type Error = ();
     fn try_from(value: u32) -> Result<ScopeStackVariable, ()> {
@@ -294,7 +343,7 @@ impl TryFrom<u32> for ScopeStackVariable {
 
 /// A symbol with an unknown, but possibly empty, list of exported scopes attached to it.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PartialScopedSymbol {
     pub symbol: Handle<Symbol>,
     // Note that not having an attached scope list is _different_ than having an empty attached
@@ -442,9 +491,8 @@ impl DisplayWithPartialPaths for PartialScopedSymbol {
 /// A pattern that might match against a symbol stack.  Consists of a (possibly empty) list of
 /// partial scoped symbols, along with an optional symbol stack variable.
 #[repr(C)]
-#[derive(Clone, Copy, Niche)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PartialSymbolStack {
-    #[niche]
     symbols: ReversibleList<PartialScopedSymbol>,
     length: u32,
     variable: ControlledOption<SymbolStackVariable>,
@@ -743,24 +791,13 @@ impl PartialSymbolStack {
         unreachable!();
     }
 
-    pub fn equals(mut self, partials: &mut PartialPaths, mut other: PartialSymbolStack) -> bool {
-        while let Some(self_symbol) = self.pop_front(partials) {
-            if let Some(other_symbol) = other.pop_front(partials) {
-                if !self_symbol.equals(partials, &other_symbol) {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-        if !other.symbols.is_empty() {
-            return false;
-        }
-        equals_option(
-            self.variable.into_option(),
-            other.variable.into_option(),
-            |a, b| a == b,
-        )
+    pub fn equals(self, _partials: &mut PartialPaths, other: PartialSymbolStack) -> bool {
+        self.symbols == other.symbols
+            && equals_option(
+                self.variable.into_option(),
+                other.variable.into_option(),
+                |a, b| a == b,
+            )
     }
 
     pub fn cmp(
@@ -849,15 +886,60 @@ impl DisplayWithPartialPaths for PartialSymbolStack {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct NichePartialSymbolStack {
+    symbols: ControlledOption<ReversibleList<PartialScopedSymbol>>,
+    length: u32,
+    variable: ControlledOption<SymbolStackVariable>,
+}
+
+impl Niche for PartialSymbolStack {
+    type Output = NichePartialSymbolStack;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NichePartialSymbolStack {
+            symbols: ControlledOption::none(),
+            length: 0,
+            variable: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.symbols.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NichePartialSymbolStack {
+            symbols: ControlledOption::from(value.symbols),
+            length: value.length,
+            variable: value.variable,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        PartialSymbolStack {
+            symbols: value.symbols.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<PartialSymbolStack>",
+            ),
+            length: value.length,
+            variable: value.variable,
+        }
+    }
+}
+
 //-------------------------------------------------------------------------------------------------
 // Partial scope stacks
 
 /// A pattern that might match against a scope stack.  Consists of a (possibly empty) list of
 /// exported scopes, along with an optional scope stack variable.
 #[repr(C)]
-#[derive(Clone, Copy, Niche)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct PartialScopeStack {
-    #[niche]
     scopes: ReversibleList<Handle<Node>>,
     length: u32,
     variable: ControlledOption<ScopeStackVariable>,
@@ -1111,11 +1193,8 @@ impl PartialScopeStack {
         self.variable.into_option()
     }
 
-    pub fn equals(self, partials: &mut PartialPaths, other: PartialScopeStack) -> bool {
-        self.scopes
-            .equals_with(&mut partials.partial_scope_stacks, other.scopes, |a, b| {
-                *a == *b
-            })
+    pub fn equals(self, _partials: &mut PartialPaths, other: PartialScopeStack) -> bool {
+        self.scopes == other.scopes
             && equals_option(
                 self.variable.into_option(),
                 other.variable.into_option(),
@@ -1191,6 +1270,52 @@ impl DisplayWithPartialPaths for PartialScopeStack {
             }
         }
         Ok(())
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct NichePartialScopeStack {
+    scopes: ControlledOption<ReversibleList<Handle<Node>>>,
+    length: u32,
+    variable: ControlledOption<ScopeStackVariable>,
+}
+
+impl Niche for PartialScopeStack {
+    type Output = NichePartialScopeStack;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NichePartialScopeStack {
+            scopes: ControlledOption::none(),
+            length: 0,
+            variable: ControlledOption::none(),
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.scopes.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NichePartialScopeStack {
+            scopes: ControlledOption::from(value.scopes),
+            length: value.length,
+            variable: value.variable,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        PartialScopeStack {
+            scopes: value.scopes.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<PartialScopeStack>",
+            ),
+            length: value.length,
+            variable: value.variable,
+        }
     }
 }
 
@@ -1597,6 +1722,48 @@ impl DisplayWithPartialPaths for PartialPathEdgeList {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct NichePartialPathEdgeList {
+    edges: ControlledOption<Deque<PartialPathEdge>>,
+    length: u32,
+}
+
+impl Niche for PartialPathEdgeList {
+    type Output = NichePartialPathEdgeList;
+
+    #[inline]
+    fn none() -> Self::Output {
+        NichePartialPathEdgeList {
+            edges: ControlledOption::none(),
+            length: 0,
+        }
+    }
+
+    #[inline]
+    fn is_none(value: &Self::Output) -> bool {
+        value.edges.is_none()
+    }
+
+    #[inline]
+    fn into_some(value: Self) -> Self::Output {
+        NichePartialPathEdgeList {
+            edges: ControlledOption::from(value.edges),
+            length: value.length,
+        }
+    }
+
+    #[inline]
+    fn from_some(value: Self::Output) -> Self {
+        PartialPathEdgeList {
+            edges: value.edges.into_option().expect(
+                "Niche::from_some called on none value of ControlledOption<PartialPathEdgeList>",
+            ),
+            length: value.length,
+        }
+    }
+}
+
 //-------------------------------------------------------------------------------------------------
 // Partial paths
 
@@ -1671,21 +1838,13 @@ impl PartialPath {
         self.edges.shadows(partials, other.edges)
     }
 
-    pub fn equals(&self, partials: &mut PartialPaths, other: &PartialPath) -> bool {
+    pub fn equals(&self, _partials: &mut PartialPaths, other: &PartialPath) -> bool {
         self.start_node == other.start_node
             && self.end_node == other.end_node
-            && self
-                .symbol_stack_precondition
-                .equals(partials, other.symbol_stack_precondition)
-            && self
-                .symbol_stack_postcondition
-                .equals(partials, other.symbol_stack_postcondition)
-            && self
-                .scope_stack_precondition
-                .equals(partials, other.scope_stack_precondition)
-            && self
-                .scope_stack_postcondition
-                .equals(partials, other.scope_stack_postcondition)
+            && self.symbol_stack_precondition == other.symbol_stack_precondition
+            && self.symbol_stack_postcondition == other.symbol_stack_postcondition
+            && self.scope_stack_precondition == other.scope_stack_precondition
+            && self.scope_stack_postcondition == other.scope_stack_postcondition
     }
 
     pub fn cmp(
@@ -2672,17 +2831,17 @@ struct Join {
 /// Manages the state of a collection of partial paths built up as part of the partial-path-finding
 /// algorithm or path-stitching algorithm.
 pub struct PartialPaths {
-    pub(crate) partial_symbol_stacks: ReversibleListArena<PartialScopedSymbol>,
-    pub(crate) partial_scope_stacks: ReversibleListArena<Handle<Node>>,
-    pub(crate) partial_path_edges: DequeArena<PartialPathEdge>,
+    pub(crate) partial_symbol_stacks: HashArena<DequeCell<PartialScopedSymbol>>,
+    pub(crate) partial_scope_stacks: HashArena<DequeCell<Handle<Node>>>,
+    pub(crate) partial_path_edges: HashArena<DequeCell<PartialPathEdge>>,
 }
 
 impl PartialPaths {
     pub fn new() -> PartialPaths {
         PartialPaths {
-            partial_symbol_stacks: ReversibleList::new_arena(),
-            partial_scope_stacks: ReversibleList::new_arena(),
-            partial_path_edges: Deque::new_arena(),
+            partial_symbol_stacks: HashArena::new(),
+            partial_scope_stacks: HashArena::new(),
+            partial_path_edges: HashArena::new(),
         }
     }
 }
