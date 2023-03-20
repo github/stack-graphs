@@ -1,20 +1,13 @@
-/*--- path: a.java ---*/
-import foo.bar.Baz;
+/*--- path: Importer.java ---*/
+import foo.Foo;
 
 public class Importer {
-  public static void main(String[] args) {
-    Baz.some_method();
-  // ^ defined: 2
+  public static Foo main(String[] args) {
+              // ^ defined: 2, 12
   }
 }
 
+/* --- path: foo/Foo.java ---*/
 
-/* --- path: b.java ---*/
-
-import foo.bar.Baz;
-
-public class AnotherImporter {
-  public static void main(String[] args) {
-    Baz.some_method();
-  }
+public class Foo {
 }

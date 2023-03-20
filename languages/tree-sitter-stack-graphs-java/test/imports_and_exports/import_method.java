@@ -4,8 +4,7 @@ import foo.Foo;
 public class Importer {
   public static void main(String[] args) {
     Foo.bar();
- // ^ defined: 2,15
-     // ^ defined: 16
+     // ^ defined: 15
 
   }
 }
