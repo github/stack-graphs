@@ -165,6 +165,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@class_body.lexical_scope -> @class_body.defs) precedence = 1
   edge @class.defs -> def
   edge def -> @class_body.defs
+  edge def -> @class_body.static_defs
 
   node this__expr_def
   node @class.type
@@ -175,6 +176,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge this__expr_def -> @class.type
 
   attr (@class.type) pop_symbol = ":"
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+  edge def -> def__typeof
+  edge def__typeof -> @class_body.static_defs
 
   edge @class.type -> ref
   attr (@class.type -> ref) precedence = 1
@@ -238,15 +244,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (class_body) @class_body {
   node @class_body.lexical_scope
   node @class_body.defs
+  node @class_body.static_defs
 }
 
 (class_body (_)@declaration)@class_body {
   edge @class_body.defs -> @declaration.defs
+  edge @class_body.static_defs -> @declaration.static_defs
   edge @declaration.lexical_scope -> @class_body.lexical_scope
 }
 
 (class_body (block) @block) {
   node @block.defs
+  node @block.static_defs
   node @block.lexical_scope
   edge @block.lexical_scope -> @block.before_scope
 }
@@ -272,6 +281,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; FIXME: can we get away with defining one and only one thing for each of these, and therefore having a `.def` node instead of `.defs`?
   node @decl.defs
   node @decl.lexical_scope
+  node @decl.static_defs
 }
 
 (annotation_type_declaration
@@ -434,6 +444,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (method_declaration
+  (modifiers "static"?@is_static)?
   type: (_) @type
   name: (identifier) @name
   body: (block) @block) @method
@@ -441,7 +452,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type.lexical_scope -> @method.lexical_scope
 
   node member
-  edge @method.defs -> member
+
+  if none @is_static {
+    edge @method.defs -> member
+  } else {
+    edge @method.static_defs -> member
+  }
 
   attr (member) pop_symbol = "."
 
@@ -1313,6 +1329,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @line_comment.lexical_defs
   node @line_comment.lexical_scope
   node @line_comment.defs
+  node @line_comment.ref
+  node @line_comment.static_defs
 
   edge @line_comment.after_scope -> @line_comment.before_scope
 }
@@ -1321,6 +1339,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @block_comment.before_scope
   node @block_comment.after_scope
   node @block_comment.defs
+  node @block_comment.ref
+  node @block_comment.static_defs
   node @block_comment.lexical_scope
 
   edge @block_comment.after_scope -> @block_comment.before_scope
