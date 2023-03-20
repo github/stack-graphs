@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use assert_json_diff::assert_json_eq;
 use serde_json::json;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::json::NoFilter;
@@ -654,18 +655,7 @@ fn can_serialize_graph() {
             ]
         }
     );
-    pretty_assertions::assert_eq!(
-        expected["nodes"].as_array().unwrap().len(),
-        actual["nodes"].as_array().unwrap().len()
-    );
-    pretty_assertions::assert_eq!(
-        expected["files"].as_array().unwrap().len(),
-        actual["files"].as_array().unwrap().len()
-    );
-    pretty_assertions::assert_eq!(
-        expected["edges"].as_array().unwrap().len(),
-        actual["edges"].as_array().unwrap().len()
-    );
+    assert_json_eq!(expected, actual);
 }
 
 #[test]
@@ -964,5 +954,5 @@ fn can_serialize_partial_paths() {
             }
         ]
     );
-    assert_eq!(expected, actual);
+    assert_json_eq!(expected, actual);
 }

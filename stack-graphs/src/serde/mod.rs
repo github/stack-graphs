@@ -7,6 +7,8 @@
 
 mod filter;
 mod graph;
+mod partial;
 
 pub use filter::*;
 pub use graph::*;
+pub use partial::*;
