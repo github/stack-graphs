@@ -1,8 +1,11 @@
-use super::{Filter, NoFilter};
+use serde::Deserialize;
+use serde::Serialize;
+use thiserror::Error;
+
 use crate::arena::Handle;
 
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use super::Filter;
+use super::NoFilter;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 pub struct StackGraph {

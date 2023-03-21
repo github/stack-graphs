@@ -1,9 +1,11 @@
-use crate::{
-    arena::Handle,
-    graph::{File, Node, StackGraph},
-    partial::{PartialPath, PartialPaths},
-};
 use itertools::Itertools;
+
+use crate::arena::Handle;
+use crate::graph::File;
+use crate::graph::Node;
+use crate::graph::StackGraph;
+use crate::partial::PartialPath;
+use crate::partial::PartialPaths;
 
 pub trait Filter {
     /// Return whether elements for the given file must be included.
