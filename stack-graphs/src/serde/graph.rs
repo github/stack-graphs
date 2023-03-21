@@ -1,105 +1,8 @@
+use super::{Filter, NoFilter};
 use crate::arena::Handle;
-pub use filter::{Filter, NoFilter};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-mod filter {
-    use crate::{
-        arena::Handle,
-        graph::{File, Node, StackGraph},
-        partial::{PartialPath, PartialPaths},
-    };
-
-    pub trait Filter {
-        /// Return whether elements for the given file must be included.
-        fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool;
-
-        /// Return whether the given node must be included.
-        /// Nodes of excluded files are always excluded.
-        fn include_node(&self, graph: &StackGraph, node: &Handle<Node>) -> bool;
-
-        /// Return whether the given edge must be included.
-        /// Edges via excluded nodes are always excluded.
-        fn include_edge(
-            &self,
-            graph: &StackGraph,
-            source: &Handle<Node>,
-            sink: &Handle<Node>,
-        ) -> bool;
-
-        /// Return whether the given path must be included.
-        /// Paths via excluded nodes or edges are always excluded.
-        fn include_partial_path(
-            &self,
-            graph: &StackGraph,
-            paths: &PartialPaths,
-            path: &PartialPath,
-        ) -> bool;
-    }
-
-    impl<F> Filter for F
-    where
-        F: Fn(&StackGraph, &Handle<File>) -> bool,
-    {
-        fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool {
-            self(graph, file)
-        }
-
-        fn include_node(&self, _graph: &StackGraph, _node: &Handle<Node>) -> bool {
-            true
-        }
-
-        fn include_edge(
-            &self,
-            _graph: &StackGraph,
-            _source: &Handle<Node>,
-            _sink: &Handle<Node>,
-        ) -> bool {
-            true
-        }
-
-        fn include_partial_path(
-            &self,
-            _graph: &StackGraph,
-            _paths: &PartialPaths,
-            _path: &PartialPath,
-        ) -> bool {
-            true
-        }
-    }
-
-    // Filter implementation that includes everything.
-    pub struct NoFilter;
-
-    impl Filter for NoFilter {
-        fn include_file(&self, _graph: &StackGraph, _file: &Handle<File>) -> bool {
-            true
-        }
-
-        fn include_node(&self, _graph: &StackGraph, _node: &Handle<Node>) -> bool {
-            true
-        }
-
-        fn include_edge(
-            &self,
-            _graph: &StackGraph,
-            _source: &Handle<Node>,
-            _sink: &Handle<Node>,
-        ) -> bool {
-            true
-        }
-
-        fn include_partial_path(
-            &self,
-            _graph: &StackGraph,
-            _paths: &PartialPaths,
-            _path: &PartialPath,
-        ) -> bool {
-            true
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 pub struct StackGraph {
@@ -123,7 +26,7 @@ pub enum Error {
     NoFileData(u32),
 
     #[error("node `{0}` is an invalid node")]
-    InvalidNode(u32),
+    InvalidGlobalNodeID(u32),
 }
 
 impl StackGraph {
@@ -150,27 +53,18 @@ impl StackGraph {
     }
 
     fn load_files(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
-        // we check if any of the files we are about to introduce, are
-        // already present in this graph, to avoid accidental merges
-        if let Some(f) = self
-            .files
-            .data
-            .iter()
-            .find(|f| graph.get_file(f.as_str()).is_some())
-        {
-            return Err(Error::FileAlreadyPresent(f.to_owned()));
-        }
-
-        for f in self.files.data.iter() {
-            graph.add_file(f.as_str()).unwrap();
+        for file in self.files.data.iter() {
+            graph
+                .add_file(&file)
+                .map_err(|_| Error::FileAlreadyPresent(file.to_owned()))?;
         }
 
         Ok(())
     }
 
     fn load_nodes(&self, graph: &mut crate::graph::StackGraph) -> Result<(), Error> {
-        for n in self.nodes.data.as_slice() {
-            let handle = match n {
+        for node in &self.nodes.data {
+            let handle = match node {
                 Node::DropScopes { id, .. } => {
                     let node_id = id.into_node_id(graph)?;
                     graph.add_drop_scopes_node(node_id)
@@ -182,7 +76,7 @@ impl StackGraph {
                     ..
                 } => {
                     let node_id = id.into_node_id(graph)?;
-                    let symbol_handle = graph.add_symbol(symbol.as_str());
+                    let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition)
                 }
                 Node::PopSymbol {
@@ -192,7 +86,7 @@ impl StackGraph {
                     ..
                 } => {
                     let node_id = id.into_node_id(graph)?;
-                    let symbol_handle = graph.add_symbol(symbol.as_str());
+                    let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition)
                 }
                 Node::PushScopedSymbol {
@@ -204,7 +98,7 @@ impl StackGraph {
                 } => {
                     let node_id = id.into_node_id(graph)?;
                     let scope_id = scope.into_node_id(graph)?;
-                    let symbol_handle = graph.add_symbol(symbol.as_str());
+                    let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_push_scoped_symbol_node(
                         node_id,
                         symbol_handle,
@@ -219,7 +113,7 @@ impl StackGraph {
                     ..
                 } => {
                     let node_id = id.into_node_id(graph)?;
-                    let symbol_handle = graph.add_symbol(symbol.as_str());
+                    let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_push_symbol_node(node_id, symbol_handle, *is_reference)
                 }
                 Node::Scope {
@@ -233,24 +127,24 @@ impl StackGraph {
 
             if let Some(handle) = handle {
                 // load source-info of each node
-                if let Some(source_info) = n.source_info() {
+                if let Some(source_info) = node.source_info() {
                     *graph.source_info_mut(handle) = crate::graph::SourceInfo {
                         span: source_info.span.clone(),
                         syntax_type: source_info
                             .syntax_type
                             .as_ref()
-                            .map(|st| graph.add_string(st.as_str())),
+                            .map(|st| graph.add_string(&st)),
                         ..Default::default()
                     };
                 }
 
                 // load debug-info of each node
-                if let Some(debug_info) = n.debug_info() {
+                if let Some(debug_info) = node.debug_info() {
                     *graph.debug_info_mut(handle) = debug_info.data.iter().fold(
                         crate::graph::DebugInfo::default(),
                         |mut info, entry| {
-                            let key = graph.add_string(entry.key.as_str());
-                            let value = graph.add_string(entry.value.as_str());
+                            let key = graph.add_string(&entry.key);
+                            let value = graph.add_string(&entry.value);
                             info.add(key, value);
                             info
                         },
@@ -267,17 +161,17 @@ impl StackGraph {
             source,
             sink,
             precedence,
-        } in self.edges.data.as_slice()
+        } in &self.edges.data
         {
             let source_id = source.into_node_id(graph)?;
             let sink_id = sink.into_node_id(graph)?;
 
             let source_handle = graph
                 .node_for_id(source_id)
-                .ok_or(Error::InvalidNode(source.local_id))?;
+                .ok_or(Error::InvalidGlobalNodeID(source.local_id))?;
             let sink_handle = graph
                 .node_for_id(sink_id)
-                .ok_or(Error::InvalidNode(sink.local_id))?;
+                .ok_or(Error::InvalidGlobalNodeID(sink.local_id))?;
 
             graph.add_edge(source_handle, sink_handle, *precedence);
         }
@@ -420,7 +314,7 @@ impl NodeID {
     ) -> Result<crate::graph::NodeID, Error> {
         if let Some(file) = self.file.as_ref() {
             let handle = graph
-                .get_file(file.as_str())
+                .get_file(&file)
                 .ok_or(Error::FileNotFound(file.to_owned()))?;
             Ok(crate::graph::NodeID::new_in_file(handle, self.local_id))
         } else if self.is_root() {
@@ -428,7 +322,7 @@ impl NodeID {
         } else if self.is_jump_to() {
             Ok(crate::graph::NodeID::jump_to())
         } else {
-            Err(Error::InvalidNode(self.local_id))
+            Err(Error::InvalidGlobalNodeID(self.local_id))
         }
     }
 }
@@ -457,6 +351,14 @@ pub struct Edge {
 }
 
 impl crate::graph::StackGraph {
+    pub fn to_serializable(&self) -> StackGraph {
+        self.to_serializable_filter(&NoFilter)
+    }
+
+    pub fn to_serializable_filter<'a>(&self, f: &'a dyn Filter) -> StackGraph {
+        crate::serde::StackGraph::from_graph_filter(self, f)
+    }
+
     fn filter_files<'a>(&self, filter: &'a dyn Filter) -> Files {
         Files {
             data: self

@@ -5,7 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use itertools::Itertools;
 use lsp_positions::Offset;
 use lsp_positions::Position;
 use lsp_positions::Span;
@@ -35,59 +34,13 @@ use crate::partial::PartialScopedSymbol;
 use crate::partial::PartialSymbolStack;
 use crate::partial::ScopeStackVariable;
 use crate::partial::SymbolStackVariable;
+use crate::serde::ImplicationFilter;
 pub use crate::serde::{Filter, NoFilter};
 use crate::stitching::Database;
 
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub struct JsonError(#[from] serde_json::error::Error);
-
-/// Filter implementation that enforces all implications of another filter.
-/// For example, that nodes frome excluded files are not included, etc.
-pub(crate) struct ImplicationFilter<'a>(pub &'a dyn Filter);
-
-impl Filter for ImplicationFilter<'_> {
-    fn include_file(&self, graph: &StackGraph, file: &Handle<File>) -> bool {
-        self.0.include_file(graph, file)
-    }
-
-    fn include_node(&self, graph: &StackGraph, node: &Handle<Node>) -> bool {
-        graph[*node]
-            .id()
-            .file()
-            .map_or(true, |f| self.include_file(graph, &f))
-            && self.0.include_node(graph, node)
-    }
-
-    fn include_edge(&self, graph: &StackGraph, source: &Handle<Node>, sink: &Handle<Node>) -> bool {
-        self.include_node(graph, source)
-            && self.include_node(graph, sink)
-            && self.0.include_edge(graph, source, sink)
-    }
-
-    fn include_partial_path(
-        &self,
-        graph: &StackGraph,
-        paths: &PartialPaths,
-        path: &PartialPath,
-    ) -> bool {
-        let super_ok = self.0.include_partial_path(graph, paths, path);
-        if !super_ok {
-            return false;
-        }
-        let all_included_edges = path
-            .edges
-            .iter_unordered(paths)
-            .map(|e| graph.node_for_id(e.source_node_id).unwrap())
-            .chain(std::iter::once(path.end_node))
-            .tuple_windows()
-            .all(|(source, sink)| self.include_edge(graph, &source, &sink));
-        if !all_included_edges {
-            return false;
-        }
-        true
-    }
-}
 
 //-----------------------------------------------------------------------------
 // InStackGraph
@@ -104,61 +57,6 @@ impl<'a, T> InStackGraph<'a, T> {
         StackGraph: Index<Idx, Output = U>,
     {
         InStackGraph(self.0, (idx, &self.0[idx]), self.2)
-    }
-}
-
-//-----------------------------------------------------------------------------
-// StackGraph
-
-impl<'a> StackGraph {
-    pub fn to_json(&'a self, f: &'a dyn Filter) -> JsonStackGraph {
-        JsonStackGraph(self, f)
-    }
-
-    pub fn to_serializable(&self) -> crate::serde::StackGraph {
-        self.to_serializable_filter(&NoFilter)
-    }
-
-    pub fn to_serializable_filter(&self, f: &'a dyn Filter) -> crate::serde::StackGraph {
-        crate::serde::StackGraph::from_graph_filter(self, f)
-    }
-}
-
-pub struct JsonStackGraph<'a>(&'a StackGraph, &'a dyn Filter);
-
-impl<'a> JsonStackGraph<'a> {
-    pub fn to_value(&self) -> Result<Value, JsonError> {
-        Ok(serde_json::to_value(self)?)
-    }
-
-    pub fn to_string(&self) -> Result<String, JsonError> {
-        Ok(serde_json::to_string(self)?)
-    }
-
-    pub fn to_string_pretty(&self) -> Result<String, JsonError> {
-        Ok(serde_json::to_string_pretty(self)?)
-    }
-}
-
-impl Serialize for JsonStackGraph<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut ser = serializer.serialize_struct("stack_graph", 2)?;
-        ser.serialize_field(
-            "files",
-            &InStackGraph(self.0, &Files, &ImplicationFilter(self.1)),
-        )?;
-        ser.serialize_field(
-            "nodes",
-            &InStackGraph(self.0, &Nodes, &ImplicationFilter(self.1)),
-        )?;
-        ser.serialize_field(
-            "edges",
-            &InStackGraph(self.0, &Edges, &ImplicationFilter(self.1)),
-        )?;
-        ser.end()
     }
 }
 

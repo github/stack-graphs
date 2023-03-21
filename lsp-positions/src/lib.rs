@@ -53,11 +53,9 @@ pub struct Position {
     pub column: Offset,
     /// The UTF-8 byte indexes (within the file) of the start and end of the line containing the
     /// character
-    #[cfg_attr(feature = "serde", serde(skip))]
     pub containing_line: Range<usize>,
     /// The UTF-8 byte indexes (within the file) of the start and end of the line containing the
     /// character, with any leading and trailing whitespace removed
-    #[cfg_attr(feature = "serde", serde(skip))]
     pub trimmed_line: Range<usize>,
 }
 

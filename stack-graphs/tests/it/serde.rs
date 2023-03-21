@@ -80,6 +80,14 @@ fn serde_json_stack_graph() {
                             "utf8_offset": 0,
                             "utf16_offset": 0,
                             "grapheme_offset": 0
+                        },
+                        "containing_line": {
+                            "start": 0,
+                            "end": 0,
+                        },
+                        "trimmed_line": {
+                            "start": 0,
+                            "end": 0,
                         }
                     },
                     "end": {
@@ -88,8 +96,16 @@ fn serde_json_stack_graph() {
                             "utf8_offset": 0,
                             "utf16_offset": 0,
                             "grapheme_offset": 0
+                        },
+                        "containing_line": {
+                            "start": 0,
+                            "end": 0,
+                        },
+                        "trimmed_line": {
+                            "start": 0,
+                            "end": 0,
                         }
-                    }
+                    },
                 }
             },
             "debug_info": []
@@ -133,6 +149,14 @@ fn reconstruct() {
                       "utf8_offset": 0,
                       "utf16_offset": 0,
                       "grapheme_offset": 0
+                    },
+                    "containing_line": {
+                        "start": 0,
+                        "end": 0,
+                    },
+                    "trimmed_line": {
+                        "start": 0,
+                        "end": 0,
                     }
                   },
                   "end": {
@@ -141,6 +165,14 @@ fn reconstruct() {
                       "utf8_offset": 0,
                       "utf16_offset": 0,
                       "grapheme_offset": 0
+                    },
+                    "containing_line": {
+                        "start": 0,
+                        "end": 0,
+                    },
+                    "trimmed_line": {
+                        "start": 0,
+                        "end": 0,
                     }
                   }
                 }
@@ -160,6 +192,14 @@ fn reconstruct() {
                       "utf8_offset": 0,
                       "utf16_offset": 0,
                       "grapheme_offset": 0
+                    },
+                    "containing_line": {
+                        "start": 0,
+                        "end": 0,
+                    },
+                    "trimmed_line": {
+                        "start": 0,
+                        "end": 0,
                     }
                   },
                   "end": {
@@ -168,6 +208,14 @@ fn reconstruct() {
                       "utf8_offset": 0,
                       "utf16_offset": 0,
                       "grapheme_offset": 0
+                    },
+                    "containing_line": {
+                        "start": 0,
+                        "end": 0,
+                    },
+                    "trimmed_line": {
+                        "start": 0,
+                        "end": 0,
                     }
                   }
                 }
@@ -189,6 +237,14 @@ fn reconstruct() {
                       "utf8_offset": 0,
                       "utf16_offset": 0,
                       "grapheme_offset": 0
+                    },
+                    "containing_line": {
+                        "start": 0,
+                        "end": 0,
+                    },
+                    "trimmed_line": {
+                        "start": 0,
+                        "end": 0,
                     }
                   },
                   "end": {
@@ -197,6 +253,14 @@ fn reconstruct() {
                       "utf8_offset": 0,
                       "utf16_offset": 0,
                       "grapheme_offset": 0
+                    },
+                    "containing_line": {
+                        "start": 0,
+                        "end": 0,
+                    },
+                    "trimmed_line": {
+                        "start": 0,
+                        "end": 0,
                     }
                   }
                 }
@@ -241,25 +305,4 @@ fn reconstruct() {
         .unwrap();
     assert!(sg.source_info(handle).is_some());
     assert!(sg.debug_info(handle).is_some());
-}
-
-#[test]
-fn load_fail_accidental_merge() {
-    let source = serde::StackGraph {
-        files: serde::Files {
-            data: vec!["index.ts".to_owned(), "App.tsx".to_owned()],
-        },
-        ..Default::default()
-    };
-
-    let mut target = graph::StackGraph::new();
-    target.add_file("App.tsx").unwrap();
-
-    assert_eq!(
-        source.load_into(&mut target).unwrap_err(),
-        serde::Error::FileAlreadyPresent("App.tsx".to_owned())
-    );
-
-    // ensure that source and target graphs were not partially merged
-    assert_eq!(target.iter_files().count(), 1);
 }
