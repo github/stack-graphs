@@ -356,6 +356,20 @@ impl NodeID {
             Err(Error::InvalidGlobalNodeID(self.local_id))
         }
     }
+
+    pub fn from_node(graph: &crate::graph::StackGraph, handle: Handle<crate::graph::Node>) -> Self {
+        Self::from_node_id(graph, graph[handle].id())
+    }
+
+    pub fn to_node(
+        &self,
+        graph: &mut crate::graph::StackGraph,
+    ) -> Result<Handle<crate::graph::Node>, Error> {
+        let value = self.to_node_id(graph)?;
+        Ok(graph
+            .node_for_id(value)
+            .ok_or_else(|| Error::NodeNotFound(self.clone()))?)
+    }
 }
 
 impl std::fmt::Display for NodeID {

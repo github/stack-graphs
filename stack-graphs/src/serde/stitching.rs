@@ -24,15 +24,15 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn from(
+    pub fn from_database(
         graph: &crate::graph::StackGraph,
         partials: &mut PartialPaths,
         value: &crate::stitching::Database,
     ) -> Self {
-        Self::from_filter(graph, partials, value, &NoFilter)
+        Self::from_database_filter(graph, partials, value, &NoFilter)
     }
 
-    pub fn from_filter(
+    pub fn from_database_filter(
         graph: &crate::graph::StackGraph,
         partials: &mut PartialPaths,
         value: &crate::stitching::Database,
@@ -45,7 +45,7 @@ impl Database {
             if !filter.include_partial_path(graph, partials, path) {
                 continue;
             }
-            let path = PartialPath::from(graph, partials, &path);
+            let path = PartialPath::from_partial_path(graph, partials, &path);
             paths.push(path);
         }
         Self { paths }
@@ -58,7 +58,7 @@ impl Database {
         value: &mut crate::stitching::Database,
     ) -> Result<(), Error> {
         for path in &self.paths {
-            let path = path.to(graph, partials)?;
+            let path = path.to_partial_path(graph, partials)?;
             value.add_partial_path(graph, partials, path);
         }
         Ok(())
@@ -67,7 +67,7 @@ impl Database {
 
 impl crate::stitching::Database {
     pub fn to_serializable(&self, graph: &StackGraph, partials: &mut PartialPaths) -> Database {
-        Database::from(graph, partials, self)
+        Database::from_database(graph, partials, self)
     }
 
     pub fn to_serializable_filter(
@@ -76,6 +76,6 @@ impl crate::stitching::Database {
         partials: &mut PartialPaths,
         filter: &dyn Filter,
     ) -> Database {
-        Database::from_filter(graph, partials, self, filter)
+        Database::from_database_filter(graph, partials, self, filter)
     }
 }
