@@ -424,7 +424,7 @@ impl TestArgs {
         graph: &StackGraph,
         filter: &dyn Filter,
     ) -> anyhow::Result<()> {
-        let json = graph.to_json(filter).to_string_pretty()?;
+        let json = serde_json::to_string_pretty(&graph.to_serializable_filter(filter))?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
