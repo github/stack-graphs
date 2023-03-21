@@ -76,7 +76,7 @@ impl StackGraph {
         for node in &self.nodes.data {
             let handle = match node {
                 Node::DropScopes { id, .. } => {
-                    let node_id = id.into_node_id(graph)?;
+                    let node_id = id.to_node_id(graph)?;
                     graph.add_drop_scopes_node(node_id)
                 }
                 Node::PopScopedSymbol {
@@ -85,7 +85,7 @@ impl StackGraph {
                     is_definition,
                     ..
                 } => {
-                    let node_id = id.into_node_id(graph)?;
+                    let node_id = id.to_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_pop_scoped_symbol_node(node_id, symbol_handle, *is_definition)
                 }
@@ -95,7 +95,7 @@ impl StackGraph {
                     is_definition,
                     ..
                 } => {
-                    let node_id = id.into_node_id(graph)?;
+                    let node_id = id.to_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_pop_symbol_node(node_id, symbol_handle, *is_definition)
                 }
@@ -106,8 +106,8 @@ impl StackGraph {
                     is_reference,
                     ..
                 } => {
-                    let node_id = id.into_node_id(graph)?;
-                    let scope_id = scope.into_node_id(graph)?;
+                    let node_id = id.to_node_id(graph)?;
+                    let scope_id = scope.to_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_push_scoped_symbol_node(
                         node_id,
@@ -122,14 +122,14 @@ impl StackGraph {
                     is_reference,
                     ..
                 } => {
-                    let node_id = id.into_node_id(graph)?;
+                    let node_id = id.to_node_id(graph)?;
                     let symbol_handle = graph.add_symbol(&symbol);
                     graph.add_push_symbol_node(node_id, symbol_handle, *is_reference)
                 }
                 Node::Scope {
                     id, is_exported, ..
                 } => {
-                    let node_id = id.into_node_id(graph)?;
+                    let node_id = id.to_node_id(graph)?;
                     graph.add_scope_node(node_id, *is_exported)
                 }
                 Node::JumpToScope { .. } | Node::Root { .. } => None,
@@ -173,8 +173,8 @@ impl StackGraph {
             precedence,
         } in &self.edges.data
         {
-            let source_id = source.into_node_id(graph)?;
-            let sink_id = sink.into_node_id(graph)?;
+            let source_id = source.to_node_id(graph)?;
+            let sink_id = sink.to_node_id(graph)?;
 
             let source_handle = graph
                 .node_for_id(source_id)
@@ -318,32 +318,29 @@ pub struct NodeID {
 }
 
 impl NodeID {
-    fn into_node_id(
+    pub fn from_node_id(graph: &crate::graph::StackGraph, value: crate::graph::NodeID) -> Self {
+        Self {
+            file: value.file().map(|f| graph[f].to_string()),
+            local_id: value.local_id(),
+        }
+    }
+
+    pub fn to_node_id(
         &self,
         graph: &crate::graph::StackGraph,
     ) -> Result<crate::graph::NodeID, Error> {
-        if let Some(file) = self.file.as_ref() {
-            let handle = graph
-                .get_file(&file)
-                .ok_or(Error::FileNotFound(file.to_owned()))?;
-            Ok(crate::graph::NodeID::new_in_file(handle, self.local_id))
-        } else if self.is_root() {
-            Ok(crate::graph::NodeID::root())
-        } else if self.is_jump_to() {
+        if let Some(file) = &self.file {
+            let file = graph
+                .get_file(file)
+                .ok_or_else(|| Error::FileNotFound(file.clone()))?;
+            Ok(crate::graph::NodeID::new_in_file(file, self.local_id))
+        } else if self.local_id == crate::graph::JUMP_TO_NODE_ID {
             Ok(crate::graph::NodeID::jump_to())
+        } else if self.local_id == crate::graph::ROOT_NODE_ID {
+            Ok(crate::graph::NodeID::root())
         } else {
             Err(Error::InvalidGlobalNodeID(self.local_id))
         }
-    }
-}
-
-impl NodeID {
-    fn is_root(&self) -> bool {
-        self.local_id == crate::graph::NodeID::root().local_id()
-    }
-
-    fn is_jump_to(&self) -> bool {
-        self.local_id == crate::graph::NodeID::jump_to().local_id()
     }
 }
 
