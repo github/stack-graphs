@@ -5,12 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-#[cfg(feature = "json")]
 use stack_graphs::graph;
-#[cfg(feature = "json")]
 use stack_graphs::serde;
 
-#[cfg(feature = "json")]
 #[test]
 fn serde_json_stack_graph() {
     let expected = serde::StackGraph {
@@ -131,7 +128,6 @@ fn serde_json_stack_graph() {
     assert_eq!(observed, expected);
 }
 
-#[cfg(feature = "json")]
 #[test]
 fn reconstruct() {
     let json_data = serde_json::json!(
