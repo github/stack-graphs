@@ -66,8 +66,6 @@ pub mod cycles;
 #[macro_use]
 mod debugging;
 pub mod graph;
-#[cfg(feature = "json")]
-pub mod json;
 pub mod partial;
 pub mod paths;
 #[cfg(feature = "serde")]

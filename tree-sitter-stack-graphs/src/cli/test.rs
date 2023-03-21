@@ -13,8 +13,8 @@ use clap::ValueHint;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
-use stack_graphs::json::Filter;
 use stack_graphs::partial::PartialPaths;
+use stack_graphs::serde::Filter;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
@@ -471,7 +471,8 @@ impl TestArgs {
         db: &mut Database,
         filter: &dyn Filter,
     ) -> anyhow::Result<()> {
-        let json = db.to_json(graph, partials, filter).to_string_pretty()?;
+        let json =
+            serde_json::to_string_pretty(&db.to_serializable_filter(graph, partials, filter))?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }

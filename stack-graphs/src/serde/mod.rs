@@ -8,7 +8,9 @@
 mod filter;
 mod graph;
 mod partial;
+mod stitching;
 
 pub use filter::*;
 pub use graph::*;
 pub use partial::*;
+pub use stitching::*;
