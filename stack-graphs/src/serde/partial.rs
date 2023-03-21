@@ -14,7 +14,7 @@ use crate::partial::PartialPaths;
 use super::Error;
 use super::NodeID;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PartialPath {
     start_node: NodeID,
     end_node: NodeID,
@@ -113,7 +113,7 @@ impl NodeID {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PartialScopeStack {
     scopes: Vec<NodeID>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -151,7 +151,7 @@ impl PartialScopeStack {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct ScopeStackVariable(u32);
 
@@ -166,7 +166,7 @@ impl ScopeStackVariable {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PartialSymbolStack {
     symbols: Vec<PartialScopedSymbol>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -204,7 +204,7 @@ impl PartialSymbolStack {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct SymbolStackVariable(u32);
 
@@ -219,7 +219,7 @@ impl SymbolStackVariable {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PartialScopedSymbol {
     symbol: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -258,7 +258,7 @@ impl PartialScopedSymbol {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct PartialPathEdgeList {
     edges: Vec<PartialPathEdge>,
@@ -292,7 +292,7 @@ impl PartialPathEdgeList {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PartialPathEdge {
     source: NodeID,
     precedence: i32,
