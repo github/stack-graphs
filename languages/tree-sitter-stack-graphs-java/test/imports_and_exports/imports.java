@@ -1,13 +1,15 @@
 /*--- path: Importer.java ---*/
 import foo.Foo;
+        // ^ defined: 14
 
 public class Importer {
-  public static Foo main(String[] args) {
-              // ^ defined: 2, 12
+  public Foo test() {
+      // ^ defined: 2, 14
   }
 }
 
 /* --- path: foo/Foo.java ---*/
+package foo;
 
 public class Foo {
 }

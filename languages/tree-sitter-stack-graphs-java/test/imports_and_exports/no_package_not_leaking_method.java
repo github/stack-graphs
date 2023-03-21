@@ -1,17 +1,12 @@
 /*--- path: Importer.java ---*/
-import foo.Foo;
-
 public class Importer {
   public static void main(String[] args) {
-    Foo.bar();
-     // ^ defined: 16
-
+    bar();
+ // ^ defined:
   }
 }
 
-/* --- path: foo/Foo.java ---*/
-package foo;
-
+/* --- path: Foo.java ---*/
 public class Foo {
   public static void bar() {
   }

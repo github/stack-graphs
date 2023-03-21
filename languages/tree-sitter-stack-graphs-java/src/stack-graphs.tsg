@@ -64,80 +64,54 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @decl.lexical_scope
 }
 
-(import_declaration
-  (scoped_identifier
-    name: (identifier) @scope_name)
-  ) @import {
-
-  node @scope_name.value
-  attr (@scope_name.value) node_definition = @scope_name
-
-  edge @import.defs -> @scope_name.value
-}
-
-(import_declaration
-  (scoped_identifier
-    scope: (scoped_identifier
-    name: (identifier) @name))) @import {
-  node @name.value
-  attr (@name.value) node_definition = @name
-
-  edge @import.defs -> @name.value
-}
-
-; Import rules lifted mostly from typescript
-(program [(import_declaration)]* @import) @prog {
-  var proj_scope = ROOT_NODE
-
-  if (not (eq PROJECT_NAME "")) {
-    ; project definition
-    node proj_def__ns
-    attr (proj_def__ns) pop_symbol = "%Proj"
-    edge proj_scope -> proj_def__ns
-    ;
-    node proj_def
-    attr (proj_def) pop_symbol = PROJECT_NAME
-    edge proj_def__ns -> proj_def
-    ;
-    set proj_scope = proj_def
-  }
-
-  var mod_scope = proj_scope
-  if (not (is-empty @import)) {
-    ; module definition
-    let mod_name = (path-filestem FILE_PATH)
-    let mod_path = (path-normalize (path-join (path-dir FILE_PATH) mod_name))
-    ;
-    node mod_def__ns
-    attr (mod_def__ns) pop_symbol = "%M"
-    edge mod_scope -> mod_def__ns
-    set mod_scope = mod_def__ns
-    ;
-    scan mod_path {
-      "index$" {
-        ; skip last component for index files
-      }
-      "([^/]+)/?" {
-        node mod_def
-        attr (mod_def) pop_symbol = $1
-        edge mod_scope -> mod_def
-        set mod_scope = mod_def
-      }
-    }
-    ; make the last one a definition
-    attr (mod_scope) is_definition, source_node = @prog, empty_source_span
+(program
+  (package_declaration
+    (identifier)@pkg_name)? @package) @prog {
+  if none @package {
+    edge ROOT_NODE -> @prog.defs
   } else {
-    ; expose definitions via project scope
-    edge mod_scope -> @prog.defs
+    node pkg_def
+    attr (pkg_def) node_definition = @pkg_name
+    edge pkg_def -> @prog.defs
+    edge ROOT_NODE -> pkg_def
   }
 }
 
-(import_declaration
-  (identifier) @name) @import {
-  node @name.value
-  attr (@name.value) node_definition = @name
+(import_declaration (_) @ref) @import {
+  edge @ref.lexical_scope -> @import.lexical_scope
+}
 
-  edge @import.defs -> @name.value
+;; X
+(identifier) @name {
+  node @name.lexical_scope
+  node @name.type
+
+  node @name.ref
+  attr (@name.ref) node_reference = @name
+  edge @name.ref -> @name.lexical_scope
+}
+
+;; _.X
+(scoped_identifier scope: (_) @scope name: (_) @name) @scoped_name {
+  node @scoped_name.lexical_scope
+
+  edge @scope.lexical_scope -> @scoped_name.lexical_scope
+
+  edge @name.lexical_scope -> @scope.ref
+
+  node @scoped_name.ref
+  edge @scoped_name.ref -> @name.ref
+}
+
+[
+  (import_declaration                                            (identifier) @scope @name)
+  (import_declaration (scoped_identifier scope: (_) @scope name: (identifier) @name))
+] @import {
+  node def
+  attr (def) node_definition = @name
+  edge def -> @name.ref
+
+  edge @import.defs -> def
 }
 
 ;;;;;;;;;;;;;;;;;;;;
@@ -869,9 +843,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (resource . (identifier) @name .) @this {
-  node @name.lexical_scope
-  node @name.type
-
   node ref
   node ref__typeof
 
@@ -1087,14 +1058,38 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; Expressions have a lexical scope (propagated to child expressions) and a type. The lexical scope is used for lexical name lookup, while types enable type-based name lookup (for field accesses, method lookup, and so forth).
 
 [
-  (array_access)
   (array_initializer)
-  (expression)
-  (field_access)
-  (parenthesized_expression)
-  (primary_expression)
-  (super)
+  (assignment_expression)
+  (binary_expression)
+  (instanceof_expression)
+  (lambda_expression)
+  (ternary_expression)
+  (update_expression)
+  (decimal_integer_literal)
+  (hex_integer_literal)
+  (octal_integer_literal)
+  (binary_integer_literal)
+  (decimal_floating_point_literal)
+  (hex_floating_point_literal)
+  (true)
+  (false)
+  (character_literal)
+  (string_literal)
+  (null_literal)
+  (class_literal)
   (this)
+  ; (identifier)
+  (parenthesized_expression)
+  (object_creation_expression)
+  (field_access)
+  (array_access)
+  (method_invocation)
+  (method_reference)
+  (array_creation_expression)
+  (unary_expression)
+  (cast_expression)
+  (switch_expression)
+  (super)
 ] @expr
 {
   node @expr.type
@@ -1102,9 +1097,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (assignment_expression left: (identifier) @name) @this {
-  ; FIXME: can we combine this with primary_expression/identifier?
-  node @name.lexical_scope
-  node @name.type
   node member
   node implicit_this
   node implicit_this__typeof
