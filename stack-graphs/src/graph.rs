@@ -429,8 +429,8 @@ pub struct NodeID {
     local_id: u32,
 }
 
-const ROOT_NODE_ID: u32 = 1;
-const JUMP_TO_NODE_ID: u32 = 2;
+pub(crate) const ROOT_NODE_ID: u32 = 1;
+pub(crate) const JUMP_TO_NODE_ID: u32 = 2;
 
 impl NodeID {
     /// Returns the ID of the singleton _root node_.
