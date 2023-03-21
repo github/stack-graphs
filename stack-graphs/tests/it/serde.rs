@@ -138,7 +138,7 @@ fn serde_json_stack_graph() {
 }
 
 #[test]
-fn reconstruct() {
+fn can_load_serialized_stack_graph() {
     let json_data = serde_json::json!(
         {
           "files": [
