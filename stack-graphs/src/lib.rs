@@ -72,7 +72,7 @@ pub mod paths;
 pub mod serde;
 pub mod stitching;
 pub(crate) mod utils;
-#[cfg(feature = "json")]
+#[cfg(feature = "visualization")]
 pub mod visualization;
 
 /// Trait to signal that the execution is cancelled
