@@ -1,10 +1,11 @@
 /*--- path: Importer.java ---*/
 import foo.Foo;
-        // ^ defined: 14
 
 public class Importer {
-  public Foo test() {
-      // ^ defined: 2, 14
+  public static void main(String[] args) {
+    Foo.bar();
+     // ^ defined: 16
+
   }
 }
 
@@ -12,4 +13,6 @@ public class Importer {
 package foo;
 
 public class Foo {
+  public static void bar() {
+  }
 }

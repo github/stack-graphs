@@ -64,25 +64,54 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @decl.lexical_scope
 }
 
-(import_declaration
-  (scoped_identifier
-    name: (identifier) @scope_name)
-  ) @import {
-
-  node @scope_name.value
-  attr (@scope_name.value) node_definition = @scope_name
-
-  edge @import.defs -> @scope_name.value
+(program
+  (package_declaration
+    (identifier)@pkg_name)? @package) @prog {
+  if none @package {
+    edge ROOT_NODE -> @prog.defs
+  } else {
+    node pkg_def
+    attr (pkg_def) node_definition = @pkg_name
+    edge pkg_def -> @prog.defs
+    edge ROOT_NODE -> pkg_def
+  }
 }
 
-(import_declaration
-  (scoped_identifier
-    scope: (scoped_identifier
-    name: (identifier) @name))) @import {
-  node @name.value
-  attr (@name.value) node_definition = @name
+(import_declaration (_) @ref) @import {
+  edge @ref.lexical_scope -> @import.lexical_scope
+}
 
-  edge @import.defs -> @name.value
+;; X
+(identifier) @name {
+  node @name.lexical_scope
+  node @name.type
+
+  node @name.ref
+  attr (@name.ref) node_reference = @name
+  edge @name.ref -> @name.lexical_scope
+}
+
+;; _.X
+(scoped_identifier scope: (_) @scope name: (_) @name) @scoped_name {
+  node @scoped_name.lexical_scope
+
+  edge @scope.lexical_scope -> @scoped_name.lexical_scope
+
+  edge @name.lexical_scope -> @scope.ref
+
+  node @scoped_name.ref
+  edge @scoped_name.ref -> @name.ref
+}
+
+[
+  (import_declaration                                            (identifier) @scope @name)
+  (import_declaration (scoped_identifier scope: (_) @scope name: (identifier) @name))
+] @import {
+  node def
+  attr (def) node_definition = @name
+  edge def -> @name.ref
+
+  edge @import.defs -> def
 }
 
 ;;;;;;;;;;;;;;;;;;;;
@@ -110,6 +139,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@class_body.lexical_scope -> @class_body.defs) precedence = 1
   edge @class.defs -> def
   edge def -> @class_body.defs
+  edge def -> @class_body.static_defs
 
   node this__expr_def
   node @class.type
@@ -120,6 +150,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge this__expr_def -> @class.type
 
   attr (@class.type) pop_symbol = ":"
+
+  node def__typeof
+  attr (def__typeof) pop_symbol = ":"
+  edge def -> def__typeof
+  edge def__typeof -> @class_body.static_defs
 
   edge @class.type -> ref
   attr (@class.type -> ref) precedence = 1
@@ -183,15 +218,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (class_body) @class_body {
   node @class_body.lexical_scope
   node @class_body.defs
+  node @class_body.static_defs
 }
 
 (class_body (_)@declaration)@class_body {
   edge @class_body.defs -> @declaration.defs
+  edge @class_body.static_defs -> @declaration.static_defs
   edge @declaration.lexical_scope -> @class_body.lexical_scope
 }
 
 (class_body (block) @block) {
   node @block.defs
+  node @block.static_defs
   node @block.lexical_scope
   edge @block.lexical_scope -> @block.before_scope
 }
@@ -217,6 +255,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; FIXME: can we get away with defining one and only one thing for each of these, and therefore having a `.def` node instead of `.defs`?
   node @decl.defs
   node @decl.lexical_scope
+  node @decl.static_defs
 }
 
 (annotation_type_declaration
@@ -379,6 +418,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (method_declaration
+  (modifiers "static"?@is_static)?
   type: (_) @type
   name: (identifier) @name
   body: (block) @block) @method
@@ -386,7 +426,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type.lexical_scope -> @method.lexical_scope
 
   node member
-  edge @method.defs -> member
+
+  if none @is_static {
+    edge @method.defs -> member
+  } else {
+    edge @method.static_defs -> member
+  }
 
   attr (member) pop_symbol = "."
 
@@ -825,9 +870,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (resource . (identifier) @name .) @this {
-  node @name.lexical_scope
-  node @name.type
-
   node ref
   node ref__typeof
 
@@ -1043,14 +1085,38 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; Expressions have a lexical scope (propagated to child expressions) and a type. The lexical scope is used for lexical name lookup, while types enable type-based name lookup (for field accesses, method lookup, and so forth).
 
 [
-  (array_access)
   (array_initializer)
-  (expression)
-  (field_access)
-  (parenthesized_expression)
-  (primary_expression)
-  (super)
+  (assignment_expression)
+  (binary_expression)
+  (instanceof_expression)
+  (lambda_expression)
+  (ternary_expression)
+  (update_expression)
+  (decimal_integer_literal)
+  (hex_integer_literal)
+  (octal_integer_literal)
+  (binary_integer_literal)
+  (decimal_floating_point_literal)
+  (hex_floating_point_literal)
+  (true)
+  (false)
+  (character_literal)
+  (string_literal)
+  (null_literal)
+  (class_literal)
   (this)
+  ; (identifier)
+  (parenthesized_expression)
+  (object_creation_expression)
+  (field_access)
+  (array_access)
+  (method_invocation)
+  (method_reference)
+  (array_creation_expression)
+  (unary_expression)
+  (cast_expression)
+  (switch_expression)
+  (super)
 ] @expr
 {
   node @expr.type
@@ -1058,9 +1124,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (assignment_expression left: (identifier) @name) @this {
-  ; FIXME: can we combine this with primary_expression/identifier?
-  node @name.lexical_scope
-  node @name.type
   node member
   node implicit_this
   node implicit_this__typeof
@@ -1251,6 +1314,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @type.lexical_scope -> @this.lexical_scope
 }
 
+(scoped_type_identifier . (_) @name) @this {
+  edge @name.lexical_scope -> @this.lexical_scope
+}
+
 (wildcard) @this
 {
   node @this.lexical_scope
@@ -1259,6 +1326,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (type_identifier) @this
 {
   edge @this.type -> @this.lexical_scope
+}
+
+(scoped_type_identifier
+  (type_identifier) @imported_class_name (type_identifier) @method_name) {
+
+  node member
+  attr (member) push_symbol = "."
+
+  edge @method_name.type -> member
+  edge member -> @imported_class_name.type
 }
 
 ;; ==========
@@ -1271,6 +1348,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @line_comment.lexical_defs
   node @line_comment.lexical_scope
   node @line_comment.defs
+  node @line_comment.ref
+  node @line_comment.static_defs
 
   edge @line_comment.after_scope -> @line_comment.before_scope
 }
@@ -1279,6 +1358,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @block_comment.before_scope
   node @block_comment.after_scope
   node @block_comment.defs
+  node @block_comment.ref
+  node @block_comment.static_defs
   node @block_comment.lexical_scope
 
   edge @block_comment.after_scope -> @block_comment.before_scope
