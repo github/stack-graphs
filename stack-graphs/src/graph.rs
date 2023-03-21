@@ -1595,3 +1595,11 @@ impl Default for StackGraph {
         }
     }
 }
+
+impl Clone for StackGraph {
+    fn clone(&self) -> Self {
+        let mut new_graph = Self::new();
+        new_graph.add_from_graph(self).unwrap();
+        new_graph
+    }
+}
