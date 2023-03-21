@@ -7,14 +7,14 @@ use crate::arena::Handle;
 use super::Filter;
 use super::NoFilter;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StackGraph {
     pub files: Files,
     pub nodes: Nodes,
     pub edges: Edges,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
     #[error("failed to load file `{0}`")]
     FileNotFound(String),
@@ -182,19 +182,19 @@ impl StackGraph {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Files {
     pub data: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Nodes {
     pub data: Vec<Node>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Node {
     DropScopes {
@@ -286,25 +286,25 @@ impl Node {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceInfo {
     pub span: lsp_positions::Span,
     pub syntax_type: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct DebugInfo {
     pub data: Vec<DebugEntry>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DebugEntry {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NodeID {
     pub file: Option<String>,
     pub local_id: u32,
@@ -340,13 +340,13 @@ impl NodeID {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Edges {
     pub data: Vec<Edge>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Edge {
     pub source: NodeID,
     pub sink: NodeID,
