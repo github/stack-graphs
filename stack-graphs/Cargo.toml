@@ -15,6 +15,7 @@ edition = "2018"
 [features]
 copious-debugging = []
 serde = ["dep:serde", "lsp-positions/serde"]
+storage = ["serde"]
 visualization = ["serde", "serde_json"]
 
 [lib]
