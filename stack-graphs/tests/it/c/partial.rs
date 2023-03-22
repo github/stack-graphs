@@ -6,9 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 use controlled_option::ControlledOption;
-use either::Either;
 use libc::c_char;
-use stack_graphs::c::sg_deque_direction;
 use stack_graphs::c::sg_file_handle;
 use stack_graphs::c::sg_node;
 use stack_graphs::c::sg_node_handle;
@@ -39,7 +37,6 @@ use stack_graphs::c::sg_stack_graph_new;
 use stack_graphs::c::sg_symbol_handle;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
 use stack_graphs::c::SG_NULL_HANDLE;
-use stack_graphs::partial::PartialPathEdgeList;
 use stack_graphs::partial::PartialScopeStack;
 use stack_graphs::partial::PartialSymbolStack;
 
@@ -95,7 +92,6 @@ fn add_exported_scope(
 fn empty_partial_scope_stack() -> sg_partial_scope_stack {
     sg_partial_scope_stack {
         cells: SG_NULL_HANDLE,
-        direction: sg_deque_direction::SG_DEQUE_FORWARDS,
         length: 0,
         variable: 0,
     }
@@ -115,11 +111,6 @@ fn partial_symbol_stack_contains(
 ) -> bool {
     let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = stack.cells;
-    let expected = if stack.direction == sg_deque_direction::SG_DEQUE_FORWARDS {
-        Either::Left(expected.iter())
-    } else {
-        Either::Right(expected.iter().rev())
-    };
     for node in expected {
         if current == SG_LIST_EMPTY_HANDLE {
             return false;
@@ -241,11 +232,6 @@ fn partial_scope_stack_contains(
 ) -> bool {
     let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = stack.cells;
-    let expected = if stack.direction == sg_deque_direction::SG_DEQUE_FORWARDS {
-        Either::Left(expected.iter())
-    } else {
-        Either::Right(expected.iter().rev())
-    };
     for node in expected {
         if current == SG_LIST_EMPTY_HANDLE {
             return false;
@@ -355,12 +341,7 @@ fn partial_path_edge_list_contains(
 ) -> bool {
     let cells = unsafe { std::slice::from_raw_parts(cells.cells, cells.count) };
     let mut current = list.cells;
-    let expected = if list.direction == sg_deque_direction::SG_DEQUE_FORWARDS {
-        Either::Left(expected.iter())
-    } else {
-        Either::Right(expected.iter().rev())
-    };
-    for node in expected {
+    for node in expected.iter().rev() {
         if current == SG_LIST_EMPTY_HANDLE {
             return false;
         }
@@ -433,14 +414,4 @@ fn can_create_partial_path_edge_lists() {
 
     sg_partial_path_arena_free(partials);
     sg_stack_graph_free(graph);
-}
-
-#[test]
-#[allow(unused_assignments)]
-fn verify_null_partial_path_edge_list_representation() {
-    let bytes = [0x55u8; std::mem::size_of::<PartialPathEdgeList>()];
-    let mut rust: ControlledOption<PartialPathEdgeList> = unsafe { std::mem::transmute(bytes) };
-    rust = ControlledOption::none();
-    let c: sg_partial_path_edge_list = unsafe { std::mem::transmute(rust) };
-    assert_eq!(c.cells, SG_NULL_HANDLE);
 }

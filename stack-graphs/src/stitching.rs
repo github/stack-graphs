@@ -305,10 +305,10 @@ impl Database {
         self.partial_paths.iter_handles()
     }
 
-    pub fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
+    pub fn ensure_both_directions(&self, partials: &mut PartialPaths) {
         for path in self.partial_paths.iter_handles() {
             self.partial_paths
-                .get_mut(path)
+                .get(path)
                 .ensure_both_directions(partials);
         }
     }

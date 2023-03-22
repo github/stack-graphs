@@ -167,12 +167,12 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
             // Ditto for any attached scopes in the symbol stack pre- and postcondition.
             assert!(partial_path
                 .symbol_stack_precondition
-                .iter_unordered(rust_partials)
+                .iter(rust_partials)
                 .filter_map(|symbol| symbol.scopes.into_option())
                 .all(|stack| stack.have_reversal(rust_partials)));
             assert!(partial_path
                 .symbol_stack_postcondition
-                .iter_unordered(rust_partials)
+                .iter(rust_partials)
                 .filter_map(|symbol| symbol.scopes.into_option())
                 .all(|stack| stack.have_reversal(rust_partials)));
 
