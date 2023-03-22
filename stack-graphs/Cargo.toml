@@ -15,7 +15,7 @@ edition = "2018"
 [features]
 copious-debugging = []
 serde = ["dep:serde", "lsp-positions/serde"]
-storage = ["serde"]
+storage = ["rusqlite", "serde"]
 visualization = ["serde", "serde_json"]
 
 [lib]
@@ -31,6 +31,7 @@ fxhash = "0.2"
 itertools = "0.10"
 libc = "0.2"
 lsp-positions = { version="0.3", path="../lsp-positions" }
+rusqlite = { version = "0.28", optional=true, features = ["bundled"] }
 serde = { version="1.0", optional=true, features = ["derive"] }
 serde_json = { version="1.0", optional=true }
 smallvec = { version="1.6", features=["union"] }
