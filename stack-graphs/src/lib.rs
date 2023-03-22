@@ -71,6 +71,8 @@ pub mod paths;
 #[cfg(feature = "serde")]
 pub mod serde;
 pub mod stitching;
+#[cfg(feature = "storage")]
+pub mod storage;
 pub(crate) mod utils;
 #[cfg(feature = "visualization")]
 pub mod visualization;
