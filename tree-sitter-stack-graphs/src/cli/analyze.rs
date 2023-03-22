@@ -80,9 +80,8 @@ pub struct AnalyzeArgs {
     /// Query definitions for the references at the given position. The position
     /// must be given in the format SOURCE_PATH:LINE:COLUMN.
     #[clap(
-        long = "definitions",
+        long = "definition",
         short = 'd',
-        visible_alias = "definition",
         value_name = "POSITION",
         parse(try_from_str)
     )]
