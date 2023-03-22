@@ -98,6 +98,37 @@ impl Filter for NoFilter {
     }
 }
 
+/// Filter implementation that includes a single file.
+pub struct FileFilter(pub Handle<File>);
+
+impl Filter for FileFilter {
+    fn include_file(&self, _graph: &StackGraph, file: &Handle<File>) -> bool {
+        *file == self.0
+    }
+
+    fn include_node(&self, _graph: &StackGraph, _node: &Handle<Node>) -> bool {
+        true
+    }
+
+    fn include_edge(
+        &self,
+        _graph: &StackGraph,
+        _source: &Handle<Node>,
+        _sink: &Handle<Node>,
+    ) -> bool {
+        true
+    }
+
+    fn include_partial_path(
+        &self,
+        _graph: &StackGraph,
+        _paths: &PartialPaths,
+        _path: &PartialPath,
+    ) -> bool {
+        true
+    }
+}
+
 /// Filter implementation that enforces all implications of another filter.
 /// For example, that nodes frome excluded files are not included, etc.
 pub(crate) struct ImplicationFilter<'a>(pub &'a dyn Filter);

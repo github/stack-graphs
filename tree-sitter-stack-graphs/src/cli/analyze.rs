@@ -106,7 +106,7 @@ impl AnalyzeArgs {
             self.wait_for_input()?;
         }
         let mut seen_mark = false;
-        let mut db = SQLiteWriter::new_in_memory();
+        let mut db = SQLiteWriter::new_in_memory()?;
         for source_path in &self.source_paths {
             if source_path.is_dir() {
                 let source_root = source_path;
@@ -272,7 +272,7 @@ impl AnalyzeArgs {
             }
             Ok(_) => {}
         };
-        db.add_graph(&graph);
+        db.add_graph_for_file(&graph, file)?;
 
         let mut partials = PartialPaths::new();
         match partials.find_minimal_partial_path_set_in_file(
@@ -280,7 +280,7 @@ impl AnalyzeArgs {
             file,
             &cancellation_flag.as_ref(),
             |g, ps, p| {
-                db.add_partial_path(g, ps, &p);
+                db.add_partial_path_for_file(g, ps, &p, file).expect("TODO");
             },
         ) {
             Ok(_) => {}
@@ -323,7 +323,7 @@ impl AnalyzeArgs {
             let lines = PositionedSubstring::lines_iter(source);
             let mut span_calculator = SpanCalculator::new(source);
 
-            db.load_for_file(&reference.path.to_string_lossy());
+            db.load_graph_for_file(&reference.path.to_string_lossy())?;
             let (graph, _, _) = db.get();
 
             let reference = match reference.to_assertion_source(graph, lines, &mut span_calculator)
