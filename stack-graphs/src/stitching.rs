@@ -485,54 +485,32 @@ impl ForwardPartialPathStitcher {
     /// paths that start with any of your requested starting nodes.
     ///
     /// Before calling [`process_next_phase`][] for the first time, you must ensure that `db`
-    /// contains all possible extensions of any of those initial partial paths.  You can retrieve a
-    /// list of those extensions via [`previous_phase_partial paths`][].
+    /// contains all of the possible partial paths that start with any of your requested starting
+    /// nodes.  You can retrieve a list of those extensions via [`previous_phase_partial paths`][].
     ///
     /// [`previous_phase_partial paths`]: #method.previous_phase_partial paths
     /// [`process_next_phase`]: #method.process_next_phase
     pub fn from_nodes<I>(
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        db: &mut Database,
+        _db: &mut Database,
         starting_nodes: I,
     ) -> ForwardPartialPathStitcher
     where
         I: IntoIterator<Item = Handle<Node>>,
     {
-        copious_debugging!("==> Start phase 0");
-        let mut candidate_partial_paths = Vec::new();
-        for node in starting_nodes {
-            copious_debugging!("    Initial node {}", node.display(graph));
-            if graph[node].is_root() {
-                db.find_candidate_partial_paths_from_root(
-                    graph,
-                    partials,
-                    None,
-                    &mut candidate_partial_paths,
-                );
-            } else {
-                db.find_candidate_partial_paths_from_node(
-                    graph,
-                    partials,
-                    node,
-                    &mut candidate_partial_paths,
-                );
-            }
-        }
         let mut appended_paths = Appendables::new();
-        let next_iteration = candidate_partial_paths
-            .iter()
-            .copied()
+        let next_iteration = starting_nodes
+            .into_iter()
             .map(|handle| {
-                let mut p = db[handle].clone();
+                let mut p = PartialPath::from_node(graph, partials, handle);
                 p.eliminate_precondition_stack_variables(partials);
-                let c = AppendingCycleDetector::from(&mut appended_paths, handle.into());
+                let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
                 (p, c)
             })
             .unzip();
-        copious_debugging!("==> End phase 0");
         ForwardPartialPathStitcher {
-            candidate_partial_paths,
+            candidate_partial_paths: Vec::new(),
             queue: VecDeque::new(),
             next_iteration,
             appended_paths,
@@ -604,7 +582,7 @@ impl ForwardPartialPathStitcher {
     /// Sets whether similar path detection should be enabled during path stitching. Paths are similar
     /// if start and end node, and pre- and postconditions are the same. The presence of similar paths
     /// can lead to exponential blow up during path stitching. Similar path detection is disabled by
-    /// default because of the accociated preformance cost.
+    /// default because of the associated preformance cost.
     pub fn set_similar_path_detection(&mut self, detect_similar_paths: bool) {
         if detect_similar_paths {
             self.similar_path_detector = Some(SimilarPathDetector::new());
@@ -787,13 +765,12 @@ impl ForwardPartialPathStitcher {
             ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
-            let complete_partial_paths = stitcher
-                .previous_phase_partial_paths()
-                .filter(|partial_path| partial_path.is_complete(graph));
-            for path in complete_partial_paths {
-                visit(graph, partials, path);
-            }
             stitcher.process_next_phase(graph, partials, db);
+            for path in stitcher.previous_phase_partial_paths() {
+                if path.is_complete(graph) {
+                    visit(graph, partials, path);
+                }
+            }
         }
         Ok(())
     }
