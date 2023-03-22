@@ -12,8 +12,8 @@ use lsp_positions::PositionedSubstring;
 use lsp_positions::SpanCalculator;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
-use stack_graphs::stitching::Database;
-use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::storage::SQLiteReader;
+use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
@@ -106,9 +106,7 @@ impl AnalyzeArgs {
             self.wait_for_input()?;
         }
         let mut seen_mark = false;
-        let mut graph = StackGraph::new();
-        let mut partials = PartialPaths::new();
-        let mut db = Database::new();
+        let mut db = SQLiteWriter::new_in_memory();
         for source_path in &self.source_paths {
             if source_path.is_dir() {
                 let source_root = source_path;
@@ -120,34 +118,18 @@ impl AnalyzeArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path();
-                    self.analyze_file(
-                        source_root,
-                        source_path,
-                        loader,
-                        &mut seen_mark,
-                        &mut graph,
-                        &mut partials,
-                        &mut db,
-                    )?;
+                    self.analyze_file(source_root, source_path, loader, &mut seen_mark, &mut db)?;
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
                 if self.should_skip(source_path, &mut seen_mark) {
                     continue;
                 }
-                self.analyze_file(
-                    source_root,
-                    source_path,
-                    loader,
-                    &mut seen_mark,
-                    &mut graph,
-                    &mut partials,
-                    &mut db,
-                )?;
+                self.analyze_file(source_root, source_path, loader, &mut seen_mark, &mut db)?;
             }
         }
 
-        self.run_queries(&graph, &mut partials, &mut db)?;
+        self.run_queries(&mut db.into_reader())?;
 
         Ok(())
     }
@@ -167,9 +149,7 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
         seen_mark: &mut bool,
-        graph: &mut StackGraph,
-        partials: &mut PartialPaths,
-        db: &mut Database,
+        db: &mut SQLiteWriter,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
         match self.analyze_file_inner(
@@ -177,8 +157,6 @@ impl AnalyzeArgs {
             source_path,
             loader,
             seen_mark,
-            graph,
-            partials,
             db,
             &mut file_status,
         ) {
@@ -197,9 +175,7 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
         seen_mark: &mut bool,
-        graph: &mut StackGraph,
-        partials: &mut PartialPaths,
-        db: &mut Database,
+        db: &mut SQLiteWriter,
         file_status: &mut FileStatusLogger,
     ) -> anyhow::Result<()> {
         if self.should_skip(source_path, seen_mark) {
@@ -226,6 +202,7 @@ impl AnalyzeArgs {
 
         file_status.processing()?;
 
+        let mut graph = StackGraph::new();
         let file = match graph.add_file(&source_path.to_string_lossy()) {
             Ok(file) => file,
             Err(_) => return Err(anyhow!("Duplicate file {}", source_path.display())),
@@ -237,7 +214,7 @@ impl AnalyzeArgs {
             .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
         {
             fa.build_stack_graph_into(
-                graph,
+                &mut graph,
                 file,
                 &relative_source_path,
                 &source,
@@ -248,7 +225,7 @@ impl AnalyzeArgs {
         } else {
             let globals = Variables::new();
             lc.sgl.build_stack_graph_into(
-                graph,
+                &mut graph,
                 file,
                 &source,
                 &globals,
@@ -295,13 +272,15 @@ impl AnalyzeArgs {
             }
             Ok(_) => {}
         };
+        db.add_graph(&graph);
 
+        let mut partials = PartialPaths::new();
         match partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
             &cancellation_flag.as_ref(),
             |g, ps, p| {
-                db.add_partial_path(g, ps, p);
+                db.add_partial_path(g, ps, &p);
             },
         ) {
             Ok(_) => {}
@@ -333,12 +312,7 @@ impl AnalyzeArgs {
         return !*seen_mark; // skip if we haven't seen the mark yet
     }
 
-    fn run_queries(
-        &self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        db: &mut Database,
-    ) -> anyhow::Result<()> {
+    fn run_queries(&self, db: &mut SQLiteReader) -> anyhow::Result<()> {
         let mut file_reader = FileReader::new();
         for reference in &self.query_definitions {
             let path = reference.to_string();
@@ -348,6 +322,9 @@ impl AnalyzeArgs {
             let source = file_reader.get(&reference.path)?;
             let lines = PositionedSubstring::lines_iter(source);
             let mut span_calculator = SpanCalculator::new(source);
+
+            db.load_for_file(&reference.path.to_string_lossy());
+            let (graph, _, _) = db.get();
 
             let reference = match reference.to_assertion_source(graph, lines, &mut span_calculator)
             {
@@ -362,22 +339,22 @@ impl AnalyzeArgs {
                 logger.error("no references")?;
                 continue;
             }
+            let starting_nodes = reference.references_iter(graph).collect::<Vec<_>>();
 
             let mut actual_paths = Vec::new();
             let mut reference_paths = Vec::new();
-            if let Err(_) = ForwardPartialPathStitcher::find_all_complete_partial_paths(
-                graph,
-                partials,
-                db,
-                reference.references_iter(graph),
+            if let Err(_) = db.find_all_complete_partial_paths(
+                starting_nodes,
                 &stack_graphs::NoCancellation,
-                |_, _, p| {
+                |_g, _ps, p| {
                     reference_paths.push(p.clone());
                 },
             ) {
                 logger.error("path finding timed out")?;
                 continue;
             };
+
+            let (graph, partials, _) = db.get();
             for reference_path in &reference_paths {
                 if reference_paths
                     .iter()
