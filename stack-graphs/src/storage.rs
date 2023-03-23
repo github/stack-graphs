@@ -8,7 +8,6 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use itertools::Itertools;
 use rusqlite::Connection;
 use thiserror::Error;
 
@@ -84,6 +83,19 @@ impl SQLiteWriter {
                 json BLOB,
                 FOREIGN KEY(file) REFERENCES graphs(file)
             ) STRICT;
+            COMMIT;
+        "#,
+        )?;
+        Ok(())
+    }
+
+    pub fn clean(&mut self) -> Result<(), StorageError> {
+        self.conn.execute_batch(
+            r#"
+            BEGIN;
+            DELETE FROM file_paths;
+            DELETE FROM root_paths;
+            DELETE FROM graphs;
             COMMIT;
         "#,
         )?;
@@ -204,18 +216,23 @@ impl SQLiteReader {
         }
         let file = self.graph[node].file().expect("TODO");
         let file = self.graph[file].name();
-        let json_paths = {
+        let paths = {
             let mut stmt = self
                 .conn
-                .prepare_cached("SELECT json from file_paths WHERE file = ?")?;
-            let json_paths = stmt
-                .query_map([file], |row| row.get::<_, Vec<u8>>(0))?
-                .collect_vec();
-            json_paths
+                .prepare_cached("SELECT file,json from file_paths WHERE file = ?")?;
+            let paths = stmt
+                .query_map([file], |row| {
+                    let file = row.get::<_, String>(0)?;
+                    let json = row.get::<_, Vec<u8>>(1)?;
+                    Ok((file, json))
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+            paths
         };
-        for json_path in json_paths {
-            let path = serde_json::from_slice::<serde::PartialPath>(&json_path?)?;
-            path.load_graphs_for_path(self)?;
+        for (file, json) in paths {
+            self.load_graph_for_file(&file)?;
+            let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
             self.db
                 .add_partial_path(&self.graph, &mut self.partials, path);
@@ -233,18 +250,23 @@ impl SQLiteReader {
             if !self.loaded_root_paths.insert(symbol_stack.to_string()) {
                 return Ok(());
             }
-            let json_paths = {
+            let paths = {
                 let mut stmt = self
                     .conn
-                    .prepare_cached("SELECT json from root_paths WHERE symbol_stack = ?")?;
-                let json_paths = stmt
-                    .query_map([symbol_stack], |row| row.get::<_, Vec<u8>>(0))?
-                    .collect_vec();
-                json_paths
+                    .prepare_cached("SELECT file,json from root_paths WHERE symbol_stack = ?")?;
+                let paths = stmt
+                    .query_map([symbol_stack], |row| {
+                        let file = row.get::<_, String>(0)?;
+                        let json = row.get::<_, Vec<u8>>(1)?;
+                        Ok((file, json))
+                    })?
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+                paths
             };
-            for json_path in json_paths {
-                let path = serde_json::from_slice::<serde::PartialPath>(&json_path?)?;
-                path.load_graphs_for_path(self)?;
+            for (file, json) in paths {
+                self.load_graph_for_file(&file)?;
+                let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
                 self.db
                     .add_partial_path(&self.graph, &mut self.partials, path);
@@ -330,74 +352,5 @@ impl PartialSymbolStack {
             key_prefixes.push(key);
         }
         key_prefixes
-    }
-}
-
-impl serde::PartialPath {
-    fn load_graphs_for_path(&self, storage: &mut SQLiteReader) -> Result<(), StorageError> {
-        self.start_node.load_graphs_for_path(storage)?;
-        self.end_node.load_graphs_for_path(storage)?;
-        self.symbol_stack_precondition
-            .load_graphs_for_path(storage)?;
-        self.symbol_stack_postcondition
-            .load_graphs_for_path(storage)?;
-        self.scope_stack_precondition
-            .load_graphs_for_path(storage)?;
-        self.scope_stack_postcondition
-            .load_graphs_for_path(storage)?;
-        self.edges.load_graphs_for_path(storage)?;
-        Ok(())
-    }
-}
-
-impl serde::PartialScopeStack {
-    fn load_graphs_for_path(&self, storage: &mut SQLiteReader) -> Result<(), StorageError> {
-        for scope in &self.scopes {
-            scope.load_graphs_for_path(storage)?;
-        }
-        Ok(())
-    }
-}
-
-impl serde::PartialSymbolStack {
-    fn load_graphs_for_path(&self, storage: &mut SQLiteReader) -> Result<(), StorageError> {
-        for symbol in &self.symbols {
-            symbol.load_graphs_for_path(storage)?;
-        }
-        Ok(())
-    }
-}
-
-impl serde::PartialScopedSymbol {
-    fn load_graphs_for_path(&self, storage: &mut SQLiteReader) -> Result<(), StorageError> {
-        if let Some(scopes) = &self.scopes {
-            scopes.load_graphs_for_path(storage)?;
-        }
-        Ok(())
-    }
-}
-
-impl serde::PartialPathEdgeList {
-    fn load_graphs_for_path(&self, storage: &mut SQLiteReader) -> Result<(), StorageError> {
-        for edge in &self.edges {
-            edge.load_graphs_for_path(storage)?;
-        }
-        Ok(())
-    }
-}
-
-impl serde::PartialPathEdge {
-    fn load_graphs_for_path(&self, storage: &mut SQLiteReader) -> Result<(), StorageError> {
-        self.source.load_graphs_for_path(storage)?;
-        Ok(())
-    }
-}
-
-impl serde::NodeID {
-    fn load_graphs_for_path(&self, storage: &mut SQLiteReader) -> Result<(), StorageError> {
-        if let Some(file) = &self.file {
-            storage.load_graph_for_file(file)?;
-        }
-        Ok(())
     }
 }
