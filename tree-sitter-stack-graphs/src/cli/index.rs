@@ -72,6 +72,10 @@ pub struct IndexArgs {
     #[clap(long, short = 'v')]
     pub verbose: bool,
 
+    /// Index files even if they are already present in the database.
+    #[clap(long, short = 'f')]
+    pub force: bool,
+
     /// Hide failure error details.
     #[clap(long)]
     pub hide_error_details: bool,
@@ -104,6 +108,7 @@ impl IndexArgs {
         Self {
             source_paths,
             database,
+            force: false,
             continue_from: None,
             verbose: false,
             hide_error_details: false,
@@ -194,7 +199,7 @@ impl IndexArgs {
             return Ok(());
         }
 
-        if db.file_exists(&source_path.to_string_lossy())? {
+        if !self.force && db.file_exists(&source_path.to_string_lossy())? {
             file_status.info("cached")?;
             return Ok(());
         }
