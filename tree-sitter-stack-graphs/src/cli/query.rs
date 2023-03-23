@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use crate::loader::FileReader;
 
 use super::util::path_exists;
+use super::util::sha1;
 use super::util::FileStatusLogger;
 use super::util::SourcePosition;
 
@@ -93,12 +94,14 @@ impl Definition {
         let mut logger = FileStatusLogger::new(&Path::new(&path), true);
         logger.processing()?;
 
-        if !db.file_exists(&source_path.to_string_lossy())? {
+        let source = file_reader.get(&reference.path)?;
+        let tag = sha1(source);
+
+        if !db.file_exists(&source_path.to_string_lossy(), Some(&tag))? {
             logger.error("file not indexed")?;
             return Ok(());
         }
 
-        let source = file_reader.get(&reference.path)?;
         let lines = PositionedSubstring::lines_iter(source);
         let mut span_calculator = SpanCalculator::new(source);
 

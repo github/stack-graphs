@@ -6,9 +6,12 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
+use base64::Engine;
 use colored::Colorize;
 use lsp_positions::PositionedSubstring;
 use lsp_positions::SpanCalculator;
+use sha1::Digest;
+use sha1::Sha1;
 use stack_graphs::assert::AssertionSource;
 use stack_graphs::graph::StackGraph;
 use std::ffi::OsStr;
@@ -339,4 +342,10 @@ impl<'a> FileStatusLogger<'a> {
             print!(" [{:.2} s]", processing_started.elapsed().as_secs_f64());
         }
     }
+}
+
+pub fn sha1(value: &str) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(value);
+    base64::prelude::BASE64_STANDARD_NO_PAD.encode(hasher.finalize())
 }

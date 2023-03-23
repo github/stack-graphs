@@ -21,9 +21,6 @@ use std::time::Duration;
 use tree_sitter_graph::Variables;
 use walkdir::WalkDir;
 
-use crate::cli::util::duration_from_seconds_str;
-use crate::cli::util::map_parse_errors;
-use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::CancelAfterDuration;
@@ -31,6 +28,10 @@ use crate::CancellationFlag;
 use crate::LoadError;
 use crate::NoCancellation;
 
+use super::util::duration_from_seconds_str;
+use super::util::map_parse_errors;
+use super::util::path_exists;
+use super::util::sha1;
 use super::util::FileStatusLogger;
 
 /// Analyze sources
@@ -182,11 +183,6 @@ impl IndexArgs {
             return Ok(());
         }
 
-        if !self.force && db.file_exists(&source_path.to_string_lossy())? {
-            file_status.info("cached")?;
-            return Ok(());
-        }
-
         let mut file_reader = FileReader::new();
         let lc = match loader.load_for_file(source_path, &mut file_reader, &NoCancellation) {
             Ok(Some(sgl)) => sgl,
@@ -198,6 +194,12 @@ impl IndexArgs {
             Err(e) => return Err(e.into()),
         };
         let source = file_reader.get(source_path)?;
+        let tag = sha1(source);
+
+        if !self.force && db.file_exists(&source_path.to_string_lossy(), Some(&tag))? {
+            file_status.info("cached")?;
+            return Ok(());
+        }
 
         let mut cancellation_flag: Arc<dyn CancellationFlag> = Arc::new(NoCancellation);
         if let Some(max_file_time) = self.max_file_time {
@@ -252,7 +254,7 @@ impl IndexArgs {
             Err(e) => return Err(e.into()),
             Ok(_) => {}
         };
-        db.add_graph_for_file(&graph, file)?;
+        db.add_graph_for_file(&graph, file, &tag)?;
 
         let mut partials = PartialPaths::new();
         match partials.find_minimal_partial_path_set_in_file(
