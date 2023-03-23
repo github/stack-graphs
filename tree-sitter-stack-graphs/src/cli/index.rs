@@ -39,7 +39,7 @@ use super::util::SourcePosition;
 
 /// Analyze sources
 #[derive(Args)]
-pub struct AnalyzeArgs {
+pub struct IndexArgs {
     /// Source file or directory paths.
     #[clap(
         value_name = "SOURCE_PATH",
@@ -90,7 +90,7 @@ pub struct AnalyzeArgs {
     pub query_definitions: Vec<SourcePosition>,
 }
 
-impl AnalyzeArgs {
+impl IndexArgs {
     pub fn new(source_paths: Vec<PathBuf>) -> Self {
         Self {
             source_paths,

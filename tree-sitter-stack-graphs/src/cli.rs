@@ -55,7 +55,7 @@
 
 pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
-pub mod analyze;
+pub mod index;
 pub mod init;
 pub mod load;
 pub mod parse;
@@ -65,7 +65,7 @@ mod util;
 pub mod path_loading {
     use clap::Subcommand;
 
-    use crate::cli::analyze::AnalyzeArgs;
+    use crate::cli::index::IndexArgs;
     use crate::cli::init::InitArgs;
     use crate::cli::load::PathLoaderArgs;
     use crate::cli::parse::ParseArgs;
@@ -73,7 +73,7 @@ pub mod path_loading {
 
     #[derive(Subcommand)]
     pub enum Subcommands {
-        Analyze(Analyze),
+        Index(Index),
         Init(Init),
         Parse(Parse),
         Test(Test),
@@ -82,7 +82,7 @@ pub mod path_loading {
     impl Subcommands {
         pub fn run(&self) -> anyhow::Result<()> {
             match self {
-                Self::Analyze(cmd) => cmd.run(),
+                Self::Index(cmd) => cmd.run(),
                 Self::Init(cmd) => cmd.run(),
                 Self::Parse(cmd) => cmd.run(),
                 Self::Test(cmd) => cmd.run(),
@@ -90,19 +90,19 @@ pub mod path_loading {
         }
     }
 
-    /// Analyze command
+    /// Index command
     #[derive(clap::Parser)]
-    pub struct Analyze {
+    pub struct Index {
         #[clap(flatten)]
         load_args: PathLoaderArgs,
         #[clap(flatten)]
-        analyze_args: AnalyzeArgs,
+        index_args: IndexArgs,
     }
 
-    impl Analyze {
+    impl Index {
         pub fn run(&self) -> anyhow::Result<()> {
             let mut loader = self.load_args.get()?;
-            self.analyze_args.run(&mut loader)
+            self.index_args.run(&mut loader)
         }
     }
 
@@ -155,7 +155,7 @@ pub mod path_loading {
 pub mod provided_languages {
     use clap::Subcommand;
 
-    use crate::cli::analyze::AnalyzeArgs;
+    use crate::cli::index::IndexArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::test::TestArgs;
@@ -163,7 +163,7 @@ pub mod provided_languages {
 
     #[derive(Subcommand)]
     pub enum Subcommands {
-        Analyze(Analyze),
+        Index(Index),
         Parse(Parse),
         Test(Test),
     }
@@ -171,26 +171,26 @@ pub mod provided_languages {
     impl Subcommands {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
             match self {
-                Self::Analyze(cmd) => cmd.run(configurations),
+                Self::Index(cmd) => cmd.run(configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Test(cmd) => cmd.run(configurations),
             }
         }
     }
 
-    /// Analyze command
+    /// Index command
     #[derive(clap::Parser)]
-    pub struct Analyze {
+    pub struct Index {
         #[clap(flatten)]
         load_args: LanguageConfigurationsLoaderArgs,
         #[clap(flatten)]
-        analyze_args: AnalyzeArgs,
+        index_args: IndexArgs,
     }
 
-    impl Analyze {
+    impl Index {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
             let mut loader = self.load_args.get(configurations)?;
-            self.analyze_args.run(&mut loader)
+            self.index_args.run(&mut loader)
         }
     }
 
