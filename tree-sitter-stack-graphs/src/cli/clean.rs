@@ -10,6 +10,8 @@ use clap::ValueHint;
 use stack_graphs::storage::SQLiteWriter;
 use std::path::PathBuf;
 
+use super::util::path_exists;
+
 /// Clean database
 #[derive(Args)]
 pub struct CleanArgs {
@@ -19,6 +21,7 @@ pub struct CleanArgs {
         value_name = "DATABASE_PATH",
         value_hint = ValueHint::AnyPath,
         parse(from_os_str),
+        validator_os = path_exists,
     )]
     pub database: PathBuf,
 }
