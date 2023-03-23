@@ -60,6 +60,7 @@ pub mod index;
 pub mod init;
 pub mod load;
 pub mod parse;
+pub mod query;
 pub mod test;
 mod util;
 
@@ -71,6 +72,7 @@ pub mod path_loading {
     use crate::cli::init::InitArgs;
     use crate::cli::load::PathLoaderArgs;
     use crate::cli::parse::ParseArgs;
+    use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
 
     #[derive(Subcommand)]
@@ -79,6 +81,7 @@ pub mod path_loading {
         Index(Index),
         Init(Init),
         Parse(Parse),
+        Query(Query),
         Test(Test),
     }
 
@@ -89,6 +92,7 @@ pub mod path_loading {
                 Self::Index(cmd) => cmd.run(),
                 Self::Init(cmd) => cmd.run(),
                 Self::Parse(cmd) => cmd.run(),
+                Self::Query(cmd) => cmd.run(),
                 Self::Test(cmd) => cmd.run(),
             }
         }
@@ -152,6 +156,19 @@ pub mod path_loading {
         }
     }
 
+    /// Query command
+    #[derive(clap::Parser)]
+    pub struct Query {
+        #[clap(flatten)]
+        query_args: QueryArgs,
+    }
+
+    impl Query {
+        pub fn run(&self) -> anyhow::Result<()> {
+            self.query_args.run()
+        }
+    }
+
     /// Test command
     #[derive(clap::Parser)]
     pub struct Test {
@@ -176,6 +193,7 @@ pub mod provided_languages {
     use crate::cli::index::IndexArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
     use crate::cli::parse::ParseArgs;
+    use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
     use crate::loader::LanguageConfiguration;
 
@@ -184,6 +202,7 @@ pub mod provided_languages {
         Clean(Clean),
         Index(Index),
         Parse(Parse),
+        Query(Query),
         Test(Test),
     }
 
@@ -193,6 +212,7 @@ pub mod provided_languages {
                 Self::Clean(cmd) => cmd.run(configurations),
                 Self::Index(cmd) => cmd.run(configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
+                Self::Query(cmd) => cmd.run(configurations),
                 Self::Test(cmd) => cmd.run(configurations),
             }
         }
@@ -240,6 +260,19 @@ pub mod provided_languages {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
             let mut loader = self.load_args.get(configurations)?;
             self.parse_args.run(&mut loader)
+        }
+    }
+
+    /// Query command
+    #[derive(clap::Parser)]
+    pub struct Query {
+        #[clap(flatten)]
+        query_args: QueryArgs,
+    }
+
+    impl Query {
+        pub fn run(&self, _configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            self.query_args.run()
         }
     }
 
