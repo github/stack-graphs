@@ -216,6 +216,14 @@ impl SQLiteReader {
         })
     }
 
+    pub fn file_exists(&mut self, file: &str) -> Result<bool, StorageError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
+        let result = stmt.exists([file])?;
+        Ok(result)
+    }
+
     pub fn load_graph_for_file(&mut self, file: &str) -> Result<(), StorageError> {
         if !self.loaded_graphs.insert(file.to_string()) {
             return Ok(());
