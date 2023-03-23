@@ -24,7 +24,7 @@ use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
-const VERSION: usize = 1;
+const VERSION: usize = 2;
 
 const SCHEMA: &str = r#"
         CREATE TABLE metadata (
@@ -32,6 +32,7 @@ const SCHEMA: &str = r#"
         ) STRICT;
         CREATE TABLE graphs (
             file TEXT PRIMARY KEY,
+            tag  TEXT NOT NULL,
             json BLOB NOT NULL
         ) STRICT;
         CREATE TABLE file_paths (
@@ -113,25 +114,18 @@ impl SQLiteWriter {
         Ok(())
     }
 
-    pub fn file_exists(&mut self, file: &str) -> Result<bool, StorageError> {
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
-        let result = stmt.exists([file])?;
-        Ok(result)
-    }
-
-    pub fn add_graph(&mut self, graph: &StackGraph) -> Result<(), StorageError> {
-        for file in graph.iter_files() {
-            self.add_graph_for_file(graph, file)?;
+    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
+        match tag {
+            Some(tag) => file_exists_with_tag(&self.conn, file, tag),
+            None => file_exists(&self.conn, file),
         }
-        Ok(())
     }
 
     pub fn add_graph_for_file(
         &mut self,
         graph: &StackGraph,
         file: Handle<File>,
+        tag: &str,
     ) -> Result<(), StorageError> {
         let file_str = graph[file].name();
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
@@ -139,8 +133,8 @@ impl SQLiteWriter {
         // insert or update graph
         let mut stmt = self
             .conn
-            .prepare_cached("INSERT OR REPLACE INTO graphs (file, json) VALUES (?, ?)")?;
-        stmt.execute((file_str, &serde_json::to_vec(&graph)?))?;
+            .prepare_cached("INSERT OR REPLACE INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
+        stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
         // remove stale file paths
         let mut stmt = self
             .conn
@@ -227,12 +221,11 @@ impl SQLiteReader {
         })
     }
 
-    pub fn file_exists(&mut self, file: &str) -> Result<bool, StorageError> {
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
-        let result = stmt.exists([file])?;
-        Ok(result)
+    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
+        match tag {
+            Some(tag) => file_exists_with_tag(&self.conn, file, tag),
+            None => file_exists(&self.conn, file),
+        }
     }
 
     pub fn load_graph_for_file(&mut self, file: &str) -> Result<(), StorageError> {
@@ -399,4 +392,16 @@ fn check_version(conn: &Connection) -> Result<(), StorageError> {
         return Err(StorageError::IncorrectVersion(version));
     }
     Ok(())
+}
+
+fn file_exists(conn: &Connection, file: &str) -> Result<bool, StorageError> {
+    let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
+    let result = stmt.exists([file])?;
+    Ok(result)
+}
+
+fn file_exists_with_tag(conn: &Connection, file: &str, tag: &str) -> Result<bool, StorageError> {
+    let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;
+    let result = stmt.exists([file, tag])?;
+    Ok(result)
 }
