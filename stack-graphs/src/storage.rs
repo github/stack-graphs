@@ -24,10 +24,14 @@ use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
+const VERSION: usize = 1;
+
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("cancelled at {0}")]
     Cancelled(&'static str),
+    #[error("unsupported database version {0}")]
+    IncorrectVersion(usize),
     #[error("database does not exist {0}")]
     MissingDatabase(String),
     #[error(transparent)]
@@ -60,14 +64,32 @@ impl SQLiteWriter {
         let conn = Connection::open(path)?;
         if is_new {
             Self::init(&conn)?;
+        } else {
+            check_version(&conn)?;
         }
         Ok(Self { conn })
+    }
+
+    pub fn clean(&mut self) -> Result<(), StorageError> {
+        self.conn.execute_batch(
+            r#"
+            BEGIN;
+            DELETE FROM file_paths;
+            DELETE FROM root_paths;
+            DELETE FROM graphs;
+            COMMIT;
+        "#,
+        )?;
+        Ok(())
     }
 
     fn init(conn: &Connection) -> Result<(), StorageError> {
         conn.execute_batch(
             r#"
             BEGIN;
+            CREATE TABLE metadata (
+                version INTEGER NOT NULL
+            ) STRICT;
             CREATE TABLE graphs (
                 file TEXT PRIMARY KEY,
                 json BLOB
@@ -87,19 +109,7 @@ impl SQLiteWriter {
             COMMIT;
         "#,
         )?;
-        Ok(())
-    }
-
-    pub fn clean(&mut self) -> Result<(), StorageError> {
-        self.conn.execute_batch(
-            r#"
-            BEGIN;
-            DELETE FROM file_paths;
-            DELETE FROM root_paths;
-            DELETE FROM graphs;
-            COMMIT;
-        "#,
-        )?;
+        conn.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
         Ok(())
     }
 
@@ -205,6 +215,7 @@ impl SQLiteReader {
             ));
         }
         let conn = Connection::open(path)?;
+        check_version(&conn)?;
         Ok(Self {
             conn,
             loaded_graphs: HashSet::new(),
@@ -380,4 +391,12 @@ impl PartialSymbolStack {
         }
         key_prefixes
     }
+}
+
+fn check_version(conn: &Connection) -> Result<(), StorageError> {
+    let version = conn.query_row("SELECT version FROM metadata", [], |r| r.get::<_, usize>(0))?;
+    if version != VERSION {
+        return Err(StorageError::IncorrectVersion(version));
+    }
+    Ok(())
 }
