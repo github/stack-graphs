@@ -90,6 +90,11 @@ impl Definition {
         let mut logger = FileStatusLogger::new(&Path::new(&path), true);
         logger.processing()?;
 
+        if !db.file_exists(&self.source_path.to_string_lossy())? {
+            logger.error("file not indexed")?;
+            return Ok(());
+        }
+
         let source = file_reader.get(&reference.path)?;
         let lines = PositionedSubstring::lines_iter(source);
         let mut span_calculator = SpanCalculator::new(source);
