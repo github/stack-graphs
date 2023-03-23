@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 use std::collections::HashSet;
+use std::path::Path;
 
 use itertools::Itertools;
 use rusqlite::Connection;
@@ -48,8 +49,22 @@ pub struct SQLiteWriter {
 }
 
 impl SQLiteWriter {
-    pub fn new_in_memory() -> Result<Self, StorageError> {
+    pub fn open_in_memory() -> Result<Self, StorageError> {
         let conn = Connection::open_in_memory()?;
+        Self::init(&conn)?;
+        Ok(Self { conn })
+    }
+
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
+        let is_new = !path.as_ref().exists();
+        let conn = Connection::open(path)?;
+        if is_new {
+            Self::init(&conn)?;
+        }
+        Ok(Self { conn })
+    }
+
+    fn init(conn: &Connection) -> Result<(), StorageError> {
         conn.execute_batch(
             r#"
             BEGIN;
@@ -72,15 +87,15 @@ impl SQLiteWriter {
             COMMIT;
         "#,
         )?;
-        Ok(Self { conn })
+        Ok(())
     }
 
     pub fn file_exists(&mut self, file: &str) -> Result<bool, StorageError> {
         let mut stmt = self
             .conn
-            .prepare_cached("SELECT FROM graphs WHERE file = ?")?;
-        let mut result = stmt.query([file])?;
-        Ok(result.next()?.is_some())
+            .prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
+        let result = stmt.exists([file])?;
+        Ok(result)
     }
 
     pub fn add_graph(&mut self, graph: &StackGraph) -> Result<(), StorageError> {

@@ -58,6 +58,15 @@ pub struct IndexArgs {
     )]
     pub continue_from: Option<PathBuf>,
 
+    #[clap(
+        long,
+        short = 'D',
+        value_name = "DATABASE_PATH",
+        value_hint = ValueHint::AnyPath,
+        parse(from_os_str),
+    )]
+    pub database: PathBuf,
+
     #[clap(long, short = 'v')]
     pub verbose: bool,
 
@@ -89,9 +98,10 @@ pub struct IndexArgs {
 }
 
 impl IndexArgs {
-    pub fn new(source_paths: Vec<PathBuf>) -> Self {
+    pub fn new(database: PathBuf, source_paths: Vec<PathBuf>) -> Self {
         Self {
             source_paths,
+            database,
             continue_from: None,
             verbose: false,
             hide_error_details: false,
@@ -106,7 +116,7 @@ impl IndexArgs {
             self.wait_for_input()?;
         }
         let mut seen_mark = false;
-        let mut db = SQLiteWriter::new_in_memory()?;
+        let mut db = SQLiteWriter::open(&self.database)?;
         for source_path in &self.source_paths {
             if source_path.is_dir() {
                 let source_root = source_path;
@@ -180,6 +190,11 @@ impl IndexArgs {
     ) -> anyhow::Result<()> {
         if self.should_skip(source_path, seen_mark) {
             file_status.info("skipped")?;
+            return Ok(());
+        }
+
+        if db.file_exists(&source_path.to_string_lossy())? {
+            file_status.info("cached")?;
             return Ok(());
         }
 
