@@ -80,8 +80,10 @@ pub struct Definition {
 
 impl Definition {
     pub fn run(&self, db: &mut SQLiteReader) -> anyhow::Result<()> {
+        let source_path = self.source_path.canonicalize()?;
+
         let reference = SourcePosition {
-            path: self.source_path.clone(),
+            path: source_path.clone(),
             line: self.line - 1,
             column: self.column - 1,
         };
@@ -91,7 +93,7 @@ impl Definition {
         let mut logger = FileStatusLogger::new(&Path::new(&path), true);
         logger.processing()?;
 
-        if !db.file_exists(&self.source_path.to_string_lossy())? {
+        if !db.file_exists(&source_path.to_string_lossy())? {
             logger.error("file not indexed")?;
             return Ok(());
         }
