@@ -26,6 +26,28 @@ use crate::CancellationFlag;
 
 const VERSION: usize = 1;
 
+const SCHEMA: &str = r#"
+        CREATE TABLE metadata (
+            version INTEGER NOT NULL
+        ) STRICT;
+        CREATE TABLE graphs (
+            file TEXT PRIMARY KEY,
+            json BLOB NOT NULL
+        ) STRICT;
+        CREATE TABLE file_paths (
+            file     TEXT NOT NULL,
+            local_id INTEGER NOT NULL,
+            json     BLOB NOT NULL,
+            FOREIGN KEY(file) REFERENCES graphs(file)
+        ) STRICT;
+        CREATE TABLE root_paths (
+            file         TEXT NOT NULL,
+            symbol_stack TEXT NOT NULL,
+            json         BLOB NOT NULL,
+            FOREIGN KEY(file) REFERENCES graphs(file)
+        ) STRICT;
+    "#;
+
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("cancelled at {0}")]
@@ -84,32 +106,10 @@ impl SQLiteWriter {
     }
 
     fn init(conn: &Connection) -> Result<(), StorageError> {
-        conn.execute_batch(
-            r#"
-            BEGIN;
-            CREATE TABLE metadata (
-                version INTEGER NOT NULL
-            ) STRICT;
-            CREATE TABLE graphs (
-                file TEXT PRIMARY KEY,
-                json BLOB
-            ) STRICT;
-            CREATE TABLE file_paths (
-                file TEXT NOT NULL,
-                local_id INTEGER NOT NULL,
-                json BLOB,
-                FOREIGN KEY(file) REFERENCES graphs(file)
-            ) STRICT;
-            CREATE TABLE root_paths (
-                file TEXT NOT NULL,
-                symbol_stack TEXT NOT NULL,
-                json BLOB,
-                FOREIGN KEY(file) REFERENCES graphs(file)
-            ) STRICT;
-            COMMIT;
-        "#,
-        )?;
+        conn.execute("BEGIN;", [])?;
+        conn.execute_batch(SCHEMA)?;
         conn.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
+        conn.execute("COMMIT;", [])?;
         Ok(())
     }
 
