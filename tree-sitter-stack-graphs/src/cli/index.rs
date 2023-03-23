@@ -110,8 +110,9 @@ impl IndexArgs {
         let mut seen_mark = false;
         let mut db = SQLiteWriter::open(&self.database)?;
         for source_path in &self.source_paths {
+            let source_path = source_path.canonicalize()?;
             if source_path.is_dir() {
-                let source_root = source_path;
+                let source_root = &source_path;
                 for source_entry in WalkDir::new(source_root)
                     .follow_links(true)
                     .sort_by_file_name()
@@ -119,23 +120,23 @@ impl IndexArgs {
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
                 {
-                    let source_path = source_entry.path();
+                    let source_path = source_entry.path().canonicalize()?;
                     self.analyze_file_with_context(
                         source_root,
-                        source_path,
+                        &source_path,
                         loader,
                         &mut seen_mark,
                         &mut db,
                     )?;
                 }
             } else {
-                let source_root = source_path.parent().unwrap();
-                if self.should_skip(source_path, &mut seen_mark) {
+                let source_root = source_path.parent().expect("expect file to have parent");
+                if self.should_skip(&source_path, &mut seen_mark) {
                     continue;
                 }
                 self.analyze_file_with_context(
                     source_root,
-                    source_path,
+                    &source_path,
                     loader,
                     &mut seen_mark,
                     &mut db,
