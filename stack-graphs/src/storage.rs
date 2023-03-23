@@ -5,10 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use rusqlite::Connection;
 use std::collections::HashSet;
 use std::path::Path;
-
-use rusqlite::Connection;
 use thiserror::Error;
 
 use crate::arena::Handle;
@@ -27,14 +26,16 @@ use crate::CancellationFlag;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
+    #[error("cancelled at {0}")]
+    Cancelled(&'static str),
+    #[error("database does not exist {0}")]
+    MissingDatabase(String),
     #[error(transparent)]
     Rusqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Serde(#[from] serde::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
-    #[error("cancelled at {0}")]
-    Cancelled(&'static str),
 }
 
 impl From<CancellationError> for StorageError {
@@ -197,6 +198,24 @@ pub struct SQLiteReader {
 }
 
 impl SQLiteReader {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
+        if !path.as_ref().exists() {
+            return Err(StorageError::MissingDatabase(
+                path.as_ref().to_string_lossy().to_string(),
+            ));
+        }
+        let conn = Connection::open(path)?;
+        Ok(Self {
+            conn,
+            loaded_graphs: HashSet::new(),
+            loaded_node_paths: HashSet::new(),
+            loaded_root_paths: HashSet::new(),
+            graph: StackGraph::new(),
+            partials: PartialPaths::new(),
+            db: Database::new(),
+        })
+    }
+
     pub fn load_graph_for_file(&mut self, file: &str) -> Result<(), StorageError> {
         if !self.loaded_graphs.insert(file.to_string()) {
             return Ok(());
