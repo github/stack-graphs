@@ -14,6 +14,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::storage::SQLiteReader;
 use stack_graphs::storage::SQLiteWriter;
+use stack_graphs::storage::StorageError;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
@@ -363,15 +364,19 @@ impl IndexArgs {
 
             let mut actual_paths = Vec::new();
             let mut reference_paths = Vec::new();
-            if let Err(_) = db.find_all_complete_partial_paths(
+            match db.find_all_complete_partial_paths(
                 starting_nodes,
                 &stack_graphs::NoCancellation,
                 |_g, _ps, p| {
                     reference_paths.push(p.clone());
                 },
             ) {
-                logger.error("path finding timed out")?;
-                continue;
+                Ok(_) => {}
+                Err(StorageError::Cancelled(..)) => {
+                    logger.error("path finding timed out")?;
+                    continue;
+                }
+                err => err?,
             };
 
             let (graph, partials, _) = db.get();
