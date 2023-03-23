@@ -8,13 +8,9 @@
 use anyhow::anyhow;
 use clap::Args;
 use clap::ValueHint;
-use lsp_positions::PositionedSubstring;
-use lsp_positions::SpanCalculator;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
-use stack_graphs::storage::SQLiteReader;
 use stack_graphs::storage::SQLiteWriter;
-use stack_graphs::storage::StorageError;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
@@ -34,7 +30,6 @@ use crate::CancellationFlag;
 use crate::NoCancellation;
 
 use super::util::FileStatusLogger;
-use super::util::SourcePosition;
 
 /// Analyze sources
 #[derive(Args)]
@@ -90,16 +85,6 @@ pub struct IndexArgs {
     /// Wait for user input before starting analysis. Useful for profiling.
     #[clap(long)]
     pub wait_at_start: bool,
-
-    /// Query definitions for the references at the given position. The position
-    /// must be given in the format SOURCE_PATH:LINE:COLUMN.
-    #[clap(
-        long = "definition",
-        short = 'd',
-        value_name = "POSITION",
-        parse(try_from_str)
-    )]
-    pub query_definitions: Vec<SourcePosition>,
 }
 
 impl IndexArgs {
@@ -113,7 +98,6 @@ impl IndexArgs {
             hide_error_details: false,
             max_file_time: None,
             wait_at_start: false,
-            query_definitions: Vec::new(),
         }
     }
 
@@ -144,9 +128,6 @@ impl IndexArgs {
                 self.analyze_file(source_root, source_path, loader, &mut seen_mark, &mut db)?;
             }
         }
-
-        self.run_queries(&mut db.into_reader())?;
-
         Ok(())
     }
 
@@ -331,87 +312,5 @@ impl IndexArgs {
             *seen_mark = true; // early return from now on
         }
         return !*seen_mark; // skip if we haven't seen the mark yet
-    }
-
-    fn run_queries(&self, db: &mut SQLiteReader) -> anyhow::Result<()> {
-        let mut file_reader = FileReader::new();
-        for reference in &self.query_definitions {
-            let path = reference.to_string();
-            let mut logger = FileStatusLogger::new(&Path::new(&path), true);
-            logger.processing()?;
-
-            let source = file_reader.get(&reference.path)?;
-            let lines = PositionedSubstring::lines_iter(source);
-            let mut span_calculator = SpanCalculator::new(source);
-
-            db.load_graph_for_file(&reference.path.to_string_lossy())?;
-            let (graph, _, _) = db.get();
-
-            let reference = match reference.to_assertion_source(graph, lines, &mut span_calculator)
-            {
-                Ok(result) => result,
-                Err(_) => {
-                    logger.error("invalid file or position")?;
-                    continue;
-                }
-            };
-
-            if reference.references_iter(graph).next().is_none() {
-                logger.error("no references")?;
-                continue;
-            }
-            let starting_nodes = reference.references_iter(graph).collect::<Vec<_>>();
-
-            let mut actual_paths = Vec::new();
-            let mut reference_paths = Vec::new();
-            match db.find_all_complete_partial_paths(
-                starting_nodes,
-                &stack_graphs::NoCancellation,
-                |_g, _ps, p| {
-                    reference_paths.push(p.clone());
-                },
-            ) {
-                Ok(_) => {}
-                Err(StorageError::Cancelled(..)) => {
-                    logger.error("path finding timed out")?;
-                    continue;
-                }
-                err => err?,
-            };
-
-            let (graph, partials, _) = db.get();
-            for reference_path in &reference_paths {
-                if reference_paths
-                    .iter()
-                    .all(|other| !other.shadows(partials, reference_path))
-                {
-                    actual_paths.push(reference_path.clone());
-                }
-            }
-
-            if actual_paths.is_empty() {
-                logger.warn("no definitions")?;
-                continue;
-            }
-
-            logger.ok("found definitions:")?;
-            for (idx, path) in actual_paths.into_iter().enumerate() {
-                let file = match graph[path.end_node].id().file() {
-                    Some(f) => graph[f].to_string(),
-                    None => "?".to_string(),
-                };
-                let line_col = match graph.source_info(path.end_node) {
-                    Some(p) => format!(
-                        "{}:{}",
-                        p.span.start.line + 1,
-                        p.span.start.column.grapheme_offset + 1
-                    ),
-                    None => "?:?".to_string(),
-                };
-                println!("  {:2}: {}:{}", idx, file, line_col);
-            }
-        }
-
-        Ok(())
     }
 }
