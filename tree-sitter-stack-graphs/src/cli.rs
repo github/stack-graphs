@@ -55,6 +55,7 @@
 
 pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
+pub mod clean;
 pub mod index;
 pub mod init;
 pub mod load;
@@ -65,6 +66,7 @@ mod util;
 pub mod path_loading {
     use clap::Subcommand;
 
+    use crate::cli::clean::CleanArgs;
     use crate::cli::index::IndexArgs;
     use crate::cli::init::InitArgs;
     use crate::cli::load::PathLoaderArgs;
@@ -73,6 +75,7 @@ pub mod path_loading {
 
     #[derive(Subcommand)]
     pub enum Subcommands {
+        Clean(Clean),
         Index(Index),
         Init(Init),
         Parse(Parse),
@@ -82,11 +85,25 @@ pub mod path_loading {
     impl Subcommands {
         pub fn run(&self) -> anyhow::Result<()> {
             match self {
+                Self::Clean(cmd) => cmd.run(),
                 Self::Index(cmd) => cmd.run(),
                 Self::Init(cmd) => cmd.run(),
                 Self::Parse(cmd) => cmd.run(),
                 Self::Test(cmd) => cmd.run(),
             }
+        }
+    }
+
+    /// Clean command
+    #[derive(clap::Parser)]
+    pub struct Clean {
+        #[clap(flatten)]
+        clean_args: CleanArgs,
+    }
+
+    impl Clean {
+        pub fn run(&self) -> anyhow::Result<()> {
+            self.clean_args.run()
         }
     }
 
@@ -155,6 +172,7 @@ pub mod path_loading {
 pub mod provided_languages {
     use clap::Subcommand;
 
+    use crate::cli::clean::CleanArgs;
     use crate::cli::index::IndexArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
     use crate::cli::parse::ParseArgs;
@@ -163,6 +181,7 @@ pub mod provided_languages {
 
     #[derive(Subcommand)]
     pub enum Subcommands {
+        Clean(Clean),
         Index(Index),
         Parse(Parse),
         Test(Test),
@@ -171,10 +190,24 @@ pub mod provided_languages {
     impl Subcommands {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
             match self {
+                Self::Clean(cmd) => cmd.run(configurations),
                 Self::Index(cmd) => cmd.run(configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Test(cmd) => cmd.run(configurations),
             }
+        }
+    }
+
+    /// Clean command
+    #[derive(clap::Parser)]
+    pub struct Clean {
+        #[clap(flatten)]
+        clean_args: CleanArgs,
+    }
+
+    impl Clean {
+        pub fn run(&self, _configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            self.clean_args.run()
         }
     }
 
