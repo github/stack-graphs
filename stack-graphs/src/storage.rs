@@ -150,6 +150,7 @@ impl SQLiteWriter {
         tag: &str,
     ) -> Result<()> {
         let file_str = graph[file].name();
+        copious_debugging!("--> Add graph for {}", file_str);
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
         self.conn.execute("BEGIN;", ())?;
         // insert or update graph
@@ -181,8 +182,17 @@ impl SQLiteWriter {
         file: Handle<File>,
     ) -> Result<()> {
         let file_str = graph[file].name();
+        copious_debugging!(
+            "--> Add {} partial path {}",
+            file_str,
+            path.display(graph, partials)
+        );
         let start_node = graph[path.start_node].id();
         if start_node.is_in_file(file) {
+            copious_debugging!(
+                " * Add as node path from node {}",
+                path.start_node.display(graph),
+            );
             let local_id = start_node.local_id();
             let path = serde::PartialPath::from_partial_path(graph, partials, path);
             let mut stmt = self
@@ -190,6 +200,10 @@ impl SQLiteWriter {
                 .prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
             stmt.execute((file_str, local_id, &serde_json::to_vec(&path)?))?;
         } else if start_node.is_root() {
+            copious_debugging!(
+                " * Add as root path with symbol stack {}",
+                path.symbol_stack_precondition.display(graph, partials),
+            );
             let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
             let path = serde::PartialPath::from_partial_path(graph, partials, path);
             let mut stmt = self.conn.prepare_cached(
@@ -197,7 +211,11 @@ impl SQLiteWriter {
             )?;
             stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
         } else {
-            todo!();
+            panic!(
+                "added path {} must start in given file {} or at root",
+                path.display(graph, partials),
+                graph[file].name()
+            );
         }
         Ok(())
     }
@@ -255,9 +273,12 @@ impl SQLiteReader {
 
     /// Ensure the graph for the given file is loaded.
     pub fn load_graph_for_file(&mut self, file: &str) -> Result<()> {
+        copious_debugging!("--> Load graph for {}", file);
         if !self.loaded_graphs.insert(file.to_string()) {
+            copious_debugging!(" * Already loaded");
             return Ok(());
         }
+        copious_debugging!(" * Load from database");
         let mut stmt = self
             .conn
             .prepare_cached("SELECT json FROM graphs WHERE file = ?")?;
@@ -269,7 +290,9 @@ impl SQLiteReader {
 
     /// Ensure the paths starting a the given node are loaded.
     fn load_paths_for_node(&mut self, node: Handle<Node>) -> Result<()> {
+        copious_debugging!(" * Load extensions from node {}", node.display(&self.graph));
         if !self.loaded_node_paths.insert(node) {
+            copious_debugging!("   > Already loaded");
             return Ok(());
         }
         let file = self.graph[node].file().expect("file node required");
@@ -292,6 +315,10 @@ impl SQLiteReader {
             self.load_graph_for_file(&file)?;
             let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
+            copious_debugging!(
+                "   > Loaded {}",
+                path.display(&self.graph, &mut self.partials)
+            );
             self.db
                 .add_partial_path(&self.graph, &mut self.partials, path);
         }
@@ -300,10 +327,19 @@ impl SQLiteReader {
 
     /// Ensure the paths starting at the root and matching the given symbol stack are loaded.
     fn load_paths_for_root(&mut self, symbol_stack: PartialSymbolStack) -> Result<()> {
+        copious_debugging!(
+            " * Load extensions from root with symbol stack {}",
+            symbol_stack.display(&self.graph, &mut self.partials)
+        );
         let symbol_stack_prefixes =
             symbol_stack.storage_key_prefixes(&self.graph, &mut self.partials);
         for symbol_stack in symbol_stack_prefixes {
+            copious_debugging!(
+                " * Load extensions from root with prefix symbol stack {}",
+                symbol_stack
+            );
             if !self.loaded_root_paths.insert(symbol_stack.to_string()) {
+                copious_debugging!("   > Already loaded");
                 return Ok(());
             }
             let paths = {
@@ -324,6 +360,10 @@ impl SQLiteReader {
                 self.load_graph_for_file(&file)?;
                 let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
+                copious_debugging!(
+                    "   > Loaded {}",
+                    path.display(&self.graph, &mut self.partials)
+                );
                 self.db
                     .add_partial_path(&self.graph, &mut self.partials, path);
             }
@@ -333,6 +373,10 @@ impl SQLiteReader {
 
     /// Ensure all possible extensions for the given partial path are loaded.
     pub fn load_partial_path_extensions(&mut self, path: &PartialPath) -> Result<()> {
+        copious_debugging!(
+            "--> Load extensions for {}",
+            path.display(&self.graph, &mut self.partials)
+        );
         let end_node = self.graph[path.end_node].id();
         if self.graph[path.end_node].file().is_some() {
             self.load_paths_for_node(path.end_node)?;
