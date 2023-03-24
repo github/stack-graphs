@@ -128,6 +128,7 @@ impl IndexArgs {
                         loader,
                         &mut seen_mark,
                         &mut db,
+                        false,
                     )?;
                 }
             } else {
@@ -141,6 +142,7 @@ impl IndexArgs {
                     loader,
                     &mut seen_mark,
                     &mut db,
+                    true,
                 )?;
             }
         }
@@ -155,8 +157,9 @@ impl IndexArgs {
         loader: &mut Loader,
         seen_mark: &mut bool,
         db: &mut SQLiteWriter,
+        strict: bool,
     ) -> anyhow::Result<()> {
-        self.analyze_file(source_root, source_path, loader, seen_mark, db)
+        self.analyze_file(source_root, source_path, loader, seen_mark, db, strict)
             .with_context(|| format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display()))
     }
 
@@ -167,6 +170,7 @@ impl IndexArgs {
         loader: &mut Loader,
         seen_mark: &mut bool,
         db: &mut SQLiteWriter,
+        strict: bool,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
 
@@ -178,7 +182,12 @@ impl IndexArgs {
         let mut file_reader = FileReader::new();
         let lc = match loader.load_for_file(source_path, &mut file_reader, &NoCancellation) {
             Ok(Some(sgl)) => sgl,
-            Ok(None) => return Ok(()),
+            Ok(None) => {
+                if strict {
+                    file_status.error("not supported")?;
+                }
+                return Ok(());
+            }
             Err(crate::loader::LoadError::Cancelled(_)) => {
                 file_status.warn("language loading timed out")?;
                 return Ok(());
