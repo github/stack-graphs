@@ -120,14 +120,28 @@ impl IndexArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path().canonicalize()?;
-                    self.analyze_file(source_root, &source_path, loader, &mut seen_mark, &mut db)?;
+                    self.analyze_file(
+                        source_root,
+                        &source_path,
+                        loader,
+                        &mut seen_mark,
+                        &mut db,
+                        false,
+                    )?;
                 }
             } else {
                 let source_root = source_path.parent().expect("expect file to have parent");
                 if self.should_skip(&source_path, &mut seen_mark) {
                     continue;
                 }
-                self.analyze_file(source_root, &source_path, loader, &mut seen_mark, &mut db)?;
+                self.analyze_file(
+                    source_root,
+                    &source_path,
+                    loader,
+                    &mut seen_mark,
+                    &mut db,
+                    true,
+                )?;
             }
         }
         Ok(())
@@ -141,6 +155,7 @@ impl IndexArgs {
         loader: &mut Loader,
         seen_mark: &mut bool,
         db: &mut SQLiteWriter,
+        strict: bool,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
         match self.analyze_file_inner(
@@ -149,6 +164,7 @@ impl IndexArgs {
             loader,
             seen_mark,
             db,
+            strict,
             &mut file_status,
         ) {
             ok @ Ok(_) => ok,
@@ -167,6 +183,7 @@ impl IndexArgs {
         loader: &mut Loader,
         seen_mark: &mut bool,
         db: &mut SQLiteWriter,
+        strict: bool,
         file_status: &mut FileStatusLogger,
     ) -> anyhow::Result<()> {
         if self.should_skip(source_path, seen_mark) {
@@ -177,7 +194,12 @@ impl IndexArgs {
         let mut file_reader = FileReader::new();
         let lc = match loader.load_for_file(source_path, &mut file_reader, &NoCancellation) {
             Ok(Some(sgl)) => sgl,
-            Ok(None) => return Ok(()),
+            Ok(None) => {
+                if strict {
+                    file_status.error("not supported")?;
+                }
+                return Ok(());
+            }
             Err(crate::loader::LoadError::Cancelled(_)) => {
                 file_status.warn("language loading timed out")?;
                 return Ok(());
