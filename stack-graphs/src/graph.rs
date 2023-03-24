@@ -363,6 +363,29 @@ impl StackGraph {
         let name = name.as_ref();
         self.file_handles.get(name).copied()
     }
+
+    /// Rename the given file.  If the new name already exists, an error is returned with
+    /// the handle of the existing file.
+    pub fn rename_file<S: AsRef<str> + ?Sized>(
+        &mut self,
+        handle: Handle<File>,
+        name: &S,
+    ) -> Result<(), Handle<File>> {
+        let name = name.as_ref();
+        if let Some(handle) = self.file_handles.get(name) {
+            return Err(*handle);
+        }
+
+        let file = self.files.get_mut(handle);
+        self.file_handles.remove(file.name());
+
+        let interned = self.interned_strings.add(name);
+        let hash_key = unsafe { interned.as_hash_key() };
+        file.name = interned;
+        self.file_handles.insert(hash_key, handle);
+
+        Ok(())
+    }
 }
 
 impl StackGraph {
