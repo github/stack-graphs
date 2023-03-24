@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 use std::collections::HashSet;
 use std::path::Path;
 use thiserror::Error;
@@ -71,17 +72,21 @@ impl From<CancellationError> for StorageError {
     }
 }
 
+/// Writer to store stack graphs and partial paths in a SQLite database.
 pub struct SQLiteWriter {
     conn: Connection,
 }
 
 impl SQLiteWriter {
+    /// Open an in-memory database.
     pub fn open_in_memory() -> Result<Self, StorageError> {
         let conn = Connection::open_in_memory()?;
         Self::init(&conn)?;
         Ok(Self { conn })
     }
 
+    /// Open a file database.  If the file does not exist, it is automatically created.
+    /// An error is thrown if the database version is not supported.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
         let is_new = !path.as_ref().exists();
         let conn = Connection::open(path)?;
@@ -93,6 +98,8 @@ impl SQLiteWriter {
         Ok(Self { conn })
     }
 
+    /// Clean file data from the database.  If a path is given, data for all descendants of
+    /// that path is cleaned.  Otherwise, data for all files is cleaned.
     pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<(), StorageError> {
         if let Some(path) = path {
             let file = format!("{}%", path.as_ref().to_string_lossy());
@@ -126,13 +133,14 @@ impl SQLiteWriter {
         Ok(())
     }
 
+    /// Check if a graph for the file exists in the database.  If a tag is provided, returns true only
+    /// if the tag matches.
     pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
-        match tag {
-            Some(tag) => file_exists_with_tag(&self.conn, file, tag),
-            None => file_exists(&self.conn, file),
-        }
+        file_exists(&self.conn, file, tag)
     }
 
+    /// Add the stack graph of a file to the database.  If the file already exists, its previous graph
+    /// and paths are removed.
     pub fn add_graph_for_file(
         &mut self,
         graph: &StackGraph,
@@ -161,6 +169,8 @@ impl SQLiteWriter {
         Ok(())
     }
 
+    /// Add a partial path for a file to the database.  Throws an error if the file does not exist in
+    /// the database.
     pub fn add_partial_path_for_file(
         &mut self,
         graph: &StackGraph,
@@ -203,6 +213,7 @@ impl SQLiteWriter {
     }
 }
 
+/// Reader to load stack graphs and partial paths from a SQLite database.
 pub struct SQLiteReader {
     conn: Connection,
     loaded_graphs: HashSet<String>,
@@ -214,6 +225,7 @@ pub struct SQLiteReader {
 }
 
 impl SQLiteReader {
+    /// Open a file database.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
         if !path.as_ref().exists() {
             return Err(StorageError::MissingDatabase(
@@ -233,13 +245,13 @@ impl SQLiteReader {
         })
     }
 
+    /// Check if a graph for the file exists in the database.  If a tag is provided, returns true only
+    /// if the tag matches.
     pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
-        match tag {
-            Some(tag) => file_exists_with_tag(&self.conn, file, tag),
-            None => file_exists(&self.conn, file),
-        }
+        file_exists(&self.conn, file, tag)
     }
 
+    /// Ensure the graph for the given file is loaded.
     pub fn load_graph_for_file(&mut self, file: &str) -> Result<(), StorageError> {
         if !self.loaded_graphs.insert(file.to_string()) {
             return Ok(());
@@ -253,11 +265,12 @@ impl SQLiteReader {
         Ok(())
     }
 
+    /// Ensure the paths starting a the given node are loaded.
     fn load_paths_for_node(&mut self, node: Handle<Node>) -> Result<(), StorageError> {
         if !self.loaded_node_paths.insert(node) {
             return Ok(());
         }
-        let file = self.graph[node].file().expect("TODO");
+        let file = self.graph[node].file().expect("file node required");
         let file = self.graph[file].name();
         let paths = {
             let mut stmt = self
@@ -283,6 +296,7 @@ impl SQLiteReader {
         Ok(())
     }
 
+    /// Ensure the paths starting at the root and matching the given symbol stack are loaded.
     fn load_paths_for_root(
         &mut self,
         symbol_stack: PartialSymbolStack,
@@ -318,14 +332,13 @@ impl SQLiteReader {
         Ok(())
     }
 
+    /// Ensure all possible extensions for the given partial path are loaded.
     pub fn load_partial_path_extensions(&mut self, path: &PartialPath) -> Result<(), StorageError> {
         let end_node = self.graph[path.end_node].id();
         if self.graph[path.end_node].file().is_some() {
             self.load_paths_for_node(path.end_node)?;
         } else if end_node.is_root() {
             self.load_paths_for_root(path.symbol_stack_postcondition)?;
-        } else {
-            todo!();
         }
         Ok(())
     }
@@ -335,7 +348,7 @@ impl SQLiteReader {
         (&self.graph, &mut self.partials, &mut self.db)
     }
 
-    /// Find all paths using the given path stitcher. Data is lazily loaded if necessary.
+    /// Find all paths using the given path stitcher.  Data is lazily loaded if necessary.
     pub fn find_all_complete_partial_paths<I, F>(
         &mut self,
         starting_nodes: I,
@@ -406,14 +419,22 @@ fn check_version(conn: &Connection) -> Result<(), StorageError> {
     Ok(())
 }
 
-fn file_exists(conn: &Connection, file: &str) -> Result<bool, StorageError> {
-    let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
-    let result = stmt.exists([file])?;
+fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
+    let result = if let Some(tag) = tag {
+        let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;
+        stmt.exists([file, tag])?
+    } else {
+        let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
+        stmt.exists([file])?
+    };
     Ok(result)
 }
 
-fn file_exists_with_tag(conn: &Connection, file: &str, tag: &str) -> Result<bool, StorageError> {
-    let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;
-    let result = stmt.exists([file, tag])?;
-    Ok(result)
+#[allow(dead_code)]
+fn get_file_tag(conn: &Connection, file: &str) -> Result<Option<String>, StorageError> {
+    let mut stmt = conn.prepare_cached("SELECT tag FROM graphs WHERE file = ?")?;
+    let tag = stmt
+        .query_row([file], |r| r.get::<_, String>(0))
+        .optional()?;
+    Ok(tag)
 }
