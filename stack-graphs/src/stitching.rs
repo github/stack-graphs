@@ -761,6 +761,9 @@ impl ForwardPartialPathStitcher {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
+        let starting_nodes = starting_nodes
+            .into_iter()
+            .filter(|n| graph[*n].is_reference());
         let mut stitcher =
             ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
         while !stitcher.is_complete() {
