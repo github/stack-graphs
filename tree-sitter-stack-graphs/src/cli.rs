@@ -63,6 +63,7 @@ pub mod parse;
 pub mod query;
 pub mod test;
 mod util;
+pub mod visualize;
 
 pub mod path_loading {
     use clap::Subcommand;
@@ -74,6 +75,7 @@ pub mod path_loading {
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
+    use crate::cli::visualize::VisualizeArgs;
 
     #[derive(Subcommand)]
     pub enum Subcommands {
@@ -83,6 +85,7 @@ pub mod path_loading {
         Parse(Parse),
         Query(Query),
         Test(Test),
+        Visualize(Visualize),
     }
 
     impl Subcommands {
@@ -94,6 +97,7 @@ pub mod path_loading {
                 Self::Parse(cmd) => cmd.run(),
                 Self::Query(cmd) => cmd.run(),
                 Self::Test(cmd) => cmd.run(),
+                Self::Visualize(cmd) => cmd.run(),
             }
         }
     }
@@ -184,6 +188,19 @@ pub mod path_loading {
             self.test_args.run(&mut loader)
         }
     }
+
+    /// Visualize command
+    #[derive(clap::Parser)]
+    pub struct Visualize {
+        #[clap(flatten)]
+        visualize_args: VisualizeArgs,
+    }
+
+    impl Visualize {
+        pub fn run(&self) -> anyhow::Result<()> {
+            self.visualize_args.run()
+        }
+    }
 }
 
 pub mod provided_languages {
@@ -195,6 +212,7 @@ pub mod provided_languages {
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
+    use crate::cli::visualize::VisualizeArgs;
     use crate::loader::LanguageConfiguration;
 
     #[derive(Subcommand)]
@@ -204,6 +222,7 @@ pub mod provided_languages {
         Parse(Parse),
         Query(Query),
         Test(Test),
+        Visualize(Visualize),
     }
 
     impl Subcommands {
@@ -214,6 +233,7 @@ pub mod provided_languages {
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Query(cmd) => cmd.run(configurations),
                 Self::Test(cmd) => cmd.run(configurations),
+                Self::Visualize(cmd) => cmd.run(configurations),
             }
         }
     }
@@ -289,6 +309,19 @@ pub mod provided_languages {
         pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
             let mut loader = self.load_args.get(configurations)?;
             self.test_args.run(&mut loader)
+        }
+    }
+
+    /// Visualize command
+    #[derive(clap::Parser)]
+    pub struct Visualize {
+        #[clap(flatten)]
+        visualize_args: VisualizeArgs,
+    }
+
+    impl Visualize {
+        pub fn run(&self, _configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            self.visualize_args.run()
         }
     }
 }
