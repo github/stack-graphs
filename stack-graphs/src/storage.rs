@@ -66,6 +66,8 @@ pub enum StorageError {
     SerdeJson(#[from] serde_json::Error),
 }
 
+pub type Result<T> = std::result::Result<T, StorageError>;
+
 impl From<CancellationError> for StorageError {
     fn from(value: CancellationError) -> Self {
         Self::Cancelled(value.0)
@@ -79,7 +81,7 @@ pub struct SQLiteWriter {
 
 impl SQLiteWriter {
     /// Open an in-memory database.
-    pub fn open_in_memory() -> Result<Self, StorageError> {
+    pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         Self::init(&conn)?;
         Ok(Self { conn })
@@ -87,7 +89,7 @@ impl SQLiteWriter {
 
     /// Open a file database.  If the file does not exist, it is automatically created.
     /// An error is thrown if the database version is not supported.
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let is_new = !path.as_ref().exists();
         let conn = Connection::open(path)?;
         if is_new {
@@ -100,7 +102,7 @@ impl SQLiteWriter {
 
     /// Clean file data from the database.  If a path is given, data for all descendants of
     /// that path is cleaned.  Otherwise, data for all files is cleaned.
-    pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<(), StorageError> {
+    pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<()> {
         if let Some(path) = path {
             let file = format!("{}%", path.as_ref().to_string_lossy());
             self.conn.execute("BEGIN;", [])?;
@@ -125,7 +127,7 @@ impl SQLiteWriter {
         Ok(())
     }
 
-    fn init(conn: &Connection) -> Result<(), StorageError> {
+    fn init(conn: &Connection) -> Result<()> {
         conn.execute("BEGIN;", [])?;
         conn.execute_batch(SCHEMA)?;
         conn.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
@@ -135,7 +137,7 @@ impl SQLiteWriter {
 
     /// Check if a graph for the file exists in the database.  If a tag is provided, returns true only
     /// if the tag matches.
-    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
+    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool> {
         file_exists(&self.conn, file, tag)
     }
 
@@ -146,7 +148,7 @@ impl SQLiteWriter {
         graph: &StackGraph,
         file: Handle<File>,
         tag: &str,
-    ) -> Result<(), StorageError> {
+    ) -> Result<()> {
         let file_str = graph[file].name();
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
         self.conn.execute("BEGIN;", ())?;
@@ -177,7 +179,7 @@ impl SQLiteWriter {
         partials: &mut PartialPaths,
         path: &PartialPath,
         file: Handle<File>,
-    ) -> Result<(), StorageError> {
+    ) -> Result<()> {
         let file_str = graph[file].name();
         let start_node = graph[path.start_node].id();
         if start_node.is_in_file(file) {
@@ -226,7 +228,7 @@ pub struct SQLiteReader {
 
 impl SQLiteReader {
     /// Open a file database.
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         if !path.as_ref().exists() {
             return Err(StorageError::MissingDatabase(
                 path.as_ref().to_string_lossy().to_string(),
@@ -247,12 +249,12 @@ impl SQLiteReader {
 
     /// Check if a graph for the file exists in the database.  If a tag is provided, returns true only
     /// if the tag matches.
-    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
+    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool> {
         file_exists(&self.conn, file, tag)
     }
 
     /// Ensure the graph for the given file is loaded.
-    pub fn load_graph_for_file(&mut self, file: &str) -> Result<(), StorageError> {
+    pub fn load_graph_for_file(&mut self, file: &str) -> Result<()> {
         if !self.loaded_graphs.insert(file.to_string()) {
             return Ok(());
         }
@@ -266,7 +268,7 @@ impl SQLiteReader {
     }
 
     /// Ensure the paths starting a the given node are loaded.
-    fn load_paths_for_node(&mut self, node: Handle<Node>) -> Result<(), StorageError> {
+    fn load_paths_for_node(&mut self, node: Handle<Node>) -> Result<()> {
         if !self.loaded_node_paths.insert(node) {
             return Ok(());
         }
@@ -283,7 +285,7 @@ impl SQLiteReader {
                     Ok((file, json))
                 })?
                 .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<std::result::Result<Vec<_>, _>>()?;
             paths
         };
         for (file, json) in paths {
@@ -297,10 +299,7 @@ impl SQLiteReader {
     }
 
     /// Ensure the paths starting at the root and matching the given symbol stack are loaded.
-    fn load_paths_for_root(
-        &mut self,
-        symbol_stack: PartialSymbolStack,
-    ) -> Result<(), StorageError> {
+    fn load_paths_for_root(&mut self, symbol_stack: PartialSymbolStack) -> Result<()> {
         let symbol_stack_prefixes =
             symbol_stack.storage_key_prefixes(&self.graph, &mut self.partials);
         for symbol_stack in symbol_stack_prefixes {
@@ -318,7 +317,7 @@ impl SQLiteReader {
                         Ok((file, json))
                     })?
                     .into_iter()
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
                 paths
             };
             for (file, json) in paths {
@@ -333,7 +332,7 @@ impl SQLiteReader {
     }
 
     /// Ensure all possible extensions for the given partial path are loaded.
-    pub fn load_partial_path_extensions(&mut self, path: &PartialPath) -> Result<(), StorageError> {
+    pub fn load_partial_path_extensions(&mut self, path: &PartialPath) -> Result<()> {
         let end_node = self.graph[path.end_node].id();
         if self.graph[path.end_node].file().is_some() {
             self.load_paths_for_node(path.end_node)?;
@@ -354,7 +353,7 @@ impl SQLiteReader {
         starting_nodes: I,
         cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
-    ) -> Result<(), StorageError>
+    ) -> Result<()>
     where
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
@@ -411,7 +410,7 @@ impl PartialSymbolStack {
     }
 }
 
-fn check_version(conn: &Connection) -> Result<(), StorageError> {
+fn check_version(conn: &Connection) -> Result<()> {
     let version = conn.query_row("SELECT version FROM metadata", [], |r| r.get::<_, usize>(0))?;
     if version != VERSION {
         return Err(StorageError::IncorrectVersion(version));
@@ -419,7 +418,7 @@ fn check_version(conn: &Connection) -> Result<(), StorageError> {
     Ok(())
 }
 
-fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool, StorageError> {
+fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool> {
     let result = if let Some(tag) = tag {
         let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;
         stmt.exists([file, tag])?
@@ -431,7 +430,7 @@ fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool,
 }
 
 #[allow(dead_code)]
-fn get_file_tag(conn: &Connection, file: &str) -> Result<Option<String>, StorageError> {
+fn get_file_tag(conn: &Connection, file: &str) -> Result<Option<String>> {
     let mut stmt = conn.prepare_cached("SELECT tag FROM graphs WHERE file = ?")?;
     let tag = stmt
         .query_row([file], |r| r.get::<_, String>(0))
