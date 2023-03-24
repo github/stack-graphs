@@ -287,6 +287,64 @@ impl SQLiteReader {
         Ok(())
     }
 
+    /// Load all paths for the given file.  Using [`load_partial_path_extensions`] is generally preferred,
+    /// as it can be more granular.
+    pub fn load_all_paths_for_file(&mut self, file: Handle<File>) -> Result<()> {
+        let file = self.graph[file].name().to_string();
+
+        // load node paths
+        let node_paths = {
+            let mut stmt = self
+                .conn
+                .prepare_cached("SELECT json from file_paths WHERE file = ?")?;
+            let paths = stmt
+                .query_map([&file], |row| {
+                    let json = row.get::<_, Vec<u8>>(0)?;
+                    Ok(json)
+                })?
+                .into_iter()
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            paths
+        };
+        for json in node_paths {
+            let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
+            let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
+            copious_debugging!(
+                "   > Loaded {}",
+                path.display(&self.graph, &mut self.partials)
+            );
+            self.db
+                .add_partial_path(&self.graph, &mut self.partials, path);
+        }
+
+        // load root paths
+        let node_paths = {
+            let mut stmt = self
+                .conn
+                .prepare_cached("SELECT json from root_paths WHERE file = ?")?;
+            let paths = stmt
+                .query_map([&file], |row| {
+                    let json = row.get::<_, Vec<u8>>(0)?;
+                    Ok(json)
+                })?
+                .into_iter()
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            paths
+        };
+        for json in node_paths {
+            let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
+            let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
+            copious_debugging!(
+                "   > Loaded {}",
+                path.display(&self.graph, &mut self.partials)
+            );
+            self.db
+                .add_partial_path(&self.graph, &mut self.partials, path);
+        }
+
+        Ok(())
+    }
+
     /// Ensure the paths starting a the given node are loaded.
     fn load_paths_for_node(&mut self, node: Handle<Node>) -> Result<()> {
         copious_debugging!(" * Load extensions from node {}", node.display(&self.graph));
