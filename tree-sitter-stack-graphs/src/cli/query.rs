@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use crate::loader::FileReader;
 
 use super::util::path_exists;
+use super::util::provided_or_default_database_path;
 use super::util::sha1;
 use super::util::wait_for_input;
 use super::util::FileStatusLogger;
@@ -35,7 +36,7 @@ pub struct QueryArgs {
         parse(from_os_str),
         validator_os = path_exists,
     )]
-    pub database: PathBuf,
+    pub database: Option<PathBuf>,
 
     /// Wait for user input before starting analysis. Useful for profiling.
     #[clap(long)]
@@ -50,7 +51,8 @@ impl QueryArgs {
         if self.wait_at_start {
             wait_for_input()?;
         }
-        let mut db = SQLiteReader::open(&self.database)?;
+        let db_path = provided_or_default_database_path(&self.database)?;
+        let mut db = SQLiteReader::open(&db_path)?;
         self.target.run(&mut db)
     }
 }
