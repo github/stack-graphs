@@ -349,3 +349,11 @@ pub fn sha1(value: &str) -> String {
     hasher.update(value);
     base64::prelude::BASE64_STANDARD_NO_PAD.encode(hasher.finalize())
 }
+
+pub fn wait_for_input() -> anyhow::Result<()> {
+    print!("<press ENTER to continue>");
+    std::io::stdout().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    Ok(())
+}

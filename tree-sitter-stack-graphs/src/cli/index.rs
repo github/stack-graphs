@@ -13,7 +13,6 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,6 +31,7 @@ use super::util::duration_from_seconds_str;
 use super::util::map_parse_errors;
 use super::util::path_exists;
 use super::util::sha1;
+use super::util::wait_for_input;
 use super::util::FileStatusLogger;
 
 /// Analyze sources
@@ -106,7 +106,7 @@ impl IndexArgs {
 
     pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
         if self.wait_at_start {
-            self.wait_for_input()?;
+            wait_for_input()?;
         }
         let mut seen_mark = false;
         let mut db = SQLiteWriter::open(&self.database)?;
@@ -144,14 +144,6 @@ impl IndexArgs {
                 )?;
             }
         }
-        Ok(())
-    }
-
-    fn wait_for_input(&self) -> anyhow::Result<()> {
-        print!("<press ENTER to continue>");
-        std::io::stdout().flush()?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
         Ok(())
     }
 
