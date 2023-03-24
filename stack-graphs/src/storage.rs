@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
 use std::collections::HashSet;
 use std::path::Path;
 use thiserror::Error;
@@ -471,13 +470,4 @@ fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool>
         stmt.exists([file])?
     };
     Ok(result)
-}
-
-#[allow(dead_code)]
-fn get_file_tag(conn: &Connection, file: &str) -> Result<Option<String>> {
-    let mut stmt = conn.prepare_cached("SELECT tag FROM graphs WHERE file = ?")?;
-    let tag = stmt
-        .query_row([file], |r| r.get::<_, String>(0))
-        .optional()?;
-    Ok(tag)
 }
