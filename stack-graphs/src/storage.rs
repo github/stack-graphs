@@ -93,16 +93,28 @@ impl SQLiteWriter {
         Ok(Self { conn })
     }
 
-    pub fn clean(&mut self) -> Result<(), StorageError> {
-        self.conn.execute_batch(
-            r#"
-            BEGIN;
-            DELETE FROM file_paths;
-            DELETE FROM root_paths;
-            DELETE FROM graphs;
-            COMMIT;
-        "#,
-        )?;
+    pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<(), StorageError> {
+        if let Some(path) = path {
+            let file = format!("{}%", path.as_ref().to_string_lossy());
+            self.conn.execute("BEGIN;", [])?;
+            self.conn
+                .execute("DELETE FROM file_paths WHERE file LIKE ?", [&file])?;
+            self.conn
+                .execute("DELETE FROM root_paths WHERE file LIKE ?", [&file])?;
+            self.conn
+                .execute("DELETE FROM graphs WHERE file LIKE ?", [&file])?;
+            self.conn.execute("COMMIT;", [])?;
+        } else {
+            self.conn.execute_batch(
+                r#"
+                        BEGIN;
+                        DELETE FROM file_paths;
+                        DELETE FROM root_paths;
+                        DELETE FROM graphs;
+                        COMMIT;
+                    "#,
+            )?;
+        }
         Ok(())
     }
 
