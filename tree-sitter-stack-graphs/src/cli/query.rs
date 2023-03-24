@@ -20,6 +20,7 @@ use crate::loader::FileReader;
 
 use super::util::path_exists;
 use super::util::sha1;
+use super::util::wait_for_input;
 use super::util::FileStatusLogger;
 use super::util::SourcePosition;
 
@@ -36,12 +37,19 @@ pub struct QueryArgs {
     )]
     pub database: PathBuf,
 
+    /// Wait for user input before starting analysis. Useful for profiling.
+    #[clap(long)]
+    pub wait_at_start: bool,
+
     #[clap(subcommand)]
     target: Target,
 }
 
 impl QueryArgs {
     pub fn run(&self) -> anyhow::Result<()> {
+        if self.wait_at_start {
+            wait_for_input()?;
+        }
         let mut db = SQLiteReader::open(&self.database)?;
         self.target.run(&mut db)
     }
