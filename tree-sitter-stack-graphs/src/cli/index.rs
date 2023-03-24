@@ -30,6 +30,7 @@ use crate::NoCancellation;
 use super::util::duration_from_seconds_str;
 use super::util::map_parse_errors;
 use super::util::path_exists;
+use super::util::provided_or_default_database_path;
 use super::util::sha1;
 use super::util::wait_for_input;
 use super::util::FileStatusLogger;
@@ -64,7 +65,7 @@ pub struct IndexArgs {
         value_hint = ValueHint::AnyPath,
         parse(from_os_str),
     )]
-    pub database: PathBuf,
+    pub database: Option<PathBuf>,
 
     #[clap(long, short = 'v')]
     pub verbose: bool,
@@ -91,10 +92,10 @@ pub struct IndexArgs {
 }
 
 impl IndexArgs {
-    pub fn new(database: PathBuf, source_paths: Vec<PathBuf>) -> Self {
+    pub fn new(source_paths: Vec<PathBuf>) -> Self {
         Self {
             source_paths,
-            database,
+            database: None,
             force: false,
             continue_from: None,
             verbose: false,
@@ -109,7 +110,8 @@ impl IndexArgs {
             wait_for_input()?;
         }
         let mut seen_mark = false;
-        let mut db = SQLiteWriter::open(&self.database)?;
+        let db_path = provided_or_default_database_path(&self.database)?;
+        let mut db = SQLiteWriter::open(&db_path)?;
         for source_path in &self.source_paths {
             let source_path = source_path.canonicalize()?;
             if source_path.is_dir() {

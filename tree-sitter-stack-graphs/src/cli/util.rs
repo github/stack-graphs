@@ -357,3 +357,15 @@ pub fn wait_for_input() -> anyhow::Result<()> {
     std::io::stdin().read_line(&mut input)?;
     Ok(())
 }
+
+pub fn provided_or_default_database_path(path: &Option<PathBuf>) -> anyhow::Result<PathBuf> {
+    if let Some(path) = path {
+        return Ok(path.clone());
+    }
+    match dirs::data_local_dir() {
+        Some(dir) => Ok(dir.join(format!("{}.sqlite", env!("CARGO_PKG_NAME")))),
+        None => Err(anyhow!(
+            "unable to determine data local directory for database"
+        )),
+    }
+}

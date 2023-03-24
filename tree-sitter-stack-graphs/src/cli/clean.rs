@@ -12,6 +12,7 @@ use stack_graphs::storage::SQLiteWriter;
 use std::path::PathBuf;
 
 use super::util::path_exists;
+use super::util::provided_or_default_database_path;
 
 /// Clean database
 #[derive(Args)]
@@ -37,7 +38,7 @@ pub struct CleanArgs {
         parse(from_os_str),
         validator_os = path_exists,
     )]
-    pub database: PathBuf,
+    pub database: Option<PathBuf>,
 
     #[clap(long, short = 'a')]
     pub all: bool,
@@ -45,7 +46,8 @@ pub struct CleanArgs {
 
 impl CleanArgs {
     pub fn run(&self) -> anyhow::Result<()> {
-        let mut db = SQLiteWriter::open(&self.database)?;
+        let db_path = provided_or_default_database_path(&self.database)?;
+        let mut db = SQLiteWriter::open(&db_path)?;
         if self.all {
             db.clean(None::<&PathBuf>)?;
         } else {
