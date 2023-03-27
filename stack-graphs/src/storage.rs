@@ -24,7 +24,7 @@ use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
-const VERSION: usize = 2;
+const VERSION: usize = 1;
 
 const SCHEMA: &str = r#"
         CREATE TABLE metadata (
