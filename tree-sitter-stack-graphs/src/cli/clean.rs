@@ -52,6 +52,7 @@ impl CleanArgs {
             db.clean(None::<&PathBuf>)?;
         } else {
             for path in &self.source_paths {
+                let path = path.canonicalize()?;
                 db.clean(Some(path))?;
             }
         }
