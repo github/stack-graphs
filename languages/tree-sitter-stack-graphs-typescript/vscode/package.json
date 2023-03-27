@@ -1,9 +1,13 @@
 {
     "name": "tree-sitter-stack-graphs-typescript",
     "description": "Stack graphs based navigation for TypeScript",
-    "publisher": "GitHub",
+    "author": "GitHub <opensource+stack-graphs@github.com>",
+    "contributors": [
+        "Hendrik van Antwerpen <hendrikvanantwerpen@github.com>"
+    ],
+    "publisher": "github",
     "license": "(MIT OR Apache-2.0)",
-    "version": "0.0.1",
+    "version": "0.1.0",
     "repository": {
         "type": "git",
         "url": "https://github.com/github/stack-graphs"
