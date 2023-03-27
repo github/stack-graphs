@@ -19,7 +19,6 @@ use std::path::PathBuf;
 use crate::loader::FileReader;
 
 use super::util::path_exists;
-use super::util::provided_or_default_database_path;
 use super::util::sha1;
 use super::util::wait_for_input;
 use super::util::FileStatusLogger;
@@ -28,16 +27,6 @@ use super::util::SourcePosition;
 /// Analyze sources
 #[derive(Args)]
 pub struct QueryArgs {
-    #[clap(
-        long,
-        short = 'D',
-        value_name = "DATABASE_PATH",
-        value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
-        validator_os = path_exists,
-    )]
-    pub database: Option<PathBuf>,
-
     /// Wait for user input before starting analysis. Useful for profiling.
     #[clap(long)]
     pub wait_at_start: bool,
@@ -47,11 +36,10 @@ pub struct QueryArgs {
 }
 
 impl QueryArgs {
-    pub fn run(&self) -> anyhow::Result<()> {
+    pub fn run(&self, db_path: &Path) -> anyhow::Result<()> {
         if self.wait_at_start {
             wait_for_input()?;
         }
-        let db_path = provided_or_default_database_path(&self.database)?;
         let mut db = SQLiteReader::open(&db_path)?;
         self.target.run(&mut db)
     }

@@ -15,6 +15,7 @@
 //!
 //! ``` no_run
 //! use clap::Parser;
+//! use tree_sitter_stack_graphs::cli::database::DatabaseArgs;
 //! use tree_sitter_stack_graphs::cli::path_loading::Subcommands;
 //!
 //! #[derive(Parser)]
@@ -26,7 +27,8 @@
 //!
 //! fn main() -> anyhow::Result<()> {
 //!     let cli = Cli::parse();
-//!     cli.subcommand.run()
+//!     let default_db_path = DatabaseArgs::default_for_crate(env!("CARGO_PKG_NAME"))?;
+//!     cli.subcommand.run(&default_db_path)
 //! }
 //! ```
 //!
@@ -37,6 +39,7 @@
 //!
 //! ``` no_run
 //! use clap::Parser;
+//! use tree_sitter_stack_graphs::cli::database::DatabaseArgs;
 //! use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
 //!
 //! #[derive(Parser)]
@@ -47,13 +50,15 @@
 //! }
 //!
 //! fn main() -> anyhow::Result<()> {
-//!     let language_configurations = vec![/* add your language configurations here */];
 //!     let cli = Cli::parse();
-//!     cli.subcommand.run(language_configurations)
+//!     let language_configurations = vec![/* add your language configurations here */];
+//!     let default_db_path = DatabaseArgs::default_for_crate(env!("CARGO_PKG_NAME"))?;
+//!     cli.subcommand.run(&default_db_path, language_configurations)
 //! }
 //! ```
 
 pub mod clean;
+pub mod database;
 pub mod index;
 pub mod init;
 pub mod load;
@@ -63,6 +68,8 @@ pub mod test;
 mod util;
 
 pub mod path_loading {
+    use std::path::Path;
+
     use clap::Subcommand;
 
     use crate::cli::clean::CleanArgs;
@@ -72,6 +79,8 @@ pub mod path_loading {
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
+
+    use super::database::DatabaseArgs;
 
     #[derive(Subcommand)]
     pub enum Subcommands {
@@ -84,13 +93,13 @@ pub mod path_loading {
     }
 
     impl Subcommands {
-        pub fn run(&self) -> anyhow::Result<()> {
+        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
             match self {
-                Self::Clean(cmd) => cmd.run(),
-                Self::Index(cmd) => cmd.run(),
+                Self::Clean(cmd) => cmd.run(default_db_path),
+                Self::Index(cmd) => cmd.run(default_db_path),
                 Self::Init(cmd) => cmd.run(),
                 Self::Parse(cmd) => cmd.run(),
-                Self::Query(cmd) => cmd.run(),
+                Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(),
             }
         }
@@ -100,12 +109,15 @@ pub mod path_loading {
     #[derive(clap::Parser)]
     pub struct Clean {
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         clean_args: CleanArgs,
     }
 
     impl Clean {
-        pub fn run(&self) -> anyhow::Result<()> {
-            self.clean_args.run()
+        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+            let db_path = self.db_args.get_or(default_db_path);
+            self.clean_args.run(&db_path)
         }
     }
 
@@ -115,13 +127,16 @@ pub mod path_loading {
         #[clap(flatten)]
         load_args: PathLoaderArgs,
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         index_args: IndexArgs,
     }
 
     impl Index {
-        pub fn run(&self) -> anyhow::Result<()> {
+        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
             let mut loader = self.load_args.get()?;
-            self.index_args.run(&mut loader)
+            let db_path = self.db_args.get_or(default_db_path);
+            self.index_args.run(&db_path, &mut loader)
         }
     }
 
@@ -158,12 +173,15 @@ pub mod path_loading {
     #[derive(clap::Parser)]
     pub struct Query {
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         query_args: QueryArgs,
     }
 
     impl Query {
-        pub fn run(&self) -> anyhow::Result<()> {
-            self.query_args.run()
+        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+            let db_path = self.db_args.get_or(default_db_path);
+            self.query_args.run(&db_path)
         }
     }
 
@@ -185,6 +203,8 @@ pub mod path_loading {
 }
 
 pub mod provided_languages {
+    use std::path::Path;
+
     use clap::Subcommand;
 
     use crate::cli::clean::CleanArgs;
@@ -194,6 +214,8 @@ pub mod provided_languages {
     use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
     use crate::loader::LanguageConfiguration;
+
+    use super::database::DatabaseArgs;
 
     #[derive(Subcommand)]
     pub enum Subcommands {
@@ -205,12 +227,16 @@ pub mod provided_languages {
     }
 
     impl Subcommands {
-        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+        pub fn run(
+            &self,
+            default_db_path: &Path,
+            configurations: Vec<LanguageConfiguration>,
+        ) -> anyhow::Result<()> {
             match self {
-                Self::Clean(cmd) => cmd.run(configurations),
-                Self::Index(cmd) => cmd.run(configurations),
+                Self::Clean(cmd) => cmd.run(default_db_path),
+                Self::Index(cmd) => cmd.run(default_db_path, configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
-                Self::Query(cmd) => cmd.run(configurations),
+                Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(configurations),
             }
         }
@@ -220,12 +246,15 @@ pub mod provided_languages {
     #[derive(clap::Parser)]
     pub struct Clean {
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         clean_args: CleanArgs,
     }
 
     impl Clean {
-        pub fn run(&self, _configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
-            self.clean_args.run()
+        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+            let db_path = self.db_args.get_or(default_db_path);
+            self.clean_args.run(&db_path)
         }
     }
 
@@ -235,13 +264,20 @@ pub mod provided_languages {
         #[clap(flatten)]
         load_args: LanguageConfigurationsLoaderArgs,
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         index_args: IndexArgs,
     }
 
     impl Index {
-        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+        pub fn run(
+            &self,
+            default_db_path: &Path,
+            configurations: Vec<LanguageConfiguration>,
+        ) -> anyhow::Result<()> {
             let mut loader = self.load_args.get(configurations)?;
-            self.index_args.run(&mut loader)
+            let db_path = self.db_args.get_or(default_db_path);
+            self.index_args.run(&db_path, &mut loader)
         }
     }
 
@@ -265,12 +301,15 @@ pub mod provided_languages {
     #[derive(clap::Parser)]
     pub struct Query {
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         query_args: QueryArgs,
     }
 
     impl Query {
-        pub fn run(&self, _configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
-            self.query_args.run()
+        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+            let db_path = self.db_args.get_or(default_db_path);
+            self.query_args.run(&db_path)
         }
     }
 

@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 use clap::Parser;
+use tree_sitter_stack_graphs::cli::database::DatabaseArgs;
 use tree_sitter_stack_graphs::cli::path_loading::Subcommands;
 
 #[derive(Parser)]
@@ -17,5 +18,6 @@ pub struct Cli {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    cli.subcommand.run()
+    let default_db_path = DatabaseArgs::default_for_crate(env!("CARGO_PKG_NAME"))?;
+    cli.subcommand.run(&default_db_path)
 }

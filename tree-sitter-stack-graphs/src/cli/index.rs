@@ -28,7 +28,6 @@ use crate::NoCancellation;
 
 use super::util::duration_from_seconds_str;
 use super::util::path_exists;
-use super::util::provided_or_default_database_path;
 use super::util::sha1;
 use super::util::wait_for_input;
 use super::util::FileStatusLogger;
@@ -55,15 +54,6 @@ pub struct IndexArgs {
         validator_os = path_exists,
     )]
     pub continue_from: Option<PathBuf>,
-
-    #[clap(
-        long,
-        short = 'D',
-        value_name = "DATABASE_PATH",
-        value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
-    )]
-    pub database: Option<PathBuf>,
 
     #[clap(long, short = 'v')]
     pub verbose: bool,
@@ -93,7 +83,6 @@ impl IndexArgs {
     pub fn new(source_paths: Vec<PathBuf>) -> Self {
         Self {
             source_paths,
-            database: None,
             force: false,
             continue_from: None,
             verbose: false,
@@ -103,12 +92,11 @@ impl IndexArgs {
         }
     }
 
-    pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+    pub fn run(&self, db_path: &Path, loader: &mut Loader) -> anyhow::Result<()> {
         if self.wait_at_start {
             wait_for_input()?;
         }
         let mut seen_mark = false;
-        let db_path = provided_or_default_database_path(&self.database)?;
         let mut db = SQLiteWriter::open(&db_path)?;
         for source_path in &self.source_paths {
             let source_path = source_path.canonicalize()?;

@@ -12,9 +12,6 @@ use stack_graphs::storage::SQLiteWriter;
 use std::path::Path;
 use std::path::PathBuf;
 
-use super::util::path_exists;
-use super::util::provided_or_default_database_path;
-
 /// Clean database
 #[derive(Args)]
 #[clap(group(
@@ -31,16 +28,6 @@ pub struct CleanArgs {
     )]
     pub source_paths: Vec<PathBuf>,
 
-    #[clap(
-        long,
-        short = 'D',
-        value_name = "DATABASE_PATH",
-        value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
-        validator_os = path_exists,
-    )]
-    pub database: Option<PathBuf>,
-
     /// Remove all data from the database.
     #[clap(long, short = 'a')]
     pub all: bool,
@@ -54,12 +41,11 @@ pub struct CleanArgs {
 }
 
 impl CleanArgs {
-    pub fn run(&self) -> anyhow::Result<()> {
-        let db_path = provided_or_default_database_path(&self.database)?;
+    pub fn run(&self, db_path: &Path) -> anyhow::Result<()> {
         if self.delete {
-            self.delete(&db_path)
+            self.delete(db_path)
         } else {
-            self.clean(&db_path)
+            self.clean(db_path)
         }
     }
 
