@@ -39,7 +39,11 @@ cli = [
   "time",
   "tree-sitter-config",
   "tree-sitter-graph/term-colors",
-  "walkdir"
+  "walkdir",
+]
+lsp = [
+  "tokio",
+  "tower-lsp",
 ]
 
 [dependencies]
@@ -64,6 +68,8 @@ sha1 = { version="0.10", optional=true }
 stack-graphs = { version="0.10", path="../stack-graphs" }
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
+tokio = { version = "1.26", optional = true, features = ["rt", "io-std"] }
+tower-lsp = { version = "0.19", optional = true }
 tree-sitter = ">= 0.19"
 tree-sitter-config = { version = "0.19", optional = true }
 tree-sitter-graph = "0.9.1"

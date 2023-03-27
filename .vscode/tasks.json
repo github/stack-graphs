@@ -1,0 +1,20 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Compile tree-sitter-stack-graphs-typescript LSP extension",
+			"type": "npm",
+			"script": "build",
+			"group": {
+				"kind": "build"
+			},
+			"options": {
+				"cwd": "${workspaceFolder}/languages/tree-sitter-stack-graphs-typescript/vscode",
+			},
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "never"
+			}
+		}
+	]
+}

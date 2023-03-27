@@ -62,6 +62,8 @@ pub mod database;
 pub mod index;
 pub mod init;
 pub mod load;
+#[cfg(feature = "lsp")]
+pub mod lsp;
 pub mod parse;
 pub mod query;
 pub mod test;
@@ -76,6 +78,8 @@ pub mod path_loading {
     use crate::cli::index::IndexArgs;
     use crate::cli::init::InitArgs;
     use crate::cli::load::PathLoaderArgs;
+    #[cfg(feature = "lsp")]
+    use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
@@ -87,6 +91,8 @@ pub mod path_loading {
         Clean(Clean),
         Index(Index),
         Init(Init),
+        #[cfg(feature = "lsp")]
+        Lsp(Lsp),
         Parse(Parse),
         Query(Query),
         Test(Test),
@@ -98,6 +104,8 @@ pub mod path_loading {
                 Self::Clean(cmd) => cmd.run(default_db_path),
                 Self::Index(cmd) => cmd.run(default_db_path),
                 Self::Init(cmd) => cmd.run(),
+                #[cfg(feature = "lsp")]
+                Self::Lsp(cmd) => cmd.run(),
                 Self::Parse(cmd) => cmd.run(),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(),
@@ -150,6 +158,24 @@ pub mod path_loading {
     impl Init {
         pub fn run(&self) -> anyhow::Result<()> {
             self.init_args.run()
+        }
+    }
+
+    /// Lsp command
+    #[cfg(feature = "lsp")]
+    #[derive(clap::Parser)]
+    pub struct Lsp {
+        #[clap(flatten)]
+        load_args: PathLoaderArgs,
+        #[clap(flatten)]
+        lsp_args: LspArgs,
+    }
+
+    #[cfg(feature = "lsp")]
+    impl Lsp {
+        pub fn run(&self) -> anyhow::Result<()> {
+            let mut loader = self.load_args.get()?;
+            self.lsp_args.run(&mut loader)
         }
     }
 
@@ -210,6 +236,8 @@ pub mod provided_languages {
     use crate::cli::clean::CleanArgs;
     use crate::cli::index::IndexArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
+    #[cfg(feature = "lsp")]
+    use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
     use crate::cli::test::TestArgs;
@@ -221,6 +249,8 @@ pub mod provided_languages {
     pub enum Subcommands {
         Clean(Clean),
         Index(Index),
+        #[cfg(feature = "lsp")]
+        Lsp(Lsp),
         Parse(Parse),
         Query(Query),
         Test(Test),
@@ -235,6 +265,8 @@ pub mod provided_languages {
             match self {
                 Self::Clean(cmd) => cmd.run(default_db_path),
                 Self::Index(cmd) => cmd.run(default_db_path, configurations),
+                #[cfg(feature = "lsp")]
+                Self::Lsp(cmd) => cmd.run(configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(configurations),
@@ -278,6 +310,24 @@ pub mod provided_languages {
             let mut loader = self.load_args.get(configurations)?;
             let db_path = self.db_args.get_or(default_db_path);
             self.index_args.run(&db_path, &mut loader)
+        }
+    }
+
+    /// Lsp command
+    #[cfg(feature = "lsp")]
+    #[derive(clap::Parser)]
+    pub struct Lsp {
+        #[clap(flatten)]
+        load_args: LanguageConfigurationsLoaderArgs,
+        #[clap(flatten)]
+        lsp_args: LspArgs,
+    }
+
+    #[cfg(feature = "lsp")]
+    impl Lsp {
+        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            let mut loader = self.load_args.get(configurations)?;
+            self.lsp_args.run(&mut loader)
         }
     }
 

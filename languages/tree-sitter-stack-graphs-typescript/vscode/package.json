@@ -1,0 +1,32 @@
+{
+    "name": "tree-sitter-stack-graphs-typescript",
+    "description": "Stack graphs based navigation for TypeScript",
+    "publisher": "GitHub",
+    "license": "(MIT OR Apache-2.0)",
+    "version": "0.0.1",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/github/stack-graphs"
+    },
+    "engines": {
+        "vscode": "^1.76.0"
+    },
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./out/extension",
+    "dependencies": {
+        "vscode-languageclient": "^8.1.0"
+    },
+    "scripts": {
+        "build-cli": "cargo build --features cli,lsp --release --target-dir target",
+        "install-cli": "mkdir -p out/bin && cp target/release/tree-sitter-stack-graphs-typescript out/bin",
+        "build-ext": "tsc -b",
+        "build": "npm run build-cli && npm run build-ext && npm run install-cli"
+    },
+    "devDependencies": {
+        "@types/node": "^16",
+        "@types/vscode": "^1.76.0",
+        "typescript": "^5"
+    }
+}
