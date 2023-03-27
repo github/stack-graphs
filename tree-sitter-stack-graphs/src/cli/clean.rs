@@ -9,6 +9,7 @@ use clap::ArgGroup;
 use clap::Args;
 use clap::ValueHint;
 use stack_graphs::storage::SQLiteWriter;
+use std::path::Path;
 use std::path::PathBuf;
 
 use super::util::path_exists;
@@ -19,7 +20,7 @@ use super::util::provided_or_default_database_path;
 #[clap(group(
     ArgGroup::new("paths")
         .required(true)
-        .args(&["source-paths", "all"]),
+        .args(&["source-paths", "all", "delete"]),
 ))]
 pub struct CleanArgs {
     /// Source file or directory paths.
@@ -40,21 +41,53 @@ pub struct CleanArgs {
     )]
     pub database: Option<PathBuf>,
 
+    /// Remove all data from the database.
     #[clap(long, short = 'a')]
     pub all: bool,
+
+    /// Delete the database file.
+    #[clap(long)]
+    pub delete: bool,
+
+    #[clap(long, short = 'v')]
+    pub verbose: bool,
 }
 
 impl CleanArgs {
     pub fn run(&self) -> anyhow::Result<()> {
         let db_path = provided_or_default_database_path(&self.database)?;
-        let mut db = SQLiteWriter::open(&db_path)?;
-        if self.all {
-            db.clean(None::<&PathBuf>)?;
+        if self.delete {
+            self.delete(&db_path)
         } else {
+            self.clean(&db_path)
+        }
+    }
+
+    fn delete(&self, db_path: &Path) -> anyhow::Result<()> {
+        if !db_path.exists() {
+            return Ok(());
+        }
+        std::fs::remove_file(db_path)?;
+        if self.verbose {
+            println!("deleted database {}", db_path.display());
+        }
+        Ok(())
+    }
+
+    fn clean(&self, db_path: &Path) -> anyhow::Result<()> {
+        let mut db = SQLiteWriter::open(&db_path)?;
+        let count = if self.all {
+            db.clean(None::<&PathBuf>)?
+        } else {
+            let mut count = 0usize;
             for path in &self.source_paths {
                 let path = path.canonicalize()?;
-                db.clean(Some(path))?;
+                count += db.clean(Some(path))?;
             }
+            count
+        };
+        if self.verbose {
+            println!("removed data for {} files", count);
         }
         Ok(())
     }

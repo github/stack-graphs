@@ -101,29 +101,28 @@ impl SQLiteWriter {
 
     /// Clean file data from the database.  If a path is given, data for all descendants of
     /// that path is cleaned.  Otherwise, data for all files is cleaned.
-    pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<()> {
-        if let Some(path) = path {
+    pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<usize> {
+        let count = if let Some(path) = path {
             let file = format!("{}%", path.as_ref().to_string_lossy());
             self.conn.execute("BEGIN;", [])?;
             self.conn
                 .execute("DELETE FROM file_paths WHERE file LIKE ?", [&file])?;
             self.conn
                 .execute("DELETE FROM root_paths WHERE file LIKE ?", [&file])?;
-            self.conn
+            let count = self
+                .conn
                 .execute("DELETE FROM graphs WHERE file LIKE ?", [&file])?;
             self.conn.execute("COMMIT;", [])?;
+            count
         } else {
-            self.conn.execute_batch(
-                r#"
-                        BEGIN;
-                        DELETE FROM file_paths;
-                        DELETE FROM root_paths;
-                        DELETE FROM graphs;
-                        COMMIT;
-                    "#,
-            )?;
-        }
-        Ok(())
+            self.conn.execute("BEGIN;", [])?;
+            self.conn.execute("DELETE FROM file_paths", [])?;
+            self.conn.execute("DELETE FROM root_paths", [])?;
+            let count = self.conn.execute("DELETE FROM graphs", [])?;
+            self.conn.execute("COMMIT;", [])?;
+            count
+        };
+        Ok(count)
     }
 
     fn init(conn: &Connection) -> Result<()> {
