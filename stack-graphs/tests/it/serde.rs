@@ -72,65 +72,71 @@ fn serde_json_stack_graph() {
         },
     };
 
-    let json_data = serde_json::json!({
-        "files": [
-            "index.ts"
-        ],
-        "nodes": [{
-            "type": "root",
-            "id": {
-                "local_id": 1
-            },
-            "source_info": {
-                "span": {
-                    "start": {
-                        "line": 0,
-                        "column": {
-                            "utf8_offset": 0,
-                            "utf16_offset": 0,
-                            "grapheme_offset": 0
-                        },
-                        "containing_line": {
-                            "start": 0,
-                            "end": 0,
-                        },
-                        "trimmed_line": {
-                            "start": 0,
-                            "end": 0,
-                        }
+    // formatted using: json_pp -json_opt utf8,canonical,pretty,indent_length=4
+    let json_data = serde_json::json!(
+        {
+            "edges" : [
+                {
+                    "precedence" : 0,
+                    "sink" : {
+                        "file" : "index.ts",
+                        "local_id" : 0
                     },
-                    "end": {
-                        "line": 0,
-                        "column": {
-                            "utf8_offset": 0,
-                            "utf16_offset": 0,
-                            "grapheme_offset": 0
-                        },
-                        "containing_line": {
-                            "start": 0,
-                            "end": 0,
-                        },
-                        "trimmed_line": {
-                            "start": 0,
-                            "end": 0,
-                        }
-                    },
+                    "source" : {
+                        "local_id" : 1
+                    }
                 }
-            },
-            "debug_info": []
-        }],
-        "edges": [{
-            "source": {
-                "local_id": 1
-            },
-            "sink": {
-                "file": "index.ts",
-                "local_id": 0
-            },
-            "precedence": 0
-        }]
-
-    });
+            ],
+            "files" : [
+                "index.ts"
+            ],
+            "nodes" : [
+                {
+                    "debug_info" : [],
+                    "id" : {
+                        "local_id" : 1
+                    },
+                    "source_info" : {
+                        "span" : {
+                            "end" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            },
+                            "start" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            }
+                        }
+                    },
+                    "type" : "root"
+                }
+            ]
+        }
+    );
 
     let observed = serde_json::from_value::<serde::StackGraph>(json_data).unwrap();
 
@@ -139,165 +145,166 @@ fn serde_json_stack_graph() {
 
 #[test]
 fn can_load_serialized_stack_graph() {
+    // formatted using: json_pp -json_opt utf8,canonical,pretty,indent_length=4
     let json_data = serde_json::json!(
         {
-          "files": [
-            "index.ts"
-          ],
-          "nodes": [
-            {
-              "type": "root",
-              "id": {
-                "local_id": 1
-              },
-              "source_info": {
-                "span": {
-                  "start": {
-                    "line": 0,
-                    "column": {
-                      "utf8_offset": 0,
-                      "utf16_offset": 0,
-                      "grapheme_offset": 0
-                    },
-                    "containing_line": {
-                        "start": 0,
-                        "end": 0,
-                    },
-                    "trimmed_line": {
-                        "start": 0,
-                        "end": 0,
-                    }
-                  },
-                  "end": {
-                    "line": 0,
-                    "column": {
-                      "utf8_offset": 0,
-                      "utf16_offset": 0,
-                      "grapheme_offset": 0
-                    },
-                    "containing_line": {
-                        "start": 0,
-                        "end": 0,
-                    },
-                    "trimmed_line": {
-                        "start": 0,
-                        "end": 0,
-                    }
-                  }
-                }
-              },
-              "debug_info": []
-            },
-            {
-              "type": "jump_to_scope",
-              "id": {
-                "local_id": 2
-              },
-              "source_info": {
-                "span": {
-                  "start": {
-                    "line": 0,
-                    "column": {
-                      "utf8_offset": 0,
-                      "utf16_offset": 0,
-                      "grapheme_offset": 0
-                    },
-                    "containing_line": {
-                        "start": 0,
-                        "end": 0,
-                    },
-                    "trimmed_line": {
-                        "start": 0,
-                        "end": 0,
-                    }
-                  },
-                  "end": {
-                    "line": 0,
-                    "column": {
-                      "utf8_offset": 0,
-                      "utf16_offset": 0,
-                      "grapheme_offset": 0
-                    },
-                    "containing_line": {
-                        "start": 0,
-                        "end": 0,
-                    },
-                    "trimmed_line": {
-                        "start": 0,
-                        "end": 0,
-                    }
-                  }
-                }
-              },
-              "debug_info": []
-            },
-            {
-              "type": "scope",
-              "is_exported": false,
-              "id": {
-                "file": "index.ts",
-                "local_id": 0
-              },
-              "source_info": {
-                "span": {
-                  "start": {
-                    "line": 0,
-                    "column": {
-                      "utf8_offset": 0,
-                      "utf16_offset": 0,
-                      "grapheme_offset": 0
-                    },
-                    "containing_line": {
-                        "start": 0,
-                        "end": 0,
-                    },
-                    "trimmed_line": {
-                        "start": 0,
-                        "end": 0,
-                    }
-                  },
-                  "end": {
-                    "line": 0,
-                    "column": {
-                      "utf8_offset": 0,
-                      "utf16_offset": 0,
-                      "grapheme_offset": 0
-                    },
-                    "containing_line": {
-                        "start": 0,
-                        "end": 0,
-                    },
-                    "trimmed_line": {
-                        "start": 0,
-                        "end": 0,
-                    }
-                  }
-                }
-              },
-              "debug_info": [
+            "edges" : [
                 {
-                  "key": "tsg_variable",
-                  "value": "@prog.defs"
+                    "precedence" : 0,
+                    "sink" : {
+                        "file" : "index.ts",
+                        "local_id" : 0
+                    },
+                    "source" : {
+                        "local_id" : 1
+                    }
+                }
+            ],
+            "files" : [
+                "index.ts"
+            ],
+            "nodes" : [
+                {
+                    "debug_info" : [],
+                    "id" : {
+                        "local_id" : 1
+                    },
+                    "source_info" : {
+                        "span" : {
+                            "end" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            },
+                            "start" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            }
+                        }
+                    },
+                    "type" : "root"
                 },
                 {
-                  "key": "tsg_location",
-                  "value": "(225, 14)"
+                    "debug_info" : [],
+                    "id" : {
+                        "local_id" : 2
+                    },
+                    "source_info" : {
+                        "span" : {
+                            "end" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            },
+                            "start" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            }
+                        }
+                    },
+                    "type" : "jump_to_scope"
+                },
+                {
+                    "debug_info" : [
+                        {
+                            "key" : "tsg_variable",
+                            "value" : "@prog.defs"
+                        },
+                        {
+                            "key" : "tsg_location",
+                            "value" : "(225, 14)"
+                        }
+                    ],
+                    "id" : {
+                        "file" : "index.ts",
+                        "local_id" : 0
+                    },
+                    "is_exported" : false,
+                    "source_info" : {
+                        "span" : {
+                            "end" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            },
+                            "start" : {
+                                "column" : {
+                                    "grapheme_offset" : 0,
+                                    "utf16_offset" : 0,
+                                    "utf8_offset" : 0
+                                },
+                                "containing_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                },
+                                "line" : 0,
+                                "trimmed_line" : {
+                                    "end" : 0,
+                                    "start" : 0
+                                }
+                            }
+                        }
+                    },
+                    "type" : "scope"
                 }
-              ]
-            }
-          ],
-          "edges": [
-            {
-              "source": {
-                "local_id": 1
-              },
-              "sink": {
-                "file": "index.ts",
-                "local_id": 0
-              },
-              "precedence": 0
-            }
-          ]
+            ]
         }
     );
     let observed = serde_json::from_value::<serde::StackGraph>(json_data).unwrap();
