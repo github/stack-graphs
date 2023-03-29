@@ -502,22 +502,24 @@ impl ProjectSettings {
             name = "test"
             path = "rust/test.rs"
             harness = false
-            required-features = ["test"] # should be a forced feature, but Cargo does not support those
 
             [features]
-            default = ["test"] # test is enabled by default because we cannot specify it as a forced featured for [[test]] above
             cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
-            test = ["anyhow", "tree-sitter-stack-graphs/cli"]
 
             [dependencies]
             anyhow = {{ version = "1.0", optional = true }}
             clap = {{ version = "3", optional = true }}
             tree-sitter-stack-graphs = "{}"
             {} = "{}"
+
+            [dev-dependencies]
+            anyhow = "1.0"
+            tree-sitter-stack-graphs = {{ version = "{}", features = ["cli"] }}
             "#,
             self.crate_name,
             TSSG_VERSION,
             self.grammar_crate_name, self.grammar_crate_version,
+            TSSG_VERSION,
         }?;
         Ok(())
     }
