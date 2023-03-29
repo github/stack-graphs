@@ -95,7 +95,7 @@ impl LanguageConfiguration {
 
 #[derive(Clone, Default)]
 pub struct FileAnalyzers {
-    file_analyzers: HashMap<String, Arc<dyn FileAnalyzer>>,
+    file_analyzers: HashMap<String, Arc<dyn FileAnalyzer + Send + Sync>>,
 }
 
 impl FileAnalyzers {
@@ -105,13 +105,17 @@ impl FileAnalyzers {
         }
     }
 
-    pub fn add(mut self, file_name: String, analyzer: impl FileAnalyzer + 'static) -> Self {
+    pub fn add(
+        mut self,
+        file_name: String,
+        analyzer: impl FileAnalyzer + Send + Sync + 'static,
+    ) -> Self {
         self.file_analyzers.insert(file_name, Arc::new(analyzer));
         self
     }
 
-    pub fn get(&self, file_name: &str) -> Option<&Arc<dyn FileAnalyzer>> {
-        self.file_analyzers.get(file_name)
+    pub fn get(&self, file_name: &str) -> Option<Arc<dyn FileAnalyzer + Send + Sync>> {
+        self.file_analyzers.get(file_name).cloned()
     }
 }
 

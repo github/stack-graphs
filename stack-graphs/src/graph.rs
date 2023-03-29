@@ -150,6 +150,9 @@ impl InternedStringContent {
     }
 }
 
+unsafe impl Send for InternedStringContent {}
+unsafe impl Sync for InternedStringContent {}
+
 //-------------------------------------------------------------------------------------------------
 // Symbols
 
