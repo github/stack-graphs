@@ -162,7 +162,7 @@ impl TestArgs {
         }
     }
 
-    pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+    pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
         let mut total_result = TestResult::new();
         for test_path in &self.test_paths {
             if test_path.is_dir() {
@@ -175,12 +175,12 @@ impl TestArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let test_path = test_entry.path();
-                    let test_result = self.run_test(test_root, test_path, loader)?;
+                    let test_result = self.run_test(test_root, test_path, &mut loader)?;
                     total_result.absorb(test_result);
                 }
             } else {
                 let test_root = test_path.parent().unwrap();
-                let test_result = self.run_test(test_root, test_path, loader)?;
+                let test_result = self.run_test(test_root, test_path, &mut loader)?;
                 total_result.absorb(test_result);
             }
         }

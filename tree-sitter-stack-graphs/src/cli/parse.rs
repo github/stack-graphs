@@ -28,8 +28,8 @@ pub struct ParseArgs {
 }
 
 impl ParseArgs {
-    pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
-        self.parse_file(&self.file_path, loader)?;
+    pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
+        self.parse_file(&self.file_path, &mut loader)?;
         Ok(())
     }
 

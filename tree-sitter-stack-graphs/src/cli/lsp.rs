@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------------------------------------
 
 use clap::Args;
+use std::path::PathBuf;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
@@ -19,7 +20,7 @@ use crate::loader::Loader;
 pub struct LspArgs {}
 
 impl LspArgs {
-    pub fn run(&self, _loader: &mut Loader) -> anyhow::Result<()> {
+    pub fn run(self, _db_path: PathBuf, _loader: Loader) -> anyhow::Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread().build()?;
         rt.block_on(async {
             let stdin = tokio::io::stdin();
@@ -32,7 +33,6 @@ impl LspArgs {
     }
 }
 
-#[derive(Debug)]
 struct Backend {
     client: Client,
 }
@@ -45,11 +45,14 @@ impl LanguageServer for Backend {
 
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::INFO, "server initialized!")
+            .log_message(MessageType::INFO, "Initialized")
             .await;
     }
 
     async fn shutdown(&self) -> Result<()> {
+        self.client
+            .log_message(MessageType::INFO, "Shutting down")
+            .await;
         Ok(())
     }
 }

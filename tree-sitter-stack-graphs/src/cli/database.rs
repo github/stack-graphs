@@ -8,7 +8,6 @@
 use anyhow::anyhow;
 use clap::Args;
 use clap::ValueHint;
-use std::path::Path;
 use std::path::PathBuf;
 
 /// CLI arguments for using a database.
@@ -25,10 +24,8 @@ pub struct DatabaseArgs {
 }
 
 impl DatabaseArgs {
-    pub fn get_or(&self, default_path: &Path) -> PathBuf {
-        self.database
-            .clone()
-            .unwrap_or_else(|| default_path.to_path_buf())
+    pub fn get_or(self, default_path: PathBuf) -> PathBuf {
+        self.database.clone().unwrap_or_else(|| default_path)
     }
 }
 

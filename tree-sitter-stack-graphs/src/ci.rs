@@ -61,8 +61,8 @@ impl Tester {
                 panic!("Test path {} does not exist", test_path.display());
             }
         }
-        let mut loader = Loader::from_language_configurations(self.configurations, None)
+        let loader = Loader::from_language_configurations(self.configurations, None)
             .expect("Expected loader");
-        TestArgs::new(test_paths).run(&mut loader)
+        TestArgs::new(test_paths).run(loader)
     }
 }

@@ -28,7 +28,7 @@
 //! fn main() -> anyhow::Result<()> {
 //!     let cli = Cli::parse();
 //!     let default_db_path = default_user_database_path_for_crate(env!("CARGO_PKG_NAME"))?;
-//!     cli.subcommand.run(&default_db_path)
+//!     cli.subcommand.run(default_db_path)
 //! }
 //! ```
 //!
@@ -53,7 +53,7 @@
 //!     let cli = Cli::parse();
 //!     let language_configurations = vec![/* add your language configurations here */];
 //!     let default_db_path = default_user_database_path_for_crate(env!("CARGO_PKG_NAME"))?;
-//!     cli.subcommand.run(&default_db_path, language_configurations)
+//!     cli.subcommand.run(default_db_path, language_configurations)
 //! }
 //! ```
 
@@ -70,7 +70,7 @@ pub mod test;
 mod util;
 
 pub mod path_loading {
-    use std::path::Path;
+    use std::path::PathBuf;
 
     use clap::Subcommand;
 
@@ -99,13 +99,13 @@ pub mod path_loading {
     }
 
     impl Subcommands {
-        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             match self {
                 Self::Clean(cmd) => cmd.run(default_db_path),
                 Self::Index(cmd) => cmd.run(default_db_path),
                 Self::Init(cmd) => cmd.run(),
                 #[cfg(feature = "lsp")]
-                Self::Lsp(cmd) => cmd.run(),
+                Self::Lsp(cmd) => cmd.run(default_db_path),
                 Self::Parse(cmd) => cmd.run(),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(),
@@ -123,7 +123,7 @@ pub mod path_loading {
     }
 
     impl Clean {
-        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             let db_path = self.db_args.get_or(default_db_path);
             self.clean_args.run(&db_path)
         }
@@ -141,10 +141,10 @@ pub mod path_loading {
     }
 
     impl Index {
-        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get()?;
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
+            let loader = self.load_args.get()?;
             let db_path = self.db_args.get_or(default_db_path);
-            self.index_args.run(&db_path, &mut loader)
+            self.index_args.run(&db_path, loader)
         }
     }
 
@@ -156,7 +156,7 @@ pub mod path_loading {
     }
 
     impl Init {
-        pub fn run(&self) -> anyhow::Result<()> {
+        pub fn run(self) -> anyhow::Result<()> {
             self.init_args.run()
         }
     }
@@ -168,14 +168,17 @@ pub mod path_loading {
         #[clap(flatten)]
         load_args: PathLoaderArgs,
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         lsp_args: LspArgs,
     }
 
     #[cfg(feature = "lsp")]
     impl Lsp {
-        pub fn run(&self) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get()?;
-            self.lsp_args.run(&mut loader)
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
+            let loader = self.load_args.get()?;
+            let db_path = self.db_args.get_or(default_db_path);
+            self.lsp_args.run(db_path, loader)
         }
     }
 
@@ -189,9 +192,9 @@ pub mod path_loading {
     }
 
     impl Parse {
-        pub fn run(&self) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get()?;
-            self.parse_args.run(&mut loader)
+        pub fn run(self) -> anyhow::Result<()> {
+            let loader = self.load_args.get()?;
+            self.parse_args.run(loader)
         }
     }
 
@@ -205,7 +208,7 @@ pub mod path_loading {
     }
 
     impl Query {
-        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             let db_path = self.db_args.get_or(default_db_path);
             self.query_args.run(&db_path)
         }
@@ -221,15 +224,15 @@ pub mod path_loading {
     }
 
     impl Test {
-        pub fn run(&self) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get()?;
-            self.test_args.run(&mut loader)
+        pub fn run(self) -> anyhow::Result<()> {
+            let loader = self.load_args.get()?;
+            self.test_args.run(loader)
         }
     }
 }
 
 pub mod provided_languages {
-    use std::path::Path;
+    use std::path::PathBuf;
 
     use clap::Subcommand;
 
@@ -258,15 +261,15 @@ pub mod provided_languages {
 
     impl Subcommands {
         pub fn run(
-            &self,
-            default_db_path: &Path,
+            self,
+            default_db_path: PathBuf,
             configurations: Vec<LanguageConfiguration>,
         ) -> anyhow::Result<()> {
             match self {
                 Self::Clean(cmd) => cmd.run(default_db_path),
                 Self::Index(cmd) => cmd.run(default_db_path, configurations),
                 #[cfg(feature = "lsp")]
-                Self::Lsp(cmd) => cmd.run(configurations),
+                Self::Lsp(cmd) => cmd.run(default_db_path, configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(configurations),
@@ -284,7 +287,7 @@ pub mod provided_languages {
     }
 
     impl Clean {
-        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             let db_path = self.db_args.get_or(default_db_path);
             self.clean_args.run(&db_path)
         }
@@ -303,13 +306,13 @@ pub mod provided_languages {
 
     impl Index {
         pub fn run(
-            &self,
-            default_db_path: &Path,
+            self,
+            default_db_path: PathBuf,
             configurations: Vec<LanguageConfiguration>,
         ) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get(configurations)?;
+            let loader = self.load_args.get(configurations)?;
             let db_path = self.db_args.get_or(default_db_path);
-            self.index_args.run(&db_path, &mut loader)
+            self.index_args.run(&db_path, loader)
         }
     }
 
@@ -320,14 +323,21 @@ pub mod provided_languages {
         #[clap(flatten)]
         load_args: LanguageConfigurationsLoaderArgs,
         #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
         lsp_args: LspArgs,
     }
 
     #[cfg(feature = "lsp")]
     impl Lsp {
-        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get(configurations)?;
-            self.lsp_args.run(&mut loader)
+        pub fn run(
+            self,
+            default_db_path: PathBuf,
+            configurations: Vec<LanguageConfiguration>,
+        ) -> anyhow::Result<()> {
+            let loader = self.load_args.get(configurations)?;
+            let db_path = self.db_args.get_or(default_db_path);
+            self.lsp_args.run(db_path, loader)
         }
     }
 
@@ -341,9 +351,9 @@ pub mod provided_languages {
     }
 
     impl Parse {
-        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get(configurations)?;
-            self.parse_args.run(&mut loader)
+        pub fn run(self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            let loader = self.load_args.get(configurations)?;
+            self.parse_args.run(loader)
         }
     }
 
@@ -357,7 +367,7 @@ pub mod provided_languages {
     }
 
     impl Query {
-        pub fn run(&self, default_db_path: &Path) -> anyhow::Result<()> {
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             let db_path = self.db_args.get_or(default_db_path);
             self.query_args.run(&db_path)
         }
@@ -373,9 +383,9 @@ pub mod provided_languages {
     }
 
     impl Test {
-        pub fn run(&self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
-            let mut loader = self.load_args.get(configurations)?;
-            self.test_args.run(&mut loader)
+        pub fn run(self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            let loader = self.load_args.get(configurations)?;
+            self.test_args.run(loader)
         }
     }
 }
