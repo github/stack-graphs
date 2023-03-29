@@ -1,5 +1,5 @@
 import { mkdirSync } from 'fs';
-import { ExtensionContext, Uri } from 'vscode';
+import { ExtensionContext, StatusBarItem, Uri, window } from 'vscode';
 
 import {
     LanguageClient,
@@ -8,6 +8,7 @@ import {
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
+let status: StatusBarItem;
 
 export function activate(context: ExtensionContext) {
     let path = context.asAbsolutePath("out/bin/tree-sitter-stack-graphs-typescript");
@@ -28,10 +29,16 @@ export function activate(context: ExtensionContext) {
         clientOptions
     );
 
+    status = window.createStatusBarItem();
+    status.text = "tree-sitter-stack-graphs-typescript"
+    status.show();
+
     client.start();
 }
 
 export function deactivate(): Thenable<void> | undefined {
+    if (status) {
+        status.dispose();
     }
     return client ? client.stop() : undefined;
 }
