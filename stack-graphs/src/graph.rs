@@ -357,8 +357,7 @@ impl StackGraph {
         self.add_file(name).unwrap_or_else(|handle| handle)
     }
 
-    /// Returns the file with a particular name.  Panics if there is no file with the requested
-    /// name.
+    /// Returns the file with a particular name, if it exists.
     pub fn get_file<S: AsRef<str> + ?Sized>(&self, name: &S) -> Option<Handle<File>> {
         let name = name.as_ref();
         self.file_handles.get(name).copied()
