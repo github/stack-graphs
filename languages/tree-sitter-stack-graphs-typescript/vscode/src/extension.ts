@@ -1,20 +1,21 @@
-import { workspace, ExtensionContext } from 'vscode';
+import { mkdirSync } from 'fs';
+import { ExtensionContext, Uri } from 'vscode';
 
 import {
-    Executable,
     LanguageClient,
     LanguageClientOptions,
-    ServerOptions,
-    TransportKind
+    ServerOptions
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
     let path = context.asAbsolutePath("out/bin/tree-sitter-stack-graphs-typescript");
+    mkdirSync(context.storageUri.fsPath, { recursive: true });
+    let db = Uri.joinPath(context.storageUri, "tree-sitter-stack-graphs-typescript.sqlite").fsPath;
     const serverOptions: ServerOptions = {
         command: path,
-        args: ["lsp"]
+        args: ["lsp", "-D", db]
     };
 
     const clientOptions: LanguageClientOptions = {
@@ -31,8 +32,6 @@ export function activate(context: ExtensionContext) {
 }
 
 export function deactivate(): Thenable<void> | undefined {
-    if (!client) {
-        return undefined;
     }
-    return client.stop();
+    return client ? client.stop() : undefined;
 }
