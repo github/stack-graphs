@@ -15,7 +15,7 @@ edition = "2018"
 [features]
 copious-debugging = []
 serde = ["dep:serde", "lsp-positions/serde"]
-json = ["serde", "serde_json", "lsp-positions/serde"]
+visualization = ["serde", "serde_json"]
 
 [lib]
 # All of our tests are in the tests/it "integration" test executable.
@@ -36,6 +36,7 @@ smallvec = { version="1.6", features=["union"] }
 thiserror = { version="1.0" }
 
 [dev-dependencies]
+assert-json-diff = "2"
 itertools = "0.10"
 maplit = "1.0"
 pretty_assertions = "0.7"

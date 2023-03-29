@@ -30,7 +30,8 @@ cli = [
   "indoc",
   "pathdiff",
   "serde_json",
-  "stack-graphs/json",
+  "stack-graphs/serde",
+  "stack-graphs/visualization",
   "time",
   "tree-sitter-config",
   "walkdir"

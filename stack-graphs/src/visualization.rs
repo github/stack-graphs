@@ -5,14 +5,15 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use serde_json::Error;
+
 use crate::arena::Handle;
 use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
-use crate::json::Filter;
-use crate::json::JsonError;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
+use crate::serde::Filter;
 use crate::stitching::Database;
 
 static CSS: &'static str = include_str!("visualization/visualization.css");
@@ -33,10 +34,10 @@ impl StackGraph {
         partials: &mut PartialPaths,
         db: &mut Database,
         filter: &dyn Filter,
-    ) -> Result<String, JsonError> {
+    ) -> Result<String, Error> {
         let filter = VisualizationFilter(filter);
         let graph = serde_json::to_string(&self.to_serializable())?;
-        let paths = db.to_json(self, partials, &filter).to_string()?;
+        let paths = serde_json::to_string(&db.to_serializable_filter(self, partials, &filter))?;
         let html = format!(
             r#"
 <!DOCTYPE html>

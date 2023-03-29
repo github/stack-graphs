@@ -66,15 +66,13 @@ pub mod cycles;
 #[macro_use]
 mod debugging;
 pub mod graph;
-#[cfg(feature = "json")]
-pub mod json;
 pub mod partial;
 pub mod paths;
 #[cfg(feature = "serde")]
 pub mod serde;
 pub mod stitching;
 pub(crate) mod utils;
-#[cfg(feature = "json")]
+#[cfg(feature = "visualization")]
 pub mod visualization;
 
 /// Trait to signal that the execution is cancelled

@@ -25,18 +25,14 @@ pub struct StackGraph {
 pub enum Error {
     #[error("failed to load file `{0}`")]
     FileNotFound(String),
-
     #[error("duplicate file `{0}`")]
     FileAlreadyPresent(String),
-
-    #[error("failed to locate node `{0}` in graph")]
-    NodeNotFound(u32),
-
-    #[error("no file data for node `{0}`")]
-    NoFileData(u32),
-
     #[error("node `{0}` is an invalid node")]
     InvalidGlobalNodeID(u32),
+    #[error("variable `{0}` is an invalid stack variable")]
+    InvalidStackVariable(u32),
+    #[error("failed to locate node `{0}` in graph")]
+    NodeNotFound(NodeID),
 }
 
 impl StackGraph {
@@ -206,13 +202,17 @@ pub struct Nodes {
 pub enum Node {
     DropScopes {
         id: NodeID,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
     JumpToScope {
         id: NodeID,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -220,7 +220,9 @@ pub enum Node {
         id: NodeID,
         symbol: String,
         is_definition: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -228,7 +230,9 @@ pub enum Node {
         id: NodeID,
         symbol: String,
         is_definition: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -237,7 +241,9 @@ pub enum Node {
         symbol: String,
         scope: NodeID,
         is_reference: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -245,20 +251,26 @@ pub enum Node {
         id: NodeID,
         symbol: String,
         is_reference: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
     Root {
         id: NodeID,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
     Scope {
         id: NodeID,
         is_exported: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 }
@@ -296,6 +308,7 @@ impl Node {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceInfo {
     pub span: lsp_positions::Span,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub syntax_type: Option<String>,
 }
 
@@ -313,6 +326,7 @@ pub struct DebugEntry {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NodeID {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
     pub local_id: u32,
 }
@@ -341,6 +355,29 @@ impl NodeID {
         } else {
             Err(Error::InvalidGlobalNodeID(self.local_id))
         }
+    }
+
+    pub fn from_node(graph: &crate::graph::StackGraph, handle: Handle<crate::graph::Node>) -> Self {
+        Self::from_node_id(graph, graph[handle].id())
+    }
+
+    pub fn to_node(
+        &self,
+        graph: &mut crate::graph::StackGraph,
+    ) -> Result<Handle<crate::graph::Node>, Error> {
+        let value = self.to_node_id(graph)?;
+        Ok(graph
+            .node_for_id(value)
+            .ok_or_else(|| Error::NodeNotFound(self.clone()))?)
+    }
+}
+
+impl std::fmt::Display for NodeID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(file) = &self.file {
+            write!(f, "{}:", file)?;
+        }
+        write!(f, "{}", self.local_id)
     }
 }
 
