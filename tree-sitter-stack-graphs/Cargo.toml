@@ -58,7 +58,7 @@ thiserror = "1.0"
 time = { version = "0.3", optional = true }
 tree-sitter = ">= 0.19"
 tree-sitter-config = { version = "0.19", optional = true }
-tree-sitter-graph = "0.7"
+tree-sitter-graph = "0.8"
 tree-sitter-loader = "0.20"
 walkdir = { version = "2.3", optional = true }
 
