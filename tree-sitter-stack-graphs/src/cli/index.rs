@@ -289,7 +289,8 @@ impl IndexArgs {
             file,
             &cancellation_flag.as_ref(),
             |g, ps, p| {
-                db.add_partial_path_for_file(g, ps, &p, file).expect("TODO");
+                db.add_partial_path_for_file(g, ps, &p, file)
+                    .expect("adding path to database failed");
             },
         ) {
             Ok(_) => {}
