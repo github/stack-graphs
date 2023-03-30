@@ -16,7 +16,7 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 pub const PROJECT_NAME_VAR: &str = "PROJECT_NAME";
 
 pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {
-    LanguageConfiguration::from_tsg_str(
+    match LanguageConfiguration::from_tsg_str(
         tree_sitter_java::language(),
         Some(String::from("source.java")),
         None,
@@ -26,6 +26,8 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
         Some(STACK_GRAPHS_BUILTINS_CONFIG),
         FileAnalyzers::new(),
         cancellation_flag,
-    )
-    .unwrap()
+    ) {
+        Ok(lc) => lc,
+        Err(err) => panic!("{}", err),
+    }
 }

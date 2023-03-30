@@ -569,7 +569,7 @@ impl ProjectSettings {
             pub const FILE_PATH_VAR: &str = "FILE_PATH";
 
             pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {{
-                LanguageConfiguration::from_tsg_str(
+                match LanguageConfiguration::from_tsg_str(
                     {}::language(),
                     Some(String::from("source.{}")),
                     None,
@@ -579,8 +579,10 @@ impl ProjectSettings {
                     Some(STACK_GRAPHS_BUILTINS_CONFIG),
                     FileAnalyzers::new(),
                     cancellation_flag,
-                )
-                .unwrap()
+                ) {{
+                    Ok(lc) => lc,
+                    Err(err) => panic!("{{}}", err),
+                }}
             }}
             "#,
             self.language_file_extension,

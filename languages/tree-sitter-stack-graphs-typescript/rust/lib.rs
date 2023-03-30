@@ -30,7 +30,7 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 pub const PROJECT_NAME_VAR: &str = "PROJECT_NAME";
 
 pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {
-    LanguageConfiguration::from_tsg_str(
+    match LanguageConfiguration::from_tsg_str(
         tree_sitter_typescript::language_typescript(),
         Some(String::from("source.ts")),
         None,
@@ -42,6 +42,8 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
             .add("tsconfig.json".to_string(), TsConfigAnalyzer {})
             .add("package.json".to_string(), NpmPackageAnalyzer {}),
         cancellation_flag,
-    )
-    .unwrap()
+    ) {
+        Ok(lc) => lc,
+        Err(err) => panic!("{}", err),
+    }
 }
