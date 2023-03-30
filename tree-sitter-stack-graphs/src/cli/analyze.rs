@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use anyhow::Context as _;
 use clap::Args;
 use clap::ValueHint;
 use stack_graphs::graph::StackGraph;
@@ -104,19 +103,14 @@ impl AnalyzeArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path();
-                    self.analyze_file_with_context(
-                        source_root,
-                        source_path,
-                        loader,
-                        &mut seen_mark,
-                    )?;
+                    self.analyze_file(source_root, source_path, loader, &mut seen_mark)?;
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
                 if self.should_skip(source_path, &mut seen_mark) {
                     continue;
                 }
-                self.analyze_file_with_context(source_root, source_path, loader, &mut seen_mark)?;
+                self.analyze_file(source_root, source_path, loader, &mut seen_mark)?;
             }
         }
         Ok(())
@@ -131,17 +125,6 @@ impl AnalyzeArgs {
     }
 
     /// Analyze file and add error context to any failures that are returned.
-    fn analyze_file_with_context(
-        &self,
-        source_root: &Path,
-        source_path: &Path,
-        loader: &mut Loader,
-        seen_mark: &mut bool,
-    ) -> anyhow::Result<()> {
-        self.analyze_file(source_root, source_path, loader, seen_mark)
-            .with_context(|| format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display()))
-    }
-
     fn analyze_file(
         &self,
         source_root: &Path,
@@ -150,7 +133,30 @@ impl AnalyzeArgs {
         seen_mark: &mut bool,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
+        match self.analyze_file_inner(
+            source_root,
+            source_path,
+            loader,
+            seen_mark,
+            &mut file_status,
+        ) {
+            ok @ Ok(_) => ok,
+            err @ Err(_) => {
+                file_status.error_if_processing("error")?;
+                println!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display());
+                err
+            }
+        }
+    }
 
+    fn analyze_file_inner(
+        &self,
+        source_root: &Path,
+        source_path: &Path,
+        loader: &mut Loader,
+        seen_mark: &mut bool,
+        file_status: &mut FileStatusLogger,
+    ) -> anyhow::Result<()> {
         if self.should_skip(source_path, seen_mark) {
             file_status.info("skipped")?;
             return Ok(());
