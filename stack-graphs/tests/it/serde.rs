@@ -1061,14 +1061,35 @@ fn can_serialize_partial_paths() {
                             "file" : "test.py",
                             "local_id" : 5
                         }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 6
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 7
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        }
                     }
                 ],
                 "end_node" : {
-                    "local_id" : 1
+                    "file" : "test.py",
+                    "local_id" : 9
                 },
                 "scope_stack_postcondition" : {
-                    "scopes" : [],
-                    "variable" : 1
+                    "scopes" : []
                 },
                 "scope_stack_precondition" : {
                     "scopes" : [],
@@ -1079,26 +1100,7 @@ fn can_serialize_partial_paths() {
                     "local_id" : 1
                 },
                 "symbol_stack_postcondition" : {
-                    "symbols" : [
-                        {
-                            "scopes" : {
-                                "scopes" : [
-                                    {
-                                        "file" : "test.py",
-                                        "local_id" : 3
-                                    }
-                                ],
-                                "variable" : 1
-                            },
-                            "symbol" : "()"
-                        },
-                        {
-                            "symbol" : "."
-                        },
-                        {
-                            "symbol" : "x"
-                        }
-                    ],
+                    "symbols" : [],
                     "variable" : 1
                 },
                 "symbol_stack_precondition" : {
@@ -1211,35 +1213,14 @@ fn can_serialize_partial_paths() {
                             "file" : "test.py",
                             "local_id" : 5
                         }
-                    },
-                    {
-                        "precedence" : 0,
-                        "source" : {
-                            "file" : "test.py",
-                            "local_id" : 6
-                        }
-                    },
-                    {
-                        "precedence" : 0,
-                        "source" : {
-                            "file" : "test.py",
-                            "local_id" : 7
-                        }
-                    },
-                    {
-                        "precedence" : 0,
-                        "source" : {
-                            "file" : "test.py",
-                            "local_id" : 8
-                        }
                     }
                 ],
                 "end_node" : {
-                    "file" : "test.py",
-                    "local_id" : 9
+                    "local_id" : 1
                 },
                 "scope_stack_postcondition" : {
-                    "scopes" : []
+                    "scopes" : [],
+                    "variable" : 1
                 },
                 "scope_stack_precondition" : {
                     "scopes" : [],
@@ -1250,7 +1231,26 @@ fn can_serialize_partial_paths() {
                     "local_id" : 1
                 },
                 "symbol_stack_postcondition" : {
-                    "symbols" : [],
+                    "symbols" : [
+                        {
+                            "scopes" : {
+                                "scopes" : [
+                                    {
+                                        "file" : "test.py",
+                                        "local_id" : 3
+                                    }
+                                ],
+                                "variable" : 1
+                            },
+                            "symbol" : "()"
+                        },
+                        {
+                            "symbol" : "."
+                        },
+                        {
+                            "symbol" : "x"
+                        }
+                    ],
                     "variable" : 1
                 },
                 "symbol_stack_precondition" : {

@@ -736,7 +736,7 @@ impl ForwardPartialPathStitcher {
                 .zip(self.next_iteration.1.drain(..)),
         );
         let mut work_performed = 0;
-        while let Some((partial_path, cycle_detector)) = self.queue.pop_front() {
+        while let Some((partial_path, cycle_detector)) = self.queue.pop_back() {
             copious_debugging!(
                 "--> Candidate partial path {}",
                 partial_path.display(graph, partials)

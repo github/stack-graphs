@@ -2525,7 +2525,7 @@ impl PartialPaths {
                     )
                 }),
         );
-        while let Some((path, path_cycle_detector)) = queue.pop_front() {
+        while let Some((path, path_cycle_detector)) = queue.pop_back() {
             cancellation_flag.check("finding partial paths in file")?;
             let is_seed = path.edges.is_empty();
             copious_debugging!(" => {}", path.display(graph, self));
@@ -2585,7 +2585,7 @@ impl PartialPaths {
             .collect::<VecDeque<_>>();
         let mut partials = PartialPaths::new();
         let mut edges = Appendables::new();
-        while let Some((path, path_cycle_detector)) = queue.pop_front() {
+        while let Some((path, path_cycle_detector)) = queue.pop_back() {
             cancellation_flag.check("finding complete paths")?;
             if path.is_complete(graph) {
                 copious_debugging!("    * visit");
