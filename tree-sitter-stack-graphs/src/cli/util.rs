@@ -239,6 +239,13 @@ impl<'a> FileStatusLogger<'a> {
         std::io::stdout().flush()
     }
 
+    pub fn error_if_processing(&mut self, status: &str) -> std::io::Result<()> {
+        if !self.path_logged {
+            return Ok(());
+        }
+        self.error(status)
+    }
+
     fn print_path(&mut self) {
         if self.path_logged {
             return;

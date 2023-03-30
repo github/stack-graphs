@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use anyhow::Context as _;
 use clap::ArgEnum;
 use clap::Args;
 use clap::ValueHint;
@@ -33,7 +32,6 @@ use crate::test::TestResult;
 use crate::CancellationFlag;
 use crate::LoadError;
 use crate::NoCancellation;
-use crate::StackGraphLanguage;
 
 use super::util::FileStatusLogger;
 
@@ -179,12 +177,12 @@ impl TestArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let test_path = test_entry.path();
-                    let test_result = self.run_test_with_context(test_root, test_path, loader)?;
+                    let test_result = self.run_test(test_root, test_path, loader)?;
                     total_result.absorb(test_result);
                 }
             } else {
                 let test_root = test_path.parent().unwrap();
-                let test_result = self.run_test_with_context(test_root, test_path, loader)?;
+                let test_result = self.run_test(test_root, test_path, loader)?;
                 total_result.absorb(test_result);
             }
         }
@@ -196,18 +194,7 @@ impl TestArgs {
         Ok(())
     }
 
-    /// Run test file and add error context to any failures that are returned.
-    fn run_test_with_context(
-        &self,
-        test_root: &Path,
-        test_path: &Path,
-        loader: &mut Loader,
-    ) -> anyhow::Result<TestResult> {
-        self.run_test(test_root, test_path, loader)
-            .with_context(|| format!("Error running test {}", test_path.display()))
-    }
-
-    /// Run test file.
+    /// Run test file. Takes care of the output when an error is returned.
     fn run_test(
         &self,
         test_root: &Path,
@@ -215,7 +202,22 @@ impl TestArgs {
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
         let mut file_status = FileStatusLogger::new(test_path, !self.quiet);
+        match self.run_test_inner(test_root, test_path, loader, &mut file_status) {
+            ok @ Ok(_) => ok,
+            err @ Err(_) => {
+                file_status.error_if_processing("error")?;
+                err
+            }
+        }
+    }
 
+    fn run_test_inner(
+        &self,
+        test_root: &Path,
+        test_path: &Path,
+        loader: &mut Loader,
+        file_status: &mut FileStatusLogger,
+    ) -> anyhow::Result<TestResult> {
         if self.show_skipped && test_path.extension().map_or(false, |e| e == "skip") {
             file_status.warn("skipped")?;
             return Ok(TestResult::new());
@@ -235,12 +237,11 @@ impl TestArgs {
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
         if !self.no_builtins {
-            self.load_builtins_into(&lc, &mut test.graph)
-                .with_context(|| format!("Loading builtins into {}", test_path.display()))?;
+            self.load_builtins_into(&lc, &mut test.graph)?;
         }
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
-            if let Some(fa) = test_fragment
+            let result = if let Some(fa) = test_fragment
                 .path
                 .file_name()
                 .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
@@ -254,28 +255,36 @@ impl TestArgs {
                     &mut all_paths,
                     &test_fragment.globals,
                     cancellation_flag,
-                )?;
+                )
             } else if lc.matches_file(
                 &test_fragment.path,
                 &mut Some(test_fragment.source.as_ref()),
             )? {
                 globals.clear();
                 test_fragment.add_globals_to(&mut globals);
-                self.build_fragment_stack_graph_into(
-                    &test_fragment.path,
-                    &lc.sgl,
+                lc.sgl.build_stack_graph_into(
+                    &mut test.graph,
                     test_fragment.file,
                     &test_fragment.source,
                     &globals,
-                    &mut test.graph,
                     cancellation_flag,
-                )?;
+                )
             } else {
                 return Err(anyhow!(
                     "Test fragment {} not supported by language of test file {}",
                     test_fragment.path.display(),
                     test.path.display()
                 ));
+            };
+            match result {
+                Err(LoadError::ParseErrors(parse_errors)) => {
+                    file_status.error("error")?;
+                    let parse_error = map_parse_errors(&test.path, &parse_errors, &source, "");
+                    println!("{}", parse_error);
+                    return Err(anyhow!("Failed to parse {}", test.path.display()));
+                }
+                Err(e) => return Err(e.into()),
+                Ok(_) => {}
             }
         }
         let mut partials = PartialPaths::new();
@@ -291,7 +300,7 @@ impl TestArgs {
             )?;
         }
         let result = test.run(&mut partials, &mut db, cancellation_flag)?;
-        let success = self.handle_result(&result, &mut file_status)?;
+        let success = self.handle_result(&result, file_status)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
             self.save_output(
@@ -317,25 +326,6 @@ impl TestArgs {
             return Err(anyhow!("Duplicate builtin file {}", &graph[h]));
         }
         Ok(())
-    }
-
-    fn build_fragment_stack_graph_into(
-        &self,
-        test_path: &Path,
-        sgl: &StackGraphLanguage,
-        file: Handle<File>,
-        source: &str,
-        globals: &Variables,
-        graph: &mut StackGraph,
-        cancellation_flag: &dyn CancellationFlag,
-    ) -> anyhow::Result<()> {
-        match sgl.build_stack_graph_into(graph, file, source, globals, cancellation_flag) {
-            Err(LoadError::ParseErrors(parse_errors)) => {
-                Err(map_parse_errors(test_path, &parse_errors, source, "  "))
-            }
-            Err(e) => Err(e.into()),
-            Ok(_) => Ok(()),
-        }
     }
 
     fn handle_result(
@@ -428,8 +418,7 @@ impl TestArgs {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(&path, json)
-            .with_context(|| format!("Unable to write graph {}", path.display()))?;
+        std::fs::write(&path, json)?;
         Ok(())
     }
 
@@ -476,8 +465,7 @@ impl TestArgs {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(&path, json)
-            .with_context(|| format!("Unable to write graph {}", path.display()))?;
+        std::fs::write(&path, json)?;
         Ok(())
     }
 
@@ -494,8 +482,7 @@ impl TestArgs {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(&path, html)
-            .with_context(|| format!("Unable to write graph {}", path.display()))?;
+        std::fs::write(&path, html)?;
         Ok(())
     }
 }
