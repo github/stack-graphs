@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use anyhow::Context as _;
 use clap::Args;
 use clap::ValueHint;
 use std::path::Path;
@@ -19,6 +18,8 @@ use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::LoadError;
 
+use super::util::map_parse_errors;
+
 /// Parse file
 #[derive(Args)]
 pub struct ParseArgs {
@@ -29,8 +30,7 @@ pub struct ParseArgs {
 
 impl ParseArgs {
     pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
-        self.parse_file(&self.file_path, loader)
-            .with_context(|| format!("Error parsing file {}", self.file_path.display()))?;
+        self.parse_file(&self.file_path, loader)?;
         Ok(())
     }
 
@@ -47,7 +47,9 @@ impl ParseArgs {
         let tree = parser.parse(source, None).ok_or(LoadError::ParseError)?;
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
-            return Err(anyhow!(LoadError::ParseErrors(parse_errors)));
+            let parse_error = map_parse_errors(file_path, &parse_errors, &source, "");
+            println!("{}", parse_error);
+            return Err(anyhow!("Failed to parse file {}", file_path.display()));
         }
         let tree = parse_errors.into_tree();
         self.print_tree(tree);
