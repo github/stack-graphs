@@ -304,17 +304,17 @@ pub enum LoadError {
     #[error(transparent)]
     Reader(Box<dyn std::error::Error + Send + Sync>),
     #[error(transparent)]
-    StackGraph(crate::LoadError),
+    StackGraph(crate::BuildError),
     #[error(transparent)]
     TsgParse(#[from] tree_sitter_graph::ParseError),
     #[error(transparent)]
     TreeSitter(anyhow::Error),
 }
 
-impl From<crate::LoadError> for LoadError {
-    fn from(value: crate::LoadError) -> Self {
+impl From<crate::BuildError> for LoadError {
+    fn from(value: crate::BuildError) -> Self {
         match value {
-            crate::LoadError::Cancelled(at) => Self::Cancelled(at),
+            crate::BuildError::Cancelled(at) => Self::Cancelled(at),
             other => Self::StackGraph(other),
         }
     }

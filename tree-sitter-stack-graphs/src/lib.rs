@@ -282,9 +282,7 @@
 //! ```
 //! # use stack_graphs::graph::StackGraph;
 //! # use tree_sitter_graph::Variables;
-//! # use tree_sitter_graph::functions::Functions;
 //! # use tree_sitter_stack_graphs::StackGraphLanguage;
-//! # use tree_sitter_stack_graphs::LoadError;
 //! # use tree_sitter_stack_graphs::NoCancellation;
 //! #
 //! # // This documentation test is not meant to test Python's actual stack graph
@@ -462,7 +460,7 @@ impl StackGraphLanguage {
         source: &'a str,
         globals: &'a Variables<'a>,
         cancellation_flag: &'a dyn CancellationFlag,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         self.builder_into_stack_graph(stack_graph, file, source)
             .build(globals, cancellation_flag)
     }
@@ -517,16 +515,16 @@ impl<'a> Builder<'a> {
         mut self,
         globals: &'a Variables<'a>,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         let mut parser = Parser::new();
         parser.set_language(self.sgl.language)?;
         unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
         let tree = parser
             .parse(self.source, None)
-            .ok_or(LoadError::ParseError)?;
+            .ok_or(BuildError::ParseError)?;
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
-            return Err(LoadError::ParseErrors(parse_errors));
+            return Err(BuildError::ParseErrors(parse_errors));
         }
         let tree = parse_errors.into_tree();
 
@@ -656,7 +654,7 @@ impl CancellationFlag for CancelAfterDuration {
 
 /// An error that can occur while loading a stack graph from a TSG file
 #[derive(Debug, Error)]
-pub enum LoadError {
+pub enum BuildError {
     #[error("{0}")]
     Cancelled(&'static str),
     #[error("Missing ‘type’ attribute on graph node")]
@@ -685,13 +683,13 @@ pub enum LoadError {
     SymbolScopeError(String, String),
 }
 
-impl From<stack_graphs::CancellationError> for LoadError {
+impl From<stack_graphs::CancellationError> for BuildError {
     fn from(value: stack_graphs::CancellationError) -> Self {
         Self::Cancelled(value.0)
     }
 }
 
-impl From<tree_sitter_graph::ExecutionError> for LoadError {
+impl From<tree_sitter_graph::ExecutionError> for BuildError {
     fn from(value: tree_sitter_graph::ExecutionError) -> Self {
         match value {
             tree_sitter_graph::ExecutionError::Cancelled(err) => Self::Cancelled(err.0),
@@ -700,7 +698,7 @@ impl From<tree_sitter_graph::ExecutionError> for LoadError {
     }
 }
 
-impl LoadError {
+impl BuildError {
     pub fn display_pretty<'a>(
         &'a self,
         source_path: &'a Path,
@@ -708,7 +706,7 @@ impl LoadError {
         tsg_path: &'a Path,
         tsg: &'a str,
     ) -> impl std::fmt::Display + 'a {
-        DisplayLoadErrorPretty {
+        DisplayBuildErrorPretty {
             error: self,
             source_path,
             source,
@@ -718,23 +716,23 @@ impl LoadError {
     }
 }
 
-struct DisplayLoadErrorPretty<'a> {
-    error: &'a LoadError,
+struct DisplayBuildErrorPretty<'a> {
+    error: &'a BuildError,
     source_path: &'a Path,
     source: &'a str,
     tsg_path: &'a Path,
     tsg: &'a str,
 }
 
-impl std::fmt::Display for DisplayLoadErrorPretty<'_> {
+impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.error {
-            LoadError::ExecutionError(err) => write!(
+            BuildError::ExecutionError(err) => write!(
                 f,
                 "{}",
                 err.display_pretty(self.source_path, self.source, self.tsg_path, self.tsg)
             ),
-            LoadError::ParseErrors(parse_errors) => {
+            BuildError::ParseErrors(parse_errors) => {
                 let parse_error = map_parse_errors(
                     self.source_path,
                     parse_errors,
@@ -750,7 +748,7 @@ impl std::fmt::Display for DisplayLoadErrorPretty<'_> {
 }
 
 impl<'a> Builder<'a> {
-    fn load(mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
+    fn load(mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), BuildError> {
         let cancellation_flag: &dyn stack_graphs::CancellationFlag = &cancellation_flag;
 
         // By default graph ids are used for stack graph local_ids. A remapping is computed
@@ -819,7 +817,7 @@ impl<'a> Builder<'a> {
         Ok(())
     }
 
-    fn get_node_type(&self, node_ref: GraphNodeRef) -> Result<NodeType, LoadError> {
+    fn get_node_type(&self, node_ref: GraphNodeRef) -> Result<NodeType, BuildError> {
         let node = &self.graph[node_ref];
         let node_type = match node.attributes.get(TYPE_ATTR) {
             Some(node_type) => node_type.as_str()?,
@@ -838,15 +836,15 @@ impl<'a> Builder<'a> {
         } else if node_type == SCOPE_TYPE {
             return Ok(NodeType::Scope);
         } else {
-            return Err(LoadError::UnknownNodeType(format!("{}", node_type)));
+            return Err(BuildError::UnknownNodeType(format!("{}", node_type)));
         }
     }
 
-    fn verify_node(&self, node: Handle<Node>) -> Result<(), LoadError> {
+    fn verify_node(&self, node: Handle<Node>) -> Result<(), BuildError> {
         if let Node::PushScopedSymbol(node) = &self.stack_graph[node] {
             let scope = &self.stack_graph[self.stack_graph.node_for_id(node.scope).unwrap()];
             if !scope.is_exported_scope() {
-                return Err(LoadError::SymbolScopeError(
+                return Err(BuildError::SymbolScopeError(
                     format!("{}", node.display(self.stack_graph)),
                     format!("{}", scope.display(self.stack_graph)),
                 ));
@@ -890,11 +888,11 @@ impl<'a> Builder<'a> {
     fn load_pop_scoped_symbol(
         &mut self,
         node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
+    ) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
@@ -906,11 +904,11 @@ impl<'a> Builder<'a> {
             .unwrap())
     }
 
-    fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+    fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
@@ -925,17 +923,17 @@ impl<'a> Builder<'a> {
     fn load_push_scoped_symbol(
         &mut self,
         node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
+    ) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         let scope = match node.attributes.get(SCOPE_ATTR) {
             Some(scope) => self.node_id_for_graph_node(scope.as_graph_node_ref()?),
-            None => return Err(LoadError::MissingScope(node_ref)),
+            None => return Err(BuildError::MissingScope(node_ref)),
         };
         let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
         self.verify_attributes(node, PUSH_SCOPED_SYMBOL_TYPE, &PUSH_SCOPED_SYMBOL_ATTRS);
@@ -945,11 +943,11 @@ impl<'a> Builder<'a> {
             .unwrap())
     }
 
-    fn load_push_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+    fn load_push_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
@@ -961,7 +959,7 @@ impl<'a> Builder<'a> {
             .unwrap())
     }
 
-    fn load_scope(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+    fn load_scope(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let id = self.node_id_for_graph_node(node_ref);
         let is_exported =
@@ -970,18 +968,18 @@ impl<'a> Builder<'a> {
         Ok(self.stack_graph.add_scope_node(id, is_exported).unwrap())
     }
 
-    fn load_symbol(&self, value: &Value) -> Result<String, LoadError> {
+    fn load_symbol(&self, value: &Value) -> Result<String, BuildError> {
         match value {
             Value::Integer(i) => Ok(i.to_string()),
             Value::String(s) => Ok(s.clone()),
-            _ => Err(LoadError::UnknownSymbolType(format!("{}", value))),
+            _ => Err(BuildError::UnknownSymbolType(format!("{}", value))),
         }
     }
 
-    fn load_flag(&self, node: &GraphNode, attribute: &str) -> Result<bool, LoadError> {
+    fn load_flag(&self, node: &GraphNode, attribute: &str) -> Result<bool, BuildError> {
         match node.attributes.get(attribute) {
             Some(value) => value.as_boolean().map_err(|_| {
-                LoadError::UnknownFlagType(format!("{}", attribute), format!("{}", value))
+                BuildError::UnknownFlagType(format!("{}", attribute), format!("{}", value))
             }),
             None => Ok(false),
         }
@@ -991,7 +989,7 @@ impl<'a> Builder<'a> {
         &mut self,
         node_ref: GraphNodeRef,
         node_handle: Handle<Node>,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
         let source_node = match node.attributes.get(SOURCE_NODE_ATTR) {
             Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
@@ -1016,7 +1014,7 @@ impl<'a> Builder<'a> {
         &mut self,
         node_ref: GraphNodeRef,
         node_handle: Handle<Node>,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
         for (name, value) in node.attributes.iter() {
             let name = name.to_string();
@@ -1064,5 +1062,5 @@ pub trait FileAnalyzer {
         all_paths: &mut dyn Iterator<Item = &'a Path>,
         globals: &HashMap<String, String>,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<(), LoadError>;
+    ) -> Result<(), BuildError>;
 }

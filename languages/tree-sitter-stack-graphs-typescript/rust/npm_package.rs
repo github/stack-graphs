@@ -12,8 +12,8 @@ use std::path::Path;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
+use tree_sitter_stack_graphs::BuildError;
 use tree_sitter_stack_graphs::FileAnalyzer;
-use tree_sitter_stack_graphs::LoadError;
 
 use crate::util::*;
 
@@ -29,13 +29,13 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         _all_paths: &mut dyn Iterator<Item = &'a Path>,
         globals: &HashMap<String, String>,
         _cancellation_flag: &dyn tree_sitter_stack_graphs::CancellationFlag,
-    ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
+    ) -> Result<(), tree_sitter_stack_graphs::BuildError> {
         // read globals
         let proj_name = globals.get(crate::PROJECT_NAME_VAR).map(String::as_str);
 
         // parse source
         let npm_pkg: NpmPackage =
-            serde_json::from_str(source).map_err(|_| LoadError::ParseError)?;
+            serde_json::from_str(source).map_err(|_| BuildError::ParseError)?;
 
         // root node
         let root = StackGraph::root_node();

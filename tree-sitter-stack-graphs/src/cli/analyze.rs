@@ -24,9 +24,9 @@ use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
+use crate::BuildError;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
-use crate::LoadError;
 use crate::NoCancellation;
 
 use super::util::FileStatusLogger;
@@ -211,11 +211,11 @@ impl AnalyzeArgs {
             )
         };
         match result {
-            Err(LoadError::Cancelled(_)) => {
+            Err(BuildError::Cancelled(_)) => {
                 file_status.warn("parsing timed out")?;
                 return Ok(());
             }
-            Err(err @ LoadError::ParseErrors(_)) => {
+            Err(err @ BuildError::ParseErrors(_)) => {
                 file_status.error("parsing failed")?;
                 if !self.hide_error_details {
                     println!(

@@ -17,7 +17,7 @@ use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::util::map_parse_errors;
-use crate::LoadError;
+use crate::BuildError;
 
 /// Parse file
 #[derive(Args)]
@@ -43,7 +43,7 @@ impl ParseArgs {
 
         let mut parser = Parser::new();
         parser.set_language(lang)?;
-        let tree = parser.parse(source, None).ok_or(LoadError::ParseError)?;
+        let tree = parser.parse(source, None).ok_or(BuildError::ParseError)?;
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
             let parse_error = map_parse_errors(

@@ -9,7 +9,7 @@ use pretty_assertions::assert_eq;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
-use tree_sitter_stack_graphs::LoadError;
+use tree_sitter_stack_graphs::BuildError;
 
 use super::build_stack_graph;
 
@@ -57,7 +57,7 @@ fn cannot_create_definition_node_without_symbol() {
     "#;
     let python = "a";
     let result = build_stack_graph(python, tsg);
-    assert!(matches!(result, Err(LoadError::MissingSymbol(_))));
+    assert!(matches!(result, Err(BuildError::MissingSymbol(_))));
 }
 
 #[test]
@@ -141,7 +141,7 @@ fn cannot_create_pop_symbol_node_without_symbol() {
     "#;
     let python = "a";
     let result = build_stack_graph(python, tsg);
-    assert!(matches!(result, Err(LoadError::MissingSymbol(_))));
+    assert!(matches!(result, Err(BuildError::MissingSymbol(_))));
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn cannot_create_pop_scoped_symbol_node_without_symbol() {
     "#;
     let python = "a";
     let result = build_stack_graph(python, tsg);
-    assert!(matches!(result, Err(LoadError::MissingSymbol(_))));
+    assert!(matches!(result, Err(BuildError::MissingSymbol(_))));
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn cannot_create_push_symbol_node_without_symbol() {
     "#;
     let python = "a";
     let result = build_stack_graph(python, tsg);
-    assert!(matches!(result, Err(LoadError::MissingSymbol(_))));
+    assert!(matches!(result, Err(BuildError::MissingSymbol(_))));
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn cannot_create_push_scoped_symbol_node_without_symbol() {
     "#;
     let python = "a";
     let result = build_stack_graph(python, tsg);
-    assert!(matches!(result, Err(LoadError::MissingSymbol(_))));
+    assert!(matches!(result, Err(BuildError::MissingSymbol(_))));
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn cannot_create_reference_node_without_symbol() {
     "#;
     let python = "a";
     let result = build_stack_graph(python, tsg);
-    assert!(matches!(result, Err(LoadError::MissingSymbol(_))));
+    assert!(matches!(result, Err(BuildError::MissingSymbol(_))));
 }
 
 #[test]
