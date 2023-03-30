@@ -343,9 +343,14 @@ pub mod cli;
 pub mod functions;
 pub mod loader;
 pub mod test;
+mod util;
 
 pub use tree_sitter_graph::VariableError;
 pub use tree_sitter_graph::Variables;
+
+use crate::util::map_parse_errors;
+
+pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
 // Node type values
 static DROP_SCOPES_TYPE: &'static str = "drop_scopes";
@@ -691,6 +696,55 @@ impl From<tree_sitter_graph::ExecutionError> for LoadError {
         match value {
             tree_sitter_graph::ExecutionError::Cancelled(err) => Self::Cancelled(err.0),
             err => Self::ExecutionError(err),
+        }
+    }
+}
+
+impl LoadError {
+    pub fn display_pretty<'a>(
+        &'a self,
+        source_path: &'a Path,
+        source: &'a str,
+        tsg_path: &'a Path,
+        tsg: &'a str,
+    ) -> impl std::fmt::Display + 'a {
+        DisplayLoadErrorPretty {
+            error: self,
+            source_path,
+            source,
+            tsg_path,
+            tsg,
+        }
+    }
+}
+
+struct DisplayLoadErrorPretty<'a> {
+    error: &'a LoadError,
+    source_path: &'a Path,
+    source: &'a str,
+    tsg_path: &'a Path,
+    tsg: &'a str,
+}
+
+impl std::fmt::Display for DisplayLoadErrorPretty<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.error {
+            LoadError::ExecutionError(err) => write!(
+                f,
+                "{}",
+                err.display_pretty(self.source_path, self.source, self.tsg_path, self.tsg)
+            ),
+            LoadError::ParseErrors(parse_errors) => {
+                let parse_error = map_parse_errors(
+                    self.source_path,
+                    parse_errors,
+                    self.source,
+                    "",
+                    crate::MAX_PARSE_ERRORS,
+                );
+                write!(f, "{}", parse_error)
+            }
+            err => err.fmt(f),
         }
     }
 }

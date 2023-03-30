@@ -21,7 +21,6 @@ use tree_sitter_graph::Variables;
 use walkdir::WalkDir;
 
 use crate::cli::util::duration_from_seconds_str;
-use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
@@ -212,19 +211,33 @@ impl AnalyzeArgs {
             )
         };
         match result {
-            Err(LoadError::ParseErrors(parse_errors)) => {
-                let parse_error = map_parse_errors(source_path, &parse_errors, &source, "");
-                file_status.error("parsing failed")?;
-                if !self.hide_error_details {
-                    println!("{}", parse_error);
-                }
-                return Ok(());
-            }
             Err(LoadError::Cancelled(_)) => {
                 file_status.warn("parsing timed out")?;
                 return Ok(());
             }
-            Err(e) => return Err(e.into()),
+            Err(err @ LoadError::ParseErrors(_)) => {
+                file_status.error("parsing failed")?;
+                if !self.hide_error_details {
+                    println!(
+                        "{}",
+                        err.display_pretty(source_path, source, Path::new(""), "")
+                    );
+                }
+                return Ok(());
+            }
+            Err(err) => {
+                file_status.error("failed to build stack graph")?;
+                if !self.hide_error_details {
+                    // TODO can we have access to the TSG source here?
+                    let tsg_path = Path::new("");
+                    let tsg = "";
+                    println!("{}", err.display_pretty(source_path, source, tsg_path, tsg));
+                }
+                return Err(anyhow!(
+                    "Failed to build graph for {}",
+                    source_path.display()
+                ));
+            }
             Ok(_) => {}
         };
 

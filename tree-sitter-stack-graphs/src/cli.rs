@@ -53,8 +53,6 @@
 //! }
 //! ```
 
-pub(self) const MAX_PARSE_ERRORS: usize = 5;
-
 pub mod analyze;
 pub mod init;
 pub mod load;

@@ -21,7 +21,6 @@ use std::path::PathBuf;
 use tree_sitter_graph::Variables;
 use walkdir::WalkDir;
 
-use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
 use crate::cli::util::PathSpec;
 use crate::loader::FileReader;
@@ -30,7 +29,6 @@ use crate::loader::Loader;
 use crate::test::Test;
 use crate::test::TestResult;
 use crate::CancellationFlag;
-use crate::LoadError;
 use crate::NoCancellation;
 
 use super::util::FileStatusLogger;
@@ -277,13 +275,16 @@ impl TestArgs {
                 ));
             };
             match result {
-                Err(LoadError::ParseErrors(parse_errors)) => {
-                    file_status.error("error")?;
-                    let parse_error = map_parse_errors(&test.path, &parse_errors, &source, "");
-                    println!("{}", parse_error);
-                    return Err(anyhow!("Failed to parse {}", test.path.display()));
+                Err(err) => {
+                    file_status.error("failed to build stack graph")?;
+                    if !self.hide_error_details {
+                        // TODO can we have access to the TSG source here?
+                        let tsg_path = Path::new("");
+                        let tsg = "";
+                        println!("{}", err.display_pretty(test_path, source, tsg_path, tsg));
+                    }
+                    return Err(anyhow!("Failed to build graph for {}", test_path.display()));
                 }
-                Err(e) => return Err(e.into()),
                 Ok(_) => {}
             }
         }
