@@ -314,10 +314,12 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::mem::transmute;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -394,6 +396,8 @@ static FILE_PATH_VAR: &'static str = "FILE_PATH";
 pub struct StackGraphLanguage {
     language: tree_sitter::Language,
     tsg: tree_sitter_graph::ast::File,
+    tsg_path: PathBuf,
+    tsg_source: std::borrow::Cow<'static, str>,
     functions: Functions,
 }
 
@@ -408,12 +412,15 @@ impl StackGraphLanguage {
         Ok(StackGraphLanguage {
             language,
             tsg,
+            tsg_path: PathBuf::from("<tsg>"),
+            tsg_source: Cow::from(String::new()),
             functions: Self::default_functions(),
         })
     }
 
     /// Creates a new stack graph language for the given language, loading the
-    /// TSG stack graph construction rules from a string.
+    /// TSG stack graph construction rules from a string. Keeps the source, which
+    /// can later be used for [`BuildError::display_pretty`][].
     pub fn from_str(
         language: tree_sitter::Language,
         tsg_source: &str,
@@ -422,8 +429,28 @@ impl StackGraphLanguage {
         Ok(StackGraphLanguage {
             language,
             tsg,
+            tsg_path: PathBuf::from("<missing tsg path>"),
+            tsg_source: Cow::from(tsg_source.to_string()),
             functions: Self::default_functions(),
         })
+    }
+
+    /// Creates a new stack graph language for the given language, loading the
+    /// TSG stack graph construction rules from a string. Keeps the path and
+    /// source, which can later be used for [`BuildError::display_pretty`][].
+    pub fn from_file(
+        language: tree_sitter::Language,
+        tsg_path: PathBuf,
+        tsg_source: &str,
+    ) -> Result<StackGraphLanguage, LanguageError> {
+        let mut sgl = Self::from_str(language, tsg_source)?;
+        sgl.tsg_path = tsg_path;
+        Ok(sgl)
+    }
+
+    pub fn set_tsg_info(&mut self, path: PathBuf, source: Cow<'static, str>) {
+        self.tsg_path = path;
+        self.tsg_source = source;
     }
 
     fn default_functions() -> tree_sitter_graph::functions::Functions {
@@ -438,6 +465,18 @@ impl StackGraphLanguage {
 
     pub fn language(&self) -> tree_sitter::Language {
         self.language
+    }
+
+    /// Returns the original TSG path, if it was provided at construction or set with
+    /// [`set_tsg_info`][]. Can be used as input for [`BuildError::display_pretty`][].
+    pub fn tsg_path(&self) -> &Path {
+        &self.tsg_path
+    }
+
+    /// Returns the original TSG source, if it was provided at construction or set with
+    /// [`set_tsg_info`][]. Can be used as input for [`BuildError::display_pretty`][].
+    pub fn tsg_source(&self) -> &Cow<'static, str> {
+        &self.tsg_source
     }
 }
 

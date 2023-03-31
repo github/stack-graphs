@@ -58,6 +58,56 @@ impl LanguageConfiguration {
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Self, LoadError> {
         let sgl = StackGraphLanguage::from_str(language, tsg_source)?;
+        Self::from_sgl(
+            language,
+            scope,
+            content_regex,
+            file_types,
+            sgl,
+            builtins_source,
+            builtins_config,
+            special_files,
+            cancellation_flag,
+        )
+    }
+
+    pub fn from_tsg_file(
+        language: Language,
+        scope: Option<String>,
+        content_regex: Option<Regex>,
+        file_types: Vec<String>,
+        tsg_path: PathBuf,
+        tsg_source: &str,
+        builtins_source: Option<&str>,
+        builtins_config: Option<&str>,
+        special_files: FileAnalyzers,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Self, LoadError> {
+        let sgl = StackGraphLanguage::from_file(language, tsg_path, tsg_source)?;
+        Self::from_sgl(
+            language,
+            scope,
+            content_regex,
+            file_types,
+            sgl,
+            builtins_source,
+            builtins_config,
+            special_files,
+            cancellation_flag,
+        )
+    }
+
+    fn from_sgl(
+        language: Language,
+        scope: Option<String>,
+        content_regex: Option<Regex>,
+        file_types: Vec<String>,
+        sgl: StackGraphLanguage,
+        builtins_source: Option<&str>,
+        builtins_config: Option<&str>,
+        special_files: FileAnalyzers,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<Self, LoadError> {
         let mut builtins = StackGraph::new();
         if let Some(builtins_source) = builtins_source {
             let mut builtins_globals = Variables::new();

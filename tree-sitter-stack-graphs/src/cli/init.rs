@@ -560,6 +560,8 @@ impl ProjectSettings {
         let mut file = File::create(project_path.join("rust/lib.rs"))?;
         self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
+            use std::path::PathBuf;
+
             use tree_sitter_stack_graphs::loader::FileAnalyzers;
             use tree_sitter_stack_graphs::loader::LanguageConfiguration;
             use tree_sitter_stack_graphs::loader::LoadError;
@@ -586,11 +588,12 @@ impl ProjectSettings {
             pub fn try_language_configuration(
                 cancellation_flag: &dyn CancellationFlag,
             ) -> Result<LanguageConfiguration, LoadError> {{
-                LanguageConfiguration::from_tsg_str(
+                LanguageConfiguration::from_tsg_file(
                     {}::language(),
                     Some(String::from("source.{}")),
                     None,
                     vec![String::from("{}")],
+                    PathBuf::from("src/stack-graphs.tsg"),
                     STACK_GRAPHS_TSG_SOURCE,
                     Some(STACK_GRAPHS_BUILTINS_SOURCE),
                     Some(STACK_GRAPHS_BUILTINS_CONFIG),

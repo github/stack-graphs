@@ -278,10 +278,15 @@ impl TestArgs {
                 Err(err) => {
                     file_status.error("failed to build stack graph")?;
                     if !self.hide_error_details {
-                        // TODO can we have access to the TSG source here?
-                        let tsg_path = Path::new("");
-                        let tsg = "";
-                        println!("{}", err.display_pretty(test_path, source, tsg_path, tsg));
+                        println!(
+                            "{}",
+                            err.display_pretty(
+                                test_path,
+                                source,
+                                lc.sgl.tsg_path(),
+                                lc.sgl.tsg_source(),
+                            )
+                        );
                     }
                     return Err(anyhow!("Failed to build graph for {}", test_path.display()));
                 }
