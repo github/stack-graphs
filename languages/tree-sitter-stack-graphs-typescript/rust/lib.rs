@@ -7,6 +7,7 @@
 
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
+use tree_sitter_stack_graphs::loader::LoadError;
 use tree_sitter_stack_graphs::CancellationFlag;
 
 use crate::npm_package::NpmPackageAnalyzer;
@@ -30,7 +31,16 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 pub const PROJECT_NAME_VAR: &str = "PROJECT_NAME";
 
 pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {
-    match LanguageConfiguration::from_tsg_str(
+    match try_language_configuration(cancellation_flag) {
+        Ok(lc) => lc,
+        Err(err) => panic!("{}", err),
+    }
+}
+
+pub fn try_language_configuration(
+    cancellation_flag: &dyn CancellationFlag,
+) -> Result<LanguageConfiguration, LoadError> {
+    LanguageConfiguration::from_tsg_str(
         tree_sitter_typescript::language_typescript(),
         Some(String::from("source.ts")),
         None,
@@ -42,8 +52,5 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
             .add("tsconfig.json".to_string(), TsConfigAnalyzer {})
             .add("package.json".to_string(), NpmPackageAnalyzer {}),
         cancellation_flag,
-    ) {
-        Ok(lc) => lc,
-        Err(err) => panic!("{}", err),
-    }
+    )
 }

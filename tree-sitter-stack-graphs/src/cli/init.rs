@@ -526,15 +526,22 @@ impl ProjectSettings {
         let mut file = File::create(project_path.join("rust/bin.rs"))?;
         self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
+            use anyhow::anyhow;
             use clap::Parser;
             use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
             use tree_sitter_stack_graphs::NoCancellation;
 
             fn main() -> anyhow::Result<()> {{
+                let lc = match {}::try_language_configuration(&NoCancellation)
+                {{
+                    Ok(lc) => lc,
+                    Err(err) => {{
+                        eprintln!("{{}}", err);
+                        return Err(anyhow!("Language configuration error"));
+                    }}
+                }};
                 let cli = Cli::parse();
-                cli.subcommand.run(vec![
-                    {}::language_configuration(&NoCancellation),
-                ])
+                cli.subcommand.run(vec![lc])
             }}
 
             #[derive(Parser)]
@@ -555,6 +562,7 @@ impl ProjectSettings {
         writedoc! {file, r#"
             use tree_sitter_stack_graphs::loader::FileAnalyzers;
             use tree_sitter_stack_graphs::loader::LanguageConfiguration;
+            use tree_sitter_stack_graphs::loader::LoadError;
             use tree_sitter_stack_graphs::CancellationFlag;
 
             /// The stack graphs tsg source for this language
@@ -569,7 +577,16 @@ impl ProjectSettings {
             pub const FILE_PATH_VAR: &str = "FILE_PATH";
 
             pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {{
-                match LanguageConfiguration::from_tsg_str(
+                match try_language_configuration(cancellation_flag) {{
+                    Ok(lc) => lc,
+                    Err(err) => panic!("{{}}", err),
+                }}
+            }}
+
+            pub fn try_language_configuration(
+                cancellation_flag: &dyn CancellationFlag,
+            ) -> Result<LanguageConfiguration, LoadError> {{
+                LanguageConfiguration::from_tsg_str(
                     {}::language(),
                     Some(String::from("source.{}")),
                     None,
@@ -579,10 +596,7 @@ impl ProjectSettings {
                     Some(STACK_GRAPHS_BUILTINS_CONFIG),
                     FileAnalyzers::new(),
                     cancellation_flag,
-                ) {{
-                    Ok(lc) => lc,
-                    Err(err) => panic!("{{}}", err),
-                }}
+                )
             }}
             "#,
             self.language_file_extension,
@@ -597,19 +611,22 @@ impl ProjectSettings {
         let mut file = File::create(project_path.join("rust/test.rs"))?;
         self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
+            use anyhow::anyhow;
             use std::path::PathBuf;
             use tree_sitter_stack_graphs::ci::Tester;
             use tree_sitter_stack_graphs::NoCancellation;
 
             fn main() -> anyhow::Result<()> {{
+                let lc = match {}::try_language_configuration(&NoCancellation)
+                {{
+                    Ok(lc) => lc,
+                    Err(err) => {{
+                        eprintln!("{{}}", err);
+                        return Err(anyhow!("Language configuration error"));
+                    }}
+                }};
                 let test_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test");
-                Tester::new(
-                    vec![{}::language_configuration(
-                        &NoCancellation,
-                    )],
-                    vec![test_path],
-                )
-                .run()
+                Tester::new(vec![lc], vec![test_path]).run()
             }}
             "#,
             self.package_name(),
