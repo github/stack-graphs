@@ -33,10 +33,7 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 pub const PROJECT_NAME_VAR: &str = "PROJECT_NAME";
 
 pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {
-    match try_language_configuration(cancellation_flag) {
-        Ok(lc) => lc,
-        Err(err) => panic!("{}", err),
-    }
+    try_language_configuration(cancellation_flag).unwrap_or_else(|err| panic!("{}", err))
 }
 
 pub fn try_language_configuration(
