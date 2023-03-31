@@ -5,8 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::path::PathBuf;
-
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::loader::LoadError;
@@ -19,6 +17,8 @@ pub mod npm_package;
 pub mod tsconfig;
 pub mod util;
 
+/// The stacks graphs tsg path for this language.
+pub const STACK_GRAPHS_TSG_PATH: &str = "src/stack-graphs.tsg";
 /// The stack graphs tsg source for this language
 pub const STACK_GRAPHS_TSG_SOURCE: &str = include_str!("../src/stack-graphs.tsg");
 
@@ -39,12 +39,12 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
 pub fn try_language_configuration(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
-    LanguageConfiguration::from_tsg_file(
+    LanguageConfiguration::from_sources(
         tree_sitter_typescript::language_typescript(),
         Some(String::from("source.ts")),
         None,
         vec![String::from("ts")],
-        PathBuf::from("src/stack-graphs.tsg"),
+        STACK_GRAPHS_TSG_PATH.into(),
         STACK_GRAPHS_TSG_SOURCE,
         Some(STACK_GRAPHS_BUILTINS_SOURCE),
         Some(STACK_GRAPHS_BUILTINS_CONFIG),

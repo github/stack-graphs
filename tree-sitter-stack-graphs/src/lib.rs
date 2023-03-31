@@ -392,7 +392,7 @@ static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
 static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_PATH_VAR: &'static str = "FILE_PATH";
 
-/// Holds information about how to construct stack graphs for a particular language
+/// Holds information about how to construct stack graphs for a particular language.
 pub struct StackGraphLanguage {
     language: tree_sitter::Language,
     tsg: tree_sitter_graph::ast::File,
@@ -435,10 +435,11 @@ impl StackGraphLanguage {
         })
     }
 
-    /// Creates a new stack graph language for the given language, loading the
-    /// TSG stack graph construction rules from a string. Keeps the path and
-    /// source, which can later be used for [`BuildError::display_pretty`][].
-    pub fn from_file(
+    /// Creates a new stack graph language for the given language, loading the TSG
+    /// stack graph construction rules from the given source. The path is purely for
+    /// informational purposes, and is not accessed. The source and path are kept,
+    /// e.g. to use for [`BuildError::display_pretty`][].
+    pub fn from_source(
         language: tree_sitter::Language,
         tsg_path: PathBuf,
         tsg_source: &str,
