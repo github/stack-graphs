@@ -335,6 +335,7 @@ use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::parse_error::ParseError;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
+use util::DisplayParseErrorsPretty;
 
 #[cfg(feature = "cli")]
 pub mod ci;
@@ -347,8 +348,6 @@ mod util;
 
 pub use tree_sitter_graph::VariableError;
 pub use tree_sitter_graph::Variables;
-
-use crate::util::map_parse_errors;
 
 pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
@@ -772,16 +771,16 @@ impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
                 "{}",
                 err.display_pretty(self.source_path, self.source, self.tsg_path, self.tsg)
             ),
-            BuildError::ParseErrors(parse_errors) => {
-                let parse_error = map_parse_errors(
-                    self.source_path,
+            BuildError::ParseErrors(parse_errors) => write!(
+                f,
+                "{}",
+                DisplayParseErrorsPretty {
                     parse_errors,
-                    self.source,
-                    "",
-                    crate::MAX_PARSE_ERRORS,
-                );
-                write!(f, "{}", parse_error)
-            }
+                    path: self.source_path,
+                    source: self.source,
+                    max_errors: crate::MAX_PARSE_ERRORS,
+                }
+            ),
             err => err.fmt(f),
         }
     }

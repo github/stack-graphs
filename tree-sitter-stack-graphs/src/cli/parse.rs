@@ -16,7 +16,7 @@ use tree_sitter_graph::parse_error::ParseError;
 use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
-use crate::util::map_parse_errors;
+use crate::util::DisplayParseErrorsPretty;
 use crate::BuildError;
 
 /// Parse file
@@ -46,14 +46,15 @@ impl ParseArgs {
         let tree = parser.parse(source, None).ok_or(BuildError::ParseError)?;
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
-            let parse_error = map_parse_errors(
-                file_path,
-                &parse_errors,
-                &source,
-                "",
-                crate::MAX_PARSE_ERRORS,
+            eprintln!(
+                "{}",
+                DisplayParseErrorsPretty {
+                    parse_errors: &parse_errors,
+                    path: file_path,
+                    source: &source,
+                    max_errors: crate::MAX_PARSE_ERRORS,
+                }
             );
-            println!("{}", parse_error);
             return Err(anyhow!("Failed to parse file {}", file_path.display()));
         }
         let tree = parse_errors.into_tree();
