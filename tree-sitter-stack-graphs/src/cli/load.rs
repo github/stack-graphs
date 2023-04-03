@@ -50,7 +50,7 @@ impl PathLoaderArgs {
         }
     }
 
-    pub fn get(&self) -> Result<Loader, LoadError> {
+    pub fn get(&self) -> Result<Loader, LoadError<'static>> {
         let tsg_paths = match &self.tsg {
             Some(tsg_path) => vec![LoadPath::Regular(tsg_path.clone())],
             None => DEFAULT_TSG_PATHS.clone(),
@@ -96,7 +96,10 @@ impl LanguageConfigurationsLoaderArgs {
         Self { scope: None }
     }
 
-    pub fn get(&self, configurations: Vec<LanguageConfiguration>) -> Result<Loader, LoadError> {
+    pub fn get(
+        &self,
+        configurations: Vec<LanguageConfiguration>,
+    ) -> Result<Loader, LoadError<'static>> {
         let loader = Loader::from_language_configurations(configurations, self.scope.clone())?;
         Ok(loader)
     }
