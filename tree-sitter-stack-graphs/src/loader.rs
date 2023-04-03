@@ -428,7 +428,7 @@ impl PathLoader {
             Some(index) => index,
             None => {
                 let tsg = self.load_tsg_from_paths(&language)?;
-                let sgl = StackGraphLanguage::new(language.language, tsg)?;
+                let sgl = StackGraphLanguage::new(language.language, tsg);
 
                 let mut builtins = StackGraph::new();
                 self.load_builtins_from_paths_into(

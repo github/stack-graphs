@@ -406,15 +406,15 @@ impl StackGraphLanguage {
     pub fn new(
         language: tree_sitter::Language,
         tsg: tree_sitter_graph::ast::File,
-    ) -> Result<StackGraphLanguage, LanguageError> {
+    ) -> StackGraphLanguage {
         debug_assert_eq!(language, tsg.language);
-        Ok(StackGraphLanguage {
+        StackGraphLanguage {
             language,
             tsg,
             tsg_path: PathBuf::from("<tsg>"),
             tsg_source: Cow::from(String::new()),
             functions: Self::default_functions(),
-        })
+        }
     }
 
     /// Creates a new stack graph language for the given language, loading the
