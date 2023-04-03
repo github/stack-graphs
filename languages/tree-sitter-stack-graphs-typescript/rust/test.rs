@@ -15,7 +15,7 @@ fn main() -> anyhow::Result<()> {
     {
         Ok(lc) => lc,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{}", err.display_pretty());
             return Err(anyhow!("Language configuration error"));
         }
     };

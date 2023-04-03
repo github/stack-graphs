@@ -6,7 +6,7 @@ fn main() -> anyhow::Result<()> {
     let lc = match tree_sitter_stack_graphs_java::try_language_configuration(&NoCancellation) {
         Ok(lc) => lc,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{}", err.display_pretty());
             return Err(anyhow!("Language configuration error"));
         }
     };

@@ -12,6 +12,7 @@ use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use stack_graphs::graph::StackGraph;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
@@ -48,21 +49,27 @@ pub struct LanguageConfiguration {
 impl LanguageConfiguration {
     /// Build a language configuration from tsg and builtins sources. The tsg path
     /// is kept for informational only, see [`StackGraphLanguage::from_source`][].
-    pub fn from_sources(
+    pub fn from_sources<'a>(
         language: Language,
         scope: Option<String>,
         content_regex: Option<Regex>,
         file_types: Vec<String>,
         tsg_path: PathBuf,
-        tsg_source: &str,
-        builtins_source: Option<&str>,
+        tsg_source: &'a str,
+        builtins_source: Option<(PathBuf, &'a str)>,
         builtins_config: Option<&str>,
         special_files: FileAnalyzers,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<Self, LoadError<'static>> {
-        let sgl = StackGraphLanguage::from_source(language, tsg_path, tsg_source)?;
+    ) -> Result<Self, LoadError<'a>> {
+        let sgl = StackGraphLanguage::from_source(language, tsg_path.clone(), tsg_source).map_err(
+            |err| LoadError::SglParse {
+                inner: err,
+                tsg_path,
+                tsg: Cow::from(tsg_source),
+            },
+        )?;
         let mut builtins = StackGraph::new();
-        if let Some(builtins_source) = builtins_source {
+        if let Some((builtins_path, builtins_source)) = builtins_source {
             let mut builtins_globals = Variables::new();
             if let Some(builtins_config) = builtins_config {
                 Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
@@ -74,7 +81,14 @@ impl LanguageConfiguration {
                 builtins_source,
                 &builtins_globals,
                 cancellation_flag,
-            )?;
+            )
+            .map_err(|err| LoadError::Builtins {
+                inner: err,
+                source_path: builtins_path,
+                source: Cow::from(builtins_source),
+                tsg_path: sgl.tsg_path.clone(),
+                tsg: Cow::from(tsg_source),
+            })?;
         }
         Ok(LanguageConfiguration {
             language,
@@ -256,23 +270,37 @@ impl Loader {
         Self::load_globals_from_config(&conf, globals)
     }
 
-    fn load_tsg(language: Language, tsg_source: &str) -> Result<TsgFile, LoadError<'static>> {
-        let tsg = TsgFile::from_str(language, &tsg_source)?;
+    fn load_tsg<'a>(
+        language: Language,
+        tsg_source: Cow<'a, str>,
+    ) -> Result<TsgFile, LoadError<'a>> {
+        let tsg = TsgFile::from_str(language, &tsg_source).map_err(|err| LoadError::TsgParse {
+            inner: err,
+            tsg_path: PathBuf::from("<unknown tsg path>"),
+            tsg: Cow::from(tsg_source),
+        })?;
         Ok(tsg)
     }
 
-    fn load_builtins_into(
+    fn load_builtins_into<'a>(
         sgl: &StackGraphLanguage,
         path: &Path,
-        source: &str,
+        source: Cow<'a, str>,
         config: &str,
         graph: &mut StackGraph,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<(), LoadError<'static>> {
+    ) -> Result<(), LoadError<'a>> {
         let file = graph.add_file(&path.to_string_lossy()).unwrap();
         let mut globals = Variables::new();
         Self::load_globals_from_config_str(&config, &mut globals)?;
-        sgl.build_stack_graph_into(graph, file, &source, &globals, cancellation_flag)?;
+        sgl.build_stack_graph_into(graph, file, &source, &globals, cancellation_flag)
+            .map_err(|err| LoadError::Builtins {
+                inner: err,
+                source_path: path.to_path_buf(),
+                source,
+                tsg_path: sgl.tsg_path.to_path_buf(),
+                tsg: sgl.tsg_source.clone(),
+            })?;
         return Ok(());
     }
 
@@ -301,30 +329,76 @@ pub enum LoadError<'a> {
     Config(#[from] ini::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Language(#[from] crate::LanguageError),
+    #[error("{inner}")]
+    SglParse {
+        #[source]
+        inner: crate::LanguageError,
+        tsg_path: PathBuf,
+        tsg: Cow<'a, str>,
+    },
     #[error("No languages found {0}")]
     NoLanguagesFound(String),
     #[error("No TSG file found")]
     NoTsgFound,
     #[error(transparent)]
     Reader(Box<dyn std::error::Error + Send + Sync>),
-    #[error(transparent)]
-    Builtins(crate::BuildError),
-    #[error(transparent)]
-    TsgParse(#[from] tree_sitter_graph::ParseError),
+    #[error("{inner}")]
+    Builtins {
+        #[source]
+        inner: crate::BuildError,
+        source_path: PathBuf,
+        source: Cow<'a, str>,
+        tsg_path: PathBuf,
+        tsg: Cow<'a, str>,
+    },
+    #[error("{inner}")]
+    TsgParse {
+        #[source]
+        inner: tree_sitter_graph::ParseError,
+        tsg_path: PathBuf,
+        tsg: Cow<'a, str>,
+    },
     #[error(transparent)]
     TreeSitter(anyhow::Error),
-    #[error("{0}")]
-    Other(&'a str),
 }
 
-impl From<crate::BuildError> for LoadError<'_> {
-    fn from(value: crate::BuildError) -> Self {
-        match value {
-            crate::BuildError::Cancelled(at) => Self::Cancelled(at),
-            other => Self::Builtins(other),
+impl LoadError<'_> {
+    pub fn display_pretty<'a>(&'a self) -> impl std::fmt::Display + 'a {
+        DisplayLoadErrorPretty { error: self }
+    }
+}
+
+struct DisplayLoadErrorPretty<'a> {
+    error: &'a LoadError<'a>,
+}
+
+impl std::fmt::Display for DisplayLoadErrorPretty<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.error {
+            LoadError::Builtins {
+                inner,
+                source_path,
+                source,
+                tsg_path,
+                tsg,
+            } => write!(
+                f,
+                "{}",
+                inner.display_pretty(source_path, source, tsg_path, tsg)
+            )?,
+            LoadError::SglParse {
+                inner,
+                tsg_path,
+                tsg,
+            } => write!(f, "{}", inner.display_pretty(tsg_path, tsg))?,
+            LoadError::TsgParse {
+                inner,
+                tsg_path,
+                tsg,
+            } => write!(f, "{}", inner.display_pretty(tsg_path, tsg))?,
+            err => writeln!(f, "{}", err)?,
         }
+        Ok(())
     }
 }
 
@@ -533,7 +607,7 @@ impl PathLoader {
             }
             if tsg_path.exists() {
                 let tsg_source = std::fs::read_to_string(tsg_path)?;
-                return Loader::load_tsg(language.language, &tsg_source);
+                return Loader::load_tsg(language.language, Cow::from(tsg_source));
             }
         }
         return Err(LoadError::NoTsgFound);
@@ -591,7 +665,7 @@ impl PathLoader {
         Loader::load_builtins_into(
             sgl,
             builtins_path,
-            &source,
+            Cow::from(source),
             &config,
             graph,
             cancellation_flag,
