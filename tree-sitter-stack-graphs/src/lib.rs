@@ -487,6 +487,18 @@ pub enum LanguageError {
     ParseError(#[from] tree_sitter_graph::ParseError),
 }
 
+impl LanguageError {
+    pub fn display_pretty<'a>(
+        &'a self,
+        path: &'a Path,
+        source: &'a str,
+    ) -> impl std::fmt::Display + 'a {
+        match self {
+            Self::ParseError(err) => err.display_pretty(path, source),
+        }
+    }
+}
+
 impl StackGraphLanguage {
     /// Executes the graph construction rules for this language against a source file, creating new
     /// nodes and edges in `stack_graph`.  Any new nodes that we create will belong to `file`.
