@@ -19,7 +19,6 @@ use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
-use walkdir::WalkDir;
 
 use crate::cli::util::path_exists;
 use crate::cli::util::PathSpec;
@@ -31,6 +30,7 @@ use crate::test::TestResult;
 use crate::CancellationFlag;
 use crate::NoCancellation;
 
+use super::util::iter_files_and_directories;
 use super::util::FileStatusLogger;
 
 /// Run tests
@@ -164,31 +164,13 @@ impl TestArgs {
 
     pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
         let mut total_result = TestResult::new();
-        for test_path in &self.test_paths {
-            if test_path.is_dir() {
-                let test_root = test_path;
-                for test_entry in WalkDir::new(test_root)
-                    .follow_links(true)
-                    .sort_by_file_name()
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    let test_path = test_entry.path();
-                    let test_result = self.run_test(test_root, test_path, &mut loader)?;
-                    total_result.absorb(test_result);
-                }
-            } else {
-                let test_root = test_path.parent().unwrap();
-                let test_result = self.run_test(test_root, test_path, &mut loader)?;
-                total_result.absorb(test_result);
-            }
+        for (test_root, test_path, _) in iter_files_and_directories(self.test_paths.clone()) {
+            let test_result = self.run_test(&test_root, &test_path, &mut loader)?;
+            total_result.absorb(test_result);
         }
-
         if total_result.failure_count() > 0 {
             return Err(anyhow!(total_result.to_string()));
         }
-
         Ok(())
     }
 

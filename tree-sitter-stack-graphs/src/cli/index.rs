@@ -17,7 +17,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tree_sitter_graph::Variables;
-use walkdir::WalkDir;
 
 use crate::loader::FileReader;
 use crate::loader::Loader;
@@ -27,6 +26,7 @@ use crate::CancellationFlag;
 use crate::NoCancellation;
 
 use super::util::duration_from_seconds_str;
+use super::util::iter_files_and_directories;
 use super::util::path_exists;
 use super::util::sha1;
 use super::util::wait_for_input;
@@ -96,43 +96,17 @@ impl IndexArgs {
         if self.wait_at_start {
             wait_for_input()?;
         }
-        let mut seen_mark = false;
         let mut db = SQLiteWriter::open(&db_path)?;
-        for source_path in &self.source_paths {
-            let source_path = &source_path.canonicalize()?;
-            if source_path.is_dir() {
-                let source_root = &source_path;
-                for source_entry in WalkDir::new(source_root)
-                    .follow_links(true)
-                    .sort_by_file_name()
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    let source_path = &source_entry.path().canonicalize()?;
-                    self.analyze_file(
-                        source_root,
-                        source_path,
-                        &mut loader,
-                        &mut seen_mark,
-                        &mut db,
-                        false,
-                    )?;
-                }
-            } else {
-                let source_root = source_path.parent().expect("expect file to have parent");
-                if self.should_skip(&source_path, &mut seen_mark) {
-                    continue;
-                }
-                self.analyze_file(
-                    source_root,
-                    source_path,
-                    &mut loader,
-                    &mut seen_mark,
-                    &mut db,
-                    true,
-                )?;
-            }
+        let mut seen_mark = false;
+        for (source_root, source_path, strict) in iter_files_and_directories(&self.source_paths) {
+            self.analyze_file(
+                &source_root,
+                &source_path,
+                &mut loader,
+                &mut seen_mark,
+                &mut db,
+                strict,
+            )?;
         }
         Ok(())
     }
@@ -148,9 +122,11 @@ impl IndexArgs {
         strict: bool,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
+        let source_root = source_root.canonicalize()?;
+        let source_path = source_path.canonicalize()?;
         match self.analyze_file_inner(
-            source_root,
-            source_path,
+            &source_root,
+            &source_path,
             loader,
             seen_mark,
             db,

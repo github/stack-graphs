@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 #[cfg(debug_assertions)]
 use std::time::Instant;
+use walkdir::WalkDir;
 
 pub fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
     let path = PathBuf::from(path);
@@ -238,6 +239,43 @@ impl std::str::FromStr for SourcePosition {
 
 pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     Ok(Duration::new(s.parse()?, 0))
+}
+
+pub fn iter_files_and_directories<'a, P, IP>(
+    paths: IP,
+) -> impl Iterator<Item = (PathBuf, PathBuf, bool)> + 'a
+where
+    P: AsRef<Path> + 'a,
+    IP: IntoIterator<Item = P> + 'a,
+{
+    paths
+        .into_iter()
+        .filter_map(
+            |source_path| -> Option<Box<dyn Iterator<Item = (PathBuf, PathBuf, bool)>>> {
+                if source_path.as_ref().is_dir() {
+                    let source_root = source_path;
+                    let paths = WalkDir::new(&source_root)
+                        .follow_links(true)
+                        .sort_by_file_name()
+                        .into_iter()
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.file_type().is_file())
+                        .map(move |e| (source_root.as_ref().to_path_buf(), e.into_path(), false));
+                    Some(Box::new(paths))
+                } else {
+                    let source_root = source_path
+                        .as_ref()
+                        .parent()
+                        .expect("expect file to have parent");
+                    Some(Box::new(std::iter::once((
+                        source_root.to_path_buf(),
+                        source_path.as_ref().to_path_buf(),
+                        true,
+                    ))))
+                }
+            },
+        )
+        .flatten()
 }
 
 pub struct FileStatusLogger<'a> {
