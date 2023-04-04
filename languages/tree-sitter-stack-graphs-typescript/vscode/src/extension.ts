@@ -27,6 +27,10 @@ export function activate(context: ExtensionContext) {
     } else {
         switch (config.get<string>('database.defaultLocation')) {
             case "workspace":
+                if (!context?.storageUri?.fsPath) {
+                    window.showErrorMessage("Cannot start: no workspace open");
+                    return;
+                }
                 mkdirSync(context.storageUri.fsPath, { recursive: true });
                 let db_path = Uri.joinPath(context.storageUri, NAME + ".sqlite").fsPath;
                 args.push("-D", db_path);
