@@ -283,12 +283,12 @@ pub trait Logger {
 }
 
 pub trait FileLogger {
-    fn processing(&mut self);
-    fn failure(&mut self, status: &str, details: Option<&dyn std::fmt::Display>);
-    fn skipped(&mut self, status: &str, details: Option<&dyn std::fmt::Display>);
-    fn success(&mut self, status: &str, details: Option<&dyn std::fmt::Display>);
-    fn warning(&mut self, status: &str, details: Option<&dyn std::fmt::Display>);
-    fn default_failure(&mut self, status: &str, details: Option<&dyn std::fmt::Display>);
+    fn processing(&mut self) {}
+    fn failure(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn skipped(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn success(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn warning(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn default_failure(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
 }
 
 pub struct ConsoleLogger {
