@@ -9,6 +9,7 @@ use anyhow::anyhow;
 use clap::ArgEnum;
 use clap::Args;
 use clap::ValueHint;
+use itertools::Itertools;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
@@ -31,7 +32,8 @@ use crate::CancellationFlag;
 use crate::NoCancellation;
 
 use super::util::iter_files_and_directories;
-use super::util::FileStatusLogger;
+use super::util::ConsoleFileLogger;
+use super::util::FileLogger;
 
 /// Run tests
 #[derive(Args)]
@@ -181,11 +183,12 @@ impl TestArgs {
         test_path: &Path,
         loader: &mut Loader,
     ) -> anyhow::Result<TestResult> {
-        let mut file_status = FileStatusLogger::new(test_path, !self.quiet);
+        let mut file_status =
+            ConsoleFileLogger::new(test_path, !self.quiet, !self.hide_error_details);
         match self.run_test_inner(test_root, test_path, loader, &mut file_status) {
             ok @ Ok(_) => ok,
             err @ Err(_) => {
-                file_status.error_if_processing("error")?;
+                file_status.default_failure("error", None);
                 err
             }
         }
@@ -196,10 +199,10 @@ impl TestArgs {
         test_root: &Path,
         test_path: &Path,
         loader: &mut Loader,
-        file_status: &mut FileStatusLogger,
+        file_status: &mut ConsoleFileLogger,
     ) -> anyhow::Result<TestResult> {
         if self.show_skipped && test_path.extension().map_or(false, |e| e == "skip") {
-            file_status.warn("skipped")?;
+            file_status.warning("skipped", None);
             return Ok(TestResult::new());
         }
 
@@ -212,7 +215,7 @@ impl TestArgs {
         };
         let source = file_reader.get(test_path)?;
 
-        file_status.processing()?;
+        file_status.processing();
 
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(&test_path, &source, default_fragment_path)?;
@@ -258,18 +261,15 @@ impl TestArgs {
             };
             match result {
                 Err(err) => {
-                    file_status.error("failed to build stack graph")?;
-                    if !self.hide_error_details {
-                        println!(
-                            "{}",
-                            err.display_pretty(
-                                test_path,
-                                source,
-                                lc.sgl.tsg_path(),
-                                lc.sgl.tsg_source(),
-                            )
-                        );
-                    }
+                    file_status.failure(
+                        "failed to build stack graph",
+                        Some(&err.display_pretty(
+                            test_path,
+                            source,
+                            lc.sgl.tsg_path(),
+                            lc.sgl.tsg_source(),
+                        )),
+                    );
                     return Err(anyhow!("Failed to build graph for {}", test_path.display()));
                 }
                 Ok(_) => {}
@@ -319,22 +319,20 @@ impl TestArgs {
     fn handle_result(
         &self,
         result: &TestResult,
-        file_status: &mut FileStatusLogger,
+        file_status: &mut ConsoleFileLogger,
     ) -> anyhow::Result<bool> {
         let success = result.failure_count() == 0;
         if success {
-            file_status.ok("success")?;
+            file_status.success("success", None);
         } else {
-            file_status.error(&format!(
-                "{}/{} assertions failed",
-                result.failure_count(),
-                result.count(),
-            ))?;
-        }
-        if !success && !self.hide_error_details {
-            for failure in result.failures_iter() {
-                println!("{}", failure);
-            }
+            file_status.failure(
+                &format!(
+                    "{}/{} assertions failed",
+                    result.failure_count(),
+                    result.count(),
+                ),
+                Some(&result.failures_iter().join("\n")),
+            );
         }
         Ok(success)
     }
