@@ -318,6 +318,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::mem::transmute;
+use std::ops::BitOr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -659,6 +660,23 @@ impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
         CancellationFlag::check(*self, at)
             .map_err(|err| tree_sitter_graph::CancellationError(err.0))
+    }
+}
+
+impl<'a> BitOr for &'a dyn CancellationFlag {
+    type Output = OrCancellationFlag<'a>;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        OrCancellationFlag(self, rhs)
+    }
+}
+
+pub struct OrCancellationFlag<'a>(&'a dyn CancellationFlag, &'a dyn CancellationFlag);
+
+impl CancellationFlag for OrCancellationFlag<'_> {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError> {
+        self.0.check(at)?;
+        self.1.check(at)?;
+        Ok(())
     }
 }
 
