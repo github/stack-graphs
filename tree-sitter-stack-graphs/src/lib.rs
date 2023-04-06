@@ -321,6 +321,9 @@ use std::mem::transmute;
 use std::ops::BitOr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
@@ -700,11 +703,44 @@ impl CancelAfterDuration {
             limit,
         }
     }
+
+    pub fn from_option(limit: Option<Duration>) -> Box<dyn CancellationFlag> {
+        match limit {
+            Some(limit) => Box::new(Self::new(limit)),
+            None => Box::new(NoCancellation),
+        }
+    }
 }
 
 impl CancellationFlag for CancelAfterDuration {
     fn check(&self, at: &'static str) -> Result<(), CancellationError> {
         if self.start.elapsed().ge(&self.limit) {
+            return Err(CancellationError(at));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct AtomicCancellationFlag {
+    flag: Arc<AtomicBool>,
+}
+
+impl AtomicCancellationFlag {
+    pub fn new() -> Self {
+        Self {
+            flag: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.flag.store(true, Ordering::Relaxed)
+    }
+}
+
+impl CancellationFlag for AtomicCancellationFlag {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError> {
+        if self.flag.load(Ordering::Relaxed) {
             return Err(CancellationError(at));
         }
         Ok(())

@@ -102,7 +102,7 @@ impl IndexArgs {
         let mut indexer = Indexer::new(&mut db, &mut loader, &logger);
         indexer.force = self.force;
         indexer.max_file_time = self.max_file_time;
-        indexer.index_all(self.source_paths, self.continue_from)?;
+        indexer.index_all(self.source_paths, self.continue_from, &NoCancellation)?;
         Ok(())
     }
 }
@@ -132,6 +132,7 @@ impl<'a> Indexer<'a> {
         &mut self,
         source_paths: IP,
         mut continue_from: Option<Q>,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<()>
     where
         P: AsRef<Path>,
@@ -139,13 +140,31 @@ impl<'a> Indexer<'a> {
         Q: AsRef<Path>,
     {
         for (source_root, source_path, strict) in iter_files_and_directories(source_paths) {
-            self.index_file(&source_root, &source_path, strict, &mut continue_from)?;
+            cancellation_flag.check("indexing all files")?;
+            self.index_file(
+                &source_root,
+                &source_path,
+                strict,
+                &mut continue_from,
+                cancellation_flag,
+            )?;
         }
         Ok(())
     }
 
-    pub fn index(&mut self, source_root: &Path, source_path: &Path) -> Result<()> {
-        self.index_file(&source_root, &source_path, true, &mut None::<&Path>)?;
+    pub fn index(
+        &mut self,
+        source_root: &Path,
+        source_path: &Path,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<()> {
+        self.index_file(
+            &source_root,
+            &source_path,
+            true,
+            &mut None::<&Path>,
+            cancellation_flag,
+        )?;
         Ok(())
     }
 
@@ -156,6 +175,7 @@ impl<'a> Indexer<'a> {
         source_path: &Path,
         missing_is_error: bool,
         continue_from: &mut Option<P>,
+        cancellation_flag: &dyn CancellationFlag,
     ) -> Result<()>
     where
         P: AsRef<Path>,
@@ -166,6 +186,7 @@ impl<'a> Indexer<'a> {
             source_path,
             missing_is_error,
             continue_from,
+            cancellation_flag,
             file_status.as_mut(),
         ) {
             ok @ Ok(_) => ok,
@@ -182,6 +203,7 @@ impl<'a> Indexer<'a> {
         source_path: &Path,
         missing_is_error: bool,
         continue_from: &mut Option<P>,
+        cancellation_flag: &dyn CancellationFlag,
         file_status: &mut dyn FileLogger,
     ) -> Result<()>
     where
@@ -222,10 +244,8 @@ impl<'a> Indexer<'a> {
             return Ok(());
         }
 
-        let mut cancellation_flag: Box<dyn CancellationFlag> = Box::new(NoCancellation);
-        if let Some(max_file_time) = self.max_file_time {
-            cancellation_flag = Box::new(CancelAfterDuration::new(max_file_time));
-        }
+        let file_cancellation_flag = CancelAfterDuration::from_option(self.max_file_time);
+        let cancellation_flag = cancellation_flag | file_cancellation_flag.as_ref();
 
         file_status.processing();
 
@@ -246,19 +266,14 @@ impl<'a> Indexer<'a> {
                 &source,
                 &mut std::iter::empty(),
                 &HashMap::new(),
-                cancellation_flag.as_ref(),
+                &cancellation_flag,
             )
         } else {
             let globals = Variables::new();
-            lc.sgl.build_stack_graph_into(
-                &mut graph,
-                file,
-                &source,
-                &globals,
-                cancellation_flag.as_ref(),
-            )
+            lc.sgl
+                .build_stack_graph_into(&mut graph, file, &source, &globals, &cancellation_flag)
         };
-        match result {
+        let processable_file = match result {
             Err(BuildError::Cancelled(_)) => {
                 file_status.warning("parsing timed out", None);
                 return Ok(());
@@ -273,7 +288,7 @@ impl<'a> Indexer<'a> {
                         lc.sgl.tsg_source(),
                     )),
                 );
-                return Ok(());
+                false
             }
             Err(err) => {
                 file_status.failure(
@@ -287,15 +302,18 @@ impl<'a> Indexer<'a> {
                 );
                 return Err(IndexError::StackGraph);
             }
-            Ok(_) => {}
+            Ok(_) => true,
         };
         self.db.add_graph_for_file(&graph, file, &tag)?;
+        if !processable_file {
+            return Ok(());
+        }
 
         let mut partials = PartialPaths::new();
         match partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
-            &cancellation_flag.as_ref(),
+            &(&cancellation_flag as &dyn CancellationFlag),
             |g, ps, p| {
                 self.db
                     .add_partial_path_for_file(g, file, ps, &p)
@@ -333,6 +351,8 @@ impl<'a> Indexer<'a> {
 
 #[derive(Debug, Error)]
 pub enum IndexError {
+    #[error("cancelled at {0}")]
+    Cancelled(&'static str),
     #[error("failed to load language")]
     LoadError(#[source] crate::loader::LoadError<'static>),
     #[error("failed to read file")]
@@ -341,6 +361,12 @@ pub enum IndexError {
     StackGraph,
     #[error(transparent)]
     StorageError(#[from] stack_graphs::storage::StorageError),
+}
+
+impl From<crate::CancellationError> for IndexError {
+    fn from(value: crate::CancellationError) -> Self {
+        Self::Cancelled(value.0)
+    }
 }
 
 type Result<T> = std::result::Result<T, IndexError>;

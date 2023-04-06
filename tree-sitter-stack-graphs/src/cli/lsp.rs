@@ -7,12 +7,14 @@
 
 use capture_it::capture;
 use clap::Args;
+use crossbeam_channel::RecvTimeoutError;
 use crossbeam_channel::Sender;
 use stack_graphs::storage::SQLiteWriter;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 use tokio::runtime::Handle;
 use tower_lsp::jsonrpc::Error;
 use tower_lsp::jsonrpc::ErrorCode;
@@ -24,13 +26,33 @@ use tower_lsp::LspService;
 use tower_lsp::Server;
 
 use crate::loader::Loader;
+use crate::AtomicCancellationFlag;
+use crate::CancelAfterDuration;
+use crate::CancellationFlag;
 
 use super::index::Indexer;
+use super::util::duration_from_seconds_str;
 use super::util::FileLogger;
 use super::util::Logger;
 
-#[derive(Args)]
-pub struct LspArgs {}
+#[derive(Args, Clone)]
+pub struct LspArgs {
+    /// Maximum index runtime per workspace folder in seconds.
+    #[clap(
+        long,
+        value_name = "SECONDS",
+        parse(try_from_str = duration_from_seconds_str),
+    )]
+    pub max_folder_index_time: Option<Duration>,
+
+    /// Maximum index runtime per file in seconds.
+    #[clap(
+        long,
+        value_name = "SECONDS",
+        parse(try_from_str = duration_from_seconds_str),
+    )]
+    pub max_file_index_time: Option<Duration>,
+}
 
 impl LspArgs {
     pub fn run(self, db_path: PathBuf, loader: Loader) -> anyhow::Result<()> {
@@ -39,6 +61,7 @@ impl LspArgs {
             let (service, socket) = LspService::new(|client| Backend {
                 _client: client.clone(),
                 db_path,
+                args: self,
                 loader: Arc::new(std::sync::Mutex::new(loader)),
                 jobs: Arc::new(tokio::sync::Mutex::new(None)),
                 logger: BackendLogger { client },
@@ -57,30 +80,41 @@ struct Backend {
     _client: Client,
     db_path: PathBuf,
     loader: Arc<std::sync::Mutex<Loader>>,
-    jobs: Arc<tokio::sync::Mutex<Option<Sender<Job>>>>,
+    args: LspArgs,
+    jobs: Arc<tokio::sync::Mutex<Option<(Sender<Job>, AtomicCancellationFlag)>>>,
     logger: BackendLogger,
 }
 
 impl Backend {
-    async fn start_job_handler(&self) -> Sender<Job> {
+    async fn start_job_handler(&self) -> (Sender<Job>, AtomicCancellationFlag) {
         let handle = Handle::current();
         let backend = self.clone();
         let (sender, receiver) = crossbeam_channel::unbounded::<Job>();
+        let cancellation_flag = AtomicCancellationFlag::new();
+        let thread_cancellation_flag = cancellation_flag.clone();
         thread::spawn(move || {
             handle.block_on(capture!([logger = &backend.logger], async move {
                 logger.info("started job handler").await;
             }));
-            while let Ok(job) = receiver.recv() {
-                job.run(&backend, handle.clone());
+            loop {
+                match receiver.recv_timeout(Duration::from_millis(10)) {
+                    Ok(job) => job.run(&backend, handle.clone(), &thread_cancellation_flag),
+                    Err(RecvTimeoutError::Timeout) => {
+                        if thread_cancellation_flag.check("").is_err() {
+                            break;
+                        }
+                    }
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
             }
             handle.block_on(capture!([logger = &backend.logger], async move {
                 logger.info("stopped job handler").await;
             }));
         });
-        sender
+        (sender, cancellation_flag)
     }
 
-    fn index(&self, path: &Path, handle: Handle) {
+    fn index(&self, path: &Path, handle: Handle, cancellation_flag: &dyn CancellationFlag) {
         handle.block_on(capture!([logger = &self.logger, path], async move {
             logger.info(format!("indexing {}", path.display())).await;
         }));
@@ -114,15 +148,30 @@ impl Backend {
             }
         };
 
-        let logger = LspLogger {};
-        let _indexer = Indexer::new(&mut db, &mut loader, &logger);
+        let logger = LspLogger {
+            handle: handle.clone(),
+            logger: self.logger.clone(),
+        };
+        let folder_cancellation_flag =
+            CancelAfterDuration::from_option(self.args.max_folder_index_time);
+        let cancellation_flag = cancellation_flag | folder_cancellation_flag.as_ref();
+        let mut indexer = Indexer::new(&mut db, &mut loader, &logger);
+        indexer.max_file_time = self.args.max_file_index_time;
+        let result = indexer.index_all(vec![path], None::<&Path>, &cancellation_flag);
 
         handle.block_on(capture!([logger = &self.logger, path], async move {
-            logger.info(format!("indexed {}", path.display())).await;
+            match result {
+                Ok(_) => logger.info(format!("indexed {}", path.display())).await,
+                Err(err) => {
+                    logger
+                        .info(format!("indexing failed {}: {}", path.display(), err))
+                        .await
+                }
+            }
         }));
     }
 
-    fn clean(&self, path: &Path, handle: Handle) {
+    fn clean(&self, path: &Path, handle: Handle, _cancellation_flag: &dyn CancellationFlag) {
         handle.block_on(capture!([logger = &self.logger, path], async move {
             logger.info(format!("cleaning {}", path.display())).await;
         }));
@@ -174,6 +223,7 @@ impl LanguageServer for Backend {
                 if let Ok(path) = folder.uri.to_file_path() {
                     jobs.as_ref()
                         .unwrap()
+                        .0
                         .send(Job::IndexPath(path))
                         .from_error()?;
                 } else {
@@ -219,7 +269,7 @@ impl LanguageServer for Backend {
             .info(format!("Saved document {}", params.text_document.uri))
             .await;
         if let Ok(path) = params.text_document.uri.to_file_path() {
-            if let Err(e) = jobs.as_ref().unwrap().send(Job::IndexPath(path)) {
+            if let Err(e) = jobs.as_ref().unwrap().0.send(Job::IndexPath(path)) {
                 self.logger
                     .error(format!("Scheduling index job failed: {}", e))
                     .await;
@@ -257,7 +307,7 @@ impl LanguageServer for Backend {
                 .info(format!("Removed workspace folder {}", folder.uri))
                 .await;
             if let Ok(path) = folder.uri.to_file_path() {
-                if let Err(e) = jobs.as_ref().unwrap().send(Job::CleanPath(path)) {
+                if let Err(e) = jobs.as_ref().unwrap().0.send(Job::CleanPath(path)) {
                     self.logger
                         .error(format!("Scheduling clean job failed: {}", e))
                         .await;
@@ -273,7 +323,7 @@ impl LanguageServer for Backend {
                 .info(format!("Added workspace folder {}", folder.uri))
                 .await;
             if let Ok(path) = folder.uri.to_file_path() {
-                if let Err(e) = jobs.as_ref().unwrap().send(Job::IndexPath(path)) {
+                if let Err(e) = jobs.as_ref().unwrap().0.send(Job::IndexPath(path)) {
                     self.logger
                         .error(format!("Scheduling index job failed: {}", e))
                         .await;
@@ -289,6 +339,9 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> Result<()> {
         self.logger.info("Shutting down").await;
+        let jobs = self.jobs.lock().await;
+        jobs.as_ref().unwrap().1.cancel();
+        drop(jobs);
         Ok(())
     }
 }
@@ -301,6 +354,10 @@ struct BackendLogger {
 impl BackendLogger {
     async fn info<M: std::fmt::Display>(&self, message: M) {
         self.client.log_message(MessageType::INFO, message).await
+    }
+
+    async fn warning<M: std::fmt::Display>(&self, message: M) {
+        self.client.log_message(MessageType::WARNING, message).await
     }
 
     async fn error<M: std::fmt::Display>(&self, message: M) {
@@ -353,21 +410,98 @@ pub enum Job {
 }
 
 impl Job {
-    fn run(self, backend: &Backend, handle: Handle) {
+    fn run(self, backend: &Backend, handle: Handle, cancellation_flag: &dyn CancellationFlag) {
         match self {
-            Self::IndexPath(path) => backend.index(&path, handle),
-            Self::CleanPath(path) => backend.clean(&path, handle),
+            Self::IndexPath(path) => backend.index(&path, handle, cancellation_flag),
+            Self::CleanPath(path) => backend.clean(&path, handle, cancellation_flag),
         }
     }
 }
 
-struct LspLogger {}
-struct LspFileLogger {}
+struct LspLogger {
+    handle: Handle,
+    logger: BackendLogger,
+}
+struct LspFileLogger<'a> {
+    path: &'a Path,
+    handle: Handle,
+    logger: BackendLogger,
+}
 
 impl Logger for LspLogger {
-    fn file<'a>(&self, _path: &'a Path) -> Box<dyn super::util::FileLogger + 'a> {
-        Box::new(LspFileLogger {})
+    fn file<'a>(&self, path: &'a Path) -> Box<dyn super::util::FileLogger + 'a> {
+        Box::new(LspFileLogger {
+            path,
+            handle: self.handle.clone(),
+            logger: self.logger.clone(),
+        })
     }
 }
 
-impl FileLogger for LspFileLogger {}
+impl FileLogger for LspFileLogger<'_> {
+    fn default_failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.handle.block_on(capture!(
+            [logger = &self.logger, path = self.path],
+            async move {
+                logger
+                    .error(format!("{}: {}", path.display(), status))
+                    .await;
+            }
+        ));
+    }
+
+    fn failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.handle.block_on(capture!(
+            [logger = &self.logger, path = self.path],
+            async move {
+                logger
+                    .error(format!("{}: {}", path.display(), status))
+                    .await;
+            }
+        ));
+    }
+
+    fn skipped(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.handle.block_on(capture!(
+            [logger = &self.logger, path = self.path],
+            async move {
+                logger
+                    .info(format!("{}: skipped: {}", path.display(), status))
+                    .await;
+            }
+        ));
+    }
+
+    fn warning(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.handle.block_on(capture!(
+            [logger = &self.logger, path = self.path],
+            async move {
+                logger
+                    .warning(format!("{}: {}", path.display(), status))
+                    .await;
+            }
+        ));
+    }
+
+    fn success(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.handle.block_on(capture!(
+            [logger = &self.logger, path = self.path],
+            async move {
+                logger
+                    .info(format!("{}: success: {}", path.display(), status))
+                    .await;
+            }
+        ));
+    }
+
+    fn processing(&mut self) {
+        self.handle.block_on(capture!(
+            [logger = &self.logger, path = self.path],
+            async move {
+                logger
+                    .info(format!("{}: processing...", path.display()))
+                    .await;
+            }
+        ));
+    }
+}
