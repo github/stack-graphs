@@ -13,7 +13,6 @@ use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tree_sitter_graph::Variables;
@@ -223,9 +222,9 @@ impl<'a> Indexer<'a> {
             return Ok(());
         }
 
-        let mut cancellation_flag: Arc<dyn CancellationFlag> = Arc::new(NoCancellation);
+        let mut cancellation_flag: Box<dyn CancellationFlag> = Box::new(NoCancellation);
         if let Some(max_file_time) = self.max_file_time {
-            cancellation_flag = CancelAfterDuration::new(max_file_time);
+            cancellation_flag = Box::new(CancelAfterDuration::new(max_file_time));
         }
 
         file_status.processing();
