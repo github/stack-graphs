@@ -59,6 +59,14 @@
                     "minimum": -1,
                     "default": 10,
                     "scope": "machine-overridable",
+                    "order": 30
+                },
+                "tree-sitter-stack-graphs-typescript.query.maxTime": {
+                    "markdownDescription": "Maximum query time per file in milliseconds (-1 means no limit). _Requires reload for changes to take effect._",
+                    "type": "integer",
+                    "minimum": -1,
+                    "default": 100,
+                    "scope": "machine-overridable",
                     "order": 20
                 }
             }

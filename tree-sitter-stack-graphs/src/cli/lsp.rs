@@ -9,6 +9,7 @@ use capture_it::capture;
 use clap::Args;
 use crossbeam_channel::RecvTimeoutError;
 use crossbeam_channel::Sender;
+use stack_graphs::storage::SQLiteReader;
 use stack_graphs::storage::SQLiteWriter;
 use stack_graphs::storage::StorageError;
 use std::path::Path;
@@ -32,9 +33,14 @@ use crate::CancelAfterDuration;
 use crate::CancellationFlag;
 
 use super::index::Indexer;
+use super::query::Querier;
+use super::query::QueryError;
+use super::util::duration_from_milliseconds_str;
 use super::util::duration_from_seconds_str;
 use super::util::FileLogger;
 use super::util::Logger;
+use super::util::SourcePosition;
+use super::util::SourceSpan;
 
 #[derive(Args, Clone)]
 pub struct LspArgs {
@@ -53,6 +59,14 @@ pub struct LspArgs {
         parse(try_from_str = duration_from_seconds_str),
     )]
     pub max_file_index_time: Option<Duration>,
+
+    /// Maximum query runtime in milliseconds.
+    #[clap(
+        long,
+        value_name = "MILLISECONDS",
+        parse(try_from_str = duration_from_milliseconds_str),
+    )]
+    pub max_query_time: Option<Duration>,
 }
 
 impl LspArgs {
@@ -228,6 +242,41 @@ impl Backend {
             })),
         }
     }
+
+    async fn definitions(&self, reference: SourcePosition) -> Vec<SourceSpan> {
+        let mut db = match SQLiteReader::open(&self.db_path) {
+            Ok(db) => db,
+            Err(err) => {
+                self.logger
+                    .error(format!(
+                        "failed to open database {}: {}",
+                        self.db_path.display(),
+                        err
+                    ))
+                    .await;
+                return Vec::default();
+            }
+        };
+
+        let mut querier = Querier::new(&mut db);
+        let result = {
+            let cancellation_flag = CancelAfterDuration::from_option(self.args.max_query_time);
+            querier.definitions(reference, cancellation_flag.as_ref())
+        };
+        match result {
+            Ok(result) => result,
+            Err(QueryError::Cancelled(at)) => {
+                self.logger
+                    .error(format!("query timed out at {}", at,))
+                    .await;
+                return Vec::default();
+            }
+            Err(err) => {
+                self.logger.error(format!("query failed {}", err)).await;
+                return Vec::default();
+            }
+        }
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -284,7 +333,12 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        self.logger.info("Initialized").await;
+        self.logger
+            .info(format!(
+                "Initialized with database {}",
+                self.db_path.display()
+            ))
+            .await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -321,7 +375,49 @@ impl LanguageServer for Backend {
                 params.text_document_position_params.position.character + 1
             ))
             .await;
-        Ok(None)
+
+        let path = match params
+            .text_document_position_params
+            .text_document
+            .uri
+            .to_file_path()
+        {
+            Ok(path) => path,
+            Err(_) => {
+                self.logger
+                    .error(format!(
+                        "Not a supported file path: {}",
+                        params.text_document_position_params.text_document.uri,
+                    ))
+                    .await;
+                return Ok(None);
+            }
+        };
+        let line = params.text_document_position_params.position.line as usize;
+        let column = params.text_document_position_params.position.character as usize;
+        let reference = SourcePosition { path, line, column };
+        let locations = self
+            .definitions(reference)
+            .await
+            .into_iter()
+            .filter_map(|l| l.try_into_location().ok())
+            .collect::<Vec<_>>();
+
+        self.logger
+            .info(format!(
+                "Found {} definitions for {}:{}:{}",
+                locations.len(),
+                params.text_document_position_params.text_document.uri,
+                params.text_document_position_params.position.line + 1,
+                params.text_document_position_params.position.character + 1
+            ))
+            .await;
+
+        match locations.len() {
+            0 => Ok(None),
+            1 => Ok(Some(locations[0].clone().into())),
+            _ => Ok(Some(locations.into())),
+        }
     }
 
     async fn did_change_workspace_folders(&self, params: DidChangeWorkspaceFoldersParams) {
@@ -527,5 +623,21 @@ impl FileLogger for LspFileLogger<'_> {
                     .await;
             }
         ));
+    }
+}
+
+impl SourceSpan {
+    fn try_into_location(self) -> std::result::Result<Location, ()> {
+        let uri = Url::from_file_path(self.path)?;
+        let start = Position {
+            line: self.span.start.line as u32,
+            character: self.span.start.column.grapheme_offset as u32,
+        };
+        let end = Position {
+            line: self.span.end.line as u32,
+            character: self.span.end.column.grapheme_offset as u32,
+        };
+        let range = Range { start, end };
+        Ok(Location { uri, range })
     }
 }

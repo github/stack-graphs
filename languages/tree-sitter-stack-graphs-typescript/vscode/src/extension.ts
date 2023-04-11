@@ -1,7 +1,7 @@
 import exp = require('constants');
 import { mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { ExtensionContext, StatusBarItem, Uri, window, workspace } from 'vscode';
+import { ExtensionContext, StatusBarItem, Uri, commands, window, workspace } from 'vscode';
 
 // should match `name` in `Cargo.toml`
 const NAME = "tree-sitter-stack-graphs-typescript";
@@ -49,6 +49,10 @@ export function activate(context: ExtensionContext) {
     let max_file_index_time = config.get<integer>('index.maxFileTime');
     if (max_file_index_time && max_file_index_time >= 0) {
         args.push("--max-file-index-time", max_file_index_time.toString());
+    }
+    let max_query_time = config.get<integer>('query.maxTime');
+    if (max_query_time && max_query_time >= 0) {
+        args.push("--max-query-time", max_query_time.toString());
     }
 
     const serverOptions: ServerOptions = { command, args };

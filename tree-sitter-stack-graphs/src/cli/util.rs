@@ -9,6 +9,7 @@ use anyhow::anyhow;
 use base64::Engine;
 use colored::Colorize;
 use lsp_positions::PositionedSubstring;
+use lsp_positions::Span;
 use lsp_positions::SpanCalculator;
 use sha1::Digest;
 use sha1::Sha1;
@@ -237,8 +238,21 @@ impl std::str::FromStr for SourcePosition {
     }
 }
 
+#[derive(Clone, Debug)]
+/// A source span.
+pub struct SourceSpan {
+    /// File path
+    pub path: PathBuf,
+    /// Span
+    pub span: Span,
+}
+
 pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     Ok(Duration::new(s.parse()?, 0))
+}
+
+pub fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
+    Ok(Duration::new(0, 1_000_000_u32 * s.parse::<u32>()?))
 }
 
 pub fn iter_files_and_directories<'a, P, IP>(
