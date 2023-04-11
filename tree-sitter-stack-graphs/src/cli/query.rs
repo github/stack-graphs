@@ -107,11 +107,11 @@ impl Definition {
                 }
             };
 
-            if reference.references_iter(graph).next().is_none() {
+            if reference.iter_references(graph).next().is_none() {
                 logger.failure("no references", None);
                 return Ok(());
             }
-            let starting_nodes = reference.references_iter(graph).collect::<Vec<_>>();
+            let starting_nodes = reference.iter_references(graph).collect::<Vec<_>>();
 
             let mut actual_paths = Vec::new();
             let mut reference_paths = Vec::new();

@@ -316,7 +316,7 @@ impl<'a> Indexer<'a> {
             &(&cancellation_flag as &dyn CancellationFlag),
             |g, ps, p| {
                 self.db
-                    .add_partial_path_for_file(g, file, ps, &p)
+                    .add_partial_path_for_file(g, ps, &p, file)
                     .expect("adding path to database failed");
             },
         ) {

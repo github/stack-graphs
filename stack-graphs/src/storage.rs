@@ -49,6 +49,10 @@ const SCHEMA: &str = r#"
         ) STRICT;
     "#;
 
+const PRAGMAS: &str = r#"
+        PRAGMA journal_mode = WAL;
+    "#;
+
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("cancelled at {0}")]
@@ -91,6 +95,7 @@ impl SQLiteWriter {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let is_new = !path.as_ref().exists();
         let conn = Connection::open(path)?;
+        set_pragmas(&conn)?;
         if is_new {
             Self::init(&conn)?;
         } else {
@@ -253,6 +258,7 @@ impl SQLiteReader {
             ));
         }
         let conn = Connection::open(path)?;
+        set_pragmas(&conn)?;
         check_version(&conn)?;
         Ok(Self {
             conn,
@@ -462,7 +468,11 @@ fn check_version(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Check if a file exists in the database.
+fn set_pragmas(conn: &Connection) -> Result<()> {
+    conn.execute_batch(PRAGMAS)?;
+    Ok(())
+}
+
 fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool> {
     let result = if let Some(tag) = tag {
         let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;
