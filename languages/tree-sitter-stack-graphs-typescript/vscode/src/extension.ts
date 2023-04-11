@@ -29,7 +29,7 @@ export function activate(context: ExtensionContext) {
         switch (config.get<string>('database.defaultLocation')) {
             case "workspace":
                 if (!context?.storageUri?.fsPath) {
-                    window.showErrorMessage("Cannot start: no workspace open");
+                    // cannot start, no workspace is open
                     return;
                 }
                 mkdirSync(context.storageUri.fsPath, { recursive: true });
