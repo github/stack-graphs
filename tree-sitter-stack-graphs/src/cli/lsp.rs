@@ -10,6 +10,7 @@ use clap::Args;
 use crossbeam_channel::RecvTimeoutError;
 use crossbeam_channel::Sender;
 use stack_graphs::storage::SQLiteWriter;
+use stack_graphs::storage::StorageError;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -114,6 +115,27 @@ impl Backend {
         (sender, cancellation_flag)
     }
 
+    /// Opens or creates the database. If the database exists with an incompatible
+    /// version, it is recreated.
+    async fn ensure_compatible_database(&self) -> Result<()> {
+        match SQLiteWriter::open(&self.db_path) {
+            Ok(_) => {}
+            Err(StorageError::IncorrectVersion(_)) => {
+                self.logger
+                    .error(format!(
+                        "Recreating database with new version {}",
+                        self.db_path.display(),
+                    ))
+                    .await;
+
+                std::fs::remove_file(&self.db_path).from_error()?;
+                SQLiteWriter::open(&self.db_path).from_error()?;
+            }
+            Err(err) => return Err(err).from_error(),
+        };
+        Ok(())
+    }
+
     fn index(&self, path: &Path, handle: Handle, cancellation_flag: &dyn CancellationFlag) {
         handle.block_on(capture!([logger = &self.logger, path], async move {
             logger.info(format!("indexing {}", path.display())).await;
@@ -212,6 +234,8 @@ impl Backend {
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         self.logger.info("Initializing").await;
+
+        self.ensure_compatible_database().await?;
 
         let mut jobs = self.jobs.lock().await;
         *jobs = Some(self.start_job_handler().await);
