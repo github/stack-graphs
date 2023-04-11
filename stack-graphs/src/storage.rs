@@ -109,7 +109,7 @@ impl SQLiteWriter {
     pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<usize> {
         let count = if let Some(path) = path {
             let file = format!("{}%", path.as_ref().to_string_lossy());
-            self.conn.execute("BEGIN;", [])?;
+            self.conn.execute("BEGIN", [])?;
             self.conn
                 .execute("DELETE FROM file_paths WHERE file LIKE ?", [&file])?;
             self.conn
@@ -117,14 +117,14 @@ impl SQLiteWriter {
             let count = self
                 .conn
                 .execute("DELETE FROM graphs WHERE file LIKE ?", [&file])?;
-            self.conn.execute("COMMIT;", [])?;
+            self.conn.execute("COMMIT", [])?;
             count
         } else {
-            self.conn.execute("BEGIN;", [])?;
+            self.conn.execute("BEGIN", [])?;
             self.conn.execute("DELETE FROM file_paths", [])?;
             self.conn.execute("DELETE FROM root_paths", [])?;
             let count = self.conn.execute("DELETE FROM graphs", [])?;
-            self.conn.execute("COMMIT;", [])?;
+            self.conn.execute("COMMIT", [])?;
             count
         };
         Ok(count)
@@ -132,10 +132,10 @@ impl SQLiteWriter {
 
     /// Create database tables and write metadata.
     fn init(conn: &Connection) -> Result<()> {
-        conn.execute("BEGIN;", [])?;
+        conn.execute("BEGIN", [])?;
         conn.execute_batch(SCHEMA)?;
         conn.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
-        conn.execute("COMMIT;", [])?;
+        conn.execute("COMMIT", [])?;
         Ok(())
     }
 
