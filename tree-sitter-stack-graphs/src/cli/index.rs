@@ -310,14 +310,13 @@ impl<'a> Indexer<'a> {
         }
 
         let mut partials = PartialPaths::new();
+        let mut paths = Vec::new();
         match partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
             &(&cancellation_flag as &dyn CancellationFlag),
-            |g, ps, p| {
-                self.db
-                    .add_partial_path_for_file(g, ps, &p, file)
-                    .expect("adding path to database failed");
+            |_g, _ps, p| {
+                paths.push(p);
             },
         ) {
             Ok(_) => {}
@@ -326,6 +325,9 @@ impl<'a> Indexer<'a> {
                 return Ok(());
             }
         }
+        self.db
+            .add_partial_paths_for_file(&graph, file, &mut partials, &paths)
+            .expect("adding path to database failed");
 
         file_status.success("success", None);
 

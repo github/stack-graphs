@@ -182,46 +182,68 @@ impl SQLiteWriter {
     pub fn add_partial_path_for_file(
         &mut self,
         graph: &StackGraph,
+        file: Handle<File>,
         partials: &mut PartialPaths,
         path: &PartialPath,
-        file: Handle<File>,
     ) -> Result<()> {
+        self.add_partial_paths_for_file(graph, file, partials, std::iter::once(path))
+    }
+
+    /// Add partial paths for a file to the database.  Throws an error if the file does not exist in
+    /// the database.
+    pub fn add_partial_paths_for_file<'a, IP>(
+        &mut self,
+        graph: &StackGraph,
+        file: Handle<File>,
+        partials: &mut PartialPaths,
+        paths: IP,
+    ) -> Result<()>
+    where
+        IP: IntoIterator<Item = &'a PartialPath>,
+    {
         let file_str = graph[file].name();
-        copious_debugging!(
-            "--> Add {} partial path {}",
-            file_str,
-            path.display(graph, partials)
-        );
-        let start_node = graph[path.start_node].id();
-        if start_node.is_in_file(file) {
+        self.conn.execute("BEGIN", [])?;
+        let mut node_stmt = self
+            .conn
+            .prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
+        let mut root_stmt = self
+            .conn
+            .prepare_cached("INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)")?;
+        for path in paths {
             copious_debugging!(
-                " * Add as node path from node {}",
-                path.start_node.display(graph),
+                "--> Add {} partial path {}",
+                file_str,
+                path.display(graph, partials)
             );
-            let local_id = start_node.local_id();
-            let path = serde::PartialPath::from_partial_path(graph, partials, path);
-            let mut stmt = self
-                .conn
-                .prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
-            stmt.execute((file_str, local_id, &serde_json::to_vec(&path)?))?;
-        } else if start_node.is_root() {
-            copious_debugging!(
-                " * Add as root path with symbol stack {}",
-                path.symbol_stack_precondition.display(graph, partials),
-            );
-            let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
-            let path = serde::PartialPath::from_partial_path(graph, partials, path);
-            let mut stmt = self.conn.prepare_cached(
-                "INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)",
-            )?;
-            stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
-        } else {
-            panic!(
-                "added path {} must start in given file {} or at root",
-                path.display(graph, partials),
-                graph[file].name()
-            );
+            let start_node = graph[path.start_node].id();
+            if start_node.is_in_file(file) {
+                copious_debugging!(
+                    " * Add as node path from node {}",
+                    path.start_node.display(graph),
+                );
+                let path = serde::PartialPath::from_partial_path(graph, partials, path);
+                node_stmt.execute((
+                    file_str,
+                    path.start_node.local_id,
+                    &serde_json::to_vec(&path)?,
+                ))?;
+            } else if start_node.is_root() {
+                copious_debugging!(
+                    " * Add as root path with symbol stack {}",
+                    path.symbol_stack_precondition.display(graph, partials),
+                );
+                let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
+                let path = serde::PartialPath::from_partial_path(graph, partials, path);
+                root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
+            } else {
+                panic!(
+                    "added path {} must start in given file {} or at root",
+                    path.display(graph, partials),
+                    graph[file].name()
+                );
+            }
         }
+        self.conn.execute("COMMIT", [])?;
         Ok(())
     }
 
