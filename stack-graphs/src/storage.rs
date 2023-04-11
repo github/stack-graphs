@@ -154,25 +154,25 @@ impl SQLiteWriter {
         tag: &str,
     ) -> Result<()> {
         let file_str = graph[file].name();
-        copious_debugging!("--> Add graph for {}", file_str);
-        let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        self.conn.execute("BEGIN;", ())?;
-        // insert or update graph
-        let mut stmt = self
+        let mut graph_stmt = self
             .conn
             .prepare_cached("INSERT OR REPLACE INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
-        stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
-        // remove stale file paths
-        let mut stmt = self
+        let mut node_paths_stmt = self
             .conn
             .prepare_cached("DELETE FROM file_paths WHERE file = ?")?;
-        stmt.execute([file_str])?;
-        // remove stale file paths
-        let mut stmt = self
+        let mut file_paths_stmt = self
             .conn
             .prepare_cached("DELETE FROM root_paths WHERE file = ?")?;
-        stmt.execute([file_str])?;
-        self.conn.execute("END;", ())?;
+        copious_debugging!("--> Add graph for {}", file_str);
+        let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
+        self.conn.execute("BEGIN", ())?;
+        // insert or update graph
+        graph_stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
+        // remove stale file paths
+        node_paths_stmt.execute([file_str])?;
+        // remove stale file paths
+        file_paths_stmt.execute([file_str])?;
+        self.conn.execute("COMMIT", ())?;
         Ok(())
     }
 
