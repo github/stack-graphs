@@ -63,12 +63,12 @@ impl CleanArgs {
     fn clean(&self, db_path: &Path) -> anyhow::Result<()> {
         let mut db = SQLiteWriter::open(&db_path)?;
         let count = if self.all {
-            db.clean(None::<&PathBuf>)?
+            db.clean_all()?
         } else {
             let mut count = 0usize;
             for path in &self.source_paths {
                 let path = path.canonicalize()?;
-                count += db.clean(Some(path))?;
+                count += db.clean_path(&path, true)?;
             }
             count
         };

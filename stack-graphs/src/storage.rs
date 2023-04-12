@@ -104,32 +104,6 @@ impl SQLiteWriter {
         Ok(Self { conn })
     }
 
-    /// Clean file data from the database.  If a path is given, data for all descendants of
-    /// that path is cleaned.  Otherwise, data for all files is cleaned.
-    pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<usize> {
-        let count = if let Some(path) = path {
-            let file = format!("{}%", path.as_ref().to_string_lossy());
-            self.conn.execute("BEGIN", [])?;
-            self.conn
-                .execute("DELETE FROM file_paths WHERE file LIKE ?", [&file])?;
-            self.conn
-                .execute("DELETE FROM root_paths WHERE file LIKE ?", [&file])?;
-            let count = self
-                .conn
-                .execute("DELETE FROM graphs WHERE file LIKE ?", [&file])?;
-            self.conn.execute("COMMIT", [])?;
-            count
-        } else {
-            self.conn.execute("BEGIN", [])?;
-            self.conn.execute("DELETE FROM file_paths", [])?;
-            self.conn.execute("DELETE FROM root_paths", [])?;
-            let count = self.conn.execute("DELETE FROM graphs", [])?;
-            self.conn.execute("COMMIT", [])?;
-            count
-        };
-        Ok(count)
-    }
-
     /// Create database tables and write metadata.
     fn init(conn: &Connection) -> Result<()> {
         conn.execute("BEGIN", [])?;
@@ -143,6 +117,59 @@ impl SQLiteWriter {
     /// if the tag matches.
     pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool> {
         file_exists(&self.conn, file, tag)
+    }
+
+    /// Clean all data from the database.
+    pub fn clean_all(&mut self) -> Result<usize> {
+        self.conn.execute("BEGIN", [])?;
+        let count = self.clean_all_inner()?;
+        self.conn.execute("COMMIT", [])?;
+        Ok(count)
+    }
+
+    /// Clean all data from the database.
+    fn clean_all_inner(&mut self) -> Result<usize> {
+        self.conn.execute("DELETE FROM file_paths", [])?;
+        self.conn.execute("DELETE FROM root_paths", [])?;
+        let count = self.conn.execute("DELETE FROM graphs", [])?;
+        Ok(count)
+    }
+
+    /// Clean path data from the database.  If recursive is true, data for all descendants of
+    /// that path is cleaned.
+    pub fn clean_path(&mut self, path: &Path, recursive: bool) -> Result<usize> {
+        self.conn.execute("BEGIN", [])?;
+        let count = self.clean_path_inner(path, recursive)?;
+        self.conn.execute("COMMIT", [])?;
+        Ok(count)
+    }
+
+    fn clean_path_inner(&mut self, path: &Path, recursive: bool) -> Result<usize> {
+        let file = format!("{}%", path.to_string_lossy());
+        let dir = file.clone() + std::path::MAIN_SEPARATOR_STR + "%";
+        let mut count = 0usize;
+        self.conn
+            .execute("DELETE FROM file_paths WHERE file=?", [&file])?;
+        if recursive {
+            self.conn
+                .execute("DELETE FROM file_paths WHERE file LIKE ?", [&dir])?;
+        }
+        self.conn
+            .execute("DELETE FROM root_paths WHERE file=?", [&file])?;
+        if recursive {
+            self.conn
+                .execute("DELETE FROM root_paths WHERE file LIKE ?", [&dir])?;
+        }
+        count += self
+            .conn
+            .execute("DELETE FROM graphs WHERE file=?", [&file])?;
+        if recursive {
+            count += self
+                .conn
+                .execute("DELETE FROM graphs WHERE file LIKE ?", [&dir])?;
+        }
+        self.conn.execute("COMMIT", [])?;
+        Ok(count)
     }
 
     /// Add the stack graph of a file to the database.  If the file already exists, its previous graph
