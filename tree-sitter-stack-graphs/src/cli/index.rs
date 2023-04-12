@@ -9,6 +9,7 @@ use clap::Args;
 use clap::ValueHint;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
+use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
 use std::path::Path;
@@ -235,13 +236,21 @@ impl<'a> Indexer<'a> {
         let source = file_reader.get(source_path)?;
         let tag = sha1(source);
 
-        if !self.force
-            && self
+        if !self.force {
+            match self
                 .db
-                .file_exists(&source_path.to_string_lossy(), Some(&tag))?
-        {
-            file_status.skipped("cached", None);
-            return Ok(());
+                .status_for_file(&source_path.to_string_lossy(), Some(&tag))?
+            {
+                FileStatus::Missing => {}
+                FileStatus::Indexed => {
+                    file_status.skipped("cached index", None);
+                    return Ok(());
+                }
+                FileStatus::Error(error) => {
+                    file_status.skipped(&format!("cached error ({})", error), None);
+                    return Ok(());
+                }
+            }
         }
 
         let file_cancellation_flag = CancelAfterDuration::from_option(self.max_file_time);
@@ -273,9 +282,11 @@ impl<'a> Indexer<'a> {
             lc.sgl
                 .build_stack_graph_into(&mut graph, file, &source, &globals, &cancellation_flag)
         };
-        let processable_file = match result {
+        match result {
             Err(BuildError::Cancelled(_)) => {
                 file_status.warning("parsing timed out", None);
+                self.db
+                    .store_error_for_file(source_path, &tag, "parsing timed out")?;
                 return Ok(());
             }
             Err(err @ BuildError::ParseErrors(_)) => {
@@ -288,7 +299,12 @@ impl<'a> Indexer<'a> {
                         lc.sgl.tsg_source(),
                     )),
                 );
-                false
+                self.db.store_error_for_file(
+                    source_path,
+                    &tag,
+                    &format!("parsing failed: {}", err),
+                )?;
+                return Ok(());
             }
             Err(err) => {
                 file_status.failure(
@@ -304,10 +320,6 @@ impl<'a> Indexer<'a> {
             }
             Ok(_) => true,
         };
-        self.db.add_graph_for_file(&graph, file, &tag)?;
-        if !processable_file {
-            return Ok(());
-        }
 
         let mut partials = PartialPaths::new();
         let mut paths = Vec::new();
@@ -322,12 +334,17 @@ impl<'a> Indexer<'a> {
             Ok(_) => {}
             Err(_) => {
                 file_status.warning("path computation timed out", None);
+                self.db.store_error_for_file(
+                    source_path,
+                    &tag,
+                    &format!("path computation timed out"),
+                )?;
                 return Ok(());
             }
         }
+
         self.db
-            .add_partial_paths_for_file(&graph, file, &mut partials, &paths)
-            .expect("adding path to database failed");
+            .store_result_for_file(&graph, file, &tag, &mut partials, &paths)?;
 
         file_status.success("success", None);
 

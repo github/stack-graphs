@@ -12,6 +12,7 @@ use clap::ValueHint;
 use itertools::Itertools;
 use lsp_positions::PositionedSubstring;
 use lsp_positions::SpanCalculator;
+use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteReader;
 use stack_graphs::storage::StorageError;
 use std::path::Path;
@@ -87,9 +88,12 @@ impl Definition {
             let source = file_reader.get(&reference.path)?;
             let tag = sha1(source);
 
-            if !db.file_exists(&source_path, Some(&tag))? {
-                logger.failure("file not indexed", None);
-                return Ok(());
+            match db.file_status(&source_path, Some(&tag))? {
+                FileStatus::Indexed => {}
+                _ => {
+                    logger.failure("file not indexed", None);
+                    return Ok(());
+                }
             }
 
             let lines = PositionedSubstring::lines_iter(source);

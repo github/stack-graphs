@@ -6,7 +6,9 @@
 // ------------------------------------------------------------------------------------------------
 
 use rusqlite::functions::FunctionFlags;
+use rusqlite::types::ValueRef;
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
@@ -26,16 +28,17 @@ use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
-const VERSION: usize = 1;
+const VERSION: usize = 2;
 
 const SCHEMA: &str = r#"
         CREATE TABLE metadata (
             version INTEGER NOT NULL
         ) STRICT;
         CREATE TABLE graphs (
-            file TEXT PRIMARY KEY,
-            tag  TEXT NOT NULL,
-            json BLOB NOT NULL
+            file   TEXT PRIMARY KEY,
+            tag    TEXT NOT NULL,
+            error  TEXT,
+            json   BLOB NOT NULL
         ) STRICT;
         CREATE TABLE file_paths (
             file     TEXT NOT NULL,
@@ -81,6 +84,26 @@ impl From<CancellationError> for StorageError {
     }
 }
 
+pub enum FileStatus {
+    Missing,
+    Indexed,
+    Error(String),
+}
+
+impl<'a> From<ValueRef<'a>> for FileStatus {
+    fn from(value: ValueRef<'a>) -> Self {
+        match value {
+            ValueRef::Null => Self::Indexed,
+            ValueRef::Text(error) => Self::Error(
+                std::str::from_utf8(error)
+                    .expect("invalid error encoding in database")
+                    .to_string(),
+            ),
+            _ => panic!("invalid value type in database"),
+        }
+    }
+}
+
 /// Writer to store stack graphs and partial paths in a SQLite database.
 pub struct SQLiteWriter {
     conn: Connection,
@@ -117,12 +140,6 @@ impl SQLiteWriter {
         Ok(())
     }
 
-    /// Check if a graph for the file exists in the database.  If a tag is provided, returns true only
-    /// if the tag matches.
-    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool> {
-        file_exists(&self.conn, file, tag)
-    }
-
     /// Clean all data from the database.
     pub fn clean_all(&mut self) -> Result<usize> {
         self.conn.execute("BEGIN", [])?;
@@ -132,6 +149,8 @@ impl SQLiteWriter {
     }
 
     /// Clean all data from the database.
+    ///
+    /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_all_inner(&mut self) -> Result<usize> {
         {
             let mut stmt = self.conn.prepare_cached("DELETE FROM file_paths")?;
@@ -219,53 +238,76 @@ impl SQLiteWriter {
         Ok(count)
     }
 
-    /// Add the stack graph of a file to the database.  If the file already exists, its previous graph
-    /// and paths are removed.
-    pub fn add_graph_for_file(
+    /// Store an error, indicating that indexing this file failed.
+    pub fn store_error_for_file(&mut self, file: &Path, tag: &str, error: &str) -> Result<()> {
+        self.conn.execute("BEGIN", [])?;
+        self.store_error_for_file_inner(file, tag, error)?;
+        self.conn.execute("COMMIT", [])?;
+        Ok(())
+    }
+
+    /// Store an error, indicating that indexing this file failed.
+    ///
+    /// This is an inner method, which does not wrap individual SQL statements in a transaction.
+    fn store_error_for_file_inner(&mut self, file: &Path, tag: &str, error: &str) -> Result<()> {
+        copious_debugging!("--> Store error for {}", file.display());
+        let mut stmt = self
+            .conn
+            .prepare_cached("INSERT INTO graphs (file, tag, error, json) VALUES (?, ?, ?, ?)")?;
+        let graph = crate::serde::StackGraph::default();
+        stmt.execute((
+            &file.to_string_lossy(),
+            tag,
+            error,
+            &serde_json::to_vec(&graph)?,
+        ))?;
+        Ok(())
+    }
+
+    /// Store the result of a successful file index.
+    pub fn store_result_for_file<'a, IP>(
+        &mut self,
+        graph: &StackGraph,
+        file: Handle<File>,
+        tag: &str,
+        partials: &mut PartialPaths,
+        paths: IP,
+    ) -> Result<()>
+    where
+        IP: IntoIterator<Item = &'a PartialPath>,
+    {
+        let path = Path::new(graph[file].name());
+        self.conn.execute("BEGIN", [])?;
+        self.clean_file_inner(path)?;
+        self.store_graph_for_file_inner(graph, file, tag)?;
+        self.store_partial_paths_for_file_inner(graph, file, partials, paths)?;
+        self.conn.execute("COMMIT", [])?;
+        Ok(())
+    }
+
+    /// Store the file graph.
+    ///
+    /// This is an inner method, which does not wrap individual SQL statements in a transaction.
+    fn store_graph_for_file_inner(
         &mut self,
         graph: &StackGraph,
         file: Handle<File>,
         tag: &str,
     ) -> Result<()> {
         let file_str = graph[file].name();
-        let mut graph_stmt = self
+        copious_debugging!("--> Store graph for {}", file_str);
+        let mut stmt = self
             .conn
-            .prepare_cached("INSERT OR REPLACE INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
-        let mut node_paths_stmt = self
-            .conn
-            .prepare_cached("DELETE FROM file_paths WHERE file = ?")?;
-        let mut file_paths_stmt = self
-            .conn
-            .prepare_cached("DELETE FROM root_paths WHERE file = ?")?;
-        copious_debugging!("--> Add graph for {}", file_str);
+            .prepare_cached("INSERT INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        self.conn.execute("BEGIN", ())?;
-        // insert or update graph
-        graph_stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
-        // remove stale file paths
-        node_paths_stmt.execute([file_str])?;
-        // remove stale file paths
-        file_paths_stmt.execute([file_str])?;
-        self.conn.execute("COMMIT", ())?;
+        stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
         Ok(())
     }
 
-    /// Add a partial path for a file to the database.  Returns an error if the file does not exist in
-    /// the database.  The start node of `path` must be in `file` or be the root node, otherwise the
-    /// method panics.
-    pub fn add_partial_path_for_file(
-        &mut self,
-        graph: &StackGraph,
-        file: Handle<File>,
-        partials: &mut PartialPaths,
-        path: &PartialPath,
-    ) -> Result<()> {
-        self.add_partial_paths_for_file(graph, file, partials, std::iter::once(path))
-    }
-
-    /// Add partial paths for a file to the database.  Panics if the file does not exist in
-    /// the database, or if a path starts at a node that doesn't belong to the given file.
-    pub fn add_partial_paths_for_file<'a, IP>(
+    /// Store the file partial paths.
+    ///
+    /// This is an inner method, which does not wrap individual SQL statements in a transaction.
+    fn store_partial_paths_for_file_inner<'a, IP>(
         &mut self,
         graph: &StackGraph,
         file: Handle<File>,
@@ -276,7 +318,6 @@ impl SQLiteWriter {
         IP: IntoIterator<Item = &'a PartialPath>,
     {
         let file_str = graph[file].name();
-        self.conn.execute("BEGIN", [])?;
         let mut node_stmt = self
             .conn
             .prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
@@ -317,10 +358,16 @@ impl SQLiteWriter {
                 );
             }
         }
-        self.conn.execute("COMMIT", [])?;
         Ok(())
     }
 
+    /// Get the file's status in the database. If a tag is provided, it must match or the file
+    /// is reported missing.
+    pub fn status_for_file(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+        file_status(&self.conn, file, tag)
+    }
+
+    /// Convert this writer into a reader for the same database.
     pub fn into_reader(self) -> SQLiteReader {
         SQLiteReader {
             conn: self.conn,
@@ -367,10 +414,10 @@ impl SQLiteReader {
         })
     }
 
-    /// Check if a graph for the file exists in the database.  If a tag is provided, returns true only
-    /// if the tag matches.
-    pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool> {
-        file_exists(&self.conn, file, tag)
+    /// Get the file's status in the database. If a tag is provided, it must match or the file
+    /// is reported missing.
+    pub fn file_status(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+        file_status(&self.conn, file, tag)
     }
 
     /// Ensure the graph for the given file is loaded.
@@ -581,13 +628,18 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool> {
+fn file_status<'a>(conn: &'a Connection, file: &str, tag: Option<&str>) -> Result<FileStatus> {
     let result = if let Some(tag) = tag {
-        let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;
-        stmt.exists([file, tag])?
+        let mut stmt =
+            conn.prepare_cached("SELECT error FROM graphs WHERE file = ? AND tag = ?")?;
+        stmt.query_row([file, tag], |r| r.get_ref(0).map(FileStatus::from))
+            .optional()?
+            .unwrap_or(FileStatus::Missing)
     } else {
-        let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ?")?;
-        stmt.exists([file])?
+        let mut stmt = conn.prepare_cached("SELECT status FROM graphs WHERE file = ?")?;
+        stmt.query_row([file], |r| r.get_ref(0).map(FileStatus::from))
+            .optional()?
+            .unwrap_or(FileStatus::Missing)
     };
     Ok(result)
 }
