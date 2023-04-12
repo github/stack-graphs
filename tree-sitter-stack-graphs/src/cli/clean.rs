@@ -68,7 +68,7 @@ impl CleanArgs {
             let mut count = 0usize;
             for path in &self.source_paths {
                 let path = path.canonicalize()?;
-                count += db.clean_path(&path, true)?;
+                count += db.clean_file_or_directory(&path)?;
             }
             count
         };
