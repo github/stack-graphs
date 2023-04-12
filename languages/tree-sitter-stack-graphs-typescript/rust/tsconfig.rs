@@ -14,8 +14,8 @@ use std::path::PathBuf;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
+use tree_sitter_stack_graphs::BuildError;
 use tree_sitter_stack_graphs::FileAnalyzer;
-use tree_sitter_stack_graphs::LoadError;
 
 use crate::util::*;
 
@@ -31,12 +31,12 @@ impl FileAnalyzer for TsConfigAnalyzer {
         all_paths: &mut dyn Iterator<Item = &'a Path>,
         globals: &HashMap<String, String>,
         _cancellation_flag: &dyn tree_sitter_stack_graphs::CancellationFlag,
-    ) -> Result<(), tree_sitter_stack_graphs::LoadError> {
+    ) -> Result<(), tree_sitter_stack_graphs::BuildError> {
         // read globals
         let proj_name = globals.get(crate::PROJECT_NAME_VAR).map(String::as_str);
 
         // parse source
-        let tsc = TsConfig::parse_str(path, source).map_err(|_| LoadError::ParseError)?;
+        let tsc = TsConfig::parse_str(path, source).map_err(|_| BuildError::ParseError)?;
 
         // root node
         let root = StackGraph::root_node();
@@ -159,9 +159,9 @@ struct TsConfig {
 }
 
 impl TsConfig {
-    fn parse_str(path: &Path, source: &str) -> Result<Self, LoadError> {
-        let project_dir = path.parent().ok_or(LoadError::ParseError)?.to_path_buf();
-        let tsc = tsconfig::TsConfig::parse_str(source).map_err(|_| LoadError::ParseError)?;
+    fn parse_str(path: &Path, source: &str) -> Result<Self, BuildError> {
+        let project_dir = path.parent().ok_or(BuildError::ParseError)?.to_path_buf();
+        let tsc = tsconfig::TsConfig::parse_str(source).map_err(|_| BuildError::ParseError)?;
         Ok(Self { project_dir, tsc })
     }
 }

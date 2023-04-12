@@ -9,7 +9,7 @@ use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use tree_sitter_graph::Variables;
-use tree_sitter_stack_graphs::LoadError;
+use tree_sitter_stack_graphs::BuildError;
 use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
@@ -22,7 +22,7 @@ mod test;
 pub(self) fn build_stack_graph(
     python_source: &str,
     tsg_source: &str,
-) -> Result<(StackGraph, Handle<File>), LoadError> {
+) -> Result<(StackGraph, Handle<File>), BuildError> {
     let language =
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
     let mut graph = StackGraph::new();

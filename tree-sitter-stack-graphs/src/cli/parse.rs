@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use anyhow::Context as _;
 use clap::Args;
 use clap::ValueHint;
 use std::path::Path;
@@ -17,7 +16,8 @@ use tree_sitter_graph::parse_error::ParseError;
 use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
-use crate::LoadError;
+use crate::util::DisplayParseErrorsPretty;
+use crate::BuildError;
 
 /// Parse file
 #[derive(Args)]
@@ -29,8 +29,7 @@ pub struct ParseArgs {
 
 impl ParseArgs {
     pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
-        self.parse_file(&self.file_path, loader)
-            .with_context(|| format!("Error parsing file {}", self.file_path.display()))?;
+        self.parse_file(&self.file_path, loader)?;
         Ok(())
     }
 
@@ -44,10 +43,19 @@ impl ParseArgs {
 
         let mut parser = Parser::new();
         parser.set_language(lang)?;
-        let tree = parser.parse(source, None).ok_or(LoadError::ParseError)?;
+        let tree = parser.parse(source, None).ok_or(BuildError::ParseError)?;
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
-            return Err(anyhow!(LoadError::ParseErrors(parse_errors)));
+            eprintln!(
+                "{}",
+                DisplayParseErrorsPretty {
+                    parse_errors: &parse_errors,
+                    path: file_path,
+                    source: &source,
+                    max_errors: crate::MAX_PARSE_ERRORS,
+                }
+            );
+            return Err(anyhow!("Failed to parse file {}", file_path.display()));
         }
         let tree = parse_errors.into_tree();
         self.print_tree(tree);

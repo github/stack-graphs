@@ -15,9 +15,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 #[cfg(debug_assertions)]
 use std::time::Instant;
-use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
-
-use crate::cli::MAX_PARSE_ERRORS;
 
 pub fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
     let path = PathBuf::from(path);
@@ -127,37 +124,6 @@ impl From<&str> for PathSpec {
     }
 }
 
-pub fn map_parse_errors(
-    test_path: &Path,
-    parse_errors: &TreeWithParseErrorVec,
-    source: &str,
-    prefix: &str,
-) -> anyhow::Error {
-    let mut error = String::new();
-    let parse_errors = parse_errors.errors();
-    for parse_error in parse_errors.iter().take(MAX_PARSE_ERRORS) {
-        let line = parse_error.node().start_position().row;
-        let column = parse_error.node().start_position().column;
-        error.push_str(&format!(
-            "{}{}:{}:{}: {}\n",
-            prefix,
-            test_path.display(),
-            line + 1,
-            column + 1,
-            parse_error.display(&source, false)
-        ));
-    }
-    if parse_errors.len() > MAX_PARSE_ERRORS {
-        let more_errors = parse_errors.len() - MAX_PARSE_ERRORS;
-        error.push_str(&format!(
-            "  {} more parse error{} omitted\n",
-            more_errors,
-            if more_errors > 1 { "s" } else { "" },
-        ));
-    }
-    anyhow!(error)
-}
-
 pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     Ok(Duration::new(s.parse()?, 0))
 }
@@ -237,6 +203,13 @@ impl<'a> FileStatusLogger<'a> {
         println!();
         self.path_logged = false;
         std::io::stdout().flush()
+    }
+
+    pub fn error_if_processing(&mut self, status: &str) -> std::io::Result<()> {
+        if !self.path_logged {
+            return Ok(());
+        }
+        self.error(status)
     }
 
     fn print_path(&mut self) {

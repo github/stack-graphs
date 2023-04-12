@@ -282,9 +282,7 @@
 //! ```
 //! # use stack_graphs::graph::StackGraph;
 //! # use tree_sitter_graph::Variables;
-//! # use tree_sitter_graph::functions::Functions;
 //! # use tree_sitter_stack_graphs::StackGraphLanguage;
-//! # use tree_sitter_stack_graphs::LoadError;
 //! # use tree_sitter_stack_graphs::NoCancellation;
 //! #
 //! # // This documentation test is not meant to test Python's actual stack graph
@@ -316,10 +314,12 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::mem::transmute;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -335,6 +335,7 @@ use tree_sitter_graph::graph::Value;
 use tree_sitter_graph::parse_error::ParseError;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
+use util::DisplayParseErrorsPretty;
 
 #[cfg(feature = "cli")]
 pub mod ci;
@@ -343,9 +344,12 @@ pub mod cli;
 pub mod functions;
 pub mod loader;
 pub mod test;
+mod util;
 
 pub use tree_sitter_graph::VariableError;
 pub use tree_sitter_graph::Variables;
+
+pub(self) const MAX_PARSE_ERRORS: usize = 5;
 
 // Node type values
 static DROP_SCOPES_TYPE: &'static str = "drop_scopes";
@@ -387,10 +391,12 @@ static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
 static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 static FILE_PATH_VAR: &'static str = "FILE_PATH";
 
-/// Holds information about how to construct stack graphs for a particular language
+/// Holds information about how to construct stack graphs for a particular language.
 pub struct StackGraphLanguage {
     language: tree_sitter::Language,
     tsg: tree_sitter_graph::ast::File,
+    tsg_path: PathBuf,
+    tsg_source: std::borrow::Cow<'static, str>,
     functions: Functions,
 }
 
@@ -400,17 +406,20 @@ impl StackGraphLanguage {
     pub fn new(
         language: tree_sitter::Language,
         tsg: tree_sitter_graph::ast::File,
-    ) -> Result<StackGraphLanguage, LanguageError> {
+    ) -> StackGraphLanguage {
         debug_assert_eq!(language, tsg.language);
-        Ok(StackGraphLanguage {
+        StackGraphLanguage {
             language,
             tsg,
+            tsg_path: PathBuf::from("<tsg>"),
+            tsg_source: Cow::from(String::new()),
             functions: Self::default_functions(),
-        })
+        }
     }
 
     /// Creates a new stack graph language for the given language, loading the
-    /// TSG stack graph construction rules from a string.
+    /// TSG stack graph construction rules from a string. Keeps the source, which
+    /// can later be used for [`BuildError::display_pretty`][].
     pub fn from_str(
         language: tree_sitter::Language,
         tsg_source: &str,
@@ -419,8 +428,29 @@ impl StackGraphLanguage {
         Ok(StackGraphLanguage {
             language,
             tsg,
+            tsg_path: PathBuf::from("<missing tsg path>"),
+            tsg_source: Cow::from(tsg_source.to_string()),
             functions: Self::default_functions(),
         })
+    }
+
+    /// Creates a new stack graph language for the given language, loading the TSG
+    /// stack graph construction rules from the given source. The path is purely for
+    /// informational purposes, and is not accessed. The source and path are kept,
+    /// e.g. to use for [`BuildError::display_pretty`][].
+    pub fn from_source(
+        language: tree_sitter::Language,
+        tsg_path: PathBuf,
+        tsg_source: &str,
+    ) -> Result<StackGraphLanguage, LanguageError> {
+        let mut sgl = Self::from_str(language, tsg_source)?;
+        sgl.tsg_path = tsg_path;
+        Ok(sgl)
+    }
+
+    pub fn set_tsg_info(&mut self, path: PathBuf, source: Cow<'static, str>) {
+        self.tsg_path = path;
+        self.tsg_source = source;
     }
 
     fn default_functions() -> tree_sitter_graph::functions::Functions {
@@ -436,6 +466,18 @@ impl StackGraphLanguage {
     pub fn language(&self) -> tree_sitter::Language {
         self.language
     }
+
+    /// Returns the original TSG path, if it was provided at construction or set with
+    /// [`set_tsg_info`][]. Can be used as input for [`BuildError::display_pretty`][].
+    pub fn tsg_path(&self) -> &Path {
+        &self.tsg_path
+    }
+
+    /// Returns the original TSG source, if it was provided at construction or set with
+    /// [`set_tsg_info`][]. Can be used as input for [`BuildError::display_pretty`][].
+    pub fn tsg_source(&self) -> &Cow<'static, str> {
+        &self.tsg_source
+    }
 }
 
 /// An error that can occur while loading in the TSG stack graph construction rules for a language
@@ -443,6 +485,18 @@ impl StackGraphLanguage {
 pub enum LanguageError {
     #[error(transparent)]
     ParseError(#[from] tree_sitter_graph::ParseError),
+}
+
+impl LanguageError {
+    pub fn display_pretty<'a>(
+        &'a self,
+        path: &'a Path,
+        source: &'a str,
+    ) -> impl std::fmt::Display + 'a {
+        match self {
+            Self::ParseError(err) => err.display_pretty(path, source),
+        }
+    }
 }
 
 impl StackGraphLanguage {
@@ -457,7 +511,7 @@ impl StackGraphLanguage {
         source: &'a str,
         globals: &'a Variables<'a>,
         cancellation_flag: &'a dyn CancellationFlag,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         self.builder_into_stack_graph(stack_graph, file, source)
             .build(globals, cancellation_flag)
     }
@@ -512,16 +566,16 @@ impl<'a> Builder<'a> {
         mut self,
         globals: &'a Variables<'a>,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         let mut parser = Parser::new();
         parser.set_language(self.sgl.language)?;
         unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
         let tree = parser
             .parse(self.source, None)
-            .ok_or(LoadError::ParseError)?;
+            .ok_or(BuildError::ParseError)?;
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
-            return Err(LoadError::ParseErrors(parse_errors));
+            return Err(BuildError::ParseErrors(parse_errors));
         }
         let tree = parse_errors.into_tree();
 
@@ -651,7 +705,7 @@ impl CancellationFlag for CancelAfterDuration {
 
 /// An error that can occur while loading a stack graph from a TSG file
 #[derive(Debug, Error)]
-pub enum LoadError {
+pub enum BuildError {
     #[error("{0}")]
     Cancelled(&'static str),
     #[error("Missing ‘type’ attribute on graph node")]
@@ -680,13 +734,13 @@ pub enum LoadError {
     SymbolScopeError(String, String),
 }
 
-impl From<stack_graphs::CancellationError> for LoadError {
+impl From<stack_graphs::CancellationError> for BuildError {
     fn from(value: stack_graphs::CancellationError) -> Self {
         Self::Cancelled(value.0)
     }
 }
 
-impl From<tree_sitter_graph::ExecutionError> for LoadError {
+impl From<tree_sitter_graph::ExecutionError> for BuildError {
     fn from(value: tree_sitter_graph::ExecutionError) -> Self {
         match value {
             tree_sitter_graph::ExecutionError::Cancelled(err) => Self::Cancelled(err.0),
@@ -695,8 +749,57 @@ impl From<tree_sitter_graph::ExecutionError> for LoadError {
     }
 }
 
+impl BuildError {
+    pub fn display_pretty<'a>(
+        &'a self,
+        source_path: &'a Path,
+        source: &'a str,
+        tsg_path: &'a Path,
+        tsg: &'a str,
+    ) -> impl std::fmt::Display + 'a {
+        DisplayBuildErrorPretty {
+            error: self,
+            source_path,
+            source,
+            tsg_path,
+            tsg,
+        }
+    }
+}
+
+struct DisplayBuildErrorPretty<'a> {
+    error: &'a BuildError,
+    source_path: &'a Path,
+    source: &'a str,
+    tsg_path: &'a Path,
+    tsg: &'a str,
+}
+
+impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.error {
+            BuildError::ExecutionError(err) => write!(
+                f,
+                "{}",
+                err.display_pretty(self.source_path, self.source, self.tsg_path, self.tsg)
+            ),
+            BuildError::ParseErrors(parse_errors) => write!(
+                f,
+                "{}",
+                DisplayParseErrorsPretty {
+                    parse_errors,
+                    path: self.source_path,
+                    source: self.source,
+                    max_errors: crate::MAX_PARSE_ERRORS,
+                }
+            ),
+            err => err.fmt(f),
+        }
+    }
+}
+
 impl<'a> Builder<'a> {
-    fn load(mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), LoadError> {
+    fn load(mut self, cancellation_flag: &dyn CancellationFlag) -> Result<(), BuildError> {
         let cancellation_flag: &dyn stack_graphs::CancellationFlag = &cancellation_flag;
 
         // By default graph ids are used for stack graph local_ids. A remapping is computed
@@ -765,7 +868,7 @@ impl<'a> Builder<'a> {
         Ok(())
     }
 
-    fn get_node_type(&self, node_ref: GraphNodeRef) -> Result<NodeType, LoadError> {
+    fn get_node_type(&self, node_ref: GraphNodeRef) -> Result<NodeType, BuildError> {
         let node = &self.graph[node_ref];
         let node_type = match node.attributes.get(TYPE_ATTR) {
             Some(node_type) => node_type.as_str()?,
@@ -784,15 +887,15 @@ impl<'a> Builder<'a> {
         } else if node_type == SCOPE_TYPE {
             return Ok(NodeType::Scope);
         } else {
-            return Err(LoadError::UnknownNodeType(format!("{}", node_type)));
+            return Err(BuildError::UnknownNodeType(format!("{}", node_type)));
         }
     }
 
-    fn verify_node(&self, node: Handle<Node>) -> Result<(), LoadError> {
+    fn verify_node(&self, node: Handle<Node>) -> Result<(), BuildError> {
         if let Node::PushScopedSymbol(node) = &self.stack_graph[node] {
             let scope = &self.stack_graph[self.stack_graph.node_for_id(node.scope).unwrap()];
             if !scope.is_exported_scope() {
-                return Err(LoadError::SymbolScopeError(
+                return Err(BuildError::SymbolScopeError(
                     format!("{}", node.display(self.stack_graph)),
                     format!("{}", scope.display(self.stack_graph)),
                 ));
@@ -836,11 +939,11 @@ impl<'a> Builder<'a> {
     fn load_pop_scoped_symbol(
         &mut self,
         node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
+    ) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
@@ -852,11 +955,11 @@ impl<'a> Builder<'a> {
             .unwrap())
     }
 
-    fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+    fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
@@ -871,17 +974,17 @@ impl<'a> Builder<'a> {
     fn load_push_scoped_symbol(
         &mut self,
         node_ref: GraphNodeRef,
-    ) -> Result<Handle<Node>, LoadError> {
+    ) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
         let scope = match node.attributes.get(SCOPE_ATTR) {
             Some(scope) => self.node_id_for_graph_node(scope.as_graph_node_ref()?),
-            None => return Err(LoadError::MissingScope(node_ref)),
+            None => return Err(BuildError::MissingScope(node_ref)),
         };
         let is_reference = self.load_flag(node, IS_REFERENCE_ATTR)?;
         self.verify_attributes(node, PUSH_SCOPED_SYMBOL_TYPE, &PUSH_SCOPED_SYMBOL_ATTRS);
@@ -891,11 +994,11 @@ impl<'a> Builder<'a> {
             .unwrap())
     }
 
-    fn load_push_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+    fn load_push_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let symbol = match node.attributes.get(SYMBOL_ATTR) {
             Some(symbol) => self.load_symbol(symbol)?,
-            None => return Err(LoadError::MissingSymbol(node_ref)),
+            None => return Err(BuildError::MissingSymbol(node_ref)),
         };
         let symbol = self.stack_graph.add_symbol(&symbol);
         let id = self.node_id_for_graph_node(node_ref);
@@ -907,7 +1010,7 @@ impl<'a> Builder<'a> {
             .unwrap())
     }
 
-    fn load_scope(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, LoadError> {
+    fn load_scope(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
         let node = &self.graph[node_ref];
         let id = self.node_id_for_graph_node(node_ref);
         let is_exported =
@@ -916,18 +1019,18 @@ impl<'a> Builder<'a> {
         Ok(self.stack_graph.add_scope_node(id, is_exported).unwrap())
     }
 
-    fn load_symbol(&self, value: &Value) -> Result<String, LoadError> {
+    fn load_symbol(&self, value: &Value) -> Result<String, BuildError> {
         match value {
             Value::Integer(i) => Ok(i.to_string()),
             Value::String(s) => Ok(s.clone()),
-            _ => Err(LoadError::UnknownSymbolType(format!("{}", value))),
+            _ => Err(BuildError::UnknownSymbolType(format!("{}", value))),
         }
     }
 
-    fn load_flag(&self, node: &GraphNode, attribute: &str) -> Result<bool, LoadError> {
+    fn load_flag(&self, node: &GraphNode, attribute: &str) -> Result<bool, BuildError> {
         match node.attributes.get(attribute) {
             Some(value) => value.as_boolean().map_err(|_| {
-                LoadError::UnknownFlagType(format!("{}", attribute), format!("{}", value))
+                BuildError::UnknownFlagType(format!("{}", attribute), format!("{}", value))
             }),
             None => Ok(false),
         }
@@ -937,7 +1040,7 @@ impl<'a> Builder<'a> {
         &mut self,
         node_ref: GraphNodeRef,
         node_handle: Handle<Node>,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
         let source_node = match node.attributes.get(SOURCE_NODE_ATTR) {
             Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
@@ -962,7 +1065,7 @@ impl<'a> Builder<'a> {
         &mut self,
         node_ref: GraphNodeRef,
         node_handle: Handle<Node>,
-    ) -> Result<(), LoadError> {
+    ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
         for (name, value) in node.attributes.iter() {
             let name = name.to_string();
@@ -1010,5 +1113,5 @@ pub trait FileAnalyzer {
         all_paths: &mut dyn Iterator<Item = &'a Path>,
         globals: &HashMap<String, String>,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<(), LoadError>;
+    ) -> Result<(), BuildError>;
 }

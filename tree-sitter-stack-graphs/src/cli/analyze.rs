@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use anyhow::Context as _;
 use clap::Args;
 use clap::ValueHint;
 use stack_graphs::graph::StackGraph;
@@ -22,13 +21,12 @@ use tree_sitter_graph::Variables;
 use walkdir::WalkDir;
 
 use crate::cli::util::duration_from_seconds_str;
-use crate::cli::util::map_parse_errors;
 use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
+use crate::BuildError;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
-use crate::LoadError;
 use crate::NoCancellation;
 
 use super::util::FileStatusLogger;
@@ -104,19 +102,14 @@ impl AnalyzeArgs {
                     .filter(|e| e.file_type().is_file())
                 {
                     let source_path = source_entry.path();
-                    self.analyze_file_with_context(
-                        source_root,
-                        source_path,
-                        loader,
-                        &mut seen_mark,
-                    )?;
+                    self.analyze_file(source_root, source_path, loader, &mut seen_mark)?;
                 }
             } else {
                 let source_root = source_path.parent().unwrap();
                 if self.should_skip(source_path, &mut seen_mark) {
                     continue;
                 }
-                self.analyze_file_with_context(source_root, source_path, loader, &mut seen_mark)?;
+                self.analyze_file(source_root, source_path, loader, &mut seen_mark)?;
             }
         }
         Ok(())
@@ -131,17 +124,6 @@ impl AnalyzeArgs {
     }
 
     /// Analyze file and add error context to any failures that are returned.
-    fn analyze_file_with_context(
-        &self,
-        source_root: &Path,
-        source_path: &Path,
-        loader: &mut Loader,
-        seen_mark: &mut bool,
-    ) -> anyhow::Result<()> {
-        self.analyze_file(source_root, source_path, loader, seen_mark)
-            .with_context(|| format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display()))
-    }
-
     fn analyze_file(
         &self,
         source_root: &Path,
@@ -150,7 +132,30 @@ impl AnalyzeArgs {
         seen_mark: &mut bool,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
+        match self.analyze_file_inner(
+            source_root,
+            source_path,
+            loader,
+            seen_mark,
+            &mut file_status,
+        ) {
+            ok @ Ok(_) => ok,
+            err @ Err(_) => {
+                file_status.error_if_processing("error")?;
+                println!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display());
+                err
+            }
+        }
+    }
 
+    fn analyze_file_inner(
+        &self,
+        source_root: &Path,
+        source_path: &Path,
+        loader: &mut Loader,
+        seen_mark: &mut bool,
+        file_status: &mut FileStatusLogger,
+    ) -> anyhow::Result<()> {
         if self.should_skip(source_path, seen_mark) {
             file_status.info("skipped")?;
             return Ok(());
@@ -206,19 +211,43 @@ impl AnalyzeArgs {
             )
         };
         match result {
-            Err(LoadError::ParseErrors(parse_errors)) => {
-                let parse_error = map_parse_errors(source_path, &parse_errors, &source, "");
-                file_status.error("parsing failed")?;
-                if !self.hide_error_details {
-                    println!("{}", parse_error);
-                }
-                return Ok(());
-            }
-            Err(LoadError::Cancelled(_)) => {
+            Err(BuildError::Cancelled(_)) => {
                 file_status.warn("parsing timed out")?;
                 return Ok(());
             }
-            Err(e) => return Err(e.into()),
+            Err(err @ BuildError::ParseErrors(_)) => {
+                file_status.error("parsing failed")?;
+                if !self.hide_error_details {
+                    println!(
+                        "{}",
+                        err.display_pretty(
+                            source_path,
+                            source,
+                            lc.sgl.tsg_path(),
+                            lc.sgl.tsg_source()
+                        )
+                    );
+                }
+                return Ok(());
+            }
+            Err(err) => {
+                file_status.error("failed to build stack graph")?;
+                if !self.hide_error_details {
+                    println!(
+                        "{}",
+                        err.display_pretty(
+                            source_path,
+                            source,
+                            lc.sgl.tsg_path(),
+                            lc.sgl.tsg_source()
+                        )
+                    );
+                }
+                return Err(anyhow!(
+                    "Failed to build graph for {}",
+                    source_path.display()
+                ));
+            }
             Ok(_) => {}
         };
 

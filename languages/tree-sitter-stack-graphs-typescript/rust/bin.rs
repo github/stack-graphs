@@ -5,15 +5,22 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use anyhow::anyhow;
 use clap::Parser;
 use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
 use tree_sitter_stack_graphs::NoCancellation;
 
 fn main() -> anyhow::Result<()> {
+    let lc = match tree_sitter_stack_graphs_typescript::try_language_configuration(&NoCancellation)
+    {
+        Ok(lc) => lc,
+        Err(err) => {
+            eprintln!("{}", err.display_pretty());
+            return Err(anyhow!("Language configuration error"));
+        }
+    };
     let cli = Cli::parse();
-    cli.subcommand.run(vec![
-        tree_sitter_stack_graphs_typescript::language_configuration(&NoCancellation),
-    ])
+    cli.subcommand.run(vec![lc])
 }
 
 #[derive(Parser)]
