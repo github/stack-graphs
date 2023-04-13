@@ -159,7 +159,6 @@ impl SQLiteWriter {
         count += self
             .conn
             .execute("DELETE FROM graphs WHERE file=?", [&file])?;
-        self.conn.execute("COMMIT", [])?;
         Ok(count)
     }
 
@@ -180,18 +179,17 @@ impl SQLiteWriter {
         let file_or_directory = format!("{}%", file_or_directory.to_string_lossy());
         let mut count = 0usize;
         self.conn.execute(
-            "DELETE FROM file_paths WHERE is_descedant_of(file, {})",
+            "DELETE FROM file_paths WHERE path_descendant_of(file, ?)",
             [&file_or_directory],
         )?;
         self.conn.execute(
-            "DELETE FROM root_paths WHERE path_descendant_of(file, {})",
+            "DELETE FROM root_paths WHERE path_descendant_of(file, ?)",
             [&file_or_directory],
         )?;
         count += self.conn.execute(
-            "DELETE FROM graphs WHERE path_descendant_of(file, {})",
+            "DELETE FROM graphs WHERE path_descendant_of(file, ?)",
             [&file_or_directory],
         )?;
-        self.conn.execute("COMMIT", [])?;
         Ok(count)
     }
 
