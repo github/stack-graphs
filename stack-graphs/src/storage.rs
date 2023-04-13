@@ -53,6 +53,8 @@ const SCHEMA: &str = r#"
 
 const PRAGMAS: &str = r#"
         PRAGMA journal_mode = WAL;
+        PRAGMA foreign_keys = false;
+        PRAGMA secure_delete = false;
     "#;
 
 #[derive(Debug, Error)]
@@ -131,9 +133,18 @@ impl SQLiteWriter {
 
     /// Clean all data from the database.
     fn clean_all_inner(&mut self) -> Result<usize> {
-        self.conn.execute("DELETE FROM file_paths", [])?;
-        self.conn.execute("DELETE FROM root_paths", [])?;
-        let count = self.conn.execute("DELETE FROM graphs", [])?;
+        {
+            let mut stmt = self.conn.prepare_cached("DELETE FROM file_paths")?;
+            stmt.execute([])?;
+        }
+        {
+            let mut stmt = self.conn.prepare_cached("DELETE FROM root_paths")?;
+            stmt.execute([])?;
+        }
+        let count = {
+            let mut stmt = self.conn.prepare_cached("DELETE FROM graphs")?;
+            stmt.execute([])?
+        };
         Ok(count)
     }
 
@@ -151,14 +162,24 @@ impl SQLiteWriter {
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_file_inner(&mut self, file: &Path) -> Result<usize> {
         let file = file.to_string_lossy();
-        let mut count = 0usize;
-        self.conn
-            .execute("DELETE FROM file_paths WHERE file=?", [&file])?;
-        self.conn
-            .execute("DELETE FROM root_paths WHERE file=?", [&file])?;
-        count += self
-            .conn
-            .execute("DELETE FROM graphs WHERE file=?", [&file])?;
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM file_paths WHERE file=?")?;
+            stmt.execute([&file])?;
+        }
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM root_paths WHERE file=?")?;
+            stmt.execute([&file])?;
+        }
+        let count = {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM graphs WHERE file=?")?;
+            stmt.execute([&file])?
+        };
         Ok(count)
     }
 
@@ -177,19 +198,24 @@ impl SQLiteWriter {
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_file_or_directory_inner(&mut self, file_or_directory: &Path) -> Result<usize> {
         let file_or_directory = file_or_directory.to_string_lossy();
-        let mut count = 0usize;
-        self.conn.execute(
-            "DELETE FROM file_paths WHERE path_descendant_of(file, ?)",
-            [&file_or_directory],
-        )?;
-        self.conn.execute(
-            "DELETE FROM root_paths WHERE path_descendant_of(file, ?)",
-            [&file_or_directory],
-        )?;
-        count += self.conn.execute(
-            "DELETE FROM graphs WHERE path_descendant_of(file, ?)",
-            [&file_or_directory],
-        )?;
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM file_paths WHERE path_descendant_of(file, ?)")?;
+            stmt.execute([&file_or_directory])?;
+        }
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM root_paths WHERE path_descendant_of(file, ?)")?;
+            stmt.execute([&file_or_directory])?;
+        }
+        let count = {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM graphs WHERE path_descendant_of(file, ?)")?;
+            stmt.execute([&file_or_directory])?
+        };
         Ok(count)
     }
 
