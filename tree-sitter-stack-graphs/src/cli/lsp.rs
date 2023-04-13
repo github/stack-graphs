@@ -588,69 +588,68 @@ impl Logger for LspLogger {
 
 impl FileLogger for LspFileLogger<'_> {
     fn default_failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .error(format!("{}: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .error(format!("{}: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .error(format!("{}: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .error(format!("{}: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn skipped(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .info(format!("{}: skipped: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .info(format!("{}: skipped: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn warning(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .warning(format!("{}: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .warning(format!("{}: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn success(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .info(format!("{}: success: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .info(format!("{}: success: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn processing(&mut self) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .info(format!("{}: processing...", path.display()))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .info(format!("{}: processing...", path.display()))
+                .await;
+        });
     }
 }
 
