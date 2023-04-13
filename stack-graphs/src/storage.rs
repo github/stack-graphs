@@ -150,7 +150,7 @@ impl SQLiteWriter {
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_file_inner(&mut self, file: &Path) -> Result<usize> {
-        let file = format!("{}%", file.to_string_lossy());
+        let file = file.to_string_lossy();
         let mut count = 0usize;
         self.conn
             .execute("DELETE FROM file_paths WHERE file=?", [&file])?;
@@ -176,7 +176,7 @@ impl SQLiteWriter {
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_file_or_directory_inner(&mut self, file_or_directory: &Path) -> Result<usize> {
-        let file_or_directory = format!("{}%", file_or_directory.to_string_lossy());
+        let file_or_directory = file_or_directory.to_string_lossy();
         let mut count = 0usize;
         self.conn.execute(
             "DELETE FROM file_paths WHERE path_descendant_of(file, ?)",
@@ -548,7 +548,8 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
             assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
             let path = PathBuf::from(ctx.get::<String>(0)?);
             let parent = PathBuf::from(ctx.get::<String>(1)?);
-            Ok(path.starts_with(parent))
+            let result = path.starts_with(&parent);
+            Ok(result)
         },
     )?;
     Ok(())
