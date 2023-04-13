@@ -88,7 +88,7 @@ impl Definition {
             let source = file_reader.get(&reference.path)?;
             let tag = sha1(source);
 
-            match db.file_status(&source_path, Some(&tag))? {
+            match db.status_for_file(&source_path, Some(&tag))? {
                 FileStatus::Indexed => {}
                 _ => {
                     logger.failure("file not indexed", None);

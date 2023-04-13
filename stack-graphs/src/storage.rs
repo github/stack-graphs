@@ -391,7 +391,7 @@ impl SQLiteWriter {
     /// Get the file's status in the database. If a tag is provided, it must match or the file
     /// is reported missing.
     pub fn status_for_file(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
-        file_status(&self.conn, file, tag)
+        status_for_file(&self.conn, file, tag)
     }
 
     /// Convert this writer into a reader for the same database.
@@ -443,8 +443,8 @@ impl SQLiteReader {
 
     /// Get the file's status in the database. If a tag is provided, it must match or the file
     /// is reported missing.
-    pub fn file_status(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
-        file_status(&self.conn, file, tag)
+    pub fn status_for_file(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+        status_for_file(&self.conn, file, tag)
     }
 
     /// Returns a [`Files`][] value that can be used to iterate over all files in the database.
@@ -676,7 +676,7 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn file_status<'a>(conn: &'a Connection, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+fn status_for_file<'a>(conn: &'a Connection, file: &str, tag: Option<&str>) -> Result<FileStatus> {
     let result = if let Some(tag) = tag {
         let mut stmt =
             conn.prepare_cached("SELECT error FROM graphs WHERE file = ? AND tag = ?")?;
