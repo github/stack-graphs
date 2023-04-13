@@ -90,6 +90,29 @@ impl LspArgs {
     }
 }
 
+impl std::fmt::Display for LspArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(max_folder_index_time) = self.max_folder_index_time {
+            write!(
+                f,
+                " --max-folder-index-time {}",
+                max_folder_index_time.as_secs()
+            )?;
+        }
+        if let Some(max_file_index_time) = self.max_file_index_time {
+            write!(
+                f,
+                " --max-file-index-time {}",
+                max_file_index_time.as_secs()
+            )?;
+        }
+        if let Some(max_query_time) = self.max_query_time {
+            write!(f, " --max-query-time {}", max_query_time.as_millis())?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 struct Backend {
     _client: Client,
@@ -282,7 +305,7 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        self.logger.info("Initializing").await;
+        self.logger.info(format!("Initialize:{}", self.args)).await;
 
         self.ensure_compatible_database().await?;
 
