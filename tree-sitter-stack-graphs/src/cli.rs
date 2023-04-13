@@ -66,6 +66,7 @@ pub mod load;
 pub mod lsp;
 pub mod parse;
 pub mod query;
+pub mod status;
 pub mod test;
 mod util;
 
@@ -82,6 +83,7 @@ pub mod path_loading {
     use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
+    use crate::cli::status::StatusArgs;
     use crate::cli::test::TestArgs;
 
     use super::database::DatabaseArgs;
@@ -95,6 +97,7 @@ pub mod path_loading {
         Lsp(Lsp),
         Parse(Parse),
         Query(Query),
+        Status(Status),
         Test(Test),
     }
 
@@ -108,6 +111,7 @@ pub mod path_loading {
                 Self::Lsp(cmd) => cmd.run(default_db_path),
                 Self::Parse(cmd) => cmd.run(),
                 Self::Query(cmd) => cmd.run(default_db_path),
+                Self::Status(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(),
             }
         }
@@ -214,6 +218,22 @@ pub mod path_loading {
         }
     }
 
+    /// Status command
+    #[derive(clap::Parser)]
+    pub struct Status {
+        #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
+        status_args: StatusArgs,
+    }
+
+    impl Status {
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
+            let db_path = self.db_args.get_or(default_db_path);
+            self.status_args.run(&db_path)
+        }
+    }
+
     /// Test command
     #[derive(clap::Parser)]
     pub struct Test {
@@ -243,6 +263,7 @@ pub mod provided_languages {
     use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
+    use crate::cli::status::StatusArgs;
     use crate::cli::test::TestArgs;
     use crate::loader::LanguageConfiguration;
 
@@ -256,6 +277,7 @@ pub mod provided_languages {
         Lsp(Lsp),
         Parse(Parse),
         Query(Query),
+        Status(Status),
         Test(Test),
     }
 
@@ -272,6 +294,7 @@ pub mod provided_languages {
                 Self::Lsp(cmd) => cmd.run(default_db_path, configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Query(cmd) => cmd.run(default_db_path),
+                Self::Status(cmd) => cmd.run(default_db_path),
                 Self::Test(cmd) => cmd.run(configurations),
             }
         }
@@ -370,6 +393,22 @@ pub mod provided_languages {
         pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             let db_path = self.db_args.get_or(default_db_path);
             self.query_args.run(&db_path)
+        }
+    }
+
+    /// Status command
+    #[derive(clap::Parser)]
+    pub struct Status {
+        #[clap(flatten)]
+        db_args: DatabaseArgs,
+        #[clap(flatten)]
+        status_args: StatusArgs,
+    }
+
+    impl Status {
+        pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
+            let db_path = self.db_args.get_or(default_db_path);
+            self.status_args.run(&db_path)
         }
     }
 
