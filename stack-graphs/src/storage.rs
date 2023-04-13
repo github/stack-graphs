@@ -9,6 +9,8 @@ use rusqlite::functions::FunctionFlags;
 use rusqlite::types::ValueRef;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use rusqlite::Params;
+use rusqlite::Statement;
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
@@ -84,6 +86,7 @@ impl From<CancellationError> for StorageError {
     }
 }
 
+/// The status of a file in the database.
 pub enum FileStatus {
     Missing,
     Indexed,
@@ -101,6 +104,30 @@ impl<'a> From<ValueRef<'a>> for FileStatus {
             ),
             _ => panic!("invalid value type in database"),
         }
+    }
+}
+
+/// A file entry in the database.
+pub struct FileEntry {
+    pub path: PathBuf,
+    pub tag: String,
+    pub status: FileStatus,
+}
+
+/// An iterator over a query returning rows with (path,tag,error) tuples.
+pub struct Files<'a, P: Params>(Statement<'a>, P);
+
+impl<'a, P: Params + Clone> Files<'a, P> {
+    pub fn try_iter<'b>(&'b mut self) -> Result<impl Iterator<Item = Result<FileEntry>> + 'b> {
+        let entries = self.0.query_map(self.1.clone(), |r| {
+            Ok(FileEntry {
+                path: PathBuf::from(r.get::<_, String>(0)?),
+                tag: r.get::<_, String>(1)?,
+                status: r.get_ref(2)?.into(),
+            })
+        })?;
+        let entries = entries.map(|r| -> Result<FileEntry> { Ok(r?) });
+        Ok(entries)
     }
 }
 
@@ -418,6 +445,27 @@ impl SQLiteReader {
     /// is reported missing.
     pub fn file_status(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
         file_status(&self.conn, file, tag)
+    }
+
+    /// Returns a [`Files`][] value that can be used to iterate over all files in the database.
+    pub fn list_all<'a>(&'a mut self) -> Result<Files<'a, ()>> {
+        self.conn
+            .prepare("SELECT file, tag, error FROM graphs")
+            .map(|stmt| Files(stmt, ()))
+            .map_err(|e| e.into())
+    }
+
+    /// Returns a [`Files`][] value that can be used to iterate over all descendants of a
+    /// file or directory in the database.
+    pub fn list_file_or_directory<'a>(
+        &'a mut self,
+        file_or_directory: &Path,
+    ) -> Result<Files<'a, [String; 1]>> {
+        let file_or_directory = file_or_directory.to_string_lossy().to_string();
+        self.conn
+            .prepare("SELECT file, tag, error FROM graphs WHERE path_descendant_of(file, ?)")
+            .map(|stmt| Files(stmt, [file_or_directory]))
+            .map_err(|e| e.into())
     }
 
     /// Ensure the graph for the given file is loaded.
