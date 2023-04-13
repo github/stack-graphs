@@ -443,7 +443,11 @@ impl SQLiteReader {
 
     /// Get the file's status in the database. If a tag is provided, it must match or the file
     /// is reported missing.
-    pub fn status_for_file(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+    pub fn status_for_file<T: AsRef<str>>(
+        &mut self,
+        file: &str,
+        tag: Option<T>,
+    ) -> Result<FileStatus> {
         status_for_file(&self.conn, file, tag)
     }
 
@@ -676,11 +680,15 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn status_for_file(conn: &Connection, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+fn status_for_file<T: AsRef<str>>(
+    conn: &Connection,
+    file: &str,
+    tag: Option<T>,
+) -> Result<FileStatus> {
     let result = if let Some(tag) = tag {
         let mut stmt =
             conn.prepare_cached("SELECT error FROM graphs WHERE file = ? AND tag = ?")?;
-        stmt.query_row([file, tag], |r| r.get_ref(0).map(FileStatus::from))
+        stmt.query_row([file, tag.as_ref()], |r| r.get_ref(0).map(FileStatus::from))
             .optional()?
             .unwrap_or(FileStatus::Missing)
     } else {

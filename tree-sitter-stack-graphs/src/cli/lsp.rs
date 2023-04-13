@@ -281,8 +281,13 @@ impl Backend {
             }
         };
 
-        let mut querier = Querier::new(&mut db);
+        let handle = Handle::current();
+        let logger = LspLogger {
+            handle: handle.clone(),
+            logger: self.logger.clone(),
+        };
         let result = {
+            let mut querier = Querier::new(&mut db, &logger);
             let cancellation_flag = CancelAfterDuration::from_option(self.args.max_query_time);
             querier.definitions(reference, cancellation_flag.as_ref())
         };
