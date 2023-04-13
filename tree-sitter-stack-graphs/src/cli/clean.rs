@@ -19,6 +19,7 @@ use std::path::PathBuf;
         .required(true)
         .args(&["source-paths", "all", "delete"]),
 ))]
+
 pub struct CleanArgs {
     /// Source file or directory paths.
     #[clap(
