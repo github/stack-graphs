@@ -21,6 +21,7 @@ use tokio::runtime::Handle;
 use tower_lsp::jsonrpc::Error;
 use tower_lsp::jsonrpc::ErrorCode;
 use tower_lsp::jsonrpc::Result;
+use tower_lsp::lsp_types::notification::Progress;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 use tower_lsp::LanguageServer;
@@ -338,7 +339,11 @@ impl LanguageServer for Backend {
 
         let result = InitializeResult {
             capabilities: ServerCapabilities {
-                definition_provider: Some(OneOf::Left(true)),
+                definition_provider: Some(OneOf::Right(DefinitionOptions {
+                    work_done_progress_options: WorkDoneProgressOptions {
+                        work_done_progress: true.into(),
+                    },
+                })),
                 text_document_sync: Some(
                     TextDocumentSyncOptions {
                         save: Some(true.into()),
@@ -404,6 +409,19 @@ impl LanguageServer for Backend {
             ))
             .await;
 
+        if let Some(token) = &params.work_done_progress_params.work_done_token {
+            self._client
+                .send_notification::<Progress>(ProgressParams {
+                    token: token.clone(),
+                    value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(
+                        WorkDoneProgressBegin {
+                            title: "Querying".to_string(),
+                            ..Default::default()
+                        },
+                    )),
+                })
+                .await;
+        }
         let path = match params
             .text_document_position_params
             .text_document
@@ -440,6 +458,18 @@ impl LanguageServer for Backend {
                 params.text_document_position_params.position.character + 1
             ))
             .await;
+        if let Some(token) = &params.work_done_progress_params.work_done_token {
+            self._client
+                .send_notification::<Progress>(ProgressParams {
+                    token: token.clone(),
+                    value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(
+                        WorkDoneProgressEnd {
+                            ..Default::default()
+                        },
+                    )),
+                })
+                .await;
+        }
 
         match locations.len() {
             0 => Ok(None),
