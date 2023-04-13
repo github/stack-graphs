@@ -24,7 +24,7 @@
             "title": "tree-sitter-stack-graphs-typescript",
             "properties": {
                 "tree-sitter-stack-graphs-typescript.database.defaultLocation": {
-                    "markdownDescription": "The default location for the database, if an explicit path is not provided. _Requires reload for changes to take effect._",
+                    "markdownDescription": "The default location for the database, if an explicit path is not provided.",
                     "type": "string",
                     "default": "workspace",
                     "enum": [
@@ -39,14 +39,14 @@
                     "order": 10
                 },
                 "tree-sitter-stack-graphs-typescript.database.path": {
-                    "markdownDescription": "The path to the database. Expands ~ to the user's home directory. _Requires reload for changes to take effect._",
+                    "markdownDescription": "The path to the database. Expands ~ to the user's home directory.",
                     "type": "string",
                     "default": null,
                     "scope": "machine-overridable",
                     "order": 11
                 },
                 "tree-sitter-stack-graphs-typescript.index.maxFolderTime": {
-                    "markdownDescription": "Maximum index time per workspace folder in seconds (-1 means no limit). _Requires reload for changes to take effect._",
+                    "markdownDescription": "Maximum index time per workspace folder in seconds (-1 means no limit).",
                     "type": "integer",
                     "minimum": -1,
                     "default": -1,
@@ -54,20 +54,20 @@
                     "order": 20
                 },
                 "tree-sitter-stack-graphs-typescript.index.maxFileTime": {
-                    "markdownDescription": "Maximum index time per file in seconds (-1 means no limit). _Requires reload for changes to take effect._",
+                    "markdownDescription": "Maximum index time per file in seconds (-1 means no limit).",
                     "type": "integer",
                     "minimum": -1,
                     "default": 10,
                     "scope": "machine-overridable",
-                    "order": 30
+                    "order": 21
                 },
                 "tree-sitter-stack-graphs-typescript.query.maxTime": {
-                    "markdownDescription": "Maximum query time per file in milliseconds (-1 means no limit). _Requires reload for changes to take effect._",
+                    "markdownDescription": "Maximum query time per file in milliseconds (-1 means no limit).",
                     "type": "integer",
                     "minimum": -1,
                     "default": 100,
                     "scope": "machine-overridable",
-                    "order": 20
+                    "order": 30
                 }
             }
         }
