@@ -87,7 +87,7 @@ impl SQLiteWriter {
     }
 
     /// Open a file database.  If the file does not exist, it is automatically created.
-    /// An error is thrown if the database version is not supported.
+    /// An error is returned if the database version is not supported.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let is_new = !path.as_ref().exists();
         let conn = Connection::open(path)?;
@@ -170,7 +170,7 @@ impl SQLiteWriter {
         Ok(())
     }
 
-    /// Add a partial path for a file to the database.  Throws an error if the file does not exist in
+    /// Add a partial path for a file to the database.  Returns an error if the file does not exist in
     /// the database.
     pub fn add_partial_path_for_file(
         &mut self,
