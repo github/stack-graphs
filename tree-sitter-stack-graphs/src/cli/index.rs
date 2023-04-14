@@ -99,7 +99,7 @@ impl IndexArgs {
         let mut seen_mark = false;
         let mut db = SQLiteWriter::open(&db_path)?;
         for source_path in &self.source_paths {
-            let source_path = source_path.canonicalize()?;
+            let source_path = &source_path.canonicalize()?;
             if source_path.is_dir() {
                 let source_root = &source_path;
                 for source_entry in WalkDir::new(source_root)
@@ -109,10 +109,10 @@ impl IndexArgs {
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
                 {
-                    let source_path = source_entry.path().canonicalize()?;
+                    let source_path = &source_entry.path().canonicalize()?;
                     self.analyze_file(
                         source_root,
-                        &source_path,
+                        source_path,
                         loader,
                         &mut seen_mark,
                         &mut db,
@@ -126,7 +126,7 @@ impl IndexArgs {
                 }
                 self.analyze_file(
                     source_root,
-                    &source_path,
+                    source_path,
                     loader,
                     &mut seen_mark,
                     &mut db,
