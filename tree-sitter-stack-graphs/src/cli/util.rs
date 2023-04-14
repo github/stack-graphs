@@ -17,6 +17,7 @@ use stack_graphs::graph::StackGraph;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::Write;
+use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -253,20 +254,16 @@ pub struct SourceSpan {
 }
 
 impl SourceSpan {
-    pub fn to_start_position(&self) -> SourcePosition {
-        SourcePosition {
-            path: self.path.clone(),
-            line: self.span.start.line,
-            column: self.span.start.column.grapheme_offset,
-        }
-    }
-
-    pub fn into_start_position(self) -> SourcePosition {
-        SourcePosition {
-            path: self.path,
-            line: self.span.start.line,
-            column: self.span.start.column.grapheme_offset,
-        }
+    /// Returns a range for the first line of this span. If multiple lines are spanned, it
+    /// will use usize::MAX for the range's end.
+    pub fn to_first_line_column_range(&self) -> Range<usize> {
+        let start = self.span.start.column.grapheme_offset;
+        let end = if self.span.start.line == self.span.end.line {
+            self.span.end.column.grapheme_offset
+        } else {
+            usize::MAX
+        };
+        start..end
     }
 }
 

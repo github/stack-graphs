@@ -15,6 +15,7 @@ use stack_graphs::storage::StorageError;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
+use tree_sitter_graph::parse_error::Excerpt;
 
 use crate::loader::FileReader;
 use crate::CancellationFlag;
@@ -78,10 +79,36 @@ pub struct Definition {
 impl Definition {
     pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
         let cancellation_flag = NoCancellation;
+        let mut file_reader = FileReader::new();
         for reference in self.references {
-            let definitions = querier.definitions(reference, &cancellation_flag)?;
-            for (idx, definition) in definitions.into_iter().enumerate() {
-                println!("  {:2}: {}", idx, definition.into_start_position());
+            let definitions = querier.definitions(reference.clone(), &cancellation_flag)?;
+            println!("queried reference");
+            println!(
+                "{}",
+                Excerpt::from_source(
+                    &reference.path,
+                    file_reader.get(&reference.path).unwrap_or_default(),
+                    reference.line,
+                    reference.column..(reference.column + 1),
+                    0
+                )
+            );
+            match definitions.len() {
+                0 => println!("has no definitions"),
+                1 => println!("has definition"),
+                n => println!("has {} definitions", n),
+            }
+            for definition in definitions.into_iter() {
+                println!(
+                    "{}",
+                    Excerpt::from_source(
+                        &definition.path,
+                        file_reader.get(&definition.path).unwrap_or_default(),
+                        definition.span.start.line,
+                        definition.to_first_line_column_range(),
+                        0
+                    )
+                );
             }
         }
         Ok(())
