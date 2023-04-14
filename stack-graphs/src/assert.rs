@@ -47,7 +47,8 @@ pub struct AssertionSource {
 }
 
 impl AssertionSource {
-    pub fn definitions_iter<'a>(
+    /// Return an iterator over definitions at this position.
+    pub fn iter_definitions<'a>(
         &'a self,
         graph: &'a StackGraph,
     ) -> impl Iterator<Item = Handle<Node>> + 'a {
@@ -60,7 +61,8 @@ impl AssertionSource {
         })
     }
 
-    pub fn references_iter<'a>(
+    /// Return an iterator over references at this position.
+    pub fn iter_references<'a>(
         &'a self,
         graph: &'a StackGraph,
     ) -> impl Iterator<Item = Handle<Node>> + 'a {
@@ -166,7 +168,7 @@ impl Assertion {
         expected_targets: &Vec<AssertionTarget>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
-        let references = source.references_iter(graph).collect::<Vec<_>>();
+        let references = source.iter_references(graph).collect::<Vec<_>>();
         if references.is_empty() {
             return Err(AssertionError::NoReferences {
                 source: source.clone(),
@@ -234,7 +236,7 @@ impl Assertion {
         expected_symbols: &Vec<Handle<Symbol>>,
     ) -> Result<(), AssertionError> {
         let actual_symbols = source
-            .definitions_iter(graph)
+            .iter_definitions(graph)
             .filter_map(|d| graph[d].symbol())
             .collect::<Vec<_>>();
         let missing_symbols = expected_symbols
@@ -266,7 +268,7 @@ impl Assertion {
         expected_symbols: &Vec<Handle<Symbol>>,
     ) -> Result<(), AssertionError> {
         let actual_symbols = source
-            .references_iter(graph)
+            .iter_references(graph)
             .filter_map(|d| graph[d].symbol())
             .collect::<Vec<_>>();
         let missing_symbols = expected_symbols
