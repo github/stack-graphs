@@ -1433,30 +1433,19 @@ impl InternalForwardPartialPathStitcher {
 
 /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
 /// nodes.
-///
-/// Before calling this method, you must ensure that `db` contains all of the possible partial
-/// paths that start with any of your requested starting nodes.
-///
-/// Before calling `sg_forward_partial_path_stitcher_process_next_phase` for the first time, you
-/// must ensure that `db` contains all possible extensions of any of those initial partial paths.
-/// You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
-/// `previous_phase_partial_paths_length` fields.
 #[no_mangle]
 pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     graph: *const sg_stack_graph,
     partials: *mut sg_partial_path_arena,
-    db: *mut sg_partial_path_database,
     count: usize,
     starting_nodes: *const sg_node_handle,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
-    let db = unsafe { &mut (*db).inner };
     let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, count) };
     let stitcher = ForwardPartialPathStitcher::from_nodes(
         graph,
         partials,
-        db,
         starting_nodes.iter().copied().map(sg_node_handle::into),
     );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
@@ -1466,28 +1455,20 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
 
 /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
 /// paths.
-///
-/// Before calling `sg_forward_partial_path_stitcher_process_next_phase` for the first time, you
-/// must ensure that `db` contains all possible extensions of any of those initial partial paths.
-/// You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
-/// `previous_phase_partial_paths_length` fields.
 #[no_mangle]
 pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
     graph: *const sg_stack_graph,
     partials: *mut sg_partial_path_arena,
-    db: *mut sg_partial_path_database,
     count: usize,
     initial_partial_paths: *const sg_partial_path,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
-    let db = unsafe { &mut (*db).inner };
     let initial_partial_paths =
         unsafe { std::slice::from_raw_parts(initial_partial_paths as *const PartialPath, count) };
     let stitcher = ForwardPartialPathStitcher::from_partial_paths(
         graph,
         partials,
-        db,
         initial_partial_paths.to_vec(),
     );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(

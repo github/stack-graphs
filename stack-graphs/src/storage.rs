@@ -400,12 +400,8 @@ impl SQLiteReader {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
-        let mut stitcher = ForwardPartialPathStitcher::from_nodes(
-            &self.graph,
-            &mut self.partials,
-            &mut self.db,
-            starting_nodes,
-        );
+        let mut stitcher =
+            ForwardPartialPathStitcher::from_nodes(&self.graph, &mut self.partials, starting_nodes);
         while !stitcher.is_complete() {
             cancellation_flag.check("find_all_complete_partial_paths")?;
             for path in stitcher.previous_phase_partial_paths() {

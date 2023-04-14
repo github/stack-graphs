@@ -480,20 +480,9 @@ pub struct ForwardPartialPathStitcher {
 impl ForwardPartialPathStitcher {
     /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack
     /// graph nodes.
-    ///
-    /// Before calling this method, you must ensure that `db` contains all of the possible partial
-    /// paths that start with any of your requested starting nodes.
-    ///
-    /// Before calling [`process_next_phase`][] for the first time, you must ensure that `db`
-    /// contains all of the possible partial paths that start with any of your requested starting
-    /// nodes.  You can retrieve a list of those extensions via [`previous_phase_partial paths`][].
-    ///
-    /// [`previous_phase_partial paths`]: #method.previous_phase_partial paths
-    /// [`process_next_phase`]: #method.process_next_phase
     pub fn from_nodes<I>(
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        _db: &mut Database,
         starting_nodes: I,
     ) -> ForwardPartialPathStitcher
     where
@@ -524,17 +513,9 @@ impl ForwardPartialPathStitcher {
 
     /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
     /// paths.
-    ///
-    /// Before calling [`process_next_phase`][] for the first time, you must ensure that `db`
-    /// contains all possible extensions of any of those initial partial paths.  You can retrieve a
-    /// list of those extensions via [`previous_phase_partial paths`][].
-    ///
-    /// [`previous_phase_partial paths`]: #method.previous_phase_partial paths
-    /// [`process_next_phase`]: #method.process_next_phase
     pub fn from_partial_paths(
         _graph: &StackGraph,
         partials: &mut PartialPaths,
-        _db: &mut Database,
         initial_partial_paths: Vec<PartialPath>,
     ) -> ForwardPartialPathStitcher {
         let mut appended_paths = Appendables::new();
@@ -764,8 +745,7 @@ impl ForwardPartialPathStitcher {
         let starting_nodes = starting_nodes
             .into_iter()
             .filter(|n| graph[*n].is_reference());
-        let mut stitcher =
-            ForwardPartialPathStitcher::from_nodes(graph, partials, db, starting_nodes);
+        let mut stitcher = ForwardPartialPathStitcher::from_nodes(graph, partials, starting_nodes);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             stitcher.process_next_phase(graph, partials, db);
