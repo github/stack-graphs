@@ -799,30 +799,15 @@ struct sg_node_handle_set sg_partial_path_database_local_nodes(const struct sg_p
 
 // Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
 // nodes.
-//
-// Before calling this method, you must ensure that `db` contains all of the possible partial
-// paths that start with any of your requested starting nodes.
-//
-// Before calling `sg_forward_partial_path_stitcher_process_next_phase` for the first time, you
-// must ensure that `db` contains all possible extensions of any of those initial partial paths.
-// You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
-// `previous_phase_partial_paths_length` fields.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_nodes(const struct sg_stack_graph *graph,
                                                                                      struct sg_partial_path_arena *partials,
-                                                                                     struct sg_partial_path_database *db,
                                                                                      size_t count,
                                                                                      const sg_node_handle *starting_nodes);
 
 // Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
 // paths.
-//
-// Before calling `sg_forward_partial_path_stitcher_process_next_phase` for the first time, you
-// must ensure that `db` contains all possible extensions of any of those initial partial paths.
-// You can retrieve a list of those extensions via the `previous_phase_partial_paths` and
-// `previous_phase_partial_paths_length` fields.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *graph,
                                                                                              struct sg_partial_path_arena *partials,
-                                                                                             struct sg_partial_path_database *db,
                                                                                              size_t count,
                                                                                              const struct sg_partial_path *initial_partial_paths);
 
