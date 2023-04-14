@@ -25,18 +25,20 @@ pub struct DatabaseArgs {
 }
 
 impl DatabaseArgs {
-    pub fn default_for_crate(crate_name: &str) -> anyhow::Result<PathBuf> {
-        match dirs::data_local_dir() {
-            Some(dir) => Ok(dir.join(format!("{}.sqlite", crate_name))),
-            None => Err(anyhow!(
-                "unable to determine data local directory for database"
-            )),
-        }
-    }
-
     pub fn get_or(&self, default_path: &Path) -> PathBuf {
         self.database
             .clone()
             .unwrap_or_else(|| default_path.to_path_buf())
+    }
+}
+
+/// Returns the default database path in the current user's local data directory for the
+/// given crate name. Distinct crate names will have distinct database paths.
+pub fn default_user_database_path_for_crate(crate_name: &str) -> anyhow::Result<PathBuf> {
+    match dirs::data_local_dir() {
+        Some(dir) => Ok(dir.join(format!("{}.sqlite", crate_name))),
+        None => Err(anyhow!(
+            "unable to determine data local directory for database"
+        )),
     }
 }
