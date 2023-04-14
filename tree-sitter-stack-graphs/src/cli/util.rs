@@ -182,32 +182,50 @@ impl std::str::FromStr for SourcePosition {
         let mut values = s.split(':');
         let path = match values.next() {
             Some(path) => PathBuf::from(path),
-            None => return Err(anyhow!("Missing path")),
+            None => return Err(anyhow!("Missing path in expected format PATH:LINE:COLUMN")),
         };
         let line = match values.next() {
             Some(line) => {
-                let line = usize::from_str(line)
-                    .map_err(|_| anyhow!("Expected line number, got {}", line))?;
+                let line = usize::from_str(line).map_err(|_| {
+                    anyhow!(
+                        "Expected line to be a number, got {} in expected format PATH:LINE:COLUMN",
+                        line
+                    )
+                })?;
                 if line == 0 {
-                    return Err(anyhow!("Line numbers are 1-based, got 0"));
+                    return Err(anyhow!(
+                        "Line numbers are 1-based, got 0 in expected format PATH:LINE:COLUMN"
+                    ));
                 }
                 line - 1
             }
-            None => return Err(anyhow!("Missing line number")),
+            None => {
+                return Err(anyhow!(
+                    "Missing line and column numbers in expected format PATH:LINE:COLUMN"
+                ))
+            }
         };
         let column = match values.next() {
             Some(column) => {
                 let column = usize::from_str(column)
-                    .map_err(|_| anyhow!("Expected column number, got {}", column))?;
+                    .map_err(|_| anyhow!("Expected column to be a number, got {} in expected format PATH:LINE:COLUMN", column))?;
                 if column == 0 {
-                    return Err(anyhow!("column numbers are 1-based, got 0"));
+                    return Err(anyhow!(
+                        "Column numbers are 1-based, got 0 in expected format PATH:LINE:COLUMN"
+                    ));
                 }
                 column - 1
             }
-            None => return Err(anyhow!("Missing column number")),
+            None => {
+                return Err(anyhow!(
+                    "Missing column number in expected format PATH:LINE:COLUMN"
+                ))
+            }
         };
         if values.next().is_some() {
-            return Err(anyhow!("Found unexpected components"));
+            return Err(anyhow!(
+                "Found unexpected components in expected format PATH:LINE:COLUMN"
+            ));
         }
         Ok(Self { path, line, column })
     }
