@@ -125,6 +125,7 @@ impl SQLiteWriter {
         Ok(count)
     }
 
+    /// Create database tables and write metadata.
     fn init(conn: &Connection) -> Result<()> {
         conn.execute("BEGIN;", [])?;
         conn.execute_batch(SCHEMA)?;
@@ -171,7 +172,8 @@ impl SQLiteWriter {
     }
 
     /// Add a partial path for a file to the database.  Returns an error if the file does not exist in
-    /// the database.
+    /// the database.  The start node of `path` must be in `file` or be the root node, otherwise the
+    /// method panics.
     pub fn add_partial_path_for_file(
         &mut self,
         graph: &StackGraph,
@@ -419,6 +421,7 @@ impl SQLiteReader {
 }
 
 impl PartialSymbolStack {
+    /// Returns a string representation of this symbol stack for indexing in the database.
     fn storage_key(mut self, graph: &StackGraph, partials: &mut PartialPaths) -> String {
         let mut key = String::new();
         while let Some(symbol) = self.pop_front(partials) {
@@ -430,6 +433,8 @@ impl PartialSymbolStack {
         key
     }
 
+    /// Returns string representations for all prefixes of this symbol stack for querying the
+    /// index in the database.
     fn storage_key_prefixes(
         mut self,
         graph: &StackGraph,
@@ -448,6 +453,7 @@ impl PartialSymbolStack {
     }
 }
 
+/// Check if the database has the version supported by this library version.
 fn check_version(conn: &Connection) -> Result<()> {
     let version = conn.query_row("SELECT version FROM metadata", [], |r| r.get::<_, usize>(0))?;
     if version != VERSION {
@@ -456,6 +462,7 @@ fn check_version(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Check if a file exists in the database.
 fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool> {
     let result = if let Some(tag) = tag {
         let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;
