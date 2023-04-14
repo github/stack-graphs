@@ -18,7 +18,6 @@ use std::path::PathBuf;
 
 use crate::loader::FileReader;
 
-use super::util::path_exists;
 use super::util::sha1;
 use super::util::wait_for_input;
 use super::util::FileStatusLogger;
@@ -60,113 +59,106 @@ impl Target {
 
 #[derive(Parser)]
 pub struct Definition {
-    /// Source file or directory paths.
+    /// Reference source positions, formatted as PATH:LINE:COLUMN.
     #[clap(
-        value_name = "SOURCE_PATH",
+        value_name = "SOURCE_POSITION",
         required = true,
         value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
-        validator_os = path_exists,
+        parse(try_from_str),
     )]
-    pub source_path: PathBuf,
-
-    /// Line number
-    pub line: usize,
-
-    /// Column number
-    pub column: usize,
+    pub references: Vec<SourcePosition>,
 }
 
 impl Definition {
     pub fn run(&self, db: &mut SQLiteReader) -> anyhow::Result<()> {
-        let source_path = self.source_path.canonicalize()?;
+        for reference in &self.references {
+            let mut reference = reference.clone();
+            reference.canonicalize()?;
 
-        let reference = SourcePosition {
-            path: source_path.clone(),
-            line: self.line - 1,
-            column: self.column - 1,
-        };
-        let mut file_reader = FileReader::new();
+            let mut file_reader = FileReader::new();
 
-        let path = reference.to_string();
-        let mut logger = FileStatusLogger::new(&Path::new(&path), true);
-        logger.processing()?;
+            let log_path = PathBuf::from(reference.to_string());
+            let mut logger = FileStatusLogger::new(&log_path, true);
+            logger.processing()?;
 
-        let source = file_reader.get(&reference.path)?;
-        let tag = sha1(source);
+            let source_path = reference.path.to_string_lossy();
+            let source = file_reader.get(&reference.path)?;
+            let tag = sha1(source);
 
-        if !db.file_exists(&source_path.to_string_lossy(), Some(&tag))? {
-            logger.error("file not indexed")?;
-            return Ok(());
-        }
-
-        let lines = PositionedSubstring::lines_iter(source);
-        let mut span_calculator = SpanCalculator::new(source);
-
-        db.load_graph_for_file(&reference.path.to_string_lossy())?;
-        let (graph, _, _) = db.get();
-
-        let reference = match reference.to_assertion_source(graph, lines, &mut span_calculator) {
-            Ok(result) => result,
-            Err(_) => {
-                logger.error("invalid file or position")?;
+            if !db.file_exists(&source_path, Some(&tag))? {
+                logger.error("file not indexed")?;
                 return Ok(());
             }
-        };
 
-        if reference.iter_references(graph).next().is_none() {
-            logger.error("no references")?;
-            return Ok(());
-        }
-        let starting_nodes = reference.iter_references(graph).collect::<Vec<_>>();
+            let lines = PositionedSubstring::lines_iter(source);
+            let mut span_calculator = SpanCalculator::new(source);
 
-        let mut actual_paths = Vec::new();
-        let mut reference_paths = Vec::new();
-        match db.find_all_complete_partial_paths(
-            starting_nodes,
-            &stack_graphs::NoCancellation,
-            |_g, _ps, p| {
-                reference_paths.push(p.clone());
-            },
-        ) {
-            Ok(_) => {}
-            Err(StorageError::Cancelled(..)) => {
-                logger.error("path finding timed out")?;
-                return Ok(());
-            }
-            err => err?,
-        };
+            db.load_graph_for_file(&reference.path.to_string_lossy())?;
+            let (graph, _, _) = db.get();
 
-        let (graph, partials, _) = db.get();
-        for reference_path in &reference_paths {
-            if reference_paths
-                .iter()
-                .all(|other| !other.shadows(partials, reference_path))
+            let reference = match reference.to_assertion_source(graph, lines, &mut span_calculator)
             {
-                actual_paths.push(reference_path.clone());
+                Ok(result) => result,
+                Err(_) => {
+                    logger.error("invalid file or position")?;
+                    return Ok(());
+                }
+            };
+
+            if reference.iter_references(graph).next().is_none() {
+                logger.error("no references")?;
+                return Ok(());
             }
-        }
+            let starting_nodes = reference.iter_references(graph).collect::<Vec<_>>();
 
-        if actual_paths.is_empty() {
-            logger.warn("no definitions")?;
-            return Ok(());
-        }
+            let mut actual_paths = Vec::new();
+            let mut reference_paths = Vec::new();
+            match db.find_all_complete_partial_paths(
+                starting_nodes,
+                &stack_graphs::NoCancellation,
+                |_g, _ps, p| {
+                    reference_paths.push(p.clone());
+                },
+            ) {
+                Ok(_) => {}
+                Err(StorageError::Cancelled(..)) => {
+                    logger.error("path finding timed out")?;
+                    return Ok(());
+                }
+                err => err?,
+            };
 
-        logger.ok("found definitions:")?;
-        for (idx, path) in actual_paths.into_iter().enumerate() {
-            let file = match graph[path.end_node].id().file() {
-                Some(f) => graph[f].to_string(),
-                None => "?".to_string(),
-            };
-            let line_col = match graph.source_info(path.end_node) {
-                Some(p) => format!(
-                    "{}:{}",
-                    p.span.start.line + 1,
-                    p.span.start.column.grapheme_offset + 1
-                ),
-                None => "?:?".to_string(),
-            };
-            println!("  {:2}: {}:{}", idx, file, line_col);
+            let (graph, partials, _) = db.get();
+            for reference_path in &reference_paths {
+                if reference_paths
+                    .iter()
+                    .all(|other| !other.shadows(partials, reference_path))
+                {
+                    actual_paths.push(reference_path.clone());
+                }
+            }
+
+            if actual_paths.is_empty() {
+                logger.warn("no definitions")?;
+                return Ok(());
+            }
+
+            logger.ok("found definitions:")?;
+            for (idx, path) in actual_paths.into_iter().enumerate() {
+                let file = match graph[path.end_node].id().file() {
+                    Some(f) => graph[f].to_string(),
+                    None => "?".to_string(),
+                };
+                let line_col = match graph.source_info(path.end_node) {
+                    Some(p) => format!(
+                        "{}:{}",
+                        p.span.start.line + 1,
+                        p.span.start.column.grapheme_offset + 1
+                    ),
+                    None => "?:?".to_string(),
+                };
+                println!("  {:2}: {}:{}", idx, file, line_col);
+            }
         }
 
         Ok(())

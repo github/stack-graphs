@@ -161,6 +161,11 @@ impl SourcePosition {
             span_calculator.for_line_and_grapheme(line_no, line.utf8_bounds.start, self.column);
         Ok(AssertionSource { file, position })
     }
+
+    pub fn canonicalize(&mut self) -> std::io::Result<()> {
+        self.path = self.path.canonicalize()?;
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for SourcePosition {
