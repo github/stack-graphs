@@ -274,6 +274,7 @@ pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     Ok(Duration::new(s.parse()?, 0))
 }
 
+#[cfg(feature = "lsp")]
 pub fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     Ok(Duration::new(0, 1_000_000_u32 * s.parse::<u32>()?))
 }
