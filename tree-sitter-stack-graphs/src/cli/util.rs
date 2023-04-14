@@ -138,7 +138,7 @@ pub struct SourcePosition {
     pub path: PathBuf,
     /// Position line (0-based)
     pub line: usize,
-    /// Position column (0-based)
+    /// Position column (0-based grapheme)
     pub column: usize,
 }
 
