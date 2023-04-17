@@ -7,6 +7,7 @@ env:
   BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
   BASE_DIR: base
+  BASE_DB: base.sqlite
   BASE_ARTIFACT: base-perf-results
   HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -136,7 +137,7 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.BASE_DIR }}/target/release/${{ env.TSSG_TS }} \
-              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+              index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       #
       # Upload results
