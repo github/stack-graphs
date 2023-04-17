@@ -147,7 +147,6 @@ fn check_find_qualified_definitions(
     let stitcher = sg_forward_partial_path_stitcher_from_partial_paths(
         graph.graph,
         partials,
-        db,
         1,
         &initial_partial_path as *const PartialPath as *const _,
     );

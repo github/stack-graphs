@@ -11,6 +11,7 @@ env:
   HEAD_REPO: ${{ github.event.pull_request.head.repo.owner.login }}/${{ github.event.pull_request.head.repo.name }}
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   HEAD_DIR: head
+  HEAD_DB: head.sqlite
   HEAD_ARTIFACT: head-perf-results
   TEST_REPO: microsoft/TypeScript
   TEST_REF: v4.9.5
@@ -222,7 +223,7 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_DIR }}/target/release/${{ env.TSSG_TS }} \
-              analyze --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       #
       # Upload results

@@ -132,7 +132,6 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
     let stitcher = sg_forward_partial_path_stitcher_from_nodes(
         graph.graph,
         partials,
-        db,
         references.len(),
         references.as_ptr() as *const _,
     );

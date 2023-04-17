@@ -23,14 +23,18 @@ required-features = ["cli"]
 
 [features]
 cli = [
+  "base64",
   "clap",
   "colored",
+  "dirs",
   "dialoguer",
   "env_logger",
   "indoc",
   "pathdiff",
   "serde_json",
+  "sha1",
   "stack-graphs/serde",
+  "stack-graphs/storage",
   "stack-graphs/visualization",
   "time",
   "tree-sitter-config",
@@ -40,10 +44,12 @@ cli = [
 
 [dependencies]
 anyhow = "1.0"
+base64 = { version = "0.21", optional=true }
 clap = { version = "3", optional = true, features=["derive"] }
 colored = { version = "2.0", optional = true }
 controlled-option = ">=0.4"
 dialoguer = { version = "0.10", optional = true }
+dirs = { version = "5", optional=true }
 env_logger = { version = "0.9", optional = true }
 indoc = { version = "1.0", optional = true }
 itertools = "0.10"
@@ -54,6 +60,7 @@ pathdiff = { version = "0.2.1", optional = true }
 regex = "1"
 rust-ini = "0.18"
 serde_json = { version="1.0", optional=true }
+sha1 = { version="0.10", optional=true }
 stack-graphs = { version="0.10", path="../stack-graphs" }
 thiserror = "1.0"
 time = { version = "0.3", optional = true }

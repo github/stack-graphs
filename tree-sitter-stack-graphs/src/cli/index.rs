@@ -10,9 +10,8 @@ use clap::Args;
 use clap::ValueHint;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
-use stack_graphs::stitching::Database;
+use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,8 +19,6 @@ use std::time::Duration;
 use tree_sitter_graph::Variables;
 use walkdir::WalkDir;
 
-use crate::cli::util::duration_from_seconds_str;
-use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::BuildError;
@@ -29,11 +26,15 @@ use crate::CancelAfterDuration;
 use crate::CancellationFlag;
 use crate::NoCancellation;
 
+use super::util::duration_from_seconds_str;
+use super::util::path_exists;
+use super::util::sha1;
+use super::util::wait_for_input;
 use super::util::FileStatusLogger;
 
 /// Analyze sources
 #[derive(Args)]
-pub struct AnalyzeArgs {
+pub struct IndexArgs {
     /// Source file or directory paths.
     #[clap(
         value_name = "SOURCE_PATH",
@@ -57,6 +58,10 @@ pub struct AnalyzeArgs {
     #[clap(long, short = 'v')]
     pub verbose: bool,
 
+    /// Index files even if they are already present in the database.
+    #[clap(long, short = 'f')]
+    pub force: bool,
+
     /// Hide failure error details.
     #[clap(long)]
     pub hide_error_details: bool,
@@ -74,10 +79,11 @@ pub struct AnalyzeArgs {
     pub wait_at_start: bool,
 }
 
-impl AnalyzeArgs {
+impl IndexArgs {
     pub fn new(source_paths: Vec<PathBuf>) -> Self {
         Self {
             source_paths,
+            force: false,
             continue_from: None,
             verbose: false,
             hide_error_details: false,
@@ -86,14 +92,16 @@ impl AnalyzeArgs {
         }
     }
 
-    pub fn run(&self, loader: &mut Loader) -> anyhow::Result<()> {
+    pub fn run(&self, db_path: &Path, loader: &mut Loader) -> anyhow::Result<()> {
         if self.wait_at_start {
-            self.wait_for_input()?;
+            wait_for_input()?;
         }
         let mut seen_mark = false;
+        let mut db = SQLiteWriter::open(&db_path)?;
         for source_path in &self.source_paths {
+            let source_path = &source_path.canonicalize()?;
             if source_path.is_dir() {
-                let source_root = source_path;
+                let source_root = &source_path;
                 for source_entry in WalkDir::new(source_root)
                     .follow_links(true)
                     .sort_by_file_name()
@@ -101,25 +109,31 @@ impl AnalyzeArgs {
                     .filter_map(|e| e.ok())
                     .filter(|e| e.file_type().is_file())
                 {
-                    let source_path = source_entry.path();
-                    self.analyze_file(source_root, source_path, loader, &mut seen_mark)?;
+                    let source_path = &source_entry.path().canonicalize()?;
+                    self.analyze_file(
+                        source_root,
+                        source_path,
+                        loader,
+                        &mut seen_mark,
+                        &mut db,
+                        false,
+                    )?;
                 }
             } else {
-                let source_root = source_path.parent().unwrap();
-                if self.should_skip(source_path, &mut seen_mark) {
+                let source_root = source_path.parent().expect("expect file to have parent");
+                if self.should_skip(&source_path, &mut seen_mark) {
                     continue;
                 }
-                self.analyze_file(source_root, source_path, loader, &mut seen_mark)?;
+                self.analyze_file(
+                    source_root,
+                    source_path,
+                    loader,
+                    &mut seen_mark,
+                    &mut db,
+                    true,
+                )?;
             }
         }
-        Ok(())
-    }
-
-    fn wait_for_input(&self) -> anyhow::Result<()> {
-        print!("<press ENTER to continue>");
-        std::io::stdout().flush()?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
         Ok(())
     }
 
@@ -130,6 +144,8 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
         seen_mark: &mut bool,
+        db: &mut SQLiteWriter,
+        strict: bool,
     ) -> anyhow::Result<()> {
         let mut file_status = FileStatusLogger::new(source_path, self.verbose);
         match self.analyze_file_inner(
@@ -137,6 +153,8 @@ impl AnalyzeArgs {
             source_path,
             loader,
             seen_mark,
+            db,
+            strict,
             &mut file_status,
         ) {
             ok @ Ok(_) => ok,
@@ -154,6 +172,8 @@ impl AnalyzeArgs {
         source_path: &Path,
         loader: &mut Loader,
         seen_mark: &mut bool,
+        db: &mut SQLiteWriter,
+        strict: bool,
         file_status: &mut FileStatusLogger,
     ) -> anyhow::Result<()> {
         if self.should_skip(source_path, seen_mark) {
@@ -164,7 +184,12 @@ impl AnalyzeArgs {
         let mut file_reader = FileReader::new();
         let lc = match loader.load_for_file(source_path, &mut file_reader, &NoCancellation) {
             Ok(Some(sgl)) => sgl,
-            Ok(None) => return Ok(()),
+            Ok(None) => {
+                if strict {
+                    file_status.error("not supported")?;
+                }
+                return Ok(());
+            }
             Err(crate::loader::LoadError::Cancelled(_)) => {
                 file_status.warn("language loading timed out")?;
                 return Ok(());
@@ -172,6 +197,12 @@ impl AnalyzeArgs {
             Err(e) => return Err(e.into()),
         };
         let source = file_reader.get(source_path)?;
+        let tag = sha1(source);
+
+        if !self.force && db.file_exists(&source_path.to_string_lossy(), Some(&tag))? {
+            file_status.info("cached")?;
+            return Ok(());
+        }
 
         let mut cancellation_flag: Arc<dyn CancellationFlag> = Arc::new(NoCancellation);
         if let Some(max_file_time) = self.max_file_time {
@@ -250,15 +281,16 @@ impl AnalyzeArgs {
             }
             Ok(_) => {}
         };
+        db.add_graph_for_file(&graph, file, &tag)?;
 
         let mut partials = PartialPaths::new();
-        let mut db = Database::new();
         match partials.find_minimal_partial_path_set_in_file(
             &graph,
             file,
             &cancellation_flag.as_ref(),
             |g, ps, p| {
-                db.add_partial_path(g, ps, p);
+                db.add_partial_path_for_file(g, ps, &p, file)
+                    .expect("adding path to database failed");
             },
         ) {
             Ok(_) => {}
@@ -269,6 +301,7 @@ impl AnalyzeArgs {
         }
 
         file_status.ok("success")?;
+
         Ok(())
     }
 
