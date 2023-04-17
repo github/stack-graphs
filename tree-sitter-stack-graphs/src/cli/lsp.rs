@@ -293,7 +293,7 @@ impl Backend {
             querier.definitions(reference, cancellation_flag.as_ref())
         };
         match result {
-            Ok(result) => result,
+            Ok(result) => result.into_iter().flat_map(|r| r.targets).collect(),
             Err(QueryError::Cancelled(at)) => {
                 self.logger
                     .error(format!("query timed out at {}", at,))

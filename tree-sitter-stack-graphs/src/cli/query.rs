@@ -11,7 +11,6 @@ use clap::Subcommand;
 use clap::ValueHint;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteReader;
-use stack_graphs::storage::StorageError;
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -81,34 +80,52 @@ impl Definition {
         let cancellation_flag = NoCancellation;
         let mut file_reader = FileReader::new();
         for reference in self.references {
-            let definitions = querier.definitions(reference.clone(), &cancellation_flag)?;
-            println!("queried reference");
-            println!(
-                "{}",
-                Excerpt::from_source(
-                    &reference.path,
-                    file_reader.get(&reference.path).unwrap_or_default(),
-                    reference.line,
-                    reference.column..(reference.column + 1),
-                    0
-                )
-            );
-            match definitions.len() {
-                0 => println!("has no definitions"),
-                1 => println!("has definition"),
-                n => println!("has {} definitions", n),
+            let results = querier.definitions(reference.clone(), &cancellation_flag)?;
+            let numbered = results.len() > 1;
+            let indent = if numbered { 6 } else { 0 };
+            if numbered {
+                println!("found {} references at position", results.len());
             }
-            for definition in definitions.into_iter() {
+            for (
+                idx,
+                QueryResult {
+                    source: reference,
+                    targets: definitions,
+                },
+            ) in results.into_iter().enumerate()
+            {
+                if numbered {
+                    println!("{:4}: queried reference", idx);
+                } else {
+                    println!("queried reference");
+                }
                 println!(
                     "{}",
                     Excerpt::from_source(
-                        &definition.path,
-                        file_reader.get(&definition.path).unwrap_or_default(),
-                        definition.span.start.line,
-                        definition.to_first_line_column_range(),
-                        0
+                        &reference.path,
+                        file_reader.get(&reference.path).unwrap_or_default(),
+                        reference.first_line(),
+                        reference.first_line_column_range(),
+                        indent
                     )
                 );
+                match definitions.len() {
+                    0 => println!("{}has no definitions", " ".repeat(indent)),
+                    1 => println!("{}has definition", " ".repeat(indent)),
+                    n => println!("{}has {} definitions", " ".repeat(indent), n),
+                }
+                for definition in definitions.into_iter() {
+                    println!(
+                        "{}",
+                        Excerpt::from_source(
+                            &definition.path,
+                            file_reader.get(&definition.path).unwrap_or_default(),
+                            definition.first_line(),
+                            definition.first_line_column_range(),
+                            indent
+                        )
+                    );
+                }
             }
         }
         Ok(())
@@ -129,7 +146,7 @@ impl<'a> Querier<'a> {
         &mut self,
         mut reference: SourcePosition,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<Vec<SourceSpan>> {
+    ) -> Result<Vec<QueryResult>> {
         reference.canonicalize()?;
 
         let log_path = PathBuf::from(reference.to_string());
@@ -143,7 +160,7 @@ impl<'a> Querier<'a> {
         {
             FileStatus::Indexed => {}
             _ => {
-                logger.failure("not indexed", None);
+                logger.failure("file not indexed", None);
                 return Ok(Vec::default());
             }
         }
@@ -156,60 +173,76 @@ impl<'a> Querier<'a> {
 
         let starting_nodes = reference.iter_references(graph).collect::<Vec<_>>();
         if starting_nodes.is_empty() {
-            logger.warning("no references", None);
+            logger.warning("no references at location", None);
             return Ok(Vec::default());
         }
 
-        let mut actual_paths = Vec::new();
-        let mut reference_paths = Vec::new();
-        match self.db.find_all_complete_partial_paths(
-            starting_nodes,
-            &cancellation_flag,
-            |_g, _ps, p| {
-                reference_paths.push(p.clone());
-            },
-        ) {
-            Ok(_) => {}
-            Err(StorageError::Cancelled(..)) => {
-                logger.failure("path finding timed out", None);
-                return Ok(Vec::default());
-            }
-            err => err?,
-        };
+        let mut result = Vec::new();
+        for (node, span) in starting_nodes {
+            let reference_span = SourceSpan {
+                path: reference.path.clone(),
+                span,
+            };
 
-        let (graph, partials, _) = self.db.get();
-        for reference_path in &reference_paths {
-            if reference_paths
-                .iter()
-                .all(|other| !other.shadows(partials, reference_path))
-            {
-                actual_paths.push(reference_path.clone());
+            let mut reference_paths = Vec::new();
+            if let Err(err) = self.db.find_all_complete_partial_paths(
+                std::iter::once(node),
+                &cancellation_flag,
+                |_g, _ps, p| {
+                    reference_paths.push(p.clone());
+                },
+            ) {
+                logger.failure("query timed out", None);
+                return Err(err.into());
             }
+
+            let (graph, partials, _) = self.db.get();
+            let mut actual_paths = Vec::new();
+            for reference_path in &reference_paths {
+                if let Err(err) = cancellation_flag.check("shadowing") {
+                    logger.failure("query timed out", None);
+                    return Err(err.into());
+                }
+                if reference_paths
+                    .iter()
+                    .all(|other| !other.shadows(partials, reference_path))
+                {
+                    actual_paths.push(reference_path.clone());
+                }
+            }
+
+            let definitions = actual_paths
+                .into_iter()
+                .filter_map(|path| {
+                    let span = match graph.source_info(path.end_node) {
+                        Some(p) => p.span.clone(),
+                        None => return None,
+                    };
+                    let path = match graph[path.end_node].id().file() {
+                        Some(f) => PathBuf::from(graph[f].name()),
+                        None => return None,
+                    };
+                    Some(SourceSpan { path, span })
+                })
+                .collect::<Vec<_>>();
+
+            result.push(QueryResult {
+                source: reference_span,
+                targets: definitions,
+            });
         }
 
-        if actual_paths.is_empty() {
-            logger.warning("no definitions", None);
-            return Ok(Vec::default());
-        }
+        let count: usize = result.iter().map(|r| r.targets.len()).sum();
+        logger.success(
+            &format!(
+                "found {} definitions for {} references",
+                count,
+                result.len()
+            ),
+            None,
+        );
 
-        let definitions = actual_paths
-            .into_iter()
-            .filter_map(|path| {
-                let span = match graph.source_info(path.end_node) {
-                    Some(p) => p.span.clone(),
-                    None => return None,
-                };
-                let path = match graph[path.end_node].id().file() {
-                    Some(f) => PathBuf::from(graph[f].name()),
-                    None => return None,
-                };
-                Some(SourceSpan { path, span })
-            })
-            .collect::<Vec<_>>();
-
-        logger.success(&format!("found {} definitions", definitions.len()), None);
-
-        Ok(definitions)
+        Ok(result)
     }
 }
 
@@ -227,6 +260,11 @@ impl From<crate::CancellationError> for QueryError {
     fn from(value: crate::CancellationError) -> Self {
         Self::Cancelled(value.0)
     }
+}
+
+pub struct QueryResult {
+    pub source: SourceSpan,
+    pub targets: Vec<SourceSpan>,
 }
 
 type Result<T> = std::result::Result<T, QueryError>;
