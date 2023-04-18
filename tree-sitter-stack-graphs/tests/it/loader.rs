@@ -47,5 +47,5 @@ fn can_load_from_provided_language_configuration() {
     let lc = loader
         .load_for_file(&PATH, &mut None, &NoCancellation)
         .expect("Expected loading stack graph language to succeed");
-    assert_eq!(lc.map(|lc| lc.language), Some(language));
+    assert_eq!(lc.primary.map(|lc| lc.language), Some(language));
 }

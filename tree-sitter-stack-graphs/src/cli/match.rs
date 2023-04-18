@@ -41,7 +41,10 @@ pub struct MatchArgs {
 impl MatchArgs {
     pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
         let mut file_reader = FileReader::new();
-        let lc = match loader.load_for_file(&self.source_path, &mut file_reader, &NoCancellation)? {
+        let lc = match loader
+            .load_for_file(&self.source_path, &mut file_reader, &NoCancellation)?
+            .primary
+        {
             Some(lc) => lc,
             None => return Err(anyhow!("No stack graph language found")),
         };
