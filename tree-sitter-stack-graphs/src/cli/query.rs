@@ -79,7 +79,9 @@ impl Definition {
     pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
         let cancellation_flag = NoCancellation;
         let mut file_reader = FileReader::new();
-        for reference in self.references {
+        for mut reference in self.references {
+            reference.canonicalize()?;
+
             let results = querier.definitions(reference.clone(), &cancellation_flag)?;
             let numbered = results.len() > 1;
             let indent = if numbered { 6 } else { 0 };
@@ -144,11 +146,9 @@ impl<'a> Querier<'a> {
 
     pub fn definitions(
         &mut self,
-        mut reference: SourcePosition,
+        reference: SourcePosition,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Vec<QueryResult>> {
-        reference.canonicalize()?;
-
         let log_path = PathBuf::from(reference.to_string());
         let mut logger = self.logger.file(&log_path);
 

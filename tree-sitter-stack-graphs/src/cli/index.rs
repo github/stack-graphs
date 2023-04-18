@@ -103,7 +103,13 @@ impl IndexArgs {
         let mut indexer = Indexer::new(&mut db, &mut loader, &logger);
         indexer.force = self.force;
         indexer.max_file_time = self.max_file_time;
-        indexer.index_all(self.source_paths, self.continue_from, &NoCancellation)?;
+
+        let source_paths = self
+            .source_paths
+            .into_iter()
+            .map(|p| p.canonicalize())
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        indexer.index_all(source_paths, self.continue_from, &NoCancellation)?;
         Ok(())
     }
 }
