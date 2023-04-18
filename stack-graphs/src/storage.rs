@@ -547,9 +547,9 @@ impl SQLiteReader {
                 " * Load extensions from root with prefix symbol stack {}",
                 symbol_stack
             );
-            if !self.loaded_root_paths.insert(symbol_stack.to_string()) {
+            if !self.loaded_root_paths.insert(symbol_stack.clone()) {
                 copious_debugging!("   > Already loaded");
-                return Ok(());
+                continue;
             }
             let mut stmt = self
                 .conn
