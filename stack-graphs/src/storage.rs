@@ -473,12 +473,18 @@ impl SQLiteReader {
     /// Returns a [`Files`][] value that can be used to iterate over all descendants of a
     /// file or directory in the database.
     pub fn list_file_or_directory<'a>(
-        &'a mut self,
+        &'a self,
+        file_or_directory: &Path,
+    ) -> Result<Files<'a, [String; 1]>> {
+        Self::list_file_or_directory_inner(&self.conn, file_or_directory)
+    }
+
+    fn list_file_or_directory_inner<'a>(
+        conn: &'a Connection,
         file_or_directory: &Path,
     ) -> Result<Files<'a, [String; 1]>> {
         let file_or_directory = file_or_directory.to_string_lossy().to_string();
-        self.conn
-            .prepare("SELECT file, tag, error FROM graphs WHERE path_descendant_of(file, ?)")
+        conn.prepare("SELECT file, tag, error FROM graphs WHERE path_descendant_of(file, ?)")
             .map(|stmt| Files(stmt, [file_or_directory]))
             .map_err(|e| e.into())
     }
@@ -504,6 +510,24 @@ impl SQLiteReader {
         let json_graph = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
         let file_graph = serde_json::from_slice::<serde::StackGraph>(&json_graph)?;
         file_graph.load_into(graph)?;
+        Ok(())
+    }
+
+    pub fn load_graph_for_file_or_directory(
+        &mut self,
+        file_or_directory: &Path,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<()> {
+        for file in Self::list_file_or_directory_inner(&self.conn, file_or_directory)?.try_iter()? {
+            cancellation_flag.check("loading graphs")?;
+            let file = file?;
+            Self::load_graph_for_file_inner(
+                &file.path.to_string_lossy(),
+                &mut self.graph,
+                &mut self.loaded_graphs,
+                &self.conn,
+            )?;
+        }
         Ok(())
     }
 
