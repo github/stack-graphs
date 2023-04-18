@@ -51,6 +51,7 @@ impl StatusArgs {
             self.status(&mut entries)?;
         } else {
             for source_path in &self.source_paths {
+                let source_path = source_path.canonicalize()?;
                 let mut files = db.list_file_or_directory(&source_path)?;
                 let mut entries = files.try_iter()?;
                 self.status(&mut entries)?;
