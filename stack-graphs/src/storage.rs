@@ -503,12 +503,13 @@ impl SQLiteReader {
             copious_debugging!("   > Already loaded");
             return Ok(());
         }
-        let file = self.graph[node].file().expect("file node required");
+        let id = self.graph[node].id();
+        let file = id.file().expect("file node required");
         let file = self.graph[file].name();
         let mut stmt = self
             .conn
-            .prepare_cached("SELECT file,json from file_paths WHERE file = ?")?;
-        let paths = stmt.query_map([file], |row| {
+            .prepare_cached("SELECT file,json from file_paths WHERE file = ? AND local_id = ?")?;
+        let paths = stmt.query_map((file, id.local_id()), |row| {
             let file = row.get::<_, String>(0)?;
             let json = row.get::<_, Vec<u8>>(1)?;
             Ok((file, json))
