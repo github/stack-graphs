@@ -8,6 +8,7 @@
 use clap::Args;
 use clap::ValueHint;
 use stack_graphs::serde::NoFilter;
+use stack_graphs::stitching::Database;
 use stack_graphs::storage::SQLiteReader;
 use stack_graphs::NoCancellation;
 use std::path::Path;
@@ -41,8 +42,18 @@ impl VisualizeArgs {
             let source_path = source_path.canonicalize()?;
             db.load_graph_for_file_or_directory(&source_path, cancellation_flag)?;
         }
-        let (graph, partials, db) = db.get();
-        let html = graph.to_html_string("stack-graph", partials, db, &NoFilter)?;
+        let (graph, _, _) = db.get();
+        let starting_nodes = graph
+            .iter_nodes()
+            .filter(|n| graph[*n].is_reference())
+            .collect::<Vec<_>>();
+        let mut complete_paths_db = Database::new();
+        db.find_all_complete_partial_paths(starting_nodes, cancellation_flag, |g, ps, p| {
+            complete_paths_db.add_partial_path(g, ps, p.clone());
+        })?;
+        let (graph, partials, _) = db.get();
+        let html =
+            graph.to_html_string("stack-graph", partials, &mut complete_paths_db, &NoFilter)?;
         if let Some(dir) = self.output.parent() {
             std::fs::create_dir_all(dir)?;
         }
