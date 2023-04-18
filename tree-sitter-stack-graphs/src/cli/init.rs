@@ -51,7 +51,7 @@ impl InitArgs {
         Self { project_path }
     }
 
-    pub fn run(&self) -> anyhow::Result<()> {
+    pub fn run(self) -> anyhow::Result<()> {
         self.check_project_dir()?;
         let mut config = ProjectSettings::default();
         loop {

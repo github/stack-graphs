@@ -41,7 +41,7 @@ pub struct CleanArgs {
 }
 
 impl CleanArgs {
-    pub fn run(&self, db_path: &Path) -> anyhow::Result<()> {
+    pub fn run(self, db_path: &Path) -> anyhow::Result<()> {
         if self.delete {
             self.delete(db_path)
         } else {

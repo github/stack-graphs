@@ -19,5 +19,5 @@ pub struct Cli {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let default_db_path = default_user_database_path_for_crate(env!("CARGO_PKG_NAME"))?;
-    cli.subcommand.run(&default_db_path)
+    cli.subcommand.run(default_db_path)
 }

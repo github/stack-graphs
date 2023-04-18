@@ -26,6 +26,7 @@ required-features = ["test"] # should be a forced feature, but Cargo does not su
 [features]
 default = ["test"] # test is enabled by default because we cannot specify it as a forced featured for [[test]] above
 cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
+lsp = ["tree-sitter-stack-graphs/lsp"]
 test = ["anyhow", "tree-sitter-stack-graphs/cli"]
 
 [dependencies]

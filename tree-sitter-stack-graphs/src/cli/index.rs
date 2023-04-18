@@ -92,7 +92,7 @@ impl IndexArgs {
         }
     }
 
-    pub fn run(&self, db_path: &Path, loader: &mut Loader) -> anyhow::Result<()> {
+    pub fn run(self, db_path: &Path, mut loader: Loader) -> anyhow::Result<()> {
         if self.wait_at_start {
             wait_for_input()?;
         }
@@ -113,7 +113,7 @@ impl IndexArgs {
                     self.analyze_file(
                         source_root,
                         source_path,
-                        loader,
+                        &mut loader,
                         &mut seen_mark,
                         &mut db,
                         false,
@@ -127,7 +127,7 @@ impl IndexArgs {
                 self.analyze_file(
                     source_root,
                     source_path,
-                    loader,
+                    &mut loader,
                     &mut seen_mark,
                     &mut db,
                     true,

@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch tree-sitter-stack-graphs-typescript LSP extension",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}/languages/tree-sitter-stack-graphs-typescript/vscode"
+            ],
+            "preLaunchTask": {
+                "type": "npm",
+                "script": "build"
+            },
+            "outFiles": [
+                "${workspaceFolder}/languages/tree-sitter-stack-graphs-typescript/vscode/out/**/*.js"
+            ]
+        }
+    ]
+}

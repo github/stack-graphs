@@ -35,7 +35,7 @@ pub struct QueryArgs {
 }
 
 impl QueryArgs {
-    pub fn run(&self, db_path: &Path) -> anyhow::Result<()> {
+    pub fn run(self, db_path: &Path) -> anyhow::Result<()> {
         if self.wait_at_start {
             wait_for_input()?;
         }
@@ -50,7 +50,7 @@ pub enum Target {
 }
 
 impl Target {
-    pub fn run(&self, db: &mut SQLiteReader) -> anyhow::Result<()> {
+    pub fn run(self, db: &mut SQLiteReader) -> anyhow::Result<()> {
         match self {
             Self::Definition(cmd) => cmd.run(db),
         }
@@ -70,9 +70,8 @@ pub struct Definition {
 }
 
 impl Definition {
-    pub fn run(&self, db: &mut SQLiteReader) -> anyhow::Result<()> {
-        for reference in &self.references {
-            let mut reference = reference.clone();
+    pub fn run(self, db: &mut SQLiteReader) -> anyhow::Result<()> {
+        for mut reference in self.references {
             reference.canonicalize()?;
 
             let mut file_reader = FileReader::new();

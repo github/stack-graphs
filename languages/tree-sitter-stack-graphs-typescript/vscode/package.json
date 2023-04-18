@@ -1,0 +1,62 @@
+{
+    "name": "tree-sitter-stack-graphs-typescript",
+    "description": "Stack graphs based navigation for TypeScript",
+    "author": "GitHub <opensource+stack-graphs@github.com>",
+    "contributors": [
+        "Hendrik van Antwerpen <hendrikvanantwerpen@github.com>"
+    ],
+    "publisher": "github",
+    "license": "(MIT OR Apache-2.0)",
+    "version": "0.1.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/github/stack-graphs"
+    },
+    "engines": {
+        "vscode": "^1.76.0"
+    },
+    "main": "./out/extension",
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "contributes": {
+        "configuration": {
+            "title": "tree-sitter-stack-graphs-typescript",
+            "properties": {
+                "tree-sitter-stack-graphs-typescript.database.defaultLocation": {
+                    "markdownDescription": "The default location for the database, if an explicit path is not provided. _Requires reload for changes to take effect._",
+                    "type": "string",
+                    "default": "workspace",
+                    "enum": ["workspace", "user"],
+                    "enumDescriptions": [
+                        "Use a workspace-local database. Indexing data will not be shared between workspaces.",
+                        "Use the user database, stored in the user's local data directory. Indexing data is shared between workspaces."
+                    ],
+                    "scope": "machine-overridable",
+                    "order": 0
+                },
+                "tree-sitter-stack-graphs-typescript.database.path": {
+                    "markdownDescription": "The path to the database. Expands ~ to the user's home directory. _Requires reload for changes to take effect._",
+                    "type": "string",
+                    "default": null,
+                    "scope": "machine-overridable",
+                    "order": 1
+                }
+            }
+        }
+    },
+    "dependencies": {
+        "vscode-languageclient": "^8.1.0"
+    },
+    "scripts": {
+        "build-cli": "cargo build --features cli,lsp --release --target-dir target",
+        "install-cli": "mkdir -p out/bin && cp target/release/tree-sitter-stack-graphs-typescript out/bin",
+        "build-ext": "tsc -b",
+        "build": "npm run build-cli && npm run build-ext && npm run install-cli"
+    },
+    "devDependencies": {
+        "@types/node": "^16",
+        "@types/vscode": "^1.76.0",
+        "typescript": "^5"
+    }
+}
