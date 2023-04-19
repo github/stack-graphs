@@ -17,8 +17,8 @@ use crate::serde::Filter;
 use crate::stitching::Database;
 
 static CSS: &'static str = include_str!("visualization/visualization.css");
-static D3: &'static str = include_str!("visualization/d3.v7.min.js");
-static D3_DAG: &'static str = include_str!("visualization/d3-dag.v0.10.0.min.js");
+static D3: &'static str = include_str!("visualization/d3.min.js");
+static D3_DAG: &'static str = include_str!("visualization/d3-dag.min.js");
 static JS: &'static str = include_str!("visualization/visualization.js");
 
 static PKG: &'static str = env!("CARGO_PKG_NAME");
