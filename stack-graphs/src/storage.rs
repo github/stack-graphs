@@ -351,6 +351,10 @@ impl SQLiteWriter {
         let mut root_stmt = self
             .conn
             .prepare_cached("INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)")?;
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+        let mut node_path_count = 0usize;
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+        let mut root_path_count = 0usize;
         for path in paths {
             copious_debugging!(
                 "--> Add {} partial path {}",
@@ -369,6 +373,7 @@ impl SQLiteWriter {
                     path.start_node.local_id,
                     &serde_json::to_vec(&path)?,
                 ))?;
+                node_path_count += 1;
             } else if start_node.is_root() {
                 copious_debugging!(
                     " * Add as root path with symbol stack {}",
@@ -377,6 +382,7 @@ impl SQLiteWriter {
                 let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
                 root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
+                root_path_count += 1;
             } else {
                 panic!(
                     "added path {} must start in given file {} or at root",
@@ -384,6 +390,11 @@ impl SQLiteWriter {
                     graph[file].name()
                 );
             }
+            copious_debugging!(
+                " * Added {} node paths and {} root paths",
+                node_path_count,
+                root_path_count,
+            );
         }
         Ok(())
     }
@@ -514,6 +525,8 @@ impl SQLiteReader {
             let json = row.get::<_, Vec<u8>>(1)?;
             Ok((file, json))
         })?;
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+        let mut count = 0usize;
         for path in paths {
             let (file, json) = path?;
             Self::load_graph_for_file_inner(
@@ -530,7 +543,9 @@ impl SQLiteReader {
             );
             self.db
                 .add_partial_path(&self.graph, &mut self.partials, path);
+            count += 1;
         }
+        copious_debugging!("   > Loaded {}", count);
         Ok(())
     }
 
@@ -559,6 +574,8 @@ impl SQLiteReader {
                 let json = row.get::<_, Vec<u8>>(1)?;
                 Ok((file, json))
             })?;
+            #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+            let mut count = 0usize;
             for path in paths {
                 let (file, json) = path?;
                 Self::load_graph_for_file_inner(
@@ -575,7 +592,9 @@ impl SQLiteReader {
                 );
                 self.db
                     .add_partial_path(&self.graph, &mut self.partials, path);
+                count += 1;
             }
+            copious_debugging!("   > Loaded {}", count);
         }
         Ok(())
     }
