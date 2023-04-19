@@ -54,11 +54,11 @@ impl<'a> TreeSitterCancellationFlag<'a> {
         // so that we can pass it to the polling thread. This is possible, because:
         //   (1) The lifetime parameter on `TreeSitterCancellationFlag` ensures it does
         //       not outlive the original reference.
-        //   (1) The thread captures a weak reference to the flag, which ensures that
+        //   (2) The thread captures a weak reference to the flag, which ensures that
         //       `cancellation_flag` are only accessed as long as the flag exists.
-        //   (2) The field `self.flag` is the only other reference to the flag, ensuring
+        //   (3) The field `self.flag` is the only other reference to the flag, ensuring
         //       the flag does not outlive the struct.
-        //   (3) The lifetime parameter `'a` ensures that the struct does not outlive the
+        //   (4) The lifetime parameter `'a` ensures that the struct does not outlive the
         //       `cancellation_flag` reference.
         // All of this ensures that the thread will not access `cancellation_flag` beyond
         // its lifetime.
