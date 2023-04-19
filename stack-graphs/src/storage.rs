@@ -362,7 +362,16 @@ impl SQLiteWriter {
                 path.display(graph, partials)
             );
             let start_node = graph[path.start_node].id();
-            if start_node.is_in_file(file) {
+            if start_node.is_root() {
+                copious_debugging!(
+                    " * Add as root path with symbol stack {}",
+                    path.symbol_stack_precondition.display(graph, partials),
+                );
+                let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
+                let path = serde::PartialPath::from_partial_path(graph, partials, path);
+                root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
+                root_path_count += 1;
+            } else if start_node.is_in_file(file) {
                 copious_debugging!(
                     " * Add as node path from node {}",
                     path.start_node.display(graph),
@@ -374,15 +383,6 @@ impl SQLiteWriter {
                     &serde_json::to_vec(&path)?,
                 ))?;
                 node_path_count += 1;
-            } else if start_node.is_root() {
-                copious_debugging!(
-                    " * Add as root path with symbol stack {}",
-                    path.symbol_stack_precondition.display(graph, partials),
-                );
-                let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
-                let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
-                root_path_count += 1;
             } else {
                 panic!(
                     "added path {} must start in given file {} or at root",
