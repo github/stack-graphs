@@ -16,6 +16,11 @@ use std::path::PathBuf;
 
 /// Visualize database
 #[derive(Args)]
+#[clap(after_help = r#"LIMITATIONS:
+    Visualizations will only work for very small stack graphs. This command is
+    useful for debugging minimal examples, but running it on any real-world code
+    will most likely result in HTML files that will not load in any browser.
+"#)]
 pub struct VisualizeArgs {
     /// Source file or directory paths.
     #[clap(
