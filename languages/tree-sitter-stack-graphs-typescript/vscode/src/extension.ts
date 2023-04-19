@@ -9,7 +9,8 @@ const NAME = "tree-sitter-stack-graphs-typescript";
 import {
     LanguageClient,
     LanguageClientOptions,
-    ServerOptions
+    ServerOptions,
+    integer
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
@@ -27,6 +28,10 @@ export function activate(context: ExtensionContext) {
     } else {
         switch (config.get<string>('database.defaultLocation')) {
             case "workspace":
+                if (!context?.storageUri?.fsPath) {
+                    // cannot start, no workspace is open
+                    return;
+                }
                 mkdirSync(context.storageUri.fsPath, { recursive: true });
                 let db_path = Uri.joinPath(context.storageUri, NAME + ".sqlite").fsPath;
                 args.push("-D", db_path);
@@ -35,6 +40,15 @@ export function activate(context: ExtensionContext) {
                 // omit -D
                 break;
         }
+    }
+
+    let max_folder_index_time = config.get<integer>('index.maxFolderTime');
+    if (max_folder_index_time && max_folder_index_time >= 0) {
+        args.push("--max-folder-index-time", max_folder_index_time.toString());
+    }
+    let max_file_index_time = config.get<integer>('index.maxFileTime');
+    if (max_file_index_time && max_file_index_time >= 0) {
+        args.push("--max-file-index-time", max_file_index_time.toString());
     }
 
     const serverOptions: ServerOptions = { command, args };

@@ -27,20 +27,39 @@
                     "markdownDescription": "The default location for the database, if an explicit path is not provided. _Requires reload for changes to take effect._",
                     "type": "string",
                     "default": "workspace",
-                    "enum": ["workspace", "user"],
+                    "enum": [
+                        "workspace",
+                        "user"
+                    ],
                     "enumDescriptions": [
                         "Use a workspace-local database. Indexing data will not be shared between workspaces.",
                         "Use the user database, stored in the user's local data directory. Indexing data is shared between workspaces."
                     ],
                     "scope": "machine-overridable",
-                    "order": 0
+                    "order": 10
                 },
                 "tree-sitter-stack-graphs-typescript.database.path": {
                     "markdownDescription": "The path to the database. Expands ~ to the user's home directory. _Requires reload for changes to take effect._",
                     "type": "string",
                     "default": null,
                     "scope": "machine-overridable",
-                    "order": 1
+                    "order": 11
+                },
+                "tree-sitter-stack-graphs-typescript.index.maxFolderTime": {
+                    "markdownDescription": "Maximum index time per workspace folder in seconds (-1 means no limit). _Requires reload for changes to take effect._",
+                    "type": "integer",
+                    "minimum": -1,
+                    "default": -1,
+                    "scope": "machine-overridable",
+                    "order": 20
+                },
+                "tree-sitter-stack-graphs-typescript.index.maxFileTime": {
+                    "markdownDescription": "Maximum index time per file in seconds (-1 means no limit). _Requires reload for changes to take effect._",
+                    "type": "integer",
+                    "minimum": -1,
+                    "default": 10,
+                    "scope": "machine-overridable",
+                    "order": 20
                 }
             }
         }
@@ -49,7 +68,7 @@
         "vscode-languageclient": "^8.1.0"
     },
     "scripts": {
-        "build-cli": "cargo build --features cli,lsp --release --target-dir target",
+        "build-cli": "CARGO_PROFILE_RELEASE_DEBUG=true cargo build --features cli,lsp --release --target-dir target",
         "install-cli": "mkdir -p out/bin && cp target/release/tree-sitter-stack-graphs-typescript out/bin",
         "build-ext": "tsc -b",
         "build": "npm run build-cli && npm run build-ext && npm run install-cli"

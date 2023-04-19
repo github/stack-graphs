@@ -318,9 +318,10 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::mem::transmute;
+use std::ops::BitOr;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -336,6 +337,7 @@ use tree_sitter_graph::parse_error::ParseError;
 use tree_sitter_graph::parse_error::TreeWithParseErrorVec;
 use tree_sitter_graph::ExecutionConfig;
 use util::DisplayParseErrorsPretty;
+use util::TreeSitterCancellationFlag;
 
 #[cfg(feature = "cli")]
 pub mod ci;
@@ -567,12 +569,19 @@ impl<'a> Builder<'a> {
         globals: &'a Variables<'a>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), BuildError> {
-        let mut parser = Parser::new();
-        parser.set_language(self.sgl.language)?;
-        unsafe { parser.set_cancellation_flag(cancellation_flag.flag()) };
-        let tree = parser
-            .parse(self.source, None)
-            .ok_or(BuildError::ParseError)?;
+        let tree = {
+            let mut parser = Parser::new();
+            parser.set_language(self.sgl.language)?;
+            let ts_cancellation_flag = TreeSitterCancellationFlag::from(cancellation_flag);
+            // The parser.set_cancellation_flag` is unsafe, because it does not tie the
+            // lifetime of the parser to the lifetime of the cancellation flag in any way.
+            // To make it more obvious that the parser does not outlive the cancellation flag,
+            // it is put into its own block here, instead of extending to the end of the method.
+            unsafe { parser.set_cancellation_flag(Some(ts_cancellation_flag.as_ref())) };
+            parser
+                .parse(self.source, None)
+                .ok_or(BuildError::ParseError)?
+        };
         let parse_errors = ParseError::into_all(tree);
         if parse_errors.errors().len() > 0 {
             return Err(BuildError::ParseErrors(parse_errors));
@@ -619,7 +628,7 @@ impl<'a> Builder<'a> {
             tree,
             self.source,
             &mut config,
-            &cancellation_flag,
+            &(cancellation_flag as &dyn CancellationFlag),
         )?;
 
         self.load(cancellation_flag)
@@ -636,24 +645,40 @@ impl<'a> Builder<'a> {
 }
 
 /// Trait to signal that the execution is cancelled
-pub trait CancellationFlag {
-    fn flag(&self) -> Option<&AtomicUsize>;
+pub trait CancellationFlag: Sync {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError>;
 }
+
+#[derive(Clone, Debug, Error)]
+#[error("Cancelled at \"{0}\"")]
+pub struct CancellationError(pub &'static str);
 
 impl stack_graphs::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), stack_graphs::CancellationError> {
-        if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
-            return Err(stack_graphs::CancellationError(at));
-        }
-        Ok(())
+        CancellationFlag::check(*self, at).map_err(|err| stack_graphs::CancellationError(err.0))
     }
 }
 
 impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
     fn check(&self, at: &'static str) -> Result<(), tree_sitter_graph::CancellationError> {
-        if self.flag().map_or(0, |f| f.load(Ordering::Relaxed)) != 0 {
-            return Err(tree_sitter_graph::CancellationError(at));
-        }
+        CancellationFlag::check(*self, at)
+            .map_err(|err| tree_sitter_graph::CancellationError(err.0))
+    }
+}
+
+impl<'a> BitOr for &'a dyn CancellationFlag {
+    type Output = OrCancellationFlag<'a>;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        OrCancellationFlag(self, rhs)
+    }
+}
+
+pub struct OrCancellationFlag<'a>(&'a dyn CancellationFlag, &'a dyn CancellationFlag);
+
+impl CancellationFlag for OrCancellationFlag<'_> {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError> {
+        self.0.check(at)?;
+        self.1.check(at)?;
         Ok(())
     }
 }
@@ -661,45 +686,64 @@ impl tree_sitter_graph::CancellationFlag for &dyn CancellationFlag {
 pub struct NoCancellation;
 
 impl CancellationFlag for NoCancellation {
-    fn flag(&self) -> Option<&AtomicUsize> {
-        None
+    fn check(&self, _at: &'static str) -> Result<(), CancellationError> {
+        Ok(())
     }
 }
 
 pub struct CancelAfterDuration {
-    flag: AtomicUsize,
+    start: Instant,
+    limit: Duration,
 }
 
 impl CancelAfterDuration {
-    pub fn new(limit: Duration) -> Arc<Self> {
-        let result = Arc::new(Self {
-            flag: AtomicUsize::new(0),
-        });
-        let start = Instant::now();
-        let timer = Arc::downgrade(&result);
-        std::thread::spawn(move || {
-            loop {
-                std::thread::sleep(Duration::from_millis(10));
-                if let Some(timer) = timer.upgrade() {
-                    // the flag is still in use
-                    if start.elapsed().ge(&limit) {
-                        // set flag and stop polling
-                        timer.flag.store(1, Ordering::Relaxed);
-                        return;
-                    }
-                } else {
-                    // the flag is not in use anymore, stop polling
-                    return;
-                }
-            }
-        });
-        result
+    pub fn new(limit: Duration) -> Self {
+        Self {
+            start: Instant::now(),
+            limit,
+        }
+    }
+
+    pub fn from_option(limit: Option<Duration>) -> Box<dyn CancellationFlag> {
+        match limit {
+            Some(limit) => Box::new(Self::new(limit)),
+            None => Box::new(NoCancellation),
+        }
     }
 }
 
 impl CancellationFlag for CancelAfterDuration {
-    fn flag(&self) -> Option<&AtomicUsize> {
-        Some(&self.flag)
+    fn check(&self, at: &'static str) -> Result<(), CancellationError> {
+        if self.start.elapsed().ge(&self.limit) {
+            return Err(CancellationError(at));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct AtomicCancellationFlag {
+    flag: Arc<AtomicBool>,
+}
+
+impl AtomicCancellationFlag {
+    pub fn new() -> Self {
+        Self {
+            flag: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.flag.store(true, Ordering::Relaxed)
+    }
+}
+
+impl CancellationFlag for AtomicCancellationFlag {
+    fn check(&self, at: &'static str) -> Result<(), CancellationError> {
+        if self.flag.load(Ordering::Relaxed) {
+            return Err(CancellationError(at));
+        }
+        Ok(())
     }
 }
 

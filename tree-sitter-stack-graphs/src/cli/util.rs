@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 #[cfg(debug_assertions)]
 use std::time::Instant;
+use walkdir::WalkDir;
 
 pub fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
     let path = PathBuf::from(path);
@@ -240,88 +241,99 @@ pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     Ok(Duration::new(s.parse()?, 0))
 }
 
-pub struct FileStatusLogger<'a> {
+pub fn iter_files_and_directories<'a, P, IP>(
+    paths: IP,
+) -> impl Iterator<Item = (PathBuf, PathBuf, bool)> + 'a
+where
+    P: AsRef<Path> + 'a,
+    IP: IntoIterator<Item = P> + 'a,
+{
+    paths
+        .into_iter()
+        .filter_map(
+            |source_path| -> Option<Box<dyn Iterator<Item = (PathBuf, PathBuf, bool)>>> {
+                if source_path.as_ref().is_dir() {
+                    let source_root = source_path;
+                    let paths = WalkDir::new(&source_root)
+                        .follow_links(true)
+                        .sort_by_file_name()
+                        .into_iter()
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.file_type().is_file())
+                        .map(move |e| (source_root.as_ref().to_path_buf(), e.into_path(), false));
+                    Some(Box::new(paths))
+                } else {
+                    let source_root = source_path
+                        .as_ref()
+                        .parent()
+                        .expect("expect file to have parent");
+                    Some(Box::new(std::iter::once((
+                        source_root.to_path_buf(),
+                        source_path.as_ref().to_path_buf(),
+                        true,
+                    ))))
+                }
+            },
+        )
+        .flatten()
+}
+
+pub trait Logger {
+    fn file<'a>(&self, path: &'a Path) -> Box<dyn FileLogger + 'a>;
+}
+
+pub trait FileLogger {
+    fn processing(&mut self) {}
+    fn failure(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn skipped(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn success(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn warning(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+    fn default_failure(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
+}
+
+pub struct ConsoleLogger {
+    show_info: bool,
+    show_details: bool,
+}
+
+impl ConsoleLogger {
+    pub fn new(show_info: bool, show_details: bool) -> Self {
+        Self {
+            show_info,
+            show_details,
+        }
+    }
+}
+
+impl Logger for ConsoleLogger {
+    fn file<'a>(&self, path: &'a Path) -> Box<dyn FileLogger + 'a> {
+        Box::new(ConsoleFileLogger::new(
+            path,
+            self.show_info,
+            self.show_details,
+        ))
+    }
+}
+
+pub struct ConsoleFileLogger<'a> {
     path: &'a Path,
-    verbose: bool,
+    show_info: bool,
+    show_details: bool,
     path_logged: bool,
     #[cfg(debug_assertions)]
     processing_started: Option<Instant>,
 }
 
-impl<'a> FileStatusLogger<'a> {
-    pub fn new(path: &'a Path, verbose: bool) -> Self {
+impl<'a> ConsoleFileLogger<'a> {
+    pub fn new(path: &'a Path, show_info: bool, show_details: bool) -> Self {
         Self {
             path,
-            verbose,
+            show_info,
+            show_details,
             path_logged: false,
             #[cfg(debug_assertions)]
             processing_started: None,
         }
-    }
-
-    pub fn processing(&mut self) -> std::io::Result<()> {
-        #[cfg(debug_assertions)]
-        {
-            self.processing_started = Some(Instant::now());
-        }
-        if !self.verbose {
-            return Ok(());
-        }
-        self.print_path();
-        std::io::stdout().flush()
-    }
-
-    pub fn ok(&mut self, status: &str) -> std::io::Result<()> {
-        if !self.verbose {
-            return Ok(());
-        }
-        self.print_path();
-        print!("{}", status.green());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        std::io::stdout().flush()
-    }
-
-    pub fn info(&mut self, status: &str) -> std::io::Result<()> {
-        if !self.verbose {
-            return Ok(());
-        }
-        self.print_path();
-        print!("{}", status.dimmed());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        std::io::stdout().flush()
-    }
-
-    pub fn warn(&mut self, status: &str) -> std::io::Result<()> {
-        self.print_path();
-        print!("{}", status.yellow());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        std::io::stdout().flush()
-    }
-
-    pub fn error(&mut self, status: &str) -> std::io::Result<()> {
-        self.print_path();
-        print!("{}", status.red());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        std::io::stdout().flush()
-    }
-
-    pub fn error_if_processing(&mut self, status: &str) -> std::io::Result<()> {
-        if !self.path_logged {
-            return Ok(());
-        }
-        self.error(status)
     }
 
     fn print_path(&mut self) {
@@ -337,6 +349,101 @@ impl<'a> FileStatusLogger<'a> {
         if let Some(processing_started) = self.processing_started {
             print!(" [{:.2} s]", processing_started.elapsed().as_secs_f64());
         }
+    }
+
+    fn flush(&mut self) {
+        std::io::stdout().flush().expect("flush should succeed");
+    }
+}
+
+impl FileLogger for ConsoleFileLogger<'_> {
+    fn processing(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            self.processing_started = Some(Instant::now());
+        }
+        if !self.show_info {
+            return;
+        }
+        self.print_path();
+        self.flush();
+    }
+
+    fn success(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        if !self.show_info {
+            return;
+        }
+        self.print_path();
+        print!("{}", status.green());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        self.flush();
+        if !self.show_details {
+            return;
+        }
+        if let Some(details) = details {
+            println!("{}", details);
+        }
+    }
+
+    fn skipped(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        if !self.show_info {
+            return;
+        }
+        self.print_path();
+        print!("{}", status.dimmed());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        self.flush();
+        if !self.show_details {
+            return;
+        }
+        if let Some(details) = details {
+            println!("{}", details);
+        }
+    }
+
+    fn warning(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        self.print_path();
+        print!("{}", status.yellow());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        self.flush();
+        if !self.show_details {
+            return;
+        }
+        if let Some(details) = details {
+            println!("{}", details);
+        }
+    }
+
+    fn failure(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        self.print_path();
+        print!("{}", status.red());
+        #[cfg(debug_assertions)]
+        self.print_processing_time();
+        println!();
+        self.path_logged = false;
+        self.flush();
+        if !self.show_details {
+            return;
+        }
+        if let Some(details) = details {
+            println!("{}", details);
+        }
+    }
+
+    fn default_failure(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        if !self.path_logged {
+            return;
+        }
+        self.failure(status, details);
     }
 }
 

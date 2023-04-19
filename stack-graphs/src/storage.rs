@@ -49,6 +49,10 @@ const SCHEMA: &str = r#"
         ) STRICT;
     "#;
 
+const PRAGMAS: &str = r#"
+        PRAGMA journal_mode = WAL;
+    "#;
+
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("cancelled at {0}")]
@@ -91,6 +95,7 @@ impl SQLiteWriter {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let is_new = !path.as_ref().exists();
         let conn = Connection::open(path)?;
+        set_pragmas(&conn)?;
         if is_new {
             Self::init(&conn)?;
         } else {
@@ -104,7 +109,7 @@ impl SQLiteWriter {
     pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<usize> {
         let count = if let Some(path) = path {
             let file = format!("{}%", path.as_ref().to_string_lossy());
-            self.conn.execute("BEGIN;", [])?;
+            self.conn.execute("BEGIN", [])?;
             self.conn
                 .execute("DELETE FROM file_paths WHERE file LIKE ?", [&file])?;
             self.conn
@@ -112,14 +117,14 @@ impl SQLiteWriter {
             let count = self
                 .conn
                 .execute("DELETE FROM graphs WHERE file LIKE ?", [&file])?;
-            self.conn.execute("COMMIT;", [])?;
+            self.conn.execute("COMMIT", [])?;
             count
         } else {
-            self.conn.execute("BEGIN;", [])?;
+            self.conn.execute("BEGIN", [])?;
             self.conn.execute("DELETE FROM file_paths", [])?;
             self.conn.execute("DELETE FROM root_paths", [])?;
             let count = self.conn.execute("DELETE FROM graphs", [])?;
-            self.conn.execute("COMMIT;", [])?;
+            self.conn.execute("COMMIT", [])?;
             count
         };
         Ok(count)
@@ -127,10 +132,10 @@ impl SQLiteWriter {
 
     /// Create database tables and write metadata.
     fn init(conn: &Connection) -> Result<()> {
-        conn.execute("BEGIN;", [])?;
+        conn.execute("BEGIN", [])?;
         conn.execute_batch(SCHEMA)?;
         conn.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
-        conn.execute("COMMIT;", [])?;
+        conn.execute("COMMIT", [])?;
         Ok(())
     }
 
@@ -149,25 +154,25 @@ impl SQLiteWriter {
         tag: &str,
     ) -> Result<()> {
         let file_str = graph[file].name();
-        copious_debugging!("--> Add graph for {}", file_str);
-        let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        self.conn.execute("BEGIN;", ())?;
-        // insert or update graph
-        let mut stmt = self
+        let mut graph_stmt = self
             .conn
             .prepare_cached("INSERT OR REPLACE INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
-        stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
-        // remove stale file paths
-        let mut stmt = self
+        let mut node_paths_stmt = self
             .conn
             .prepare_cached("DELETE FROM file_paths WHERE file = ?")?;
-        stmt.execute([file_str])?;
-        // remove stale file paths
-        let mut stmt = self
+        let mut file_paths_stmt = self
             .conn
             .prepare_cached("DELETE FROM root_paths WHERE file = ?")?;
-        stmt.execute([file_str])?;
-        self.conn.execute("END;", ())?;
+        copious_debugging!("--> Add graph for {}", file_str);
+        let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
+        self.conn.execute("BEGIN", ())?;
+        // insert or update graph
+        graph_stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
+        // remove stale file paths
+        node_paths_stmt.execute([file_str])?;
+        // remove stale file paths
+        file_paths_stmt.execute([file_str])?;
+        self.conn.execute("COMMIT", ())?;
         Ok(())
     }
 
@@ -177,46 +182,68 @@ impl SQLiteWriter {
     pub fn add_partial_path_for_file(
         &mut self,
         graph: &StackGraph,
+        file: Handle<File>,
         partials: &mut PartialPaths,
         path: &PartialPath,
-        file: Handle<File>,
     ) -> Result<()> {
+        self.add_partial_paths_for_file(graph, file, partials, std::iter::once(path))
+    }
+
+    /// Add partial paths for a file to the database.  Panics if the file does not exist in
+    /// the database, or if a path starts at a node that doesn't belong to the given file.
+    pub fn add_partial_paths_for_file<'a, IP>(
+        &mut self,
+        graph: &StackGraph,
+        file: Handle<File>,
+        partials: &mut PartialPaths,
+        paths: IP,
+    ) -> Result<()>
+    where
+        IP: IntoIterator<Item = &'a PartialPath>,
+    {
         let file_str = graph[file].name();
-        copious_debugging!(
-            "--> Add {} partial path {}",
-            file_str,
-            path.display(graph, partials)
-        );
-        let start_node = graph[path.start_node].id();
-        if start_node.is_in_file(file) {
+        self.conn.execute("BEGIN", [])?;
+        let mut node_stmt = self
+            .conn
+            .prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
+        let mut root_stmt = self
+            .conn
+            .prepare_cached("INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)")?;
+        for path in paths {
             copious_debugging!(
-                " * Add as node path from node {}",
-                path.start_node.display(graph),
+                "--> Add {} partial path {}",
+                file_str,
+                path.display(graph, partials)
             );
-            let local_id = start_node.local_id();
-            let path = serde::PartialPath::from_partial_path(graph, partials, path);
-            let mut stmt = self
-                .conn
-                .prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
-            stmt.execute((file_str, local_id, &serde_json::to_vec(&path)?))?;
-        } else if start_node.is_root() {
-            copious_debugging!(
-                " * Add as root path with symbol stack {}",
-                path.symbol_stack_precondition.display(graph, partials),
-            );
-            let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
-            let path = serde::PartialPath::from_partial_path(graph, partials, path);
-            let mut stmt = self.conn.prepare_cached(
-                "INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)",
-            )?;
-            stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
-        } else {
-            panic!(
-                "added path {} must start in given file {} or at root",
-                path.display(graph, partials),
-                graph[file].name()
-            );
+            let start_node = graph[path.start_node].id();
+            if start_node.is_in_file(file) {
+                copious_debugging!(
+                    " * Add as node path from node {}",
+                    path.start_node.display(graph),
+                );
+                let path = serde::PartialPath::from_partial_path(graph, partials, path);
+                node_stmt.execute((
+                    file_str,
+                    path.start_node.local_id,
+                    &serde_json::to_vec(&path)?,
+                ))?;
+            } else if start_node.is_root() {
+                copious_debugging!(
+                    " * Add as root path with symbol stack {}",
+                    path.symbol_stack_precondition.display(graph, partials),
+                );
+                let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
+                let path = serde::PartialPath::from_partial_path(graph, partials, path);
+                root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
+            } else {
+                panic!(
+                    "added path {} must start in given file {} or at root",
+                    path.display(graph, partials),
+                    graph[file].name()
+                );
+            }
         }
+        self.conn.execute("COMMIT", [])?;
         Ok(())
     }
 
@@ -253,6 +280,7 @@ impl SQLiteReader {
             ));
         }
         let conn = Connection::open(path)?;
+        set_pragmas(&conn)?;
         check_version(&conn)?;
         Ok(Self {
             conn,
@@ -462,7 +490,11 @@ fn check_version(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Check if a file exists in the database.
+fn set_pragmas(conn: &Connection) -> Result<()> {
+    conn.execute_batch(PRAGMAS)?;
+    Ok(())
+}
+
 fn file_exists(conn: &Connection, file: &str, tag: Option<&str>) -> Result<bool> {
     let result = if let Some(tag) = tag {
         let mut stmt = conn.prepare_cached("SELECT 1 FROM graphs WHERE file = ? AND tag = ?")?;

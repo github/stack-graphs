@@ -9,6 +9,7 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
+use itertools::Itertools;
 use lsp_positions::PositionedSubstring;
 use lsp_positions::SpanCalculator;
 use stack_graphs::storage::SQLiteReader;
@@ -20,7 +21,8 @@ use crate::loader::FileReader;
 
 use super::util::sha1;
 use super::util::wait_for_input;
-use super::util::FileStatusLogger;
+use super::util::ConsoleFileLogger;
+use super::util::FileLogger;
 use super::util::SourcePosition;
 
 /// Analyze sources
@@ -77,15 +79,16 @@ impl Definition {
             let mut file_reader = FileReader::new();
 
             let log_path = PathBuf::from(reference.to_string());
-            let mut logger = FileStatusLogger::new(&log_path, true);
-            logger.processing()?;
+            let mut logger = ConsoleFileLogger::new(&log_path, true, true);
+
+            logger.processing();
 
             let source_path = reference.path.to_string_lossy();
             let source = file_reader.get(&reference.path)?;
             let tag = sha1(source);
 
             if !db.file_exists(&source_path, Some(&tag))? {
-                logger.error("file not indexed")?;
+                logger.failure("file not indexed", None);
                 return Ok(());
             }
 
@@ -99,13 +102,13 @@ impl Definition {
             {
                 Ok(result) => result,
                 Err(_) => {
-                    logger.error("invalid file or position")?;
+                    logger.failure("invalid file or position", None);
                     return Ok(());
                 }
             };
 
             if reference.iter_references(graph).next().is_none() {
-                logger.error("no references")?;
+                logger.failure("no references", None);
                 return Ok(());
             }
             let starting_nodes = reference.iter_references(graph).collect::<Vec<_>>();
@@ -121,7 +124,7 @@ impl Definition {
             ) {
                 Ok(_) => {}
                 Err(StorageError::Cancelled(..)) => {
-                    logger.error("path finding timed out")?;
+                    logger.failure("path finding timed out", None);
                     return Ok(());
                 }
                 err => err?,
@@ -138,28 +141,35 @@ impl Definition {
             }
 
             if actual_paths.is_empty() {
-                logger.warn("no definitions")?;
+                logger.warning("no definitions", None);
                 return Ok(());
             }
 
-            logger.ok("found definitions:")?;
-            for (idx, path) in actual_paths.into_iter().enumerate() {
-                let file = match graph[path.end_node].id().file() {
-                    Some(f) => graph[f].to_string(),
-                    None => "?".to_string(),
-                };
-                let line_col = match graph.source_info(path.end_node) {
-                    Some(p) => format!(
-                        "{}:{}",
-                        p.span.start.line + 1,
-                        p.span.start.column.grapheme_offset + 1
-                    ),
-                    None => "?:?".to_string(),
-                };
-                println!("  {:2}: {}:{}", idx, file, line_col);
-            }
+            logger.success(
+                "found definitions:",
+                Some(
+                    &actual_paths
+                        .into_iter()
+                        .enumerate()
+                        .map(|(idx, path)| {
+                            let file = match graph[path.end_node].id().file() {
+                                Some(f) => graph[f].to_string(),
+                                None => "?".to_string(),
+                            };
+                            let line_col = match graph.source_info(path.end_node) {
+                                Some(p) => format!(
+                                    "{}:{}",
+                                    p.span.start.line + 1,
+                                    p.span.start.column.grapheme_offset + 1
+                                ),
+                                None => "?:?".to_string(),
+                            };
+                            format!("  {:2}: {}:{}", idx, file, line_col)
+                        })
+                        .join("\n"),
+                ),
+            );
         }
-
         Ok(())
     }
 }
