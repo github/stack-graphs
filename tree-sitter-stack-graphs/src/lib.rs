@@ -1148,6 +1148,9 @@ impl<'a> Builder<'a> {
 }
 
 pub trait FileAnalyzer {
+    /// Construct stack graph for the given file. Implementations must assume that nodes
+    /// for the given file may already exist, and make sure to prevent node id conflicts,
+    /// for example by using `StackGraph::new_node_id`.
     fn build_stack_graph_into<'a>(
         &self,
         stack_graph: &mut StackGraph,
