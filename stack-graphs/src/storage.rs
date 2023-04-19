@@ -189,8 +189,8 @@ impl SQLiteWriter {
         self.add_partial_paths_for_file(graph, file, partials, std::iter::once(path))
     }
 
-    /// Add partial paths for a file to the database.  Throws an error if the file does not exist in
-    /// the database.
+    /// Add partial paths for a file to the database.  Panics if the file does not exist in
+    /// the database, or if a path starts at a node that doesn't belong to the given file.
     pub fn add_partial_paths_for_file<'a, IP>(
         &mut self,
         graph: &StackGraph,
