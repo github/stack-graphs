@@ -113,7 +113,12 @@ impl PartialScopeStack {
         graph: &mut crate::graph::StackGraph,
         partials: &mut PartialPaths,
     ) -> Result<crate::partial::PartialScopeStack, Error> {
-        let mut value = crate::partial::PartialScopeStack::empty();
+        let mut value = match &self.variable {
+            Some(variable) => crate::partial::PartialScopeStack::from_variable(
+                variable.to_scope_stack_variable()?,
+            ),
+            None => crate::partial::PartialScopeStack::empty(),
+        };
         for scope in &self.scopes {
             let scope = scope.to_node(graph)?;
             value.push_back(partials, scope);
@@ -170,7 +175,12 @@ impl PartialSymbolStack {
         graph: &mut crate::graph::StackGraph,
         partials: &mut PartialPaths,
     ) -> Result<crate::partial::PartialSymbolStack, Error> {
-        let mut value = crate::partial::PartialSymbolStack::empty();
+        let mut value = match &self.variable {
+            Some(variable) => crate::partial::PartialSymbolStack::from_variable(
+                variable.to_symbol_stack_variable()?,
+            ),
+            None => crate::partial::PartialSymbolStack::empty(),
+        };
         for symbol in &self.symbols {
             let symbol = symbol.to_partial_scoped_symbol(graph, partials)?;
             value.push_back(partials, symbol);
