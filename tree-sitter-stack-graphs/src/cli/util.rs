@@ -271,12 +271,16 @@ impl SourceSpan {
 }
 
 pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
-    Ok(Duration::new(s.parse()?, 0))
+    let seconds = s.parse::<u64>()?;
+    Ok(Duration::new(seconds, 0))
 }
 
 #[cfg(feature = "lsp")]
 pub fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
-    Ok(Duration::new(0, 1_000_000_u32 * s.parse::<u32>()?))
+    let milliseconds = s.parse::<u64>()?;
+    let seconds = milliseconds / 1000;
+    let nano_seconds = (milliseconds % 1000) as u32 * 1_000_000;
+    Ok(Duration::new(seconds, nano_seconds))
 }
 
 pub fn iter_files_and_directories<'a, P, IP>(
