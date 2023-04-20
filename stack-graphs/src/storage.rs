@@ -139,8 +139,8 @@ pub struct SQLiteWriter {
 impl SQLiteWriter {
     /// Open an in-memory database.
     pub fn open_in_memory() -> Result<Self> {
-        let conn = Connection::open_in_memory()?;
-        Self::init(&conn)?;
+        let mut conn = Connection::open_in_memory()?;
+        Self::init(&mut conn)?;
         Ok(Self { conn })
     }
 
@@ -148,10 +148,10 @@ impl SQLiteWriter {
     /// An error is returned if the database version is not supported.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let is_new = !path.as_ref().exists();
-        let conn = Connection::open(path)?;
+        let mut conn = Connection::open(path)?;
         set_pragmas_and_functions(&conn)?;
         if is_new {
-            Self::init(&conn)?;
+            Self::init(&mut conn)?;
         } else {
             check_version(&conn)?;
         }
@@ -159,36 +159,36 @@ impl SQLiteWriter {
     }
 
     /// Create database tables and write metadata.
-    fn init(conn: &Connection) -> Result<()> {
-        conn.execute("BEGIN", [])?;
-        conn.execute_batch(SCHEMA)?;
-        conn.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
-        conn.execute("COMMIT", [])?;
+    fn init(conn: &mut Connection) -> Result<()> {
+        let tx = conn.transaction()?;
+        tx.execute_batch(SCHEMA)?;
+        tx.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
+        tx.commit()?;
         Ok(())
     }
 
     /// Clean all data from the database.
     pub fn clean_all(&mut self) -> Result<usize> {
-        self.conn.execute("BEGIN", [])?;
-        let count = self.clean_all_inner()?;
-        self.conn.execute("COMMIT", [])?;
+        let tx = self.conn.transaction()?;
+        let count = Self::clean_all_inner(&tx)?;
+        tx.commit()?;
         Ok(count)
     }
 
     /// Clean all data from the database.
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
-    fn clean_all_inner(&mut self) -> Result<usize> {
+    fn clean_all_inner(conn: &Connection) -> Result<usize> {
         {
-            let mut stmt = self.conn.prepare_cached("DELETE FROM file_paths")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM file_paths")?;
             stmt.execute([])?;
         }
         {
-            let mut stmt = self.conn.prepare_cached("DELETE FROM root_paths")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM root_paths")?;
             stmt.execute([])?;
         }
         let count = {
-            let mut stmt = self.conn.prepare_cached("DELETE FROM graphs")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM graphs")?;
             stmt.execute([])?
         };
         Ok(count)
@@ -197,33 +197,27 @@ impl SQLiteWriter {
     /// Clean file data from the database.  If recursive is true, data for all descendants of
     /// that file is cleaned.
     pub fn clean_file(&mut self, file: &Path) -> Result<usize> {
-        self.conn.execute("BEGIN", [])?;
-        let count = self.clean_file_inner(file)?;
-        self.conn.execute("COMMIT", [])?;
+        let tx = self.conn.transaction()?;
+        let count = Self::clean_file_inner(&tx, file)?;
+        tx.commit()?;
         Ok(count)
     }
 
     /// Clean file data from the database.
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
-    fn clean_file_inner(&mut self, file: &Path) -> Result<usize> {
+    fn clean_file_inner(conn: &Connection, file: &Path) -> Result<usize> {
         let file = file.to_string_lossy();
         {
-            let mut stmt = self
-                .conn
-                .prepare_cached("DELETE FROM file_paths WHERE file=?")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM file_paths WHERE file=?")?;
             stmt.execute([&file])?;
         }
         {
-            let mut stmt = self
-                .conn
-                .prepare_cached("DELETE FROM root_paths WHERE file=?")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM root_paths WHERE file=?")?;
             stmt.execute([&file])?;
         }
         let count = {
-            let mut stmt = self
-                .conn
-                .prepare_cached("DELETE FROM graphs WHERE file=?")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM graphs WHERE file=?")?;
             stmt.execute([&file])?
         };
         Ok(count)
@@ -232,9 +226,9 @@ impl SQLiteWriter {
     /// Clean file or directory data from the database.  Data for all decendants of the given path
     /// is cleaned.
     pub fn clean_file_or_directory(&mut self, file_or_directory: &Path) -> Result<usize> {
-        self.conn.execute("BEGIN", [])?;
-        let count = self.clean_file_or_directory_inner(file_or_directory)?;
-        self.conn.execute("COMMIT", [])?;
+        let tx = self.conn.transaction()?;
+        let count = Self::clean_file_or_directory_inner(&tx, file_or_directory)?;
+        tx.commit()?;
         Ok(count)
     }
 
@@ -242,24 +236,21 @@ impl SQLiteWriter {
     /// is cleaned.
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
-    fn clean_file_or_directory_inner(&mut self, file_or_directory: &Path) -> Result<usize> {
+    fn clean_file_or_directory_inner(conn: &Connection, file_or_directory: &Path) -> Result<usize> {
         let file_or_directory = file_or_directory.to_string_lossy();
         {
-            let mut stmt = self
-                .conn
-                .prepare_cached("DELETE FROM file_paths WHERE path_descendant_of(file, ?)")?;
+            let mut stmt =
+                conn.prepare_cached("DELETE FROM file_paths WHERE path_descendant_of(file, ?)")?;
             stmt.execute([&file_or_directory])?;
         }
         {
-            let mut stmt = self
-                .conn
-                .prepare_cached("DELETE FROM root_paths WHERE path_descendant_of(file, ?)")?;
+            let mut stmt =
+                conn.prepare_cached("DELETE FROM root_paths WHERE path_descendant_of(file, ?)")?;
             stmt.execute([&file_or_directory])?;
         }
         let count = {
-            let mut stmt = self
-                .conn
-                .prepare_cached("DELETE FROM graphs WHERE path_descendant_of(file, ?)")?;
+            let mut stmt =
+                conn.prepare_cached("DELETE FROM graphs WHERE path_descendant_of(file, ?)")?;
             stmt.execute([&file_or_directory])?
         };
         Ok(count)
@@ -267,20 +258,24 @@ impl SQLiteWriter {
 
     /// Store an error, indicating that indexing this file failed.
     pub fn store_error_for_file(&mut self, file: &Path, tag: &str, error: &str) -> Result<()> {
-        self.conn.execute("BEGIN", [])?;
-        self.store_error_for_file_inner(file, tag, error)?;
-        self.conn.execute("COMMIT", [])?;
+        let tx = self.conn.transaction()?;
+        Self::store_error_for_file_inner(&tx, file, tag, error)?;
+        tx.commit()?;
         Ok(())
     }
 
     /// Store an error, indicating that indexing this file failed.
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
-    fn store_error_for_file_inner(&mut self, file: &Path, tag: &str, error: &str) -> Result<()> {
+    fn store_error_for_file_inner(
+        conn: &Connection,
+        file: &Path,
+        tag: &str,
+        error: &str,
+    ) -> Result<()> {
         copious_debugging!("--> Store error for {}", file.display());
-        let mut stmt = self
-            .conn
-            .prepare_cached("INSERT INTO graphs (file, tag, error, json) VALUES (?, ?, ?, ?)")?;
+        let mut stmt =
+            conn.prepare_cached("INSERT INTO graphs (file, tag, error, json) VALUES (?, ?, ?, ?)")?;
         let graph = crate::serde::StackGraph::default();
         stmt.execute((
             &file.to_string_lossy(),
@@ -304,11 +299,11 @@ impl SQLiteWriter {
         IP: IntoIterator<Item = &'a PartialPath>,
     {
         let path = Path::new(graph[file].name());
-        self.conn.execute("BEGIN", [])?;
-        self.clean_file_inner(path)?;
-        self.store_graph_for_file_inner(graph, file, tag)?;
-        self.store_partial_paths_for_file_inner(graph, file, partials, paths)?;
-        self.conn.execute("COMMIT", [])?;
+        let tx = self.conn.transaction()?;
+        Self::clean_file_inner(&tx, path)?;
+        Self::store_graph_for_file_inner(&tx, graph, file, tag)?;
+        Self::store_partial_paths_for_file_inner(&tx, graph, file, partials, paths)?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -316,16 +311,15 @@ impl SQLiteWriter {
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn store_graph_for_file_inner(
-        &mut self,
+        conn: &Connection,
         graph: &StackGraph,
         file: Handle<File>,
         tag: &str,
     ) -> Result<()> {
         let file_str = graph[file].name();
         copious_debugging!("--> Store graph for {}", file_str);
-        let mut stmt = self
-            .conn
-            .prepare_cached("INSERT INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
+        let mut stmt =
+            conn.prepare_cached("INSERT INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
         stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
         Ok(())
@@ -335,7 +329,7 @@ impl SQLiteWriter {
     ///
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn store_partial_paths_for_file_inner<'a, IP>(
-        &mut self,
+        conn: &Connection,
         graph: &StackGraph,
         file: Handle<File>,
         partials: &mut PartialPaths,
@@ -345,11 +339,9 @@ impl SQLiteWriter {
         IP: IntoIterator<Item = &'a PartialPath>,
     {
         let file_str = graph[file].name();
-        let mut node_stmt = self
-            .conn
-            .prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
-        let mut root_stmt = self
-            .conn
+        let mut node_stmt =
+            conn.prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
+        let mut root_stmt = conn
             .prepare_cached("INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)")?;
         #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
         let mut node_path_count = 0usize;
