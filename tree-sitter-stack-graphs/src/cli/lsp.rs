@@ -217,7 +217,7 @@ impl Backend {
             }
         };
 
-        match db.clean(Some(path)) {
+        match db.clean_file_or_directory(path) {
             Ok(_) => handle.block_on(capture!([logger = &self.logger, path], async move {
                 logger.info(format!("cleaned {}", path.display())).await;
             })),

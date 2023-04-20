@@ -5,9 +5,11 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use rusqlite::functions::FunctionFlags;
 use rusqlite::Connection;
 use std::collections::HashSet;
 use std::path::Path;
+use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::arena::Handle;
@@ -51,6 +53,8 @@ const SCHEMA: &str = r#"
 
 const PRAGMAS: &str = r#"
         PRAGMA journal_mode = WAL;
+        PRAGMA foreign_keys = false;
+        PRAGMA secure_delete = false;
     "#;
 
 #[derive(Debug, Error)]
@@ -95,39 +99,13 @@ impl SQLiteWriter {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let is_new = !path.as_ref().exists();
         let conn = Connection::open(path)?;
-        set_pragmas(&conn)?;
+        set_pragmas_and_functions(&conn)?;
         if is_new {
             Self::init(&conn)?;
         } else {
             check_version(&conn)?;
         }
         Ok(Self { conn })
-    }
-
-    /// Clean file data from the database.  If a path is given, data for all descendants of
-    /// that path is cleaned.  Otherwise, data for all files is cleaned.
-    pub fn clean<P: AsRef<Path>>(&mut self, path: Option<P>) -> Result<usize> {
-        let count = if let Some(path) = path {
-            let file = format!("{}%", path.as_ref().to_string_lossy());
-            self.conn.execute("BEGIN", [])?;
-            self.conn
-                .execute("DELETE FROM file_paths WHERE file LIKE ?", [&file])?;
-            self.conn
-                .execute("DELETE FROM root_paths WHERE file LIKE ?", [&file])?;
-            let count = self
-                .conn
-                .execute("DELETE FROM graphs WHERE file LIKE ?", [&file])?;
-            self.conn.execute("COMMIT", [])?;
-            count
-        } else {
-            self.conn.execute("BEGIN", [])?;
-            self.conn.execute("DELETE FROM file_paths", [])?;
-            self.conn.execute("DELETE FROM root_paths", [])?;
-            let count = self.conn.execute("DELETE FROM graphs", [])?;
-            self.conn.execute("COMMIT", [])?;
-            count
-        };
-        Ok(count)
     }
 
     /// Create database tables and write metadata.
@@ -143,6 +121,102 @@ impl SQLiteWriter {
     /// if the tag matches.
     pub fn file_exists(&mut self, file: &str, tag: Option<&str>) -> Result<bool> {
         file_exists(&self.conn, file, tag)
+    }
+
+    /// Clean all data from the database.
+    pub fn clean_all(&mut self) -> Result<usize> {
+        self.conn.execute("BEGIN", [])?;
+        let count = self.clean_all_inner()?;
+        self.conn.execute("COMMIT", [])?;
+        Ok(count)
+    }
+
+    /// Clean all data from the database.
+    fn clean_all_inner(&mut self) -> Result<usize> {
+        {
+            let mut stmt = self.conn.prepare_cached("DELETE FROM file_paths")?;
+            stmt.execute([])?;
+        }
+        {
+            let mut stmt = self.conn.prepare_cached("DELETE FROM root_paths")?;
+            stmt.execute([])?;
+        }
+        let count = {
+            let mut stmt = self.conn.prepare_cached("DELETE FROM graphs")?;
+            stmt.execute([])?
+        };
+        Ok(count)
+    }
+
+    /// Clean file data from the database.  If recursive is true, data for all descendants of
+    /// that file is cleaned.
+    pub fn clean_file(&mut self, file: &Path) -> Result<usize> {
+        self.conn.execute("BEGIN", [])?;
+        let count = self.clean_file_inner(file)?;
+        self.conn.execute("COMMIT", [])?;
+        Ok(count)
+    }
+
+    /// Clean file data from the database.
+    ///
+    /// This is an inner method, which does not wrap individual SQL statements in a transaction.
+    fn clean_file_inner(&mut self, file: &Path) -> Result<usize> {
+        let file = file.to_string_lossy();
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM file_paths WHERE file=?")?;
+            stmt.execute([&file])?;
+        }
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM root_paths WHERE file=?")?;
+            stmt.execute([&file])?;
+        }
+        let count = {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM graphs WHERE file=?")?;
+            stmt.execute([&file])?
+        };
+        Ok(count)
+    }
+
+    /// Clean file or directory data from the database.  Data for all decendants of the given path
+    /// is cleaned.
+    pub fn clean_file_or_directory(&mut self, file_or_directory: &Path) -> Result<usize> {
+        self.conn.execute("BEGIN", [])?;
+        let count = self.clean_file_or_directory_inner(file_or_directory)?;
+        self.conn.execute("COMMIT", [])?;
+        Ok(count)
+    }
+
+    /// Clean file or directory data from the database.  Data for all decendants of the given path
+    /// is cleaned.
+    ///
+    /// This is an inner method, which does not wrap individual SQL statements in a transaction.
+    fn clean_file_or_directory_inner(&mut self, file_or_directory: &Path) -> Result<usize> {
+        let file_or_directory = file_or_directory.to_string_lossy();
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM file_paths WHERE path_descendant_of(file, ?)")?;
+            stmt.execute([&file_or_directory])?;
+        }
+        {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM root_paths WHERE path_descendant_of(file, ?)")?;
+            stmt.execute([&file_or_directory])?;
+        }
+        let count = {
+            let mut stmt = self
+                .conn
+                .prepare_cached("DELETE FROM graphs WHERE path_descendant_of(file, ?)")?;
+            stmt.execute([&file_or_directory])?
+        };
+        Ok(count)
     }
 
     /// Add the stack graph of a file to the database.  If the file already exists, its previous graph
@@ -280,7 +354,7 @@ impl SQLiteReader {
             ));
         }
         let conn = Connection::open(path)?;
-        set_pragmas(&conn)?;
+        set_pragmas_and_functions(&conn)?;
         check_version(&conn)?;
         Ok(Self {
             conn,
@@ -490,8 +564,20 @@ fn check_version(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn set_pragmas(conn: &Connection) -> Result<()> {
+fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
     conn.execute_batch(PRAGMAS)?;
+    conn.create_scalar_function(
+        "path_descendant_of",
+        2,
+        FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_UTF8,
+        move |ctx| {
+            assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
+            let path = PathBuf::from(ctx.get::<String>(0)?);
+            let parent = PathBuf::from(ctx.get::<String>(1)?);
+            let result = path.starts_with(&parent);
+            Ok(result)
+        },
+    )?;
     Ok(())
 }
 
