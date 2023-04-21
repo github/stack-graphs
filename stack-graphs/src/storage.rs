@@ -676,7 +676,7 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn status_for_file<'a>(conn: &'a Connection, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+fn status_for_file(conn: &Connection, file: &str, tag: Option<&str>) -> Result<FileStatus> {
     let result = if let Some(tag) = tag {
         let mut stmt =
             conn.prepare_cached("SELECT error FROM graphs WHERE file = ? AND tag = ?")?;
