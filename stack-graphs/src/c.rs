@@ -48,7 +48,7 @@ pub extern "C" fn sg_stack_graph_new() -> *mut sg_stack_graph {
 
 /// Frees a stack graph, and all of its contents.
 #[no_mangle]
-pub extern "C" fn sg_stack_graph_free(graph: *mut sg_stack_graph) {
+pub unsafe extern "C" fn sg_stack_graph_free(graph: *mut sg_stack_graph) {
     drop(unsafe { Box::from_raw(graph) })
 }
 
@@ -67,7 +67,7 @@ pub extern "C" fn sg_partial_path_arena_new() -> *mut sg_partial_path_arena {
 
 /// Frees a path arena, and all of its contents.
 #[no_mangle]
-pub extern "C" fn sg_partial_path_arena_free(partials: *mut sg_partial_path_arena) {
+pub unsafe extern "C" fn sg_partial_path_arena_free(partials: *mut sg_partial_path_arena) {
     drop(unsafe { Box::from_raw(partials) })
 }
 
@@ -94,7 +94,7 @@ pub extern "C" fn sg_partial_path_database_new() -> *mut sg_partial_path_databas
 
 /// Frees a partial path database, and all of its contents.
 #[no_mangle]
-pub extern "C" fn sg_partial_path_database_free(db: *mut sg_partial_path_database) {
+pub unsafe extern "C" fn sg_partial_path_database_free(db: *mut sg_partial_path_database) {
     drop(unsafe { Box::from_raw(db) })
 }
 

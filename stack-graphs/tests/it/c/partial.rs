@@ -217,8 +217,8 @@ fn can_create_partial_symbol_stacks() {
         &cells, &stacks[2]
     ));
 
-    sg_partial_path_arena_free(partials);
-    sg_stack_graph_free(graph);
+    unsafe { sg_partial_path_arena_free(partials) };
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -323,8 +323,8 @@ fn can_create_partial_scope_stacks() {
         &cells, &stacks[2]
     ));
 
-    sg_partial_path_arena_free(partials);
-    sg_stack_graph_free(graph);
+    unsafe { sg_partial_path_arena_free(partials) };
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -431,8 +431,8 @@ fn can_create_partial_path_edge_lists() {
         &cells, &lists[2]
     ));
 
-    sg_partial_path_arena_free(partials);
-    sg_stack_graph_free(graph);
+    unsafe { sg_partial_path_arena_free(partials) };
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]

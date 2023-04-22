@@ -244,8 +244,8 @@ fn check_find_qualified_definitions(
     assert_eq!(expected_partial_paths, results);
 
     sg_forward_partial_path_stitcher_free(stitcher);
-    sg_partial_path_database_free(db);
-    sg_partial_path_arena_free(partials);
+    unsafe { sg_partial_path_database_free(db) };
+    unsafe { sg_partial_path_arena_free(partials) };
 }
 
 #[test]

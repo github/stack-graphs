@@ -39,7 +39,7 @@ impl Default for TestGraph {
 
 impl Drop for TestGraph {
     fn drop(&mut self) {
-        sg_stack_graph_free(self.graph);
+        unsafe { sg_stack_graph_free(self.graph) };
     }
 }
 

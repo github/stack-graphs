@@ -138,7 +138,7 @@ fn cannot_add_singleton_nodes() {
     let mut handles: [sg_node_handle; 2] = [SG_NULL_HANDLE; 2];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles.iter().all(|h| *h == SG_NULL_HANDLE));
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn can_dereference_singleton_nodes() {
     let node_arena = sg_stack_graph_nodes(graph);
     assert!(get_node(&node_arena, SG_ROOT_NODE_HANDLE).is_root());
     assert!(get_node(&node_arena, SG_JUMP_TO_NODE_HANDLE).is_jump_to());
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn singleton_nodes_have_correct_ids() {
     assert!(jump_to.id.file == SG_NULL_HANDLE);
     assert!(jump_to.id.local_id == SG_JUMP_TO_NODE_ID);
 
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -201,7 +201,7 @@ fn can_add_drop_scopes_node() {
         new_handles.as_mut_ptr(),
     );
     assert!(handles == new_handles);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -214,7 +214,7 @@ fn drop_scopes_cannot_have_symbol() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -229,7 +229,7 @@ fn drop_scopes_cannot_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -267,7 +267,7 @@ fn can_add_exported_scope_node() {
         new_handles.as_mut_ptr(),
     );
     assert!(handles == new_handles);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn exported_scope_cannot_have_symbol() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -295,7 +295,7 @@ fn exported_scope_cannot_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -333,7 +333,7 @@ fn can_add_internal_scope_node() {
         new_handles.as_mut_ptr(),
     );
     assert!(handles == new_handles);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn internal_scope_cannot_have_symbol() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn internal_scope_cannot_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -401,7 +401,7 @@ fn can_add_pop_scoped_symbol_node() {
         new_handles.as_mut_ptr(),
     );
     assert!(handles == new_handles);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -412,7 +412,7 @@ fn pop_scoped_symbol_must_have_symbol() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -428,7 +428,7 @@ fn pop_scoped_symbol_cannot_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -468,7 +468,7 @@ fn can_add_pop_symbol_node() {
         new_handles.as_mut_ptr(),
     );
     assert!(handles == new_handles);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -479,7 +479,7 @@ fn pop_symbol_must_have_symbol() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -495,7 +495,7 @@ fn pop_symbol_cannot_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -546,7 +546,7 @@ fn can_add_push_scoped_symbol_node() {
         new_handles.as_mut_ptr(),
     );
     assert!(handles == new_handles);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -563,7 +563,7 @@ fn push_scoped_symbol_must_have_symbol() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -581,7 +581,7 @@ fn push_scoped_symbol_must_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -621,7 +621,7 @@ fn can_add_push_symbol_node() {
         new_handles.as_mut_ptr(),
     );
     assert!(handles == new_handles);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -632,7 +632,7 @@ fn push_symbol_must_have_symbol() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
@@ -648,7 +648,7 @@ fn push_symbol_cannot_have_scope() {
     let mut handles: [sg_node_handle; 1] = [SG_NULL_HANDLE; 1];
     sg_stack_graph_get_or_create_nodes(graph, nodes.len(), nodes.as_ptr(), handles.as_mut_ptr());
     assert!(handles[0] == SG_NULL_HANDLE);
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -698,5 +698,5 @@ fn can_create_source_info() {
     assert_eq!(actual.span.start.line, 17);
     assert_eq!(actual.span.end.column.utf8_offset, 23);
 
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }

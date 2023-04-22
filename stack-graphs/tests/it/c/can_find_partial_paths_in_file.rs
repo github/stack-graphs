@@ -133,7 +133,7 @@ fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[
     assert_eq!(expected_paths, results);
 
     sg_partial_path_list_free(path_list);
-    sg_partial_path_arena_free(partials);
+    unsafe { sg_partial_path_arena_free(partials) };
 }
 
 #[test]

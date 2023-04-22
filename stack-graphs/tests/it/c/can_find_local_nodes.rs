@@ -83,9 +83,9 @@ fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str
         .collect::<BTreeSet<_>>();
     assert_eq!(expected_local_nodes, results);
 
-    sg_partial_path_database_free(db);
+    unsafe { sg_partial_path_database_free(db) };
     sg_partial_path_list_free(path_list);
-    sg_partial_path_arena_free(partials);
+    unsafe { sg_partial_path_arena_free(partials) };
 }
 
 #[test]

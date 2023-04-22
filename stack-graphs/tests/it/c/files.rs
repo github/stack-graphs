@@ -66,7 +66,7 @@ fn can_create_files() {
     assert_eq!(get_file(&file_arena, b), "b.py");
     assert_eq!(get_file(&file_arena, c), "c.py");
 
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]

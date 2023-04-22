@@ -55,7 +55,7 @@ fn check_jump_to_definition(graph: &TestGraph, expected_paths: &[&str]) {
     assert_eq!(expected_paths, results);
 
     sg_partial_path_list_free(path_list);
-    sg_partial_path_arena_free(paths);
+    unsafe { sg_partial_path_arena_free(paths) };
 }
 
 #[test]

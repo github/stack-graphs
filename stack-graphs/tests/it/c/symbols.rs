@@ -66,7 +66,7 @@ fn can_create_symbols() {
     assert_eq!(get_symbol(&symbol_arena, b), "b");
     assert_eq!(get_symbol(&symbol_arena, c), "c");
 
-    sg_stack_graph_free(graph);
+    unsafe { sg_stack_graph_free(graph) };
 }
 
 #[test]
