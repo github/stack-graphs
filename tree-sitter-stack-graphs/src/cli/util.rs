@@ -8,11 +8,11 @@
 use anyhow::anyhow;
 use base64::Engine;
 use colored::Colorize;
-use lsp_positions::PositionedSubstring;
-use lsp_positions::SpanCalculator;
+use lsp_positions::Span;
 use sha1::Digest;
 use sha1::Sha1;
-use stack_graphs::assert::AssertionSource;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::Node;
 use stack_graphs::graph::StackGraph;
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -144,23 +144,29 @@ pub struct SourcePosition {
 }
 
 impl SourcePosition {
-    pub fn to_assertion_source<'a>(
-        &self,
-        graph: &StackGraph,
-        lines: impl Iterator<Item = PositionedSubstring<'a>>,
-        span_calculator: &mut SpanCalculator,
-    ) -> anyhow::Result<AssertionSource> {
-        let file = match graph.get_file(&self.path.to_string_lossy()) {
-            Some(file) => file,
-            None => return Err(anyhow!("")),
-        };
-        let (line_no, line) = match lines.enumerate().nth(self.line) {
-            Some(result) => result,
-            None => return Err(anyhow!("Missing line {}", self.line + 1)),
-        };
-        let position =
-            span_calculator.for_line_and_grapheme(line_no, line.utf8_bounds.start, self.column);
-        Ok(AssertionSource { file, position })
+    pub fn iter_references<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+    ) -> impl Iterator<Item = Handle<Node>> + 'a {
+        graph
+            .get_file(&self.path.to_string_lossy())
+            .into_iter()
+            .flat_map(move |file| {
+                graph.nodes_for_file(file).filter(move |n| {
+                    graph[*n].is_reference()
+                        && graph
+                            .source_info(*n)
+                            .map(|si| self.within_span(&si.span))
+                            .unwrap_or(false)
+                })
+            })
+    }
+
+    fn within_span(&self, span: &lsp_positions::Span) -> bool {
+        ((span.start.line < self.line)
+            || (span.start.line == self.line && span.start.column.grapheme_offset <= self.column))
+            && ((span.end.line == self.line && span.end.column.grapheme_offset >= self.column)
+                || (span.end.line > self.line))
     }
 
     pub fn canonicalize(&mut self) -> std::io::Result<()> {
@@ -237,8 +243,44 @@ impl std::str::FromStr for SourcePosition {
     }
 }
 
+#[derive(Clone, Debug)]
+/// A source span.
+pub struct SourceSpan {
+    /// File path
+    pub path: PathBuf,
+    /// Span
+    pub span: Span,
+}
+
+impl SourceSpan {
+    pub fn to_start_position(&self) -> SourcePosition {
+        SourcePosition {
+            path: self.path.clone(),
+            line: self.span.start.line,
+            column: self.span.start.column.grapheme_offset,
+        }
+    }
+
+    pub fn into_start_position(self) -> SourcePosition {
+        SourcePosition {
+            path: self.path,
+            line: self.span.start.line,
+            column: self.span.start.column.grapheme_offset,
+        }
+    }
+}
+
 pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
-    Ok(Duration::new(s.parse()?, 0))
+    let seconds = s.parse::<u64>()?;
+    Ok(Duration::new(seconds, 0))
+}
+
+#[cfg(feature = "lsp")]
+pub fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
+    let milliseconds = s.parse::<u64>()?;
+    let seconds = milliseconds / 1000;
+    let nano_seconds = (milliseconds % 1000) as u32 * 1_000_000;
+    Ok(Duration::new(seconds, nano_seconds))
 }
 
 pub fn iter_files_and_directories<'a, P, IP>(

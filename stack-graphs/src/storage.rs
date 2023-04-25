@@ -443,7 +443,11 @@ impl SQLiteReader {
 
     /// Get the file's status in the database. If a tag is provided, it must match or the file
     /// is reported missing.
-    pub fn status_for_file(&mut self, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+    pub fn status_for_file<T: AsRef<str>>(
+        &mut self,
+        file: &str,
+        tag: Option<T>,
+    ) -> Result<FileStatus> {
         status_for_file(&self.conn, file, tag)
     }
 
@@ -470,18 +474,25 @@ impl SQLiteReader {
 
     /// Ensure the graph for the given file is loaded.
     pub fn load_graph_for_file(&mut self, file: &str) -> Result<()> {
+        Self::load_graph_for_file_inner(file, &mut self.graph, &mut self.loaded_graphs, &self.conn)
+    }
+
+    fn load_graph_for_file_inner(
+        file: &str,
+        graph: &mut StackGraph,
+        loaded_graphs: &mut HashSet<String>,
+        conn: &Connection,
+    ) -> Result<()> {
         copious_debugging!("--> Load graph for {}", file);
-        if !self.loaded_graphs.insert(file.to_string()) {
+        if !loaded_graphs.insert(file.to_string()) {
             copious_debugging!(" * Already loaded");
             return Ok(());
         }
         copious_debugging!(" * Load from database");
-        let mut stmt = self
-            .conn
-            .prepare_cached("SELECT json FROM graphs WHERE file = ?")?;
+        let mut stmt = conn.prepare_cached("SELECT json FROM graphs WHERE file = ?")?;
         let json_graph = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
-        let graph = serde_json::from_slice::<serde::StackGraph>(&json_graph)?;
-        graph.load_into(&mut self.graph)?;
+        let file_graph = serde_json::from_slice::<serde::StackGraph>(&json_graph)?;
+        file_graph.load_into(graph)?;
         Ok(())
     }
 
@@ -494,22 +505,22 @@ impl SQLiteReader {
         }
         let file = self.graph[node].file().expect("file node required");
         let file = self.graph[file].name();
-        let paths = {
-            let mut stmt = self
-                .conn
-                .prepare_cached("SELECT file,json from file_paths WHERE file = ?")?;
-            let paths = stmt
-                .query_map([file], |row| {
-                    let file = row.get::<_, String>(0)?;
-                    let json = row.get::<_, Vec<u8>>(1)?;
-                    Ok((file, json))
-                })?
-                .into_iter()
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-            paths
-        };
-        for (file, json) in paths {
-            self.load_graph_for_file(&file)?;
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT file,json from file_paths WHERE file = ?")?;
+        let paths = stmt.query_map([file], |row| {
+            let file = row.get::<_, String>(0)?;
+            let json = row.get::<_, Vec<u8>>(1)?;
+            Ok((file, json))
+        })?;
+        for path in paths {
+            let (file, json) = path?;
+            Self::load_graph_for_file_inner(
+                &file,
+                &mut self.graph,
+                &mut self.loaded_graphs,
+                &self.conn,
+            )?;
             let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
             copious_debugging!(
@@ -539,22 +550,22 @@ impl SQLiteReader {
                 copious_debugging!("   > Already loaded");
                 return Ok(());
             }
-            let paths = {
-                let mut stmt = self
-                    .conn
-                    .prepare_cached("SELECT file,json from root_paths WHERE symbol_stack = ?")?;
-                let paths = stmt
-                    .query_map([symbol_stack], |row| {
-                        let file = row.get::<_, String>(0)?;
-                        let json = row.get::<_, Vec<u8>>(1)?;
-                        Ok((file, json))
-                    })?
-                    .into_iter()
-                    .collect::<std::result::Result<Vec<_>, _>>()?;
-                paths
-            };
-            for (file, json) in paths {
-                self.load_graph_for_file(&file)?;
+            let mut stmt = self
+                .conn
+                .prepare_cached("SELECT file,json from root_paths WHERE symbol_stack = ?")?;
+            let paths = stmt.query_map([symbol_stack], |row| {
+                let file = row.get::<_, String>(0)?;
+                let json = row.get::<_, Vec<u8>>(1)?;
+                Ok((file, json))
+            })?;
+            for path in paths {
+                let (file, json) = path?;
+                Self::load_graph_for_file_inner(
+                    &file,
+                    &mut self.graph,
+                    &mut self.loaded_graphs,
+                    &self.conn,
+                )?;
                 let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
                 copious_debugging!(
@@ -676,11 +687,15 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn status_for_file(conn: &Connection, file: &str, tag: Option<&str>) -> Result<FileStatus> {
+fn status_for_file<T: AsRef<str>>(
+    conn: &Connection,
+    file: &str,
+    tag: Option<T>,
+) -> Result<FileStatus> {
     let result = if let Some(tag) = tag {
         let mut stmt =
             conn.prepare_cached("SELECT error FROM graphs WHERE file = ? AND tag = ?")?;
-        stmt.query_row([file, tag], |r| r.get_ref(0).map(FileStatus::from))
+        stmt.query_row([file, tag.as_ref()], |r| r.get_ref(0).map(FileStatus::from))
             .optional()?
             .unwrap_or(FileStatus::Missing)
     } else {
