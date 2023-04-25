@@ -1,6 +1,6 @@
 (number)@number {
 
-    edge @number.before_scope -> @number.before_scopeß
+    edge @number.before_scope -> @number.before_scope
   
 }
 
