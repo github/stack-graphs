@@ -1,0 +1,19 @@
+[package]
+name = "tree-sitter-stack-graphs-javascript"
+version = "0.1.0"
+description = "Stack graphs definition for JavaScript using tree-sitter-javascript"
+readme = "README.md"
+keywords = ["tree-sitter", "stack-graphs", "javascript"]
+authors = ["Beka Valentine <bekavalentine@github.com>"]
+edition = "2018"
+
+include = [
+    "bindings/rust",
+    "src"
+]
+
+[lib]
+path = "bindings/rust/lib.rs"
+
+[dev-dependencies]
+tree-sitter-stack-graphs = "~0.6.0"
