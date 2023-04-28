@@ -304,6 +304,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     ;; builtin types
     node @prog.builtins_number
+    node @prog.builtins_string
+    node @prog.builtins_boolean
+    node @prog.builtins_null
+    node @prog.builtins_undefined
+    node @prog.builtins_Regex_prototype
 
 }
 
@@ -311,6 +316,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (_ (_)@child)@parent {
 
     let @child.builtins_number = @parent.builtins_number
+    let @child.builtins_string = @parent.builtins_string
+    let @child.builtins_boolean = @parent.builtins_boolean
+    let @child.builtins_null = @parent.builtins_null
+    let @child.builtins_undefined = @parent.builtins_undefined
+    let @child.builtins_Regex_prototype = @parent.builtins_Regex_prototype
 
 }
 
@@ -1818,11 +1828,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @string.after_scope
     node @string.value
 
-;;   ; scopes don't change
-;;   edge @string.after_scope -> @string.before_scope
+    ; scopes don't change
+    edge @string.after_scope -> @string.before_scope
 
-;;   ; the value of a string is the string primitive
-;;   edge @string.value -> @string::string
+    ; the value of a string is the string primitive
+    edge @string.value -> @string.builtins_string
 }
 
 
@@ -1839,39 +1849,39 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; template_strings w/ no substitutions
 ; LATER-TODO tree sitter queries don't let us find the absence of substitutions
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-;; (template_string)@template_string {
-;;   edge @template_string.after_scope -> @template_string.before_scope
-;; }
+(template_string)@template_string {
+  edge @template_string.after_scope -> @template_string.before_scope
+}
 
 ; nonempty template string, value
 ; LATER-TODO this isn't really right, but it gets flows through the template string
 ; which may be useful
-;; (template_string (template_substitution (_)@inner_expr))@template_string {
-;;   ; the value of a template string is a template string value built from the values of its substitutions
-;;   ; attr @template_string.value "template_string_value"
-;;   edge @template_string.value -> @inner_expr.value
-;; }
+(template_string (template_substitution (_)@inner_expr))@template_string {
+  ; the value of a template string is a template string value built from the values of its substitutions
+  ; attr @template_string.value "template_string_value"
+  edge @template_string.value -> @inner_expr.value
+}
 
 ; nonempty template string, first substitution
-;; (template_string . (template_substitution (_)@first_inner_expr))@template_string {
-;;   ; scopes propagate into the first subtitution of the template string
-;;   edge @first_inner_expr.before_scope -> @template_string.before_scope
-;; }
+(template_string . (template_substitution (_)@first_inner_expr))@template_string {
+  ; scopes propagate into the first subtitution of the template string
+  edge @first_inner_expr.before_scope -> @template_string.before_scope
+}
 
 ; nonempty template string, between substitutions
-;; (template_string
-;;   (template_substitution (_)@left_inner_expr)
-;;   .
-;;   (template_substitution (_)@right_inner_expr))@template_string {
-;;   ; scopes propagate from left substitutions to right substitutions
-;;   edge @right_inner_expr.before_scope -> @left_inner_expr.after_scope
-;; }
+(template_string
+  (template_substitution (_)@left_inner_expr)
+  .
+  (template_substitution (_)@right_inner_expr))@template_string {
+  ; scopes propagate from left substitutions to right substitutions
+  edge @right_inner_expr.before_scope -> @left_inner_expr.after_scope
+}
 
 ; nonempty template string, last substitution
-;; (template_string . (template_substitution (_)@last_inner_expr))@template_string {
-;;   ; scopes propagate out of the last substitution to the template string
-;;   edge @template_string.after_scope -> @last_inner_expr.after_scope
-;; }
+(template_string . (template_substitution (_)@last_inner_expr))@template_string {
+  ; scopes propagate out of the last substitution to the template string
+  edge @template_string.after_scope -> @last_inner_expr.after_scope
+}
 
 
 
@@ -1921,8 +1931,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     ; scopes don't change
     edge @true.after_scope -> @true.before_scope
 
-;;   ; the value of true is a boolean primitive
-;;   edge @true.value -> @true::boolean
+    ; the value of true is a boolean primitive
+    edge @true.value -> @true.builtins_boolean
 
 }
 
@@ -1935,8 +1945,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     ; scopes don't change
     edge @false.after_scope -> @false.before_scope
 
-;;   ; the value of false is a boolean primitive
-;;   edge @false.value -> @false::boolean
+    ; the value of false is a boolean primitive
+    edge @false.value -> @false.builtins_boolean
 }
 
 
@@ -1951,6 +1961,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     ; scopes don't change
     edge @this.after_scope -> @this.before_scope
 
+    ;; TODO
     ;; ; this is a lookup, ie a push
     ;; attr @this.value "push" = "this", "reference"
     ;; edge @this.value -> @this.before_scope
@@ -1982,8 +1993,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     ; scopes don't change
     edge @null.after_scope -> @null.before_scope
 
-    ;; ; the value of null is the null primitive
-    ;; edge @null.value -> @null::null
+    ; the value of null is the null primitive
+    edge @null.value -> @null.builtins_null
 }
 
 
@@ -1998,8 +2009,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     ; scopes don't change
     edge @undefined.after_scope -> @undefined.before_scope
 
-    ;; ; the value of undefined is the undefined primitive
-    ;; edge @undefined.value -> @undefined::undefined
+    ; the value of undefined is the undefined primitive
+    edge @undefined.value -> @undefined.builtins_undefined
 }
 
 
@@ -2014,12 +2025,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     ; scopes don't change
     edge @regex.after_scope -> @regex.before_scope
 
-;;   ; the value of a regex is the Regex prototype
-;;   edge @regex.value -> @regex::Regex_prototype
+    ; the value of a regex is the Regex prototype
+    edge @regex.value -> @regex.builtins_Regex_prototype
 }
 
 
 ;; #### Spread Elements
+
+;; TODO NOW
 
 ;; (spread_element (_)@expr)@spread_elem {
 ;;   ; scopes flow in then right back out
@@ -2705,12 +2718,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @await_expr.after_scope
     node @await_expr.value
 
-;;   ; scopes flow into the inner expression then back out
-;;   edge @awaited.before_scope -> @await_expr.before_scope
-;;   edge @await_expr.after_scope -> @awaited.after_scope
+    ; scopes flow into the inner expression then back out
+    edge @awaited.before_scope -> @await_expr.before_scope
+    edge @await_expr.after_scope -> @awaited.after_scope
 
-;;   ; value is just propagated up
-;;   edge @await_expr.value -> @awaited.value
+    ; value is just propagated up
+    edge @await_expr.value -> @awaited.value
 }
 
 
@@ -2722,17 +2735,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @update_expr.before_scope
     node @update_expr.after_scope
     node @update_expr.value
+    node @update_expr.pop
 
-;;   ; scope propagates through the operand then is updated by the expr
-;;   edge @argument.before_scope -> @update_expr.before_scope
-;;   edge @update_expr.after_scope -> @argument.after_scope
-;;   ; LATER-TODO this isn't quite right because the update argument can't be an arbitrary expr
-;;   ; eg f(x)++ doesn't make any sense, you have to have something more like
-;;   ; (update_expression argument: (lvar)@argument)
-;;   attr @argument.pop "pop", "definition"
-;;   edge @update_expr.value -> @argument.value
-;;   edge @update_expr.after_scope -> @argument.pop
-;;   edge @argument.pop -> @argument.value
+    ; scope propagates through the operand then is updated by the expr
+    edge @argument.before_scope -> @update_expr.before_scope
+    edge @update_expr.after_scope -> @argument.after_scope
+    ; LATER-TODO this isn't quite right because the update argument can't be an arbitrary expr
+    ; eg f(x)++ doesn't make any sense, you have to have something more like
+    ; (update_expression argument: (lvar)@argument)
+    attr (@update_expr.pop) node_definition = @argument
+    edge @update_expr.value -> @argument.value
+    edge @update_expr.after_scope -> @update_expr.pop
+    edge @update_expr.pop -> @argument.value
 }
 
 
@@ -2749,12 +2763,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @right.before_scope -> @left.after_scope
     edge @binary_expr.after_scope -> @right.after_scope
 
-    ; value is a binary op value built from the operands
-    ; LATER-TODO this isn't quite correct but it permits flow through the expression
-    ; which can be useful
-    ; attr @binary_expr.value "binary_operation_value"
-    edge @binary_expr.value -> @left.value
-    edge @binary_expr.value -> @right.value
+    ;; ; value is a binary op value built from the operands
+    ;; ; LATER-TODO this isn't quite correct but it permits flow through the expression
+    ;; ; which can be useful
+    ;; ; attr @binary_expr.value "binary_operation_value"
+    ;; edge @binary_expr.value -> @left.value
+    ;; edge @binary_expr.value -> @right.value
 }
 
 
@@ -2766,9 +2780,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @unary_expr.after_scope
     node @unary_expr.value
 
-;;   ; scope propagates through the operand
-;;   edge @argument.before_scope -> @unary_expr.before_scope
-;;   edge @unary_expr.after_scope -> @argument.after_scope
+    ; scope propagates through the operand
+    edge @argument.before_scope -> @unary_expr.before_scope
+    edge @unary_expr.after_scope -> @argument.after_scope
 
 ;;   ; value is a unaryop value built from the operand
 ;;   ; LATER-TODO this isn't quite correct but it permits flow through the expression
@@ -2781,6 +2795,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; #### Assignment Expressions;
 
+; TODO NOW
 ; scopes on RHS, values
 (assignment_expression
   left: (_)@left
@@ -2822,6 +2837,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 ; assignment to direct fields on `this`
+; TODO NOW
 ;; (assignment_expression
 ;;   left: (member_expression
 ;;     object:(this)@this
@@ -2855,6 +2871,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; #### Augmented Assignment Expressions
 
+; TODO NOW
 (augmented_assignment_expression
   left: (_)@left
   right: (_)@right)@augmented_assignment_expr
@@ -2903,13 +2920,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @sequence_expr.after_scope
     node @sequence_expr.value
 
-;;   ; scopes propagate left to right
-;;   edge @left.before_scope -> @sequence_expr.before_scope
-;;   edge @right.before_scope -> @left.after_scope
-;;   edge @sequence_expr.after_scope -> @right.after_scope
+    ; scopes propagate left to right
+    edge @left.before_scope -> @sequence_expr.before_scope
+    edge @right.before_scope -> @left.after_scope
+    edge @sequence_expr.after_scope -> @right.after_scope
 
-;;   ; the value is just the value of the right
-;;   edge @sequence_expr.value -> @right.value
+    ; the value is just the value of the right
+    edge @sequence_expr.value -> @right.value
 }
 
 
@@ -2926,16 +2943,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @ternary_expr.after_scope
     node @ternary_expr.value
 
-;;   ; scopes propagate into condition, then into each branch
-;;   edge @condition.before_scope -> @ternary_expr.before_scope
-;;   edge @consequence.before_scope -> @condition.after_scope
-;;   edge @alternative.before_scope -> @condition.after_scope
-;;   edge @ternary_expr.after_scope -> @consequence.after_scope
-;;   edge @ternary_expr.after_scope -> @alternative.after_scope
+    ; scopes propagate into condition, then into each branch
+    edge @condition.before_scope -> @ternary_expr.before_scope
+    edge @consequence.before_scope -> @condition.after_scope
+    edge @alternative.before_scope -> @condition.after_scope
+    edge @ternary_expr.after_scope -> @consequence.after_scope
+    edge @ternary_expr.after_scope -> @alternative.after_scope
 
-;;   ; value of the whole thing is a conditional value from the operands
-;;   edge @ternary_expr.value -> @consequence.value
-;;   edge @ternary_expr.value -> @alternative.value
+    ; value of the whole thing is a conditional value from the operands
+    edge @ternary_expr.value -> @consequence.value
+    edge @ternary_expr.value -> @alternative.value
 }
 
 
@@ -2948,10 +2965,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @yield_expr.after_scope
     node @yield_expr.value
 
-;;   ; scopes flow in to the yielded expression then back out
-;;   edge @yielded_expr.before_scope -> @yield_expr.before_scope
-;;   edge @yield_expr.after_scope -> @yielded_expr.after_scope
+    ; scopes flow in to the yielded expression then back out
+    edge @yielded_expr.before_scope -> @yield_expr.before_scope
+    edge @yield_expr.after_scope -> @yielded_expr.after_scope
 
+; TODO NOW
 ;;   ; yield expressions hook up to the call node of the function value
 ;;   edge @yield_expr::return_or_yield -> @yielded_expr.value
 }
@@ -2960,6 +2978,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; #### Class Expressions
 
+; TODO NOW
 (class body:(_)@body)@class {
 
     node @class.before_scope
