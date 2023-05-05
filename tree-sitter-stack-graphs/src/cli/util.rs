@@ -17,6 +17,7 @@ use stack_graphs::graph::StackGraph;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::Write;
+use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -147,17 +148,23 @@ impl SourcePosition {
     pub fn iter_references<'a>(
         &'a self,
         graph: &'a StackGraph,
-    ) -> impl Iterator<Item = Handle<Node>> + 'a {
+    ) -> impl Iterator<Item = (Handle<Node>, Span)> + 'a {
         graph
             .get_file(&self.path.to_string_lossy())
             .into_iter()
             .flat_map(move |file| {
-                graph.nodes_for_file(file).filter(move |n| {
-                    graph[*n].is_reference()
-                        && graph
-                            .source_info(*n)
-                            .map(|si| self.within_span(&si.span))
-                            .unwrap_or(false)
+                graph.nodes_for_file(file).filter_map(move |node| {
+                    if !graph[node].is_reference() {
+                        return None;
+                    }
+                    let source_info = match graph.source_info(node) {
+                        Some(source_info) => source_info,
+                        None => return None,
+                    };
+                    if !self.within_span(&source_info.span) {
+                        return None;
+                    }
+                    Some((node, source_info.span.clone()))
                 })
             })
     }
@@ -253,20 +260,20 @@ pub struct SourceSpan {
 }
 
 impl SourceSpan {
-    pub fn to_start_position(&self) -> SourcePosition {
-        SourcePosition {
-            path: self.path.clone(),
-            line: self.span.start.line,
-            column: self.span.start.column.grapheme_offset,
-        }
+    pub fn first_line(&self) -> usize {
+        self.span.start.line
     }
 
-    pub fn into_start_position(self) -> SourcePosition {
-        SourcePosition {
-            path: self.path,
-            line: self.span.start.line,
-            column: self.span.start.column.grapheme_offset,
-        }
+    /// Returns a range for the first line of this span. If multiple lines are spanned, it
+    /// will use usize::MAX for the range's end.
+    pub fn first_line_column_range(&self) -> Range<usize> {
+        let start = self.span.start.column.grapheme_offset;
+        let end = if self.span.start.line == self.span.end.line {
+            self.span.end.column.grapheme_offset
+        } else {
+            usize::MAX
+        };
+        start..end
     }
 }
 
