@@ -2,8 +2,7 @@ let x = 1;
 let y = 2;
 let z = 3;
 
-// Flow into subexpressions
-
+// Flow in
 z = x;
 //  ^ defined: 1
 

@@ -920,19 +920,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   
 }
 
-;; (variable_declaration
-;;   (variable_declarator
-;;     !value))@decl {
+(variable_declaration
+  (variable_declarator
+    !value))@decl {
 
-;;   edge @decl.after_scope -> @decl.before_scope
-;; }
+  edge @decl.after_scope -> @decl.before_scope
+}
 
-;; (lexical_declaration
-;;   (variable_declarator
-;;     !value))@decl {
+(lexical_declaration
+  (variable_declarator
+    !value))@decl {
 
-;;   edge @decl.after_scope -> @decl.before_scope
-;; }
+  edge @decl.after_scope -> @decl.before_scope
+}
 
 (variable_declaration
   (variable_declarator
@@ -1306,30 +1306,30 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 ; statement block, first statement
-;; (statement_block
-;;   .
-;;   (_)@first_stmt)@block {
+(statement_block
+  .
+  (_)@first_stmt)@block {
 
-;;   ; scope flows from block to first statement
-;;   edge @first_stmt.before_scope -> @block.before_scope
-;; }
+  ; scope flows from block to first statement
+  edge @first_stmt.before_scope -> @block.before_scope
+}
 
 ; statement block, between statements
-;; (statement_block
-;;   (_)@left_stmt
-;;   .
-;;   (_)@right_stmt) {
-;;   ; scope flows from left to right
-;;   edge @right_stmt.before_scope -> @left_stmt.after_scope
-;; }
+(statement_block
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+  ; scope flows from left to right
+  edge @right_stmt.before_scope -> @left_stmt.after_scope
+}
 
 ; statement block, last statement
-;; (statement_block
-;;   (_)@last_stmt
-;;   .)@block {
-;;   ; scope flows from last statement to block
-;;   edge @block.after_scope -> @last_stmt.after_scope
-;; }
+(statement_block
+  (_)@last_stmt
+  .)@block {
+  ; scope flows from last statement to block
+  edge @block.after_scope -> @last_stmt.after_scope
+}
 
 
 

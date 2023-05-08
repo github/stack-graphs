@@ -1,7 +1,6 @@
 let x = 1;
 
-// Flow into subexpressions
-
+// Flow in
 yield x;
 //    ^ defined: 1
 
