@@ -23,7 +23,7 @@ break;
 continue;
 return;
 ;
-// foo: x;
+foo: x;
 
 (5);
 "foo";

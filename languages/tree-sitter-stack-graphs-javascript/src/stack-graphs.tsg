@@ -368,6 +368,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     node @comment.before_scope
     node @comment.after_scope
+    node @comment.value
 
     edge @comment.after_scope -> @comment.before_scope
 
@@ -1347,30 +1348,38 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 }
 
-;; (if_statement
-;;   condition:(_)@condition
-;;   consequence:(_)@consequence)@if_stmt {
+(if_statement
+  condition:(_)@condition
+  consequence:(_)@consequence)@if_stmt
+{
 
-;;   ; scopes flow from the condition to the consequence, then to the if statement
-;;   edge @consequence.before_scope -> @condition.after_scope
-;;   edge @if_stmt.after_scope -> @consequence.after_scope
-;; }
+    ; scopes flow from the condition to the consequence, then to the if statement
+    edge @consequence.before_scope -> @condition.after_scope
+    edge @if_stmt.after_scope -> @consequence.after_scope
 
-;; (if_statement
-;;   condition:(_)@condition
-;;   alternative:(_)@alternative)@if_stmt {
+}
 
-;;   ; scopes flow from the condition to the alternative, then to the if statement
-;;   edge @alternative.before_scope -> @condition.after_scope
-;;   edge @if_stmt.after_scope -> @alternative.after_scope
-;; }
+(if_statement
+  condition:(_)@condition
+  alternative:(_)@alternative)@if_stmt
+{
 
-;; (else_clause (_)@inner)@else_clause {
+    ; scopes flow from the condition to the alternative, then to the if statement
+    edge @alternative.before_scope -> @condition.after_scope
+    edge @if_stmt.after_scope -> @alternative.after_scope
 
-;;   ; scopes flow in and right back out
-;;   edge @inner.before_scope -> @else_clause.before_scope
-;;   edge @else_clause.after_scope -> @inner.after_scope
-;; }
+}
+
+(else_clause (_)@inner)@else_clause {
+
+    node @else_clause.before_scope
+    node @else_clause.after_scope
+
+    ; scopes flow in and right back out
+    edge @inner.before_scope -> @else_clause.before_scope
+    edge @else_clause.after_scope -> @inner.after_scope
+
+}
 
 
 
@@ -1385,117 +1394,156 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @switch_stmt.before_scope
     node @switch_stmt.after_scope
 
-;;   ; scopes flow into the value then into the body then back out to the switch
-;;   edge @value.before_scope -> @switch_stmt.before_scope
-;;   edge @body.before_scope -> @value.after_scope
-;;   edge @switch_stmt.after_scope -> @body.after_scope
+    ; scopes flow into the value then into the body then back out to the switch
+    edge @value.before_scope -> @switch_stmt.before_scope
+    edge @body.before_scope -> @value.after_scope
+    edge @switch_stmt.after_scope -> @body.after_scope
+}
+
+(switch_body)@switch_body {
+
+    node @switch_body.before_scope
+    node @switch_body.after_scope
+
 }
 
 ; LATER-TODO tree sitter doesn't yet support empty switch bodies
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-;; (switch_body)@switch_body {
-;;   edge @switch_body.after_scope -> @switch_body.before_scope
-;; }
+(switch_body)@switch_body {
+  edge @switch_body.after_scope -> @switch_body.before_scope
+}
 
 ; switch body, first choice
-;; (switch_body
-;;   .
-;;   (_)@first_choice)@switch_body {
+(switch_body
+  .
+  (_)@first_choice)@switch_body
+{
 
-;;   ; scopes flow from the body into the first choice
-;;   edge @first_choice.before_scope -> @switch_body.before_scope
-;; }
+    ; scopes flow from the body into the first choice
+    edge @first_choice.before_scope -> @switch_body.before_scope
+
+}
 
 ; switch body, between choices
-;; (switch_body
-;;   (_)@left_choice
-;;   .
-;;   (_)@right_choice) {
+(switch_body
+  (_)@left_choice
+  .
+  (_)@right_choice)
+{
 
-;;   ; scopes flow left to right
-;;   edge @right_choice.before_scope -> @left_choice.after_scope
-;; }
+    ; scopes flow left to right
+    edge @right_choice.before_scope -> @left_choice.after_scope
+
+}
 
 ; switch body, last choice
-;; (switch_body
-;;   (_)@last_choice
-;;   .)@switch_body {
+(switch_body
+  (_)@last_choice
+  .)@switch_body
+{
 
-;;   ; scope flows out to the switch body
-;;   edge @switch_body.after_scope -> @last_choice.after_scope
-;; }
+    ; scope flows out to the switch body
+    edge @switch_body.after_scope -> @last_choice.after_scope
+
+}
+
+(switch_case)@switch_case {
+  
+    node @switch_case.before_scope
+    node @switch_case.after_scope
+
+}
 
 ; LATER-TODO tree sitter doesnt yet support switch case's with no statements
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-;; (switch_case)@switch_case {
-;;   edge @switch_case.after_scope -> @switch_case.before_scope
-;; }
+(switch_case)@switch_case {
+    edge @switch_case.after_scope -> @switch_case.before_scope
+}
 
 ; switch case, non-empty statements, first statement
-;; (switch_case
-;;   value:(_)@value
-;;   .
-;;   (_)@first_stmt)@switch_case {
+(switch_case
+  value:(_)@value
+  .
+  (_)@first_stmt)@switch_case
+{
 
-;;   ; scopes flow into the value then into the first statement
-;;   edge @value.before_scope -> @switch_case.before_scope
-;;   edge @first_stmt.before_scope -> @value.after_scope
-;; }
+    ; scopes flow into the value then into the first statement
+    edge @value.before_scope -> @switch_case.before_scope
+    edge @first_stmt.before_scope -> @value.after_scope
+
+}
 
 ; switch case, non-empty statements, between statement
-;; (switch_case
-;;   value:(_)
-;;   (_)@left_stmt
-;;   .
-;;   (_)@right_stmt) {
+(switch_case
+  value:(_)
+  (_)@left_stmt
+  .
+  (_)@right_stmt)
+{
 
-;;   ; scopes flow left to right
-;;   edge @right_stmt.before_scope -> @left_stmt.after_scope
-;; }
+    ; scopes flow left to right
+    edge @right_stmt.before_scope -> @left_stmt.after_scope
+
+}
 
 ; switch case, non-empty statements, last statement
-;; (switch_case
-;;   value:(_)
-;;   (_)@last_stmt
-;;   .)@switch_case {
+(switch_case
+  value:(_)
+  (_)@last_stmt
+  .)@switch_case
+{
 
-;;   ; scopes flow out from the last statement to the case
-;;   edge @switch_case.after_scope -> @last_stmt.after_scope
-;; }
+    ; scopes flow out from the last statement to the case
+    edge @switch_case.after_scope -> @last_stmt.after_scope
+
+}
+
+(switch_default)@switch_default {
+  
+    node @switch_default.before_scope
+    node @switch_default.after_scope
+
+}
 
 ; LATER-TODO tree sitter doesnt yet support empty defaults
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-;; (switch_default)@switch_default {
-;;   edge @switch_default.after_scope -> @switch_default.before_scope
-;; }
+(switch_default)@switch_default {
+    edge @switch_default.after_scope -> @switch_default.before_scope
+}
 
 ; switch default, non-empty statements, first statement
-;; (switch_default
-;;   .
-;;   (_)@first_stmt)@switch_default {
+(switch_default
+  .
+  (_)@first_stmt)@switch_default
+{
 
-;;   ; scopes flow into the first statement
-;;   edge @first_stmt.before_scope -> @switch_default.before_scope
-;; }
+    ; scopes flow into the first statement
+    edge @first_stmt.before_scope -> @switch_default.before_scope
+
+}
 
 ; switch default, non-empty statements, between statements
-;; (switch_default
-;;   (_)@left_stmt
-;;   .
-;;   (_)@right_stmt) {
+(switch_default
+  (_)@left_stmt
+  .
+  (_)@right_stmt)
+{
 
-;;   ; scopes flow left to right
-;;   edge @right_stmt.before_scope -> @left_stmt.after_scope
-;; }
+    ; scopes flow left to right
+    edge @right_stmt.before_scope -> @left_stmt.after_scope
+
+}
 
 ; switch default, non-empty statements, last statement
-;; (switch_default
-;;   (_)@last_stmt
-;;   .)@switch_default {
+(switch_default
+  (_)@last_stmt
+  .)@switch_default
+{
 
-;;   ; scopes flow out to the default
-;;   edge @switch_default.after_scope -> @last_stmt.after_scope
-;; }
+    ; scopes flow out to the default
+    edge @switch_default.after_scope -> @last_stmt.after_scope
+
+}
 
 
 
@@ -1511,17 +1559,17 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @for_stmt.before_scope
     node @for_stmt.after_scope
 
-;;   ; scopes flow from statement to initializer then test then body then increment
-;;   edge @initializer.before_scope -> @for_stmt.before_scope
-;;   edge @condition.before_scope -> @initializer.after_scope
-;;   edge @body.before_scope -> @condition.after_scope
-;;   edge @increment.before_scope -> @body.after_scope
+    ; scopes flow from statement to initializer then test then body then increment
+    edge @initializer.before_scope -> @for_stmt.before_scope
+    edge @condition.before_scope -> @initializer.after_scope
+    edge @body.before_scope -> @condition.after_scope
+    edge @increment.before_scope -> @body.after_scope
 
-;;   ; scopes also from from the body back into the condition
-;;   edge @condition.before_scope -> @body.after_scope
+    ; scopes also from from the body back into the condition
+    edge @condition.before_scope -> @increment.after_scope
 
-;;   ; scopes also flow from condition out to statement
-;;   edge @for_stmt.after_scope -> @condition.after_scope
+    ; scopes also flow from condition out to statement
+    edge @for_stmt.after_scope -> @condition.after_scope
 }
 
 
@@ -1537,21 +1585,25 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @for_in_stmt.before_scope
     node @for_in_stmt.after_scope
 
-;;   ; scopes flow from statement to right then to body then back out
-;;   edge @right.before_scope -> @for_in_stmt.before_scope
-;;   edge @body.before_scope -> @right.after_scope
-;;   edge @for_in_stmt.after_scope -> @body.after_scope
+    ; scopes flow from statement to right then to body then back out
+    edge @right.before_scope -> @for_in_stmt.before_scope
+    edge @body.before_scope -> @right.after_scope
+    edge @for_in_stmt.after_scope -> @body.after_scope
+
 }
 
-;; (for_in_statement
-;;   left:(identifier)@left
-;;   right:(_)@right
-;;   body:(_)@body) {
+(for_in_statement
+  left:(identifier)@left
+  right:(_)@right
+  body:(_)@body)@for_in_stmt
+{
 
-;;   attr @left.pop "pop", "definition"
-;;   edge @left.pop -> @right.value
-;;   edge @body.before_scope -> @left.pop
-;; }
+    node @for_in_stmt.pop
+    attr (@for_in_stmt.pop) node_definition = @left
+    edge @for_in_stmt.pop -> @right.value
+    edge @body.before_scope -> @for_in_stmt.pop
+
+}
 
 
 
@@ -1764,17 +1816,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; #### Labeled
 
-;; TODO DEBUG!!! this doesnt work, causes a weird error
+(labeled_statement body:(_)@inner)@labeled_stmt {
 
-;; (labeled_statement (_)@inner)@labeled_stmt {
+    node @labeled_stmt.before_scope
+    node @labeled_stmt.after_scope
 
-;;     node @labeled_stmt.before_scope
-;;     node @labeled_stmt.after_scope
-
-;; ;;   ; scopes flow through the inner statement then back out
-;; ;;   edge @inner.before_scope -> @labeled_stmt.before_scope
-;; ;;   edge @labeled_stmt.after_scope -> @inner.after_scope
-;; }
+;;   ; scopes flow through the inner statement then back out
+;;   edge @inner.before_scope -> @labeled_stmt.before_scope
+;;   edge @labeled_stmt.after_scope -> @inner.after_scope
+}
 
 
 
@@ -1804,11 +1854,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; #### Parenthesized
 
-(parenthesized_expression (_)@inner)@parens {
+(parenthesized_expression)@parens {
 
     node @parens.before_scope
     node @parens.after_scope
     node @parens.value
+
+}
+
+(parenthesized_expression (_)@inner)@parens {
 
     ; scopes flow right through
     edge @inner.before_scope -> @parens.before_scope

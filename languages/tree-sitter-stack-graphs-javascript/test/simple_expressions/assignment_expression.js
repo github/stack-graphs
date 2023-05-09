@@ -11,7 +11,7 @@ z = x;
 x = (y = 3);
 
 /**/ x;
-//   ^ defined: 1, 12
+//   ^ defined: 1, 11
 
 /****/ y;
-//     ^ defined: 2, 12
+//     ^ defined: 2, 11
