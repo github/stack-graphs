@@ -104,8 +104,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 [
-  (import_declaration                                            (identifier) @scope @name)
-  (import_declaration (scoped_identifier scope: (_) @scope name: (identifier) @name))
+  (import_declaration                                             (identifier) @_scope @name)
+  (import_declaration (scoped_identifier scope: (_) @_scope name: (identifier) @name))
 ] @import {
   node def
   attr (def) node_definition = @name
@@ -401,7 +401,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   type_parameters: (type_parameters
     (type_parameter
       (type_identifier) @type_identifier))
-  body: (_) @body) @this {
+  body: (_) @body) @_this {
   node type_ident
   attr (type_ident) node_definition = @type_identifier
   edge @body.lexical_scope -> type_ident
@@ -421,7 +421,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (modifiers "static"?@is_static)?
   type: (_) @type
   name: (identifier) @name
-  body: (block) @block) @method
+  body: (block) @_block) @method
 {
   edge @type.lexical_scope -> @method.lexical_scope
 
@@ -554,7 +554,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @block.after_scope -> @last.after_scope
 }
 
-(break_statement (identifier) @name) @this {
+(break_statement (identifier) @_name) @this {
   edge @this.after_scope -> @this.before_scope
 }
 
@@ -586,7 +586,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge ns -> @this.before_scope
 }
 
-(declaration) @decl {}
+(declaration) @_decl {}
 
 (do_statement body: (_) @body condition: (_) @cond) @stmt {
   edge @body.before_scope -> @stmt.before_scope
@@ -660,7 +660,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (local_variable_declaration
   type: (_) @type
   declarator: (variable_declarator) @var_decl
-) @local_var
+) @_local_var
 {
   edge @var_decl.def__typeof -> @type.type
 }
@@ -692,7 +692,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   declarator: (_) @left
   .
   declarator: (_) @right
-  ) @local_var {
+  ) @_local_var {
   edge @right.before_scope -> @left.after_scope
 }
 
@@ -770,7 +770,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @first.before_scope -> @this.lexical_scope
 }
 
-(switch_block (switch_block_statement_group (switch_label)+ (statement) @a . (statement) @b)) @this {
+(switch_block (switch_block_statement_group (switch_label)+ (statement) @a . (statement) @b)) @_this {
   edge @b.before_scope -> @a.after_scope
 }
 
@@ -838,11 +838,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @first.before_scope -> @stmt.before_scope
 }
 
-(try_with_resources_statement resources: (resource_specification (resource) @a . (resource) @b)) @stmt {
+(try_with_resources_statement resources: (resource_specification (resource) @a . (resource) @b)) @_stmt {
   edge @b.before_scope -> @a.after_scope
 }
 
-(try_with_resources_statement resources: (resource_specification (resource) @last .) body: (_) @body) @stmt {
+(try_with_resources_statement resources: (resource_specification (resource) @last .) body: (_) @body) @_stmt {
   edge @body.before_scope -> @last.after_scope
 }
 
@@ -1066,7 +1066,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge expr_ref__typeof -> expr_ref
 }
 
-(method_reference . (identifier) @lhs (identifier) @name) @this {
+(method_reference . (identifier) @lhs (identifier) @_name) @this {
   ; @lhs could be a type name
   node ref
   attr (ref) node_reference = @lhs
