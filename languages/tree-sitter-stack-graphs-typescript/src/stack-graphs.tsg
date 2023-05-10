@@ -370,13 +370,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; hashbang
 
-(hash_bang_line)@hashbang {
+(hash_bang_line) {
 }
 
 
 ;; Comments
 
-(comment)@comment {
+(comment) {
 }
 
 
@@ -906,7 +906,7 @@ if none @is_default {
 ; )
 
 (export_statement
-  (namespace_export (identifier)@ns)
+  (namespace_export (identifier))
   source:(_)@name
 )@export_stmt {
   ; namespace definitions are specified together with (module) and (internal_module)
@@ -954,8 +954,8 @@ if none @is_default {
 (import_statement
   "type"?
   (import_clause)?@has_clause
-  source:(_)@from
-)@import_stmt {
+  source:(_)
+) {
 if none @has_clause {
   ; do nothing, imported for side-effect only
 }
@@ -1068,7 +1068,7 @@ if none @is_type {
 
 (import_statement
   "type"?
-  (import_clause (namespace_import (identifier)@name))
+  (import_clause (namespace_import (identifier)))
   source:(_)@from
 )@import_stmt {
   ; namespace definitions are specified together with (module) and (internal_module)
@@ -1094,7 +1094,7 @@ if none @is_type {
 ; debugger;
 ; debugger
 
-(debugger_statement)@debugger_stmt {
+(debugger_statement) {
 }
 
 
@@ -1205,7 +1205,7 @@ if none @is_type {
 (variable_declarator
   type:(_)@type
   value:(_)@value
-)@decl {
+) {
   ; match value cotype to type annotation
   edge @value.cotype -> @type.type
 }
@@ -1413,8 +1413,8 @@ if none @is_async {
   edge @class_decl.type_export -> @class_decl.generic_type
 }
 [
-  (abstract_class_declaration name:(_)@name)
-  (class_declaration          name:(_)@name)
+  (abstract_class_declaration name:(_))
+  (class_declaration          name:(_))
 ; NOTE not for interface_declaration as body is already a type with an endpoint of needed
 ]@class_decl {
   ; mark type scope as endpoint
@@ -1716,7 +1716,7 @@ if none @is_async {
 ; }
 
 (switch_statement
-  value:(_)@value
+  value:(_)
   body:(_)@body
 )@switch_stmt {
   ; propagate lexical scope
@@ -1747,7 +1747,7 @@ if none @is_async {
 }
 
 (switch_case
-  value:(_)@value
+  value:(_)
   body: (_)@stmt
 )@switch_case {
   ; propagate lexical scope
@@ -2097,7 +2097,7 @@ if none @is_async {
 
 ; break;
 
-(break_statement)@break_stmt {
+(break_statement) {
 }
 
 
@@ -2106,7 +2106,7 @@ if none @is_async {
 
 ; continue;
 
-(continue_statement)@continue_stmt {
+(continue_statement) {
 }
 
 
@@ -2144,7 +2144,7 @@ if none @is_async {
 ; if (true) { ; };;;
 ; if (true) {} else {}
 
-(empty_statement)@empty_stmt {
+(empty_statement) {
 }
 
 
@@ -2212,7 +2212,7 @@ if none @is_async {
 ; FIXME what is this? tsc doesn't recognize this syntax
 (ambient_declaration
   "module"
-  (property_identifier)@prop
+  (property_identifier)
   (_)@type
 )@amb_decl {
   ; propagate lexical scope
@@ -2704,7 +2704,7 @@ if none @is_async {
 ; "A double quoted string.";
 ; 'A single quoted string.';
 
-(string)@string {
+(string) {
 }
 
 
@@ -2728,7 +2728,7 @@ if none @is_async {
 
 ; 12345;
 
-(number)@number {
+(number) {
 }
 
 
@@ -2846,7 +2846,7 @@ if none @is_def {
 
 ; new.target
 
-(meta_property)@new_target {
+(meta_property) {
 }
 
 
@@ -2855,12 +2855,12 @@ if none @is_def {
 
 ;; true;
 
-(true)@true {
+(true) {
 }
 
 ;; false;
 
-(false)@false {
+(false) {
 }
 
 
@@ -2912,13 +2912,13 @@ if none @is_def {
 
 
 ; null;
-(null)@null {
+(null) {
 }
 
 
 
 ; undefined;
-(undefined)@undefined {
+(undefined) {
 }
 
 
@@ -2932,7 +2932,7 @@ if none @is_def {
 ; (regex (regex_pattern))
 ; (regex (regex_pattern) (regex_flags))
 
-(regex)@regex {
+(regex) {
 }
 
 
@@ -3429,14 +3429,14 @@ if none @is_async {
 ; type application is handled by the generics rules below
 
 (call_expression
-  function:(_)@fun arguments: (_)@args
+  function:(_) arguments: (_)@args
 )@call_expr {
   ; propagate lexical scope
   edge @args.lexical_scope -> @call_expr.lexical_scope
 }
 
 (call_expression
-  function:(_)@fun arguments: (arguments)@args
+  function:(_) arguments: (arguments)@args
 )@call_expr {
   ; connect cotype to function params
   edge @args.coargs -> @call_expr.callable__params ;; FIXME
@@ -3535,7 +3535,7 @@ if none @is_async {
 
 (subscript_expression
   object: (_)@object
-  index: (_)@index ; FIXME typeof index == number
+  index: (_) ; FIXME typeof index == number
 )@subscript_expr {
   node @subscript_expr.indexable
 
@@ -3547,7 +3547,7 @@ if none @is_async {
 }
 
 (subscript_expression
-  object: (_)@object
+  object: (_)
   index: (number)@index
 )@subscript_expr {
   node @subscript_expr.comp_index
@@ -4003,7 +4003,7 @@ if none @is_async {
 ; )
 
 (type_assertion
-  (type_arguments)@type_arguments
+  (type_arguments)
   (expression)@expr
 )@type_assert {
   ; propagate lexical scope
@@ -4081,7 +4081,7 @@ if none @is_async {
   (variable_declarator name:(identifier)@name)
   (pattern/identifier)@name
   (rest_pattern (_)@name)
-]@pat {
+] {
   node @name.cotype
   node @name.lexical_scope
 }
@@ -4091,7 +4091,7 @@ if none @is_async {
   (variable_declarator name:(identifier)@name)
   (pattern/identifier)@name
   (rest_pattern (_)@name)
-]@pat {
+] {
   node @name.defs
   node @name.expr_def
   node @name.expr_def__ns
@@ -4510,7 +4510,7 @@ if none @is_async {
   name:(_)@name
   !type ; opt
   value:(_)@value ; opt
-)@def {
+) {
   ; type of field is type of value
   edge @name.expr_def -> @name.expr_def__typeof
   ;
