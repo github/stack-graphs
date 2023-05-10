@@ -9,3 +9,10 @@ let x = 1;
 
 /**/ x;
 //   ^ defined: 1
+
+// Flow out
+
+x + (y = 1);
+
+/**/ y;
+//   ^ defined: 15

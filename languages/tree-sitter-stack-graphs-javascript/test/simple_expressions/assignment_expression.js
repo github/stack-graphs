@@ -6,7 +6,7 @@ let z = 3;
 z = x;
 //  ^ defined: 1
 
-// Flow around and update
+// Flow around, update, and out
 
 x = (y = 3);
 

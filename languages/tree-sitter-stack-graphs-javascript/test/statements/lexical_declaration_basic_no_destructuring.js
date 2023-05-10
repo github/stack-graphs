@@ -15,4 +15,4 @@ let y = x;
 
 let x = 2;
 /**/ x;
-//   ^ defined: 17
+//   ^ defined: 16

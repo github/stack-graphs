@@ -4,7 +4,7 @@ let x = 1;
 
 switch (x) {
     //  ^ defined: 1
-    case value:
+    case 0:
         /**/ x;
         //   ^ defined: 1
         y = 2;
@@ -17,7 +17,7 @@ switch (x) {
 // Flow out
 
 /**/ y;
-//   ^ defined: 10, 16
+//   ^ defined: 10, 14
 
 // Flow around
 

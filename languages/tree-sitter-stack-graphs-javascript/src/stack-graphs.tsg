@@ -1751,7 +1751,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @body.before_scope -> @object.after_scope
     edge @with_stmt.after_scope -> @body.after_scope
 
-    attr (@with_stmt.push_dot) push_symbol = "."
+    attr (@with_stmt.push_dot) push_symbol = "GUARD:MEMBER"
     edge @with_stmt.push_dot -> @object.value
     edge @body.before_scope -> @with_stmt.push_dot
 }
@@ -1765,8 +1765,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @break_stmt.before_scope
     node @break_stmt.after_scope
 
-    ;; ; scopes flow through unchanged
-    ;; edge @break_stmt.after_scope -> @break_stmt.before_scope
+    ; scopes flow through unchanged
+    edge @break_stmt.after_scope -> @break_stmt.before_scope
+}
+
+(break_statement (_)@label)@break_stmt {
+
+    node @break_stmt.label_push
+    node @break_stmt.label_guard
+
+    attr (@break_stmt.label_guard) push_symbol = "GUARD:LABEL"
+    attr (@break_stmt.label_push) node_reference = @label
+
+    edge @break_stmt.label_push -> @break_stmt.label_guard
+    edge @break_stmt.label_guard -> @break_stmt.before_scope
 }
 
 
@@ -1778,8 +1790,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @continue_stmt.before_scope
     node @continue_stmt.after_scope
 
-;;   ; scopes flow through unchanged
-;;   edge @continue_stmt.after_scope -> @continue_stmt.before_scope
+    ; scopes flow through unchanged
+    edge @continue_stmt.after_scope -> @continue_stmt.before_scope
+}
+
+(continue_statement (_)@label)@continue_stmt {
+
+    node @continue_stmt.label_push
+    node @continue_stmt.label_guard
+
+    attr (@continue_stmt.label_guard) push_symbol = "GUARD:LABEL"
+    attr (@continue_stmt.label_push) node_reference = @label
+
+    edge @continue_stmt.label_push -> @continue_stmt.label_guard
+    edge @continue_stmt.label_guard -> @continue_stmt.before_scope
 }
 
 
@@ -1840,14 +1864,24 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; #### Labeled
 
-(labeled_statement body:(_)@inner)@labeled_stmt {
+(labeled_statement
+    label:(_)@label
+    body:(_)@inner)@labeled_stmt
+{
 
     node @labeled_stmt.before_scope
     node @labeled_stmt.after_scope
+    node @labeled_stmt.label_pop
+    node @labeled_stmt.label_guard
 
-;;   ; scopes flow through the inner statement then back out
-;;   edge @inner.before_scope -> @labeled_stmt.before_scope
-;;   edge @labeled_stmt.after_scope -> @inner.after_scope
+    attr (@labeled_stmt.label_guard) pop_symbol = "GUARD:LABEL"
+    attr (@labeled_stmt.label_pop) node_definition = @label
+
+    ; scopes flow through the inner statement then back out
+    edge @inner.before_scope -> @labeled_stmt.before_scope
+    edge @inner.before_scope -> @labeled_stmt.label_guard
+    edge @labeled_stmt.label_guard -> @labeled_stmt.label_pop
+    edge @labeled_stmt.after_scope -> @inner.after_scope
 }
 
 

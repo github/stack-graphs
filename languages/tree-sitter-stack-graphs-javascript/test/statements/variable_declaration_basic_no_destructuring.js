@@ -15,4 +15,4 @@ var y = x;
 
 var x = 2;
 /**/ x;
-//   ^ defined: 17
+//   ^ defined: 16

@@ -8,3 +8,10 @@ await x;
 
 /**/ x;
 //   ^ defined: 1
+
+// Flow out
+
+await y = 1;
+
+/**/ y;
+//   ^ defined: 14
