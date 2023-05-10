@@ -1617,13 +1617,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @while_stmt.before_scope
     node @while_stmt.after_scope
 
-;;   ; scopes flow from while to condition then to body then back out
-;;   edge @condition.before_scope -> @while_stmt.before_scope
-;;   edge @body.before_scope -> @condition.after_scope
-;;   edge @while_stmt.after_scope -> @body.after_scope
+    ; scopes flow from while to condition then to body then back out
+    edge @condition.before_scope -> @while_stmt.before_scope
+    edge @body.before_scope -> @condition.after_scope
+    edge @while_stmt.after_scope -> @body.after_scope
 
-;;   ; scopes also flow back into the condition
-;;   edge @condition.before_scope -> @body.after_scope
+    ; scopes also flow back into the condition
+    edge @condition.before_scope -> @body.after_scope
 }
 
 
@@ -1638,13 +1638,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @do_stmt.before_scope
     node @do_stmt.after_scope
 
-;;   ; scopes flow from statement to body then condition then back to statement
-;;   edge @body.before_scope -> @do_stmt.before_scope
-;;   edge @condition.before_scope -> @body.after_scope
-;;   edge @do_stmt.after_scope -> @condition.after_scope
+    ; scopes flow from statement to body then condition then back to statement
+    edge @body.before_scope -> @do_stmt.before_scope
+    edge @condition.before_scope -> @body.after_scope
+    edge @do_stmt.after_scope -> @condition.after_scope
 
-;;   ; scopes also flow back to the body from the condition
-;;   edge @body.before_scope -> @condition.after_scope
+    ; scopes also flow back to the body from the condition
+    edge @body.before_scope -> @condition.after_scope
 
 }
 
@@ -1657,58 +1657,81 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @try_stmt.before_scope
     node @try_stmt.after_scope
 
-;;   ; scopes flow into the body then back out
-;;   edge @body.before_scope -> @try_stmt.before_scope
-;;   edge @try_stmt.after_scope -> @body.after_scope
+    ; scopes flow into the body then back out
+    edge @body.before_scope -> @try_stmt.before_scope
+    edge @try_stmt.after_scope -> @body.after_scope
 
 }
 
-;; (try_statement
-;;   body:(_)@body
-;;   handler:(_)@handler)@try_stmt {
+(try_statement
+  body:(_)@body
+  handler:(_)@handler)@try_stmt
+{
 
-;;   ; scopes flow from body to handler then back out
-;;   edge @handler.before_scope -> @body.after_scope
-;;   edge @try_stmt.after_scope -> @handler.after_scope
-;; }
+    ; scopes flow from body to handler then back out
+    edge @handler.before_scope -> @body.after_scope
+    edge @try_stmt.after_scope -> @handler.after_scope
 
-;; (try_statement
-;;   body:(_)@body
-;;   finalizer:(_)@finalizer)@try_stmt {
+}
 
-;;   ; scopes flow from body to finalizer then back out
-;;   edge @finalizer.before_scope -> @body.after_scope
-;;   edge @try_stmt.after_scope -> @finalizer.after_scope
-;; }
+(try_statement
+  body:(_)@body
+  finalizer:(_)@finalizer)@try_stmt
+{
 
-;; (try_statement
-;;   handler:(_)@handler
-;;   finalizer:(_)@finalizer)@try_stmt {
+    ; scopes flow from body to finalizer then back out
+    edge @finalizer.before_scope -> @body.after_scope
 
-;;   ; scopes flow from handler to finalizer then back out
-;;   edge @finalizer.before_scope -> @handler.after_scope
-;;   edge @try_stmt.after_scope -> @finalizer.after_scope
-;; }
+}
 
-;; (catch_clause body:(_)@body)@catch_clause {
-;;   ; scopes flow in then back out
-;;   edge @body.before_scope -> @catch_clause.before_scope
-;;   edge @catch_clause.after_scope -> @body.after_scope
-;; }
+(try_statement
+  handler:(_)@handler
+  finalizer:(_)@finalizer)@try_stmt
+{
 
-;; (catch_clause
-;;   parameter:(identifier)@name
-;;   body:(_)@body) {
+    ; scopes flow from handler to finalizer then back out
+    edge @finalizer.before_scope -> @handler.after_scope
 
-;;   attr @name.pop "pop", "definition"
-;;   edge @body.before_scope -> @name.pop
-;; }
+}
 
-;; (finally_clause body:(_)@body)@finally_clause {
-;;   ; scopes flow in thenback out
-;;   edge @body.before_scope -> @finally_clause.before_scope
-;;   edge @finally_clause.after_scope -> @body.after_scope
-;; }
+(try_statement finalizer:(_)@finalizer)@try_stmt {
+
+    edge @try_stmt.after_scope -> @finalizer.after_scope
+
+}
+
+(catch_clause body:(_)@body)@catch_clause {
+
+    node @catch_clause.before_scope
+    node @catch_clause.after_scope
+
+    ; scopes flow in then back out
+    edge @body.before_scope -> @catch_clause.before_scope
+    edge @catch_clause.after_scope -> @body.after_scope
+
+}
+
+(catch_clause
+  parameter:(identifier)@name
+  body:(_)@body)@catch_clause
+{
+
+    node @catch_clause.pop
+    attr (@catch_clause.pop) node_definition = @name
+    edge @body.before_scope -> @catch_clause.pop
+
+}
+
+(finally_clause body:(_)@body)@finally_clause {
+
+    node @finally_clause.before_scope
+    node @finally_clause.after_scope
+
+    ; scopes flow in thenback out
+    edge @body.before_scope -> @finally_clause.before_scope
+    edge @finally_clause.after_scope -> @body.after_scope
+
+}
 
 
 
@@ -1721,15 +1744,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     node @with_stmt.before_scope
     node @with_stmt.after_scope
+    node @with_stmt.push_dot
 
-;;   ; scopes flow from the statement into the object then into the body then back out
-;;   edge @object.before_scope -> @with_stmt.before_scope
-;;   edge @body.before_scope -> @object.after_scope
-;;   edge @with_stmt.after_scope -> @body.after_scope
+    ; scopes flow from the statement into the object then into the body then back out
+    edge @object.before_scope -> @with_stmt.before_scope
+    edge @body.before_scope -> @object.after_scope
+    edge @with_stmt.after_scope -> @body.after_scope
 
-;;   attr @object.push_dot "push" = "."
-;;   edge @object.push_dot -> @object.value
-;;   edge @body.before_scope -> @object.push_dot
+    attr (@with_stmt.push_dot) push_symbol = "."
+    edge @with_stmt.push_dot -> @object.value
+    edge @body.before_scope -> @with_stmt.push_dot
 }
 
 
