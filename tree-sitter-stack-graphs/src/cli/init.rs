@@ -6,6 +6,11 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
+use clap::builder::StringValueParser;
+use clap::builder::TypedValueParser;
+use clap::error::ContextKind;
+use clap::error::ContextValue;
+use clap::error::ErrorKind;
 use clap::Args;
 use clap::ValueHint;
 use dialoguer::Input;
@@ -44,47 +49,71 @@ pub struct InitArgs {
     /// Project directory path.
     #[clap(value_name = "PROJECT_PATH", required = false, default_value = ".", value_hint = ValueHint::AnyPath)]
     pub project_path: PathBuf,
+
+    /// Disable console interaction. All input values must be provided through the appropriate options.
+    #[clap(
+        long,
+        requires("language_name"),
+        requires("language_id"),
+        requires("language_file_extension"),
+        requires("crate_name"),
+        requires("crate_version"),
+        // author is optional
+        // license is optional
+        requires("grammar_crate_name"),
+        requires("grammar_crate_version")
+    )]
+    pub non_interactive: bool,
+
+    #[clap(long)]
+    pub language_name: Option<String>,
+
+    #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
+    pub language_id: Option<String>,
+
+    #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
+    pub language_file_extension: Option<String>,
+
+    #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
+    pub crate_name: Option<String>,
+
+    #[clap(long, value_parser = RegexValidator(&VALID_CRATE_VERSION))]
+    pub crate_version: Option<String>,
+
+    #[clap(long)]
+    pub author: Option<String>,
+
+    #[clap(long)]
+    pub license: Option<String>,
+
+    #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
+    pub grammar_crate_name: Option<String>,
+
+    #[clap(long, value_parser = RegexValidator(&VALID_DEPENDENCY_VERSION))]
+    pub grammar_crate_version: Option<String>,
 }
 
 impl InitArgs {
-    pub fn new(project_path: PathBuf) -> Self {
-        Self { project_path }
-    }
-
     pub fn run(self) -> anyhow::Result<()> {
         self.check_project_dir()?;
-        let mut config = ProjectSettings::default();
-        loop {
-            config.read_from_console()?;
-            println!();
-            println!("=== Review project settings ===");
-            println!(
-                "Project directory          : {}",
-                self.project_path.display()
-            );
-            println!("{}", config);
-            let action = Select::new()
-                .items(&["Generate", "Edit", "Cancel"])
-                .default(0)
-                .interact()?;
-            match action {
-                0 => {
-                    config.generate_files_into(&self.project_path)?;
-                    println!(
-                        "Project created. See {} to get started!",
-                        self.project_path.join("README.md").display(),
-                    );
-                    break;
-                }
-                1 => {
-                    continue;
-                }
-                2 => {
-                    println!("No project created.");
-                    break;
-                }
-                _ => unreachable!(),
-            }
+        let mut config = ProjectSettings {
+            language_name: self.language_name.unwrap_or_default(),
+            language_id: self.language_id.unwrap_or_default(),
+            language_file_extension: self.language_file_extension.unwrap_or_default(),
+            crate_name: self.crate_name.unwrap_or_default(),
+            crate_version: self.crate_version.unwrap_or_default(),
+            author: self.author.unwrap_or_default(),
+            license: self.license.unwrap_or_default(),
+            grammar_crate_name: self.grammar_crate_name.unwrap_or_default(),
+            grammar_crate_version: self.grammar_crate_version.unwrap_or_default(),
+        };
+        let generate = if !self.non_interactive {
+            Self::interactive(&self.project_path, &mut config)?
+        } else {
+            false
+        };
+        if generate {
+            config.generate_files_into(&self.project_path)?;
         }
         Ok(())
     }
@@ -100,6 +129,37 @@ impl InitArgs {
             return Err(anyhow!("Project directory exists but is not empty"));
         }
         Ok(())
+    }
+
+    fn interactive(project_path: &Path, config: &mut ProjectSettings) -> anyhow::Result<bool> {
+        loop {
+            config.read_from_console()?;
+            println!();
+            println!("=== Review project settings ===");
+            println!("Project directory          : {}", project_path.display());
+            println!("{}", config);
+            let action = Select::new()
+                .items(&["Generate", "Edit", "Cancel"])
+                .default(0)
+                .interact()?;
+            match action {
+                0 => {
+                    println!(
+                        "Project created. See {} to get started!",
+                        project_path.join("README.md").display(),
+                    );
+                    return Ok(true);
+                }
+                1 => {
+                    continue;
+                }
+                2 => {
+                    println!("No project created.");
+                    return Ok(false);
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 }
 
@@ -145,7 +205,7 @@ impl ProjectSettings {
             } else {
                 &self.language_id
             })
-            .validate_with(regex_validator(&VALID_CRATE_NAME))
+            .validate_with(RegexValidator(&VALID_CRATE_NAME))
             .interact_text()?;
 
         printdoc! {r#"
@@ -163,7 +223,7 @@ impl ProjectSettings {
         self.language_file_extension = Input::new()
             .with_prompt("Language file extension")
             .with_initial_text(default_language_file_extension)
-            .validate_with(regex_validator(&VALID_CRATE_NAME))
+            .validate_with(RegexValidator(&VALID_CRATE_NAME))
             .interact_text()?;
 
         printdoc! {r#"
@@ -180,7 +240,7 @@ impl ProjectSettings {
             } else {
                 &self.crate_name
             })
-            .validate_with(regex_validator(&VALID_CRATE_NAME))
+            .validate_with(RegexValidator(&VALID_CRATE_NAME))
             .interact_text()?;
 
         printdoc! {r#"
@@ -195,7 +255,7 @@ impl ProjectSettings {
             } else {
                 &self.crate_version
             })
-            .validate_with(regex_validator(&VALID_CRATE_VERSION))
+            .validate_with(RegexValidator(&VALID_CRATE_VERSION))
             .interact_text()?;
 
         printdoc! {r#"
@@ -268,7 +328,7 @@ impl ProjectSettings {
         self.grammar_crate_version = Input::new()
             .with_prompt("Grammar crate version")
             .with_initial_text(&self.grammar_crate_version)
-            .validate_with(regex_validator(&VALID_DEPENDENCY_VERSION))
+            .validate_with(RegexValidator(&VALID_DEPENDENCY_VERSION))
             .interact_text()?;
 
         Ok(())
@@ -747,16 +807,47 @@ impl std::fmt::Display for ProjectSettings {
     }
 }
 
-fn regex_validator<'a>(regex: &'a Regex) -> impl Validator<String, Err = String> + 'a {
-    struct RegexValidator<'a>(&'a Regex);
-    impl Validator<String> for RegexValidator<'_> {
-        type Err = String;
-        fn validate(&mut self, input: &String) -> Result<(), Self::Err> {
-            if !self.0.is_match(input) {
-                return Err(format!("Invalid input value. Must match {}", self.0));
-            }
-            Ok(())
+#[derive(Clone)]
+struct RegexValidator<'a>(&'a Regex);
+
+impl TypedValueParser for RegexValidator<'static> {
+    type Value = String;
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        let inner = StringValueParser::new();
+        let value = inner.parse_ref(cmd, arg, value)?;
+
+        if self.0.is_match(&value) {
+            return Ok(value);
         }
+
+        let mut err = clap::Error::new(ErrorKind::ValueValidation);
+        if let Some(arg) = arg {
+            err.insert(
+                ContextKind::InvalidArg,
+                ContextValue::String(arg.to_string()),
+            );
+        }
+        err.insert(ContextKind::InvalidValue, ContextValue::String(value));
+        err.insert(
+            ContextKind::Custom,
+            ContextValue::String(format!("value must match {}", self.0)),
+        );
+
+        Err(err)
     }
-    RegexValidator(regex)
+}
+
+impl Validator<String> for RegexValidator<'_> {
+    type Err = String;
+    fn validate(&mut self, input: &String) -> Result<(), Self::Err> {
+        if !self.0.is_match(input) {
+            return Err(format!("Invalid input value. Must match {}", self.0));
+        }
+        Ok(())
+    }
 }
