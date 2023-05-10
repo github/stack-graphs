@@ -13,7 +13,7 @@ pub type WriteLicenseHeader = fn(&mut File, i32, &str, &str) -> std::io::Result<
 pub type WriteLicenseText = fn(&mut File, i32, &str) -> std::io::Result<()>;
 
 pub const DEFAULT_LICENSES: &[(&str, WriteLicenseHeader, WriteLicenseText)] = &[
-    ("APACHE-2.0", write_apache2_header, write_apache2_text),
+    ("Apache-2.0", write_apache2_header, write_apache2_text),
     ("BSD-2-Clause", write_empty_header, write_bsd2_text),
     ("BSD-3-Clause", write_empty_header, write_bsd3_text),
     ("ISC", write_empty_header, write_isc_text),
