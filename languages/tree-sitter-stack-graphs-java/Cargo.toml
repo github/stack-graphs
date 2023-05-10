@@ -35,6 +35,6 @@ harness = false # need to provide own main function to handle running tests
 
 [dependencies]
 anyhow = "1.0"
-clap = "3"
+clap = "4"
 tree-sitter-stack-graphs = { version = "~0.6.0", path = "../../tree-sitter-stack-graphs", features=["cli"] }
 tree-sitter-java = { version = "~0.20.0" }

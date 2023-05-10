@@ -49,7 +49,7 @@ pub struct LspArgs {
     #[clap(
         long,
         value_name = "SECONDS",
-        parse(try_from_str = duration_from_seconds_str),
+        value_parser = duration_from_seconds_str,
     )]
     pub max_folder_index_time: Option<Duration>,
 
@@ -57,7 +57,7 @@ pub struct LspArgs {
     #[clap(
         long,
         value_name = "SECONDS",
-        parse(try_from_str = duration_from_seconds_str),
+        value_parser = duration_from_seconds_str,
     )]
     pub max_file_index_time: Option<Duration>,
 
@@ -65,7 +65,7 @@ pub struct LspArgs {
     #[clap(
         long,
         value_name = "MILLISECONDS",
-        parse(try_from_str = duration_from_milliseconds_str),
+        value_parser = duration_from_milliseconds_str,
     )]
     pub max_query_time: Option<Duration>,
 }

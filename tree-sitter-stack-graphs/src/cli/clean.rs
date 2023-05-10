@@ -25,7 +25,6 @@ pub struct CleanArgs {
     #[clap(
         value_name = "SOURCE_PATH",
         value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
     )]
     pub source_paths: Vec<PathBuf>,
 

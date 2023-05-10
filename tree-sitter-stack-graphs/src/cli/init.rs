@@ -42,7 +42,7 @@ static VALID_DEPENDENCY_VERSION: Lazy<Regex> =
 #[derive(Args)]
 pub struct InitArgs {
     /// Project directory path.
-    #[clap(value_name = "PROJECT_PATH", required = false, default_value = ".", value_hint = ValueHint::AnyPath, parse(from_os_str))]
+    #[clap(value_name = "PROJECT_PATH", required = false, default_value = ".", value_hint = ValueHint::AnyPath)]
     pub project_path: PathBuf,
 }
 
@@ -508,7 +508,7 @@ impl ProjectSettings {
 
             [dependencies]
             anyhow = {{ version = "1.0", optional = true }}
-            clap = {{ version = "3", optional = true }}
+            clap = {{ version = "4", optional = true }}
             tree-sitter-stack-graphs = "{}"
             {} = "{}"
 
