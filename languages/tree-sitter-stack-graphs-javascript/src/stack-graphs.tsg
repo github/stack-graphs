@@ -2186,97 +2186,168 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @object.before_scope
     node @object.after_scope
     node @object.value
+    node @object.member_pop
+
+    attr (@object.member_pop) pop_symbol = "GUARD:MEMBER"
+    edge @object.value -> @object.member_pop
 
 }
 
 ; empty objects
 ; LATER-TODO currently unsupported by tree sitter queries
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-;; (object)@object_expr {
-;;   edge @object_expr.after_scope -> @object_expr.before_scope
-;; }
+(object)@object_expr {
+
+    edge @object_expr.after_scope -> @object_expr.before_scope
+
+}
 
 ; non-empty objects, scopes, first entry
-;; (object
-;;   .
-;;   (_)@first_entry)@object_expr {
-;;   ; scopes propagate from the object to the first entry
-;;   edge @first_entry.before_scope -> @object_expr.before_scope
-;; }
+(object
+  .
+  (_)@first_entry)@object_expr
+{
+
+    ; scopes propagate from the object to the first entry
+    edge @first_entry.before_scope -> @object_expr.before_scope
+
+}
 
 ; non-empty objects, scopes, between entries
-;; (object
-;;   (_)@left_entry
-;;   .
-;;   (_)@right_entry
-;; )@object_expr {
-;;   ; scopes propagate from left entries to right entries
-;;   edge @right_entry.before_scope -> @left_entry.after_scope
-;; }
+(object
+  (_)@left_entry
+  .
+  (_)@right_entry)
+{
+
+    ; scopes propagate from left entries to right entries
+    edge @right_entry.before_scope -> @left_entry.after_scope
+
+}
 
 ; non-empty objects, scopes, last entry
-;; (object
-;;   (_)@last_entry
-;;   .)@object_expr {
-;;   ; scopes propagate from the last entry back to the object
-;;   edge @object_expr.after_scope -> @last_entry.after_scope
-;; }
+(object
+  (_)@last_entry
+  .)@object_expr
+{
+
+    ; scopes propagate from the last entry back to the object
+    edge @object_expr.after_scope -> @last_entry.after_scope
+
+}
 
 ; shorthand property identifier
-;; (object
-;;   (shorthand_property_identifier)@keyval)@object {
+(shorthand_property_identifier)@keyval {
 
-;;   ; scopes flow into rhsvar, and also straight across b/c they can't be modified
-;;   edge @keyval.rhsvar_before_scope -> @keyval.before_scope
-;;   edge @keyval.after_scope -> @keyval.before_scope
+    node @keyval.before_scope
+    node @keyval.after_scope
 
-;;   ; shorthand property identifiers have secret variable exprs
-;;   attr @keyval.rhsvar_value "push" = @keyval, "reference"
-;;   edge @keyval.rhsvar_value -> @keyval.rhsvar_before_scope
+}
 
-;;   ; shorthand property identifiers augment the object value with a member binding
-;;   attr @keyval.boundvar_pop "pop" = @keyval, "definition"
+(object (shorthand_property_identifier)@keyval)@object {
 
-;;   attr @object.field_pop_dot "pop" = "."
-;;   edge @keyval.boundvar_pop -> @keyval.rhsvar_value
-;;   edge @object.field_pop_dot -> @keyval.boundvar_pop
-;;   edge @object.value -> @object.field_pop_dot
+    node rhsvar_before_scope
+    node rhsvar_after_scope
+    node rhsvar_value
+    node key_pop
 
-;; }
+    attr (rhsvar_value) node_reference = @keyval
+    attr (key_pop) node_definition = @keyval
+
+
+    ; scopes flow into rhsvar, and also straight across b/c they can't be modified
+    edge rhsvar_before_scope -> @keyval.before_scope
+    edge rhsvar_after_scope -> rhsvar_before_scope
+    edge @keyval.after_scope -> rhsvar_after_scope
+
+    edge rhsvar_value -> rhsvar_before_scope
+
+    ; shorthand property identifiers augment the object value with a member binding
+    edge key_pop -> rhsvar_value
+    edge @object.member_pop -> key_pop
+
+}
 
 ; pairs
-;; (object
-;;   (pair
-;;     key:(_)@key
-;;     value: (_)@value)@pair)@object {
 
-;;   ; scopes flow into values then back to the pair
-;;   edge @value.before_scope -> @pair.before_scope
-;;   edge @pair.after_scope -> @value.after_scope
+(computed_property_name (_)@expr)@computed_property_name {
 
-;;   ; pairs augment the object value with a member binding
+    node @computed_property_name.before_scope
+    node @computed_property_name.after_scope
 
-;;   ; This is done differently depending on what the key is. See next rules.
-;;   ; attr @key.pop "pop" = @key, "definition"
-;;   attr @key.pop "definition"
+    edge @expr.before_scope -> @computed_property_name.before_scope
+    edge @computed_property_name.after_scope -> @expr.after_scope
 
-;;   attr @object.field_pop_dot "pop" = "."
-;;   edge @key.pop -> @value.value
-;;   edge @object.field_pop_dot -> @key.pop
-;;   edge @object.value -> @object.field_pop_dot
-;; }
+}
 
-;; (pair key:(property_identifier)@key) {
-;;   attr @key.pop "pop" = @key
-;; }
+(pair
+    key:(_)@key
+    value: (_)@value)@pair
+{
+
+    node @pair.before_scope
+    node @pair.after_scope
+
+}
+
+(object
+  (pair
+    key:(_)@key
+    value:(_)@value)@pair)@object
+{
+
+    ; pairs augment the object value with a member binding
+    node @pair.key_pop
+
+    ; This is done differently depending on what the key is. See next rules.
+    ; attr @key.pop "pop" = @key, "definition"
+    
+    edge @pair.key_pop -> @value.value
+    edge @object.member_pop -> @pair.key_pop
+
+}
+
+(pair
+    key:(property_identifier)@key
+    value:(_)@value)@pair
+{
+
+    attr (@pair.key_pop) node_definition = @key
+
+    ; scopes flow into the value, then back to the pair
+    edge @value.before_scope -> @pair.before_scope
+    edge @pair.after_scope -> @value.after_scope
+
+}
 
 ;; (pair key:(string)@key) {
 ;;   attr @key.pop "pop" = (replace @key "\"" "")
 ;; }
 
-;; (pair key:(number)@key) {
-;;   attr @key.pop "pop" = @key
-;; }
+(pair
+    key:(number)@key
+    value:(_)@value)@pair
+{
+
+    attr (@pair.key_pop) node_definition = @key
+
+    ; scopes flow into the value, then back to the pair
+    edge @value.before_scope -> @pair.before_scope
+    edge @pair.after_scope -> @value.after_scope
+
+}
+
+(pair
+    key:(computed_property_name)@key
+    value:(_)@value)@pair
+{
+
+    ; scopes flow into the key, then out to the value, then back to the pair
+    edge @key.before_scope -> @pair.before_scope
+    edge @value.before_scope -> @key.after_scope
+    edge @pair.after_scope -> @value.after_scope
+
+}
 
 
 
@@ -2287,49 +2358,65 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @array_expr.before_scope
     node @array_expr.after_scope
     node @array_expr.value
+    node @array_expr.element_pop_dot
+
+    attr (@array_expr.element_pop_dot) pop_symbol = "GUARD:MEMBER"
+    edge @array_expr.value -> @array_expr.element_pop_dot
 
 }
 
 ; empty arrays
 ; LATER-TODO currently unsupported by tree sitter queries
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-;; (array)@array_expr {
-;;   edge @array_expr.after_scope -> @array_expr.before_scope
-;; }
+(array)@array_expr {
+
+    edge @array_expr.after_scope -> @array_expr.before_scope
+
+}
 
 ; nonempty arrays, first element
-;; (array
-;;   .
-;;   (_)@first_element)@array_expr {
-;;   ; scopes propagate into the first element of the array
-;;   edge @first_element.before_scope -> @array_expr.before_scope
-;; }
+(array
+  .
+  (_)@first_element)@array_expr {
+
+    ; scopes propagate into the first element of the array
+    edge @first_element.before_scope -> @array_expr.before_scope
+
+}
 
 ; nonempty arrays, between elements
-;; (array
-;;   (_)@left_element
-;;   .
-;;   (_)@right_element) {
-;;   ; scopes propagate from left elements to right elements
-;;   edge @right_element.before_scope -> @left_element.after_scope
-;; }
+(array
+  (_)@left_element
+  .
+  (_)@right_element)
+{
+
+    ; scopes propagate from left elements to right elements
+    edge @right_element.before_scope -> @left_element.after_scope
+
+}
 
 ; nonempty arrays, last element
-;; (array
-;;   (_)@last_element
-;;   .)@array_expr {
-;;   ; scopes propagate out of the last element to the array
-;;   edge @array_expr.after_scope -> @last_element.after_scope
-;; }
+(array
+  (_)@last_element
+  .)@array_expr
+{
+
+    ; scopes propagate out of the last element to the array
+    edge @array_expr.after_scope -> @last_element.after_scope
+
+}
 
 ; elements at indices
-;; (array (_)@element)@array_expr {
-;;   attr @array_expr.element_pop_dot "pop" = "."
-;;   attr @element.index_pop "pop" = (child-index @element), "definition"
-;;   edge @array_expr.element_pop_dot -> @element.index_pop
-;;   edge @array_expr.value -> @array_expr.element_pop_dot
-;;   edge @element.index_pop -> @element.value
-;; }
+(array (_)@element)@array_expr {
+
+    node element_index_pop
+
+    attr (element_index_pop) symbol_definition = (named-child-index @element)
+    edge @array_expr.element_pop_dot -> element_index_pop
+    edge element_index_pop -> @element.value
+
+}
 
 
 
@@ -2732,19 +2819,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @member_expr.before_scope
     node @member_expr.after_scope
     node @member_expr.value
+    node member_push
+    node property_push
 
-;;   ; scopes flow into object then back out
-;;   edge @object.before_scope -> @member_expr.before_scope
-;;   edge @member_expr.after_scope -> @object.after_scope
+    ; scopes flow into object then back out
+    edge @object.before_scope -> @member_expr.before_scope
+    edge @member_expr.after_scope -> @object.after_scope
 
-;;   ; value is a member projection on the value of the object ie. a push then push dot
-;;   attr @property.push "push", "reference"
-;;   ;attr @member_expr.value "push" = @property.pop
-;;   attr @member_expr.push_dot "push" = "."
-;;   edge @property.push -> @member_expr.push_dot
-;;   ;edge @member_expr.value -> @member_expr.push_dot
-;;   edge @member_expr.value -> @property.push
-;;   edge @member_expr.push_dot -> @object.value
+    ; value is a member projection on the value of the object ie. a push then push dot
+    attr (member_push) push_symbol = "GUARD:MEMBER"
+    attr (property_push) node_reference = @property
+    edge property_push -> member_push
+    edge @member_expr.value -> property_push
+    edge member_push -> @object.value
+
 }
 
 ;; ##### Subscript Expressions
@@ -2757,44 +2845,41 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @subscript_expr.before_scope
     node @subscript_expr.after_scope
     node @subscript_expr.value
+    node @subscript_expr.push_dot
+    node @subscript_expr.index_push
 
-;;   ; scopes flow left to right
-;;   edge @object.before_scope -> @subscript_expression.before_scope
-;;   edge @index.before_scope -> @object.after_scope
-;;   edge @subscript_expression.after_scope -> @index.after_scope
+    ; scopes flow left to right
+    edge @object.before_scope -> @subscript_expr.before_scope
+    edge @index.before_scope -> @object.after_scope
+    edge @subscript_expr.after_scope -> @index.after_scope
 
-;;   ; value is a subscript lookup, ie a push then push dot
+    ; value is a subscript lookup, ie a push then push dot
+    attr (@subscript_expr.push_dot) push_symbol = "GUARD:MEMBER"
+    edge @subscript_expr.push_dot -> @object.value
 
-;;   ; this is done differently depending on what the index is
-;;   ; attr @index.push "push" = @index, "reference"
+    ; this is done differently depending on what the index is
+    ; attr @index.push "push" = @index, "reference"
+    edge @subscript_expr.value -> @subscript_expr.index_push
+    edge @subscript_expr.index_push -> @subscript_expr.push_dot
 
 }
 
-;; (subscript_expression
-;;   object: (_)@object
-;;   index: (string)@index)@subscript_expression {
+(subscript_expression
+  object: (_)@object
+  index: (string)@index)@subscript_expr
+{
 
-;;   attr @index.push "reference"
+    attr (@subscript_expr.index_push) push_symbol = (replace (source-text @index) "[\"\']" "")
+}
 
-;;   attr @index.push_dot "push" = "."
-;;   edge @subscript_expression.value -> @index.push
-;;   edge @index.push -> @index.push_dot
-;;   edge @index.push_dot -> @object.value
-;;   attr @index.push "push" = (replace @index "\"" "")
-;; }
+(subscript_expression
+  object: (_)@object
+  index: (number)@index)@subscript_expr
+{
 
-;; (subscript_expression
-;;   object: (_)@object
-;;   index: (number)@index)@subscript_expression {
-
-;;   attr @index.push "reference"
-
-;;   attr @index.push_dot "push" = "."
-;;   edge @subscript_expression.value -> @index.push
-;;   edge @index.push -> @index.push_dot
-;;   edge @index.push_dot -> @object.value
-;;   attr @index.push "push" = @index
-;; }
+    attr (@subscript_expr.index_push) node_reference = @index
+  
+}
 
 
 
