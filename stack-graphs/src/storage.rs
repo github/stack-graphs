@@ -351,6 +351,10 @@ impl SQLiteWriter {
         let mut root_stmt = self
             .conn
             .prepare_cached("INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)")?;
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+        let mut node_path_count = 0usize;
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+        let mut root_path_count = 0usize;
         for path in paths {
             copious_debugging!(
                 "--> Add {} partial path {}",
@@ -358,7 +362,16 @@ impl SQLiteWriter {
                 path.display(graph, partials)
             );
             let start_node = graph[path.start_node].id();
-            if start_node.is_in_file(file) {
+            if start_node.is_root() {
+                copious_debugging!(
+                    " * Add as root path with symbol stack {}",
+                    path.symbol_stack_precondition.display(graph, partials),
+                );
+                let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
+                let path = serde::PartialPath::from_partial_path(graph, partials, path);
+                root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
+                root_path_count += 1;
+            } else if start_node.is_in_file(file) {
                 copious_debugging!(
                     " * Add as node path from node {}",
                     path.start_node.display(graph),
@@ -369,14 +382,7 @@ impl SQLiteWriter {
                     path.start_node.local_id,
                     &serde_json::to_vec(&path)?,
                 ))?;
-            } else if start_node.is_root() {
-                copious_debugging!(
-                    " * Add as root path with symbol stack {}",
-                    path.symbol_stack_precondition.display(graph, partials),
-                );
-                let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
-                let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
+                node_path_count += 1;
             } else {
                 panic!(
                     "added path {} must start in given file {} or at root",
@@ -384,6 +390,11 @@ impl SQLiteWriter {
                     graph[file].name()
                 );
             }
+            copious_debugging!(
+                " * Added {} node paths and {} root paths",
+                node_path_count,
+                root_path_count,
+            );
         }
         Ok(())
     }
@@ -497,23 +508,31 @@ impl SQLiteReader {
     }
 
     /// Ensure the paths starting a the given node are loaded.
-    fn load_paths_for_node(&mut self, node: Handle<Node>) -> Result<()> {
+    fn load_paths_for_node(
+        &mut self,
+        node: Handle<Node>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<()> {
         copious_debugging!(" * Load extensions from node {}", node.display(&self.graph));
         if !self.loaded_node_paths.insert(node) {
             copious_debugging!("   > Already loaded");
             return Ok(());
         }
-        let file = self.graph[node].file().expect("file node required");
+        let id = self.graph[node].id();
+        let file = id.file().expect("file node required");
         let file = self.graph[file].name();
         let mut stmt = self
             .conn
-            .prepare_cached("SELECT file,json from file_paths WHERE file = ?")?;
-        let paths = stmt.query_map([file], |row| {
+            .prepare_cached("SELECT file,json from file_paths WHERE file = ? AND local_id = ?")?;
+        let paths = stmt.query_map((file, id.local_id()), |row| {
             let file = row.get::<_, String>(0)?;
             let json = row.get::<_, Vec<u8>>(1)?;
             Ok((file, json))
         })?;
+        #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+        let mut count = 0usize;
         for path in paths {
+            cancellation_flag.check("loading node paths")?;
             let (file, json) = path?;
             Self::load_graph_for_file_inner(
                 &file,
@@ -529,12 +548,18 @@ impl SQLiteReader {
             );
             self.db
                 .add_partial_path(&self.graph, &mut self.partials, path);
+            count += 1;
         }
+        copious_debugging!("   > Loaded {}", count);
         Ok(())
     }
 
     /// Ensure the paths starting at the root and matching the given symbol stack are loaded.
-    fn load_paths_for_root(&mut self, symbol_stack: PartialSymbolStack) -> Result<()> {
+    fn load_paths_for_root(
+        &mut self,
+        symbol_stack: PartialSymbolStack,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<()> {
         copious_debugging!(
             " * Load extensions from root with symbol stack {}",
             symbol_stack.display(&self.graph, &mut self.partials)
@@ -546,9 +571,9 @@ impl SQLiteReader {
                 " * Load extensions from root with prefix symbol stack {}",
                 symbol_stack
             );
-            if !self.loaded_root_paths.insert(symbol_stack.to_string()) {
+            if !self.loaded_root_paths.insert(symbol_stack.clone()) {
                 copious_debugging!("   > Already loaded");
-                return Ok(());
+                continue;
             }
             let mut stmt = self
                 .conn
@@ -558,7 +583,10 @@ impl SQLiteReader {
                 let json = row.get::<_, Vec<u8>>(1)?;
                 Ok((file, json))
             })?;
+            #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
+            let mut count = 0usize;
             for path in paths {
+                cancellation_flag.check("loading root paths")?;
                 let (file, json) = path?;
                 Self::load_graph_for_file_inner(
                     &file,
@@ -574,22 +602,28 @@ impl SQLiteReader {
                 );
                 self.db
                     .add_partial_path(&self.graph, &mut self.partials, path);
+                count += 1;
             }
+            copious_debugging!("   > Loaded {}", count);
         }
         Ok(())
     }
 
     /// Ensure all possible extensions for the given partial path are loaded.
-    pub fn load_partial_path_extensions(&mut self, path: &PartialPath) -> Result<()> {
+    pub fn load_partial_path_extensions(
+        &mut self,
+        path: &PartialPath,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> Result<()> {
         copious_debugging!(
             "--> Load extensions for {}",
             path.display(&self.graph, &mut self.partials)
         );
         let end_node = self.graph[path.end_node].id();
         if self.graph[path.end_node].file().is_some() {
-            self.load_paths_for_node(path.end_node)?;
+            self.load_paths_for_node(path.end_node, cancellation_flag)?;
         } else if end_node.is_root() {
-            self.load_paths_for_root(path.symbol_stack_postcondition)?;
+            self.load_paths_for_root(path.symbol_stack_postcondition, cancellation_flag)?;
         }
         Ok(())
     }
@@ -612,10 +646,11 @@ impl SQLiteReader {
     {
         let mut stitcher =
             ForwardPartialPathStitcher::from_nodes(&self.graph, &mut self.partials, starting_nodes);
+        stitcher.set_max_work_per_phase(128);
         while !stitcher.is_complete() {
             cancellation_flag.check("find_all_complete_partial_paths")?;
             for path in stitcher.previous_phase_partial_paths() {
-                self.load_partial_path_extensions(path)?;
+                self.load_partial_path_extensions(path, cancellation_flag)?;
             }
             stitcher.process_next_phase(&self.graph, &mut self.partials, &mut self.db);
             for path in stitcher.previous_phase_partial_paths() {
