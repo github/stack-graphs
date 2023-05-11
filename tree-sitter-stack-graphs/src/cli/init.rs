@@ -107,11 +107,10 @@ pub struct InitArgs {
 
 impl InitArgs {
     pub fn run(self) -> anyhow::Result<()> {
-        let mut project_path = self.project_path;
         if self.internal {
-            Self::check_repo_dir(&project_path)?;
+            Self::check_repo_dir(&self.project_path)?;
         } else {
-            Self::check_project_dir(&project_path)?;
+            Self::check_project_dir(&self.project_path)?;
         }
         let license = if self.internal {
             Some(INTERNAL_LICENSE)
@@ -136,13 +135,11 @@ impl InitArgs {
             grammar_crate_version: self.grammar_crate_version.unwrap_or_default(),
             internal: self.internal,
         };
-        if !self.non_interactive && !Self::interactive(&project_path, &mut config)? {
+        if !self.non_interactive && !Self::interactive(&self.project_path, &mut config)? {
             return Ok(());
         }
-        if self.internal {
-            project_path = project_path.join("languages").join(&config.crate_name());
-            Self::check_project_dir(&project_path)?;
-        }
+        let project_path = Self::effective_project_path(&self.project_path, &config);
+        Self::check_project_dir(&project_path)?;
         config.generate_files_into(&project_path)?;
         Ok(())
     }
@@ -175,9 +172,18 @@ impl InitArgs {
         Ok(())
     }
 
+    fn effective_project_path(project_path: &Path, config: &ProjectSettings) -> PathBuf {
+        if config.internal {
+            project_path.join("languages").join(config.crate_name())
+        } else {
+            project_path.to_path_buf()
+        }
+    }
+
     fn interactive(project_path: &Path, config: &mut ProjectSettings) -> anyhow::Result<bool> {
         loop {
             Self::read_from_console(config)?;
+            let project_path = Self::effective_project_path(project_path, config);
             println!();
             println!("=== Review project settings ===");
             println!("Project directory          : {}", project_path.display());
