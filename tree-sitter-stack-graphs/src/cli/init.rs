@@ -27,10 +27,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use time::OffsetDateTime;
 
-use self::license::lookup_license;
-use self::license::DEFAULT_LICENSES;
-use self::license::NO_LICENSE;
-use self::license::OTHER_LICENSE;
+use self::license::*;
 
 mod license;
 
@@ -56,84 +53,131 @@ pub struct InitArgs {
         requires("language_name"),
         requires("language_id"),
         requires("language_file_extension"),
-        requires("crate_name"),
-        requires("crate_version"),
+        // crate_name is optional
+        // crate_version is optional
         // author is optional
         // license is optional
-        requires("grammar_crate_name"),
+        // grammar_crate_name
         requires("grammar_crate_version")
     )]
     pub non_interactive: bool,
 
+    /// Name of the target language.
     #[clap(long)]
     pub language_name: Option<String>,
 
+    /// Identifier for the target language.
     #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
     pub language_id: Option<String>,
 
+    /// File extension for files written in the target language.
     #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
     pub language_file_extension: Option<String>,
 
+    /// Name for the generated crate. Default: tree-sitter-stack-graphs-LANGUAGE_ID
     #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
     pub crate_name: Option<String>,
 
+    /// Version for the generated crate. Default: 0.1.0
     #[clap(long, value_parser = RegexValidator(&VALID_CRATE_VERSION))]
     pub crate_version: Option<String>,
 
+    /// Author of the generated crate, in NAME <EMAIL> format.
     #[clap(long)]
     pub author: Option<String>,
 
+    /// SPDX identifier for the license of the generated crate. Examples: MIT, Apache-2.0
     #[clap(long)]
     pub license: Option<String>,
 
+    /// The crate name of the Tree-sitter grammar for the target language.
     #[clap(long, value_parser = RegexValidator(&VALID_CRATE_NAME))]
     pub grammar_crate_name: Option<String>,
 
+    /// The crate version of the Tree-sitter grammar for the target language.
     #[clap(long, value_parser = RegexValidator(&VALID_DEPENDENCY_VERSION))]
     pub grammar_crate_version: Option<String>,
+
+    /// Generate a project that is meant to be part of the official stack-graphs repository.
+    /// Instead of the project path, the repository root must be specified. The project path,
+    /// license, and dependencies will follow the repository conventions.
+    #[clap(long, conflicts_with("crate_name"), conflicts_with("license"))]
+    pub internal: bool,
 }
 
 impl InitArgs {
     pub fn run(self) -> anyhow::Result<()> {
-        self.check_project_dir()?;
+        let mut project_path = self.project_path;
+        if self.internal {
+            Self::check_repo_dir(&project_path)?;
+        } else {
+            Self::check_project_dir(&project_path)?;
+        }
+        let license = if self.internal {
+            Some(INTERNAL_LICENSE)
+        } else {
+            self.license.map(|spdx| {
+                DEFAULT_LICENSES
+                    .iter()
+                    .find(|l| l.0 == spdx)
+                    .cloned()
+                    .unwrap_or_else(|| new_license(spdx.into()))
+            })
+        };
         let mut config = ProjectSettings {
             language_name: self.language_name.unwrap_or_default(),
             language_id: self.language_id.unwrap_or_default(),
             language_file_extension: self.language_file_extension.unwrap_or_default(),
-            crate_name: self.crate_name.unwrap_or_default(),
-            crate_version: self.crate_version.unwrap_or_default(),
-            author: self.author.unwrap_or_default(),
-            license: self.license.unwrap_or_default(),
-            grammar_crate_name: self.grammar_crate_name.unwrap_or_default(),
+            crate_name: self.crate_name,
+            crate_version: self.crate_version,
+            author: self.author,
+            license,
+            grammar_crate_name: self.grammar_crate_name,
             grammar_crate_version: self.grammar_crate_version.unwrap_or_default(),
+            internal: self.internal,
         };
-        let generate = if !self.non_interactive {
-            Self::interactive(&self.project_path, &mut config)?
-        } else {
-            false
-        };
-        if generate {
-            config.generate_files_into(&self.project_path)?;
+        if !self.non_interactive && !Self::interactive(&project_path, &mut config)? {
+            return Ok(());
+        }
+        if self.internal {
+            project_path = project_path.join("languages").join(&config.crate_name());
+            Self::check_project_dir(&project_path)?;
+        }
+        config.generate_files_into(&project_path)?;
+        Ok(())
+    }
+
+    fn check_project_dir(project_path: &Path) -> anyhow::Result<()> {
+        if !project_path.exists() {
+            return Ok(());
+        }
+        if !project_path.is_dir() {
+            return Err(anyhow!("Project path exists but is not a directory"));
+        }
+        if fs::read_dir(&project_path)?.next().is_some() {
+            return Err(anyhow!("Project directory exists but is not empty"));
         }
         Ok(())
     }
 
-    fn check_project_dir(&self) -> anyhow::Result<()> {
-        if !self.project_path.exists() {
+    fn check_repo_dir(project_path: &Path) -> anyhow::Result<()> {
+        if !project_path.exists() {
             return Ok(());
         }
-        if !self.project_path.is_dir() {
-            return Err(anyhow!("Project path exists but is not a directory"));
+        if !project_path.is_dir() {
+            return Err(anyhow!("Repository path exists but is not a directory"));
         }
-        if fs::read_dir(&self.project_path)?.next().is_some() {
-            return Err(anyhow!("Project directory exists but is not empty"));
+        if !project_path.join("Cargo.toml").exists() {
+            return Err(anyhow!(
+                "Repository directory exists but is missing Cargo.toml"
+            ));
         }
         Ok(())
     }
 
     fn interactive(project_path: &Path, config: &mut ProjectSettings) -> anyhow::Result<bool> {
         loop {
-            config.read_from_console()?;
+            Self::read_from_console(config)?;
             println!();
             println!("=== Review project settings ===");
             println!("Project directory          : {}", project_path.display());
@@ -161,32 +205,17 @@ impl InitArgs {
             }
         }
     }
-}
 
-#[derive(Default)]
-struct ProjectSettings {
-    language_name: String,
-    language_id: String,
-    language_file_extension: String,
-    crate_name: String,
-    crate_version: String,
-    author: String,
-    license: String,
-    grammar_crate_name: String,
-    grammar_crate_version: String,
-}
-
-impl ProjectSettings {
-    fn read_from_console(&mut self) -> anyhow::Result<()> {
+    fn read_from_console(config: &mut ProjectSettings) -> anyhow::Result<()> {
         printdoc! {r#"
 
             Give the name of the programming language the stack graphs definitions in this
             project will target. This name will appear in the project description and comments.
             "#
         };
-        self.language_name = Input::new()
+        config.language_name = Input::new()
             .with_prompt("Language name")
-            .with_initial_text(&self.language_name)
+            .with_initial_text(&config.language_name)
             .interact_text()?;
 
         printdoc! {r#"
@@ -195,15 +224,15 @@ impl ProjectSettings {
             name and suggested dependencies. May only contain letters, numbers, dashes, and
             underscores.
             "#,
-            self.language_name,
+            config.language_name,
         };
-        let default_language_id = self.language_name.to_lowercase();
-        self.language_id = Input::new()
+        let default_language_id = config.language_name.to_lowercase();
+        config.language_id = Input::new()
             .with_prompt("Language identifier")
-            .with_initial_text(if self.language_id.is_empty() {
+            .with_initial_text(if config.language_id.is_empty() {
                 &default_language_id
             } else {
-                &self.language_id
+                &config.language_id
             })
             .validate_with(RegexValidator(&VALID_CRATE_NAME))
             .interact_text()?;
@@ -213,14 +242,14 @@ impl ProjectSettings {
             Give the file extension for {}. This file extension will be used for stub files in
             the project. May only contain letters, numbers, dashes, and underscores.
             "#,
-            self.language_name,
+            config.language_name,
         };
-        let default_language_file_extension = if self.language_file_extension.is_empty() {
-            &self.language_id
+        let default_language_file_extension = if config.language_file_extension.is_empty() {
+            &config.language_id
         } else {
-            &self.language_file_extension
+            &config.language_file_extension
         };
-        self.language_file_extension = Input::new()
+        config.language_file_extension = Input::new()
             .with_prompt("Language file extension")
             .with_initial_text(default_language_file_extension)
             .validate_with(RegexValidator(&VALID_CRATE_NAME))
@@ -230,75 +259,87 @@ impl ProjectSettings {
 
             Give the crate name for this project. May only contain letters, numbers, dashes,
             and underscores.
-            "#
+        "#
         };
-        let default_crate_name = "tree-sitter-stack-graphs-".to_string() + &self.language_id;
-        self.crate_name = Input::new()
-            .with_prompt("Package name")
-            .with_initial_text(if self.crate_name.is_empty() {
-                &default_crate_name
-            } else {
-                &self.crate_name
-            })
-            .validate_with(RegexValidator(&VALID_CRATE_NAME))
-            .interact_text()?;
+        config.crate_name = Some(
+            Input::new()
+                .with_prompt("Crate name")
+                .with_initial_text(config.crate_name())
+                .validate_with(RegexValidator(&VALID_CRATE_NAME))
+                .interact_text()?,
+        );
 
         printdoc! {r#"
 
             Give the crate version for this project. Must be in MAJOR.MINOR.PATCH format.
             "#
         };
-        self.crate_version = Input::new()
-            .with_prompt("Package version")
-            .with_initial_text(if self.crate_version.is_empty() {
-                "0.1.0"
-            } else {
-                &self.crate_version
-            })
-            .validate_with(RegexValidator(&VALID_CRATE_VERSION))
-            .interact_text()?;
+        config.crate_version = Some(
+            Input::new()
+                .with_prompt("Crate version")
+                .with_initial_text(config.crate_version())
+                .validate_with(RegexValidator(&VALID_CRATE_VERSION))
+                .interact_text()?,
+        );
 
         printdoc! {r#"
 
             Give the project author in the format NAME <EMAIL>. Leave empty to omit.
             "#
         };
-        self.author = Input::new()
+        let author: String = Input::new()
             .with_prompt("Author")
-            .with_initial_text(&self.author)
+            .with_initial_text(config.author.clone().unwrap_or_default())
             .allow_empty(true)
             .interact_text()?;
+        config.author = if author.is_empty() {
+            None
+        } else {
+            Some(author)
+        };
 
-        printdoc! {r#"
+        config.license = if config.internal {
+            Some(INTERNAL_LICENSE)
+        } else {
+            printdoc! {r#"
 
-            Give the project license as an SPDX expression. Choose "Other" to input
-            manually. Press ESC to deselect. See https://spdx.org/licenses/ for possible
-            license identifiers.
+                Give the project license as an SPDX expression. Choose "Other" to input
+                manually. Press ESC to deselect. See https://spdx.org/licenses/ for possible
+                license identifiers.
             "#
-        };
-        let selected = lookup_license(&self.license);
-        let (other, other_default) = if selected == OTHER_LICENSE {
-            (format!("Other ({})", self.license), self.license.as_ref())
-        } else {
-            ("Other".to_string(), "")
-        };
-        let selected = Select::new()
-            .with_prompt("License")
-            .items(&DEFAULT_LICENSES.iter().map(|l| l.0).collect::<Vec<_>>())
-            .item(&other)
-            .item("None")
-            .default(selected)
-            .interact()?;
-        self.license = if selected == NO_LICENSE {
-            "".to_string()
-        } else if selected == OTHER_LICENSE {
-            Input::new()
-                .with_prompt("Other license")
-                .with_initial_text(other_default)
-                .allow_empty(true)
-                .interact_text()?
-        } else {
-            DEFAULT_LICENSES[selected].0.to_string()
+            };
+            let (selected, other, other_default) = if let Some(license) = &config.license {
+                if let Some(selected) = DEFAULT_LICENSES.iter().position(|l| l.0 == license.0) {
+                    (selected, "Other".to_string(), "")
+                } else {
+                    (
+                        OTHER_LICENSE,
+                        format!("Other ({})", license.0),
+                        license.0.as_ref(),
+                    )
+                }
+            } else {
+                (NO_LICENSE, "Other".to_string(), "")
+            };
+            let selected = Select::new()
+                .with_prompt("License")
+                .items(&DEFAULT_LICENSES.iter().map(|l| &l.0).collect::<Vec<_>>())
+                .item(&other)
+                .item("None")
+                .default(selected)
+                .interact()?;
+            if selected == NO_LICENSE {
+                None
+            } else if selected == OTHER_LICENSE {
+                let spdx: String = Input::new()
+                    .with_prompt("Other license")
+                    .with_initial_text(other_default)
+                    .allow_empty(true)
+                    .interact_text()?;
+                Some(new_license(spdx.into()))
+            } else {
+                Some(DEFAULT_LICENSES[selected].clone())
+            }
         };
 
         printdoc! {r#"
@@ -307,15 +348,12 @@ impl ProjectSettings {
             parsing. May only contain letters, numbers, dashes, and underscores.
             "#
         };
-        let default_grammar_crate_name = "tree-sitter-".to_string() + &self.language_id;
-        self.grammar_crate_name = Input::new()
-            .with_prompt("Grammar crate name")
-            .with_initial_text(if self.grammar_crate_name.is_empty() {
-                &default_grammar_crate_name
-            } else {
-                &self.grammar_crate_name
-            })
-            .interact_text()?;
+        config.grammar_crate_name = Some(
+            Input::new()
+                .with_prompt("Grammar crate name")
+                .with_initial_text(config.grammar_crate_name())
+                .interact_text()?,
+        );
 
         printdoc! {r##"
 
@@ -323,31 +361,65 @@ impl ProjectSettings {
             dependency version. For example, 1.2, ^0.4.1, or ~3.2.4.
             See https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html.
             "##,
-            self.grammar_crate_name,
+            config.grammar_crate_name(),
         };
-        self.grammar_crate_version = Input::new()
+        config.grammar_crate_version = Input::new()
             .with_prompt("Grammar crate version")
-            .with_initial_text(&self.grammar_crate_version)
+            .with_initial_text(&config.grammar_crate_version)
             .validate_with(RegexValidator(&VALID_DEPENDENCY_VERSION))
             .interact_text()?;
 
         Ok(())
     }
+}
+
+#[derive(Default)]
+struct ProjectSettings<'a> {
+    language_name: String,
+    language_id: String,
+    language_file_extension: String,
+    crate_name: Option<String>,
+    crate_version: Option<String>,
+    author: Option<String>,
+    license: Option<License<'a>>,
+    grammar_crate_name: Option<String>,
+    grammar_crate_version: String,
+    internal: bool,
+}
+
+impl<'a> ProjectSettings<'a> {}
+
+impl ProjectSettings<'_> {
+    fn crate_name(&self) -> String {
+        self.crate_name
+            .clone()
+            .unwrap_or_else(|| format!("tree-sitter-stack-graphs-{}", self.language_id))
+    }
+
+    fn crate_version(&self) -> String {
+        self.crate_version
+            .clone()
+            .unwrap_or_else(|| "0.1.0".to_string())
+    }
 
     fn package_name(&self) -> String {
-        self.crate_name.replace("-", "_")
+        self.crate_name().replace("-", "_")
+    }
+
+    fn grammar_crate_name(&self) -> String {
+        self.grammar_crate_name
+            .clone()
+            .unwrap_or_else(|| format!("tree-sitter-{}", self.language_id))
     }
 
     fn grammar_package_name(&self) -> String {
-        self.grammar_crate_name.replace("-", "_")
+        self.grammar_crate_name().replace("-", "_")
     }
 
     fn license_author(&self) -> String {
-        if self.author.is_empty() {
-            format!("the {} authors", self.crate_name)
-        } else {
-            self.author.clone()
-        }
+        self.author
+            .clone()
+            .unwrap_or_else(|| format!("the {} authors", self.crate_name()))
     }
 
     fn generate_files_into(&self, project_path: &Path) -> anyhow::Result<()> {
@@ -473,13 +545,13 @@ impl ProjectSettings {
             Go to https://crates.io/crates/tree-sitter-stack-graphs for links to examples and documentation.
             "####,
             self.language_name,
-            self.language_name, self.grammar_crate_name,
-            self.grammar_crate_name, self.grammar_crate_name,
-            self.crate_name, self.crate_version,
-            self.crate_name,
-            self.crate_name,
-            self.crate_name,
-            self.crate_name,
+            self.language_name, self.grammar_crate_name(),
+            self.grammar_crate_name(), self.grammar_crate_name(),
+            self.crate_name(), self.crate_version(),
+            self.crate_name(),
+            self.crate_name(),
+            self.crate_name(),
+            self.crate_name(),
             self.language_file_extension,
         }?;
         Ok(())
@@ -495,33 +567,27 @@ impl ProjectSettings {
             The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
             and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
             "####,
-            self.crate_name,
+            self.crate_name(),
         }?;
         Ok(())
     }
 
     fn generate_license(&self, project_path: &Path) -> std::io::Result<()> {
-        match lookup_license(&self.license) {
-            NO_LICENSE | OTHER_LICENSE => {}
-            selected => {
-                let mut file = File::create(project_path.join("LICENSE"))?;
-                let year = OffsetDateTime::now_utc().year();
-                let author = self.license_author();
-                (DEFAULT_LICENSES[selected].2)(&mut file, year, &author)?;
-            }
-        };
+        if let Some(license) = &self.license {
+            let mut file = File::create(project_path.join("LICENSE"))?;
+            let year = OffsetDateTime::now_utc().year();
+            let author = self.license_author();
+            (license.2)(&mut file, year, &author)?;
+        }
         Ok(())
     }
 
     fn write_license_header(&self, file: &mut File, prefix: &str) -> std::io::Result<()> {
-        match lookup_license(&self.license) {
-            NO_LICENSE | OTHER_LICENSE => {}
-            selected => {
-                let year = OffsetDateTime::now_utc().year();
-                let author = self.license_author();
-                (DEFAULT_LICENSES[selected].1)(file, year, &author, prefix)?;
-            }
-        };
+        if let Some(license) = &self.license {
+            let year = OffsetDateTime::now_utc().year();
+            let author = self.license_author();
+            (license.1)(file, year, &author, prefix)?;
+        }
         Ok(())
     }
 
@@ -535,17 +601,35 @@ impl ProjectSettings {
             readme = "README.md"
             keywords = ["tree-sitter", "stack-graphs", "{}"]
             "#,
-            self.crate_name,
-            self.crate_version,
-            self.language_name, self.grammar_crate_name,
+            self.crate_name(),
+            self.crate_version(),
+            self.language_name, self.grammar_crate_name(),
             self.language_id
         }?;
-        if !self.author.is_empty() {
-            writeln!(file, r#"authors = ["{}"]"#, self.author)?;
+        if self.internal || self.author.is_some() {
+            writeln!(file, r#"authors = ["#)?;
+            if self.internal {
+                writeln!(
+                    file,
+                    r#"    "GitHub <opensource+stack-graphs@github.com>","#
+                )?;
+            }
+            if let Some(author) = &self.author {
+                writeln!(file, r#"    "{}","#, author)?;
+            }
+            writeln!(file, r#"]"#)?;
         }
-        if !self.license.is_empty() {
-            writeln!(file, r#"license = "{}""#, self.license)?;
+        if let Some(license) = &self.license {
+            writeln!(file, r#"license = "{}""#, license.0)?;
         }
+        let tssg_dep_fields = if self.internal {
+            format!(
+                r#"version = "{}", path = "../../tree-sitter-stack-graphs""#,
+                TSSG_VERSION
+            )
+        } else {
+            format!(r#"version = "{}""#, TSSG_VERSION)
+        };
         writedoc! {file, r#"
             edition = "2018"
 
@@ -569,17 +653,17 @@ impl ProjectSettings {
             [dependencies]
             anyhow = {{ version = "1.0", optional = true }}
             clap = {{ version = "4", optional = true }}
-            tree-sitter-stack-graphs = "{}"
+            tree-sitter-stack-graphs = {{ {} }}
             {} = "{}"
 
             [dev-dependencies]
             anyhow = "1.0"
-            tree-sitter-stack-graphs = {{ version = "{}", features = ["cli"] }}
+            tree-sitter-stack-graphs = {{ {}, features = ["cli"] }}
             "#,
-            self.crate_name,
-            TSSG_VERSION,
-            self.grammar_crate_name, self.grammar_crate_version,
-            TSSG_VERSION,
+            self.crate_name(),
+            tssg_dep_fields,
+            self.grammar_crate_name(), self.grammar_crate_version,
+            tssg_dep_fields,
         }?;
         Ok(())
     }
@@ -590,6 +674,7 @@ impl ProjectSettings {
         writedoc! {file, r#"
             use anyhow::anyhow;
             use clap::Parser;
+            use tree_sitter_stack_graphs::cli::database::default_user_database_path_for_crate;
             use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
             use tree_sitter_stack_graphs::NoCancellation;
 
@@ -603,7 +688,8 @@ impl ProjectSettings {
                     }}
                 }};
                 let cli = Cli::parse();
-                cli.subcommand.run(vec![lc])
+                let default_db_path = default_user_database_path_for_crate(env!("CARGO_PKG_NAME"))?;
+                cli.subcommand.run(default_db_path, vec![lc])
             }}
 
             #[derive(Parser)]
@@ -780,7 +866,7 @@ impl ProjectSettings {
     }
 }
 
-impl std::fmt::Display for ProjectSettings {
+impl std::fmt::Display for ProjectSettings<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writedoc! {f, r##"
             Language name              : {}
@@ -797,11 +883,11 @@ impl std::fmt::Display for ProjectSettings {
             self.language_name,
             self.language_id,
             self.language_file_extension,
-            self.crate_name,
-            self.crate_version,
-            self.author,
-            self.license,
-            self.grammar_crate_name,
+            self.crate_name(),
+            self.crate_version(),
+            self.author.clone().unwrap_or_default(),
+            self.license.as_ref().map_or("", |l| &l.0),
+            self.grammar_crate_name(),
             self.grammar_crate_version,
         }
     }
