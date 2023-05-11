@@ -97,3 +97,39 @@ jobs:
         run: cargo build -p ${{ matrix.language }}
       - name: Test
         run: cargo test -p ${{ matrix.language }}
+
+  test-init:
+    needs: [test-rust]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable]
+
+    steps:
+      - name: Install Rust environment
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: ${{ matrix.rust }}
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.OS }}-cargo-
+      - name: Generate new project
+        run: |
+          cargo run --bin tree-sitter-stack-graphs --features cli -- init \
+            --language-name InitTest \
+            --language-id init_test \
+            --language-file-extension it \
+            --grammar-crate-name tree-sitter-python \
+            --grammar-crate-version 0.20.0 \
+            --internal \
+            --non-interactive
+          cargo check -p tree-sitter-stack-graphs-init_test --all-features
+          cargo test -p tree-sitter-stack-graphs-init_test
