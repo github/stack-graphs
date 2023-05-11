@@ -50,7 +50,7 @@ fn can_create_definition_node() {
 #[test]
 fn cannot_create_definition_node_without_symbol() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) type = "pop_symbol", is_definition
       }
@@ -63,7 +63,7 @@ fn cannot_create_definition_node_without_symbol() {
 #[test]
 fn can_create_drop_node() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) type = "drop_scopes"
       }
@@ -75,7 +75,7 @@ fn can_create_drop_node() {
 #[test]
 fn can_create_exported_node() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) is_exported
       }
@@ -87,7 +87,7 @@ fn can_create_exported_node() {
 #[test]
 fn can_create_endpoint_node() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) is_endpoint
       }
@@ -99,7 +99,7 @@ fn can_create_endpoint_node() {
 #[test]
 fn can_create_implicit_internal_node() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
       }
     "#;
@@ -110,7 +110,7 @@ fn can_create_implicit_internal_node() {
 #[test]
 fn can_create_explicit_internal_node() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) type = "scope"
       }
@@ -134,7 +134,7 @@ fn can_create_pop_symbol_node() {
 #[test]
 fn cannot_create_pop_symbol_node_without_symbol() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) type = "pop_symbol"
       }
@@ -159,7 +159,7 @@ fn can_create_pop_scoped_symbol_node() {
 #[test]
 fn cannot_create_pop_scoped_symbol_node_without_symbol() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) type = "pop_scoped_symbol"
       }
@@ -184,7 +184,7 @@ fn can_create_push_node() {
 #[test]
 fn cannot_create_push_symbol_node_without_symbol() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) type = "push_symbol"
       }
@@ -218,7 +218,7 @@ fn can_create_push_scoped_node() {
 #[test]
 fn cannot_create_push_scoped_symbol_node_without_symbol() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node scope
          attr (scope) is_exported
          node result
@@ -245,7 +245,7 @@ fn can_create_reference_node() {
 #[test]
 fn cannot_create_reference_node_without_symbol() {
     let tsg = r#"
-      (identifier) @id {
+      (identifier) {
          node result
          attr (result) type = "push_symbol", is_reference
       }
