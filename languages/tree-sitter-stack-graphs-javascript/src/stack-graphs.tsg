@@ -963,7 +963,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (variable_declaration
   (variable_declarator
-    name:(identifier)@name
+    name:(identifier)@_name
     value:(_)@initializer))@variable_decl
 {
 
@@ -975,7 +975,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (lexical_declaration
   (variable_declarator
-    name:(identifier)@name
+    name:(identifier)@_name
     value:(_)@initializer))@lexical_decl
 {
 
@@ -1015,9 +1015,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ##### Function Declarations
 
 (function_declaration
-  name:(_)@name
-  parameters:(_)@call_sig
-  body:(_)@body)@fun_decl
+  name:(_)@_name
+  parameters:(_)@_call_sig
+  body:(_)@_body)@fun_decl
 {
 
     node @fun_decl.before_scope
@@ -1090,9 +1090,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ##### Generator Function Declarations
 
 (generator_function_declaration
-  name:(_)@name
-  parameters:(_)@call_sig
-  body:(_)@body)@gen_fun_decl
+  name:(_)@_name
+  parameters:(_)@_call_sig
+  body:(_)@_body)@gen_fun_decl
 {
 
     node @gen_fun_decl.before_scope
@@ -1165,8 +1165,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; #### Classes
 
 (class_declaration
-  name:(_)@name
-  body:(_)@body)@class_decl
+  name:(_)@_name
+  body:(_)@_body)@class_decl
 {
 
     node @class_decl.before_scope
@@ -1603,7 +1603,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; #### For In
 
 (for_in_statement
-  left:(_)@left
+  left:(_)@_left
   right:(_)@right
   body:(_)@body)@for_in_stmt
 {
@@ -1702,7 +1702,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (try_statement
   body:(_)@body
-  finalizer:(_)@finalizer)@try_stmt
+  finalizer:(_)@finalizer)@_try_stmt
 {
 
     ; scopes flow from body to finalizer then back out
@@ -1712,7 +1712,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (try_statement
   handler:(_)@handler
-  finalizer:(_)@finalizer)@try_stmt
+  finalizer:(_)@finalizer)@_try_stmt
 {
 
     ; scopes flow from handler to finalizer then back out
@@ -1863,7 +1863,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ;; #### Throw
 
-(throw_statement (_)@thrown_expr)@throw_stmt {
+(throw_statement (_)@_thrown_expr)@throw_stmt {
 
     node @throw_stmt.before_scope
     node @throw_stmt.after_scope
@@ -2010,7 +2010,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (template_string
   (template_substitution (_)@left_inner_expr)
   .
-  (template_substitution (_)@right_inner_expr))@template_string {
+  (template_substitution (_)@right_inner_expr))@_template_string {
   ; scopes propagate from left substitutions to right substitutions
   edge @right_inner_expr.before_scope -> @left_inner_expr.after_scope
 }
@@ -2390,8 +2390,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; function
 (function
-  parameters:(_)@call_sig
-  body:(_)@body)@fun
+  parameters:(_)@_call_sig
+  body:(_)@_body)@fun
 {
 
     node @fun.before_scope
@@ -2460,12 +2460,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; function
 [
   (arrow_function
-    parameters:(_)@call_sig
-    body:(_)@body)@fun
+    parameters:(_)@_call_sig
+    body:(_)@_body)@fun
 
   (arrow_function
-    parameter:(_)@call_sig
-      body:(_)@body)@fun
+    parameter:(_)@_call_sig
+      body:(_)@_body)@fun
 ] {
 
     node @fun.before_scope
@@ -2560,8 +2560,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; generator function
 (generator_function
-  parameters:(_)@call_sig
-  body:(_)@body)@gen_fun
+  parameters:(_)@_call_sig
+  body:(_)@_body)@gen_fun
 {
 
     node @gen_fun.before_scope
@@ -2617,8 +2617,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; calls, functions
 (call_expression
-  function:(_)@function
-  arguments:(_)@arguments)@call_expr
+  function:(_)@_function
+  arguments:(_)@_arguments)@call_expr
 {
 
     node @call_expr.before_scope
@@ -2725,8 +2725,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ##### Member Expressions
 
 (member_expression
-  object: (_)@object
-  property: (_)@property)@member_expr
+  object: (_)@_object
+  property: (_)@_property)@member_expr
 {
 
     node @member_expr.before_scope
@@ -2750,8 +2750,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ##### Subscript Expressions
 
 (subscript_expression
-  object: (_)@object
-  index: (_)@index)@subscript_expr
+  object: (_)@_object
+  index: (_)@_index)@subscript_expr
 {
 
     node @subscript_expr.before_scope
@@ -2801,8 +2801,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; #### Constructor Calls
 
 (new_expression
-  constructor:(_)@constructor
-  arguments:(_)@arguments)@new_expr
+  constructor:(_)@_constructor
+  arguments:(_)@_arguments)@new_expr
 {
 
     node @new_expr.before_scope
@@ -3011,7 +3011,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; TODO NOW
 (augmented_assignment_expression
-  left: (_)@left
+  left: (_)@_left
   right: (_)@right)@augmented_assignment_expr
 {
 
@@ -3117,7 +3117,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; #### Class Expressions
 
 ; TODO NOW
-(class body:(_)@body)@class {
+(class body:(_)@_body)@class {
 
     node @class.before_scope
     node @class.after_scope
