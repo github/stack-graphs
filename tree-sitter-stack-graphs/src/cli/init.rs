@@ -658,7 +658,7 @@ impl ProjectSettings<'_> {
 
             [dependencies]
             anyhow = {{ version = "1.0", optional = true }}
-            clap = {{ version = "4", optional = true }}
+            clap = {{ version = "4", optional = true, features = ["derive"] }}
             tree-sitter-stack-graphs = {{ {} }}
             {} = "{}"
 
