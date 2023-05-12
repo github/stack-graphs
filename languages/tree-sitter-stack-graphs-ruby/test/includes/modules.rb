@@ -39,15 +39,27 @@ $LOAD_PATH << '.'
 require 'b_module'
 
 class D
-  include C
-        # ^ defined: 19
+  include B
+        # ^ defined: 4
+  extend C
+       # ^ defined: 19
 
   def calling_a
     puts "calling a: #{a}"
                      # ^ defined: 3
   end
 
-  def calling_c
+  def calling_b
+    puts "calling b: #{b}"
+                     # ^ defined: 8
+  end
+
+  def self.calling_b
+    puts "calling self.b: #{b}"
+                          # ^ defined: 21
+  end
+
+  def self.calling_c
     puts "calling c: #{c}"
                      # ^ defined: 20
   end
