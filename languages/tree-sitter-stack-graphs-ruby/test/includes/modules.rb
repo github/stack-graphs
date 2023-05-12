@@ -1,10 +1,10 @@
-/*--- path: a_module.rb ---*/
+# --- path: a_module.rb ---
 module A
   CONST = 1
   def a; end
 end
 
-/*--- path: b_module.rb ---*/
+# --- path: b_module.rb ---
 $LOAD_PATH << '.'
 require 'a_module'
 
@@ -34,7 +34,7 @@ self.extend(C)
 self.c
    # ^ defined: 20
 
-/*--- path: d_class.rb ---*/
+# --- path: d_class.rb ---
 $LOAD_PATH << '.'
 require 'b_module'
 
