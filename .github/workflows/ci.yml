@@ -54,7 +54,9 @@ jobs:
         run: cargo test --all-features
       - name: Run test suite with all optimizations
         run: cargo test --release
-      - name: Generate, build, and run new langauge project
+      # Do the new project test last, because it adds the crate in the current source
+      # folder, and that shouldn't influence other tests.
+      - name: Generate, build, and run new language project
         run: |
           cargo run --bin tree-sitter-stack-graphs --features cli -- init \
             --language-name InitTest \
