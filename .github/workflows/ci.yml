@@ -133,3 +133,4 @@ jobs:
             --non-interactive
           cargo check -p tree-sitter-stack-graphs-init_test --all-features
           cargo test -p tree-sitter-stack-graphs-init_test
+          cargo run -p tree-sitter-stack-graphs-init_test --features cli -- help
