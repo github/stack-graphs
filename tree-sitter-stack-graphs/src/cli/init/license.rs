@@ -6,34 +6,44 @@
 // ------------------------------------------------------------------------------------------------
 
 use indoc::writedoc;
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::Write;
 
+pub type License<'a> = (Cow<'a, str>, WriteLicenseHeader, WriteLicenseText);
 pub type WriteLicenseHeader = fn(&mut File, i32, &str, &str) -> std::io::Result<()>;
 pub type WriteLicenseText = fn(&mut File, i32, &str) -> std::io::Result<()>;
 
-pub const DEFAULT_LICENSES: &[(&str, WriteLicenseHeader, WriteLicenseText)] = &[
-    ("APACHE-2.0", write_apache2_header, write_apache2_text),
-    ("BSD-2-Clause", write_empty_header, write_bsd2_text),
-    ("BSD-3-Clause", write_empty_header, write_bsd3_text),
-    ("ISC", write_empty_header, write_isc_text),
-    ("MIT", write_empty_header, write_mit_text),
+pub const DEFAULT_LICENSES: &[License] = &[
+    (
+        Cow::Borrowed("Apache-2.0"),
+        write_apache2_header,
+        write_apache2_text,
+    ),
+    (
+        Cow::Borrowed("BSD-2-Clause"),
+        write_empty_header,
+        write_bsd2_text,
+    ),
+    (
+        Cow::Borrowed("BSD-3-Clause"),
+        write_empty_header,
+        write_bsd3_text,
+    ),
+    (Cow::Borrowed("ISC"), write_empty_header, write_isc_text),
+    (Cow::Borrowed("MIT"), write_empty_header, write_mit_text),
 ];
 pub const OTHER_LICENSE: usize = DEFAULT_LICENSES.len();
 pub const NO_LICENSE: usize = OTHER_LICENSE + 1;
 
-// Return an index into DEFAULT_LICENSES, OTHER_LICENSE, or NO_LICENSE.
-pub fn lookup_license(name: &str) -> usize {
-    DEFAULT_LICENSES
-        .iter()
-        .position(|l| l.0 == name)
-        .unwrap_or_else(|| {
-            if name.is_empty() {
-                NO_LICENSE
-            } else {
-                OTHER_LICENSE
-            }
-        })
+pub const INTERNAL_LICENSE: License = (
+    Cow::Borrowed("MIT OR Apache-2.0"),
+    write_internal_header,
+    write_empty_text,
+);
+
+pub fn new_license<'a>(spdx: Cow<'a, str>) -> License<'a> {
+    (spdx.into(), write_empty_header, write_empty_text)
 }
 
 fn write_empty_header(
@@ -43,6 +53,31 @@ fn write_empty_header(
     _prefix: &str,
 ) -> std::io::Result<()> {
     Ok(())
+}
+
+fn write_empty_text(_file: &mut File, _year: i32, _prefix: &str) -> std::io::Result<()> {
+    Ok(())
+}
+
+pub fn write_internal_header(
+    file: &mut File,
+    year: i32,
+    _author: &str,
+    prefix: &str,
+) -> std::io::Result<()> {
+    writedoc! {file, r####"
+            {}-*- coding: utf-8 -*-
+            {}------------------------------------------------------------------------------------------------
+            {}Copyright © {}, stack-graphs authors.
+            {}Licensed under either of Apache License, Version 2.0, or MIT license, at your option.
+            {}Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
+            {}------------------------------------------------------------------------------------------------
+
+        "####,
+        prefix, prefix,
+        prefix, year,
+        prefix, prefix, prefix,
+    }
 }
 
 fn write_apache2_header(

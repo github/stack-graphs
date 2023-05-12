@@ -7,6 +7,11 @@
 
 use anyhow::anyhow;
 use base64::Engine;
+use clap::builder::PathBufValueParser;
+use clap::builder::TypedValueParser;
+use clap::error::ContextKind;
+use clap::error::ContextValue;
+use clap::error::ErrorKind;
 use colored::Colorize;
 use lsp_positions::Span;
 use sha1::Digest;
@@ -25,16 +30,48 @@ use std::time::Duration;
 use std::time::Instant;
 use walkdir::WalkDir;
 
-pub fn path_exists(path: &OsStr) -> anyhow::Result<PathBuf> {
-    let path = PathBuf::from(path);
-    if !path.exists() {
-        return Err(anyhow!("path does not exist"));
+#[derive(Clone)]
+pub(crate) struct ExistingPathBufValueParser;
+
+impl TypedValueParser for ExistingPathBufValueParser {
+    type Value = PathBuf;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        let inner = PathBufValueParser::new();
+        let value = inner.parse_ref(cmd, arg, value)?;
+
+        if value.exists() {
+            return Ok(value);
+        }
+
+        let mut err = clap::Error::new(ErrorKind::ValueValidation);
+        if let Some(arg) = arg {
+            err.insert(
+                ContextKind::InvalidArg,
+                ContextValue::String(arg.to_string()),
+            );
+        }
+        err.insert(
+            ContextKind::InvalidValue,
+            ContextValue::String(value.to_string_lossy().to_string()),
+        );
+        err.insert(
+            ContextKind::Custom,
+            ContextValue::String("path does not exist".to_string()),
+        );
+
+        Err(err)
     }
-    Ok(path)
 }
 
 /// A path specification that can be formatted into a path based on a root and path
 /// contained in that root.
+#[derive(Clone)]
 pub struct PathSpec {
     spec: String,
 }

@@ -18,7 +18,6 @@ pub struct DatabaseArgs {
         short = 'D',
         value_name = "DATABASE_PATH",
         value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
     )]
     pub database: Option<PathBuf>,
 }

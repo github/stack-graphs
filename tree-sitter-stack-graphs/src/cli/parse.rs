@@ -13,17 +13,23 @@ use std::path::PathBuf;
 use tree_sitter::Parser;
 use tree_sitter_graph::parse_error::ParseError;
 
-use crate::cli::util::path_exists;
 use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::util::DisplayParseErrorsPretty;
 use crate::BuildError;
 
+use super::util::ExistingPathBufValueParser;
+
 /// Parse file
 #[derive(Args)]
 pub struct ParseArgs {
     /// Input file path.
-    #[clap(value_name = "FILE_PATH", required = true, value_hint = ValueHint::AnyPath, parse(from_os_str), validator_os = path_exists)]
+    #[clap(
+        value_name = "FILE_PATH",
+        required = true,
+        value_hint = ValueHint::AnyPath,
+        value_parser = ExistingPathBufValueParser,
+    )]
     pub file_path: PathBuf,
 }
 

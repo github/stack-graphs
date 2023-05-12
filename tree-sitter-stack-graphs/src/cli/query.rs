@@ -70,7 +70,7 @@ pub struct Definition {
         value_name = "SOURCE_POSITION",
         required = true,
         value_hint = ValueHint::AnyPath,
-        parse(try_from_str),
+        value_parser,
     )]
     pub references: Vec<SourcePosition>,
 }

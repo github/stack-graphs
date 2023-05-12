@@ -6,8 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use anyhow::anyhow;
-use clap::ArgEnum;
 use clap::Args;
+use clap::ValueEnum;
 use clap::ValueHint;
 use itertools::Itertools;
 use stack_graphs::arena::Handle;
@@ -21,7 +21,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
 
-use crate::cli::util::path_exists;
+use crate::cli::util::ExistingPathBufValueParser;
 use crate::cli::util::PathSpec;
 use crate::loader::FileReader;
 use crate::loader::LanguageConfiguration;
@@ -61,8 +61,7 @@ pub struct TestArgs {
         value_name = "TEST_PATH",
         required = true,
         value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
-        validator_os = path_exists
+        value_parser = ExistingPathBufValueParser,
     )]
     pub test_paths: Vec<PathBuf>,
 
@@ -85,8 +84,7 @@ pub struct TestArgs {
         long,
         short = 'G',
         value_name = "PATH_SPEC",
-        min_values = 0,
-        max_values = 1,
+        num_args = 0..1,
         require_equals = true,
         default_missing_value = "%n.graph.json"
     )]
@@ -99,8 +97,7 @@ pub struct TestArgs {
         long,
         short = 'P',
         value_name = "PATH_SPEC",
-        min_values = 0,
-        max_values = 1,
+        num_args = 0..1,
         require_equals = true,
         default_missing_value = "%n.paths.json"
     )]
@@ -113,8 +110,7 @@ pub struct TestArgs {
         long,
         short = 'V',
         value_name = "PATH_SPEC",
-        min_values = 0,
-        max_values = 1,
+        num_args = 0..1,
         require_equals = true,
         default_missing_value = "%n.html"
     )]
@@ -123,7 +119,7 @@ pub struct TestArgs {
     /// Controls when graphs, paths, or visualization are saved.
     #[clap(
         long,
-        arg_enum,
+        value_enum,
         default_value_t = OutputMode::OnFailure,
     )]
     pub output_mode: OutputMode,
@@ -134,7 +130,7 @@ pub struct TestArgs {
 }
 
 /// Flag to control output
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum OutputMode {
     Always,
     OnFailure,
