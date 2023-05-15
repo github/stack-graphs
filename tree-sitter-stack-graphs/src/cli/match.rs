@@ -10,7 +10,8 @@ use clap::Args;
 use clap::ValueHint;
 use std::path::Path;
 use std::path::PathBuf;
-use tree_sitter::Tree;
+use tree_sitter::CaptureQuantifier;
+use tree_sitter::Node;
 
 use crate::cli::parse::parse;
 use crate::cli::parse::print_node;
@@ -18,6 +19,8 @@ use crate::cli::util::ExistingPathBufValueParser;
 use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::NoCancellation;
+
+const MAX_TEXT_LENGTH: usize = 16;
 
 /// Match file
 #[derive(Args)]
@@ -30,6 +33,10 @@ pub struct MatchArgs {
         value_parser = ExistingPathBufValueParser,
     )]
     pub file_path: PathBuf,
+
+    /// Only match stanza on the given line.
+    #[clap(long, short = 'L')]
+    pub line: Option<usize>,
 }
 
 impl MatchArgs {
@@ -41,52 +48,97 @@ impl MatchArgs {
         };
         let source = file_reader.get(&self.file_path)?;
         let tree = parse(lc.language, &self.file_path, source)?;
-        print_matches(lc.sgl.tsg_path(), &lc.sgl.tsg, &tree, source)?;
+        if let Some(line) = self.line {
+            let stanza = lc
+                .sgl
+                .tsg
+                .stanzas
+                .iter()
+                .find(|s| s.range.start.row <= line - 1 && line - 1 <= s.range.end.row)
+                .ok_or_else(|| anyhow!("No stanza on {}:{}", lc.sgl.tsg_path().display(), line))?;
+            stanza.try_visit_matches(&tree, source, |mat| {
+                print_matches(lc.sgl.tsg_path(), source, mat)
+            })?;
+        } else {
+            lc.sgl.tsg.try_visit_matches(&tree, source, true, |mat| {
+                print_matches(lc.sgl.tsg_path(), source, mat)
+            })?;
+        }
         Ok(())
     }
 }
 
 fn print_matches(
     tsg_path: &Path,
-    tsg: &tree_sitter_graph::ast::File,
-    tree: &Tree,
     source: &str,
+    mat: tree_sitter_graph::Match,
 ) -> anyhow::Result<()> {
-    tsg.try_visit_matches(tree, source, true, |mat| {
-        println!(
-            "{}:{}:{}: stanza query",
-            tsg_path.display(),
-            mat.query_location().row + 1,
-            mat.query_location().column + 1,
-        );
-        {
-            let full_capture = mat.full_capture();
-            print!("  matched ");
-            print_node(full_capture, true);
+    println!(
+        "{}:{}:{}: stanza query",
+        tsg_path.display(),
+        mat.query_location().row + 1,
+        mat.query_location().column + 1,
+    );
+    {
+        let full_capture = mat.full_capture();
+        print!("  matched ");
+        print_node(full_capture, true);
+        print_node_text(full_capture, source)?;
+        println!();
+    }
+    let width = mat
+        .capture_names()
+        .map(|n| n.len())
+        .max()
+        .unwrap_or_default();
+    if width == 0 {
+        return Ok(());
+    }
+    println!("  captured");
+    for (name, quantifier, nodes) in mat.named_captures() {
+        let mut first = true;
+        for node in nodes {
+            if first {
+                first = false;
+                print!(
+                    "    @{}{}{} = ",
+                    name,
+                    quantifier_ch(quantifier),
+                    " ".repeat(width - name.len())
+                );
+            } else {
+                print!("     {}  | ", " ".repeat(width));
+            }
+            print_node(node, true);
+            print_node_text(node, source)?;
             println!();
         }
-        let width = mat
-            .capture_names()
-            .map(|n| n.len())
-            .max()
-            .unwrap_or_default();
-        if width == 0 {
-            return Ok(());
-        }
-        println!("  captured");
-        for (name, _, nodes) in mat.named_captures() {
-            let mut first = true;
-            for node in nodes {
-                if first {
-                    first = false;
-                    print!("    @{}{} = ", name, " ".repeat(width - name.len()));
-                } else {
-                    print!("     {} | ", " ".repeat(width));
-                }
-                print_node(node, true);
-                println!();
-            }
-        }
-        Ok(())
-    })
+    }
+    Ok(())
+}
+
+fn print_node_text(node: Node, source: &str) -> anyhow::Result<()> {
+    print!(", text: \"");
+    let text = node.utf8_text(source.as_bytes())?;
+    let summary: String = text
+        .chars()
+        .take(MAX_TEXT_LENGTH)
+        .take_while(|c| *c != '\n')
+        .collect();
+    print!("{}", summary);
+    if summary.len() < text.len() {
+        print!("[...]");
+    }
+    print!("\"");
+    Ok(())
+}
+
+fn quantifier_ch(quantifier: CaptureQuantifier) -> char {
+    match quantifier {
+        CaptureQuantifier::Zero => '-',
+        CaptureQuantifier::ZeroOrOne => '?',
+        CaptureQuantifier::ZeroOrMore => '*',
+        CaptureQuantifier::One => ' ',
+        CaptureQuantifier::OneOrMore => '+',
+    }
 }
