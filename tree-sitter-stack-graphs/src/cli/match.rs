@@ -8,6 +8,7 @@
 use anyhow::anyhow;
 use clap::Args;
 use clap::ValueHint;
+use colored::Colorize;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter::CaptureQuantifier;
@@ -57,11 +58,11 @@ impl MatchArgs {
                 .find(|s| s.range.start.row <= line - 1 && line - 1 <= s.range.end.row)
                 .ok_or_else(|| anyhow!("No stanza on {}:{}", lc.sgl.tsg_path().display(), line))?;
             stanza.try_visit_matches(&tree, source, |mat| {
-                print_matches(lc.sgl.tsg_path(), source, mat)
+                print_matches(lc.sgl.tsg_path(), &self.file_path, source, mat)
             })?;
         } else {
             lc.sgl.tsg.try_visit_matches(&tree, source, true, |mat| {
-                print_matches(lc.sgl.tsg_path(), source, mat)
+                print_matches(lc.sgl.tsg_path(), &self.file_path, source, mat)
             })?;
         }
         Ok(())
@@ -70,20 +71,25 @@ impl MatchArgs {
 
 fn print_matches(
     tsg_path: &Path,
+    source_path: &Path,
     source: &str,
     mat: tree_sitter_graph::Match,
 ) -> anyhow::Result<()> {
     println!(
-        "{}:{}:{}: stanza query",
-        tsg_path.display(),
-        mat.query_location().row + 1,
-        mat.query_location().column + 1,
+        "{}: stanza query",
+        format!(
+            "{}:{}:{}",
+            tsg_path.display(),
+            mat.query_location().row + 1,
+            mat.query_location().column + 1
+        )
+        .bold(),
     );
     {
         let full_capture = mat.full_capture();
         print!("  matched ");
         print_node(full_capture, true);
-        print_node_text(full_capture, source)?;
+        print_node_text(full_capture, source_path, source)?;
         println!();
     }
     let width = mat
@@ -94,7 +100,7 @@ fn print_matches(
     if width == 0 {
         return Ok(());
     }
-    println!("  captured");
+    println!("  and captured");
     for (name, quantifier, nodes) in mat.named_captures() {
         let mut first = true;
         for node in nodes {
@@ -110,14 +116,14 @@ fn print_matches(
                 print!("     {}  | ", " ".repeat(width));
             }
             print_node(node, true);
-            print_node_text(node, source)?;
+            print_node_text(node, source_path, source)?;
             println!();
         }
     }
     Ok(())
 }
 
-fn print_node_text(node: Node, source: &str) -> anyhow::Result<()> {
+fn print_node_text(node: Node, source_path: &Path, source: &str) -> anyhow::Result<()> {
     print!(", text: \"");
     let text = node.utf8_text(source.as_bytes())?;
     let summary: String = text
@@ -125,11 +131,17 @@ fn print_node_text(node: Node, source: &str) -> anyhow::Result<()> {
         .take(MAX_TEXT_LENGTH)
         .take_while(|c| *c != '\n')
         .collect();
-    print!("{}", summary);
+    print!("{}", summary.blue());
     if summary.len() < text.len() {
-        print!("[...]");
+        print!("{}", "...".dimmed());
     }
     print!("\"");
+    print!(
+        ", path: {}:{}:{}",
+        source_path.display(),
+        node.start_position().row + 1,
+        node.start_position().column + 1
+    );
     Ok(())
 }
 
