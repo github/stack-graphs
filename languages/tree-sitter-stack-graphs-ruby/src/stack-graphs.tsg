@@ -39,4 +39,58 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; Stack Graph Rules
 ;; ^^^^^^^^^^^^^^^^^
 
-; Have fun!
+;; Program
+
+(program)@prog {
+    node @prog.defs
+    node @prog.lexical_scope
+
+    edge @prog.lexical_scope -> @prog.defs
+}
+
+(program (_)@stmt)@prog {
+    edge @stmt.lexical_scope -> @prog.lexical_scope
+
+    edge @prog.defs -> @stmt.defs
+}
+
+;; Statements
+
+[
+    (class)
+    (uninterpreted)
+]@stmt {
+    node @stmt.defs
+    node @stmt.lexical_scope
+}
+
+(class name:(_)@name)@class {
+    node def
+    attr (def) node_definition = @name
+    edge @class.defs -> def
+}
+
+;; Expression
+
+[
+    (constant)
+]@expr {
+    node @expr.lexical_scope
+    node @expr.type
+
+    ; FIXME expressions can appear in statement positions
+    node @expr.defs
+}
+
+(_expression/constant)@constant {
+    node ref
+    attr (ref) node_reference = @constant
+    edge ref -> @constant.lexical_scope
+}
+
+;; Comments
+
+(comment)@comment {
+    node @comment.defs
+    node @comment.lexical_scope
+}
