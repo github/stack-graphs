@@ -84,7 +84,7 @@ pub struct TestArgs {
         long,
         short = 'G',
         value_name = "PATH_SPEC",
-        num_args = 0..1,
+        num_args = 0..=1,
         require_equals = true,
         default_missing_value = "%n.graph.json"
     )]
@@ -97,7 +97,7 @@ pub struct TestArgs {
         long,
         short = 'P',
         value_name = "PATH_SPEC",
-        num_args = 0..1,
+        num_args = 0..=1,
         require_equals = true,
         default_missing_value = "%n.paths.json"
     )]
@@ -110,7 +110,7 @@ pub struct TestArgs {
         long,
         short = 'V',
         value_name = "PATH_SPEC",
-        num_args = 0..1,
+        num_args = 0..=1,
         require_equals = true,
         default_missing_value = "%n.html"
     )]
