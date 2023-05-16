@@ -2281,8 +2281,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (pair
-    key:(_)@key
-    value: (_)@value)@pair
+    key:(_)@_key
+    value: (_)@_value)@pair
 {
 
     node @pair.before_scope
@@ -2292,7 +2292,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (object
   (pair
-    key:(_)@key
+    key:(_)@_key
     value:(_)@value)@pair)@object
 {
 
@@ -2812,8 +2812,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ##### Member Expressions
 
 (member_expression
-  object: (_)@_object
-  property: (_)@_property)@member_expr
+  object: (_)@object
+  property: (_)@property)@member_expr
 {
 
     node @member_expr.before_scope
@@ -2838,8 +2838,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ##### Subscript Expressions
 
 (subscript_expression
-  object: (_)@_object
-  index: (_)@_index)@subscript_expr
+  object: (_)@object
+  index: (_)@index)@subscript_expr
 {
 
     node @subscript_expr.before_scope
@@ -2865,7 +2865,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (subscript_expression
-  object: (_)@object
+  object: (_)@_object
   index: (string)@index)@subscript_expr
 {
 
@@ -2873,7 +2873,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (subscript_expression
-  object: (_)@object
+  object: (_)@_object
   index: (number)@index)@subscript_expr
 {
 
