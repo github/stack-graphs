@@ -23,19 +23,19 @@ use super::util::ExistingPathBufValueParser;
 /// Parse file
 #[derive(Args)]
 pub struct ParseArgs {
-    /// Input file path.
+    /// Source file path to parse.
     #[clap(
-        value_name = "FILE_PATH",
+        value_name = "SOURCE_PATH",
         required = true,
         value_hint = ValueHint::AnyPath,
         value_parser = ExistingPathBufValueParser,
     )]
-    pub file_path: PathBuf,
+    pub source_path: PathBuf,
 }
 
 impl ParseArgs {
     pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
-        self.parse_file(&self.file_path, &mut loader)?;
+        self.parse_file(&self.source_path, &mut loader)?;
         Ok(())
     }
 
