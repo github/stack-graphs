@@ -21,8 +21,6 @@ use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::NoCancellation;
 
-const MAX_TEXT_LENGTH: usize = 16;
-
 /// Match file
 #[derive(Args)]
 pub struct MatchArgs {
@@ -126,6 +124,8 @@ fn print_matches(
 }
 
 fn print_node_text(node: Node, source_path: &Path, source: &str) -> anyhow::Result<()> {
+    const MAX_TEXT_LENGTH: usize = 16;
+
     print!(", text: \"");
     let text = node.utf8_text(source.as_bytes())?;
     let summary: String = text
