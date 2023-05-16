@@ -64,6 +64,7 @@ pub mod init;
 pub mod load;
 #[cfg(feature = "lsp")]
 pub mod lsp;
+pub mod r#match;
 pub mod parse;
 pub mod query;
 pub mod status;
@@ -83,6 +84,7 @@ pub mod path_loading {
     use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
+    use crate::cli::r#match::MatchArgs;
     use crate::cli::status::StatusArgs;
     use crate::cli::test::TestArgs;
 
@@ -95,6 +97,7 @@ pub mod path_loading {
         Init(Init),
         #[cfg(feature = "lsp")]
         Lsp(Lsp),
+        Match(Match),
         Parse(Parse),
         Query(Query),
         Status(Status),
@@ -109,6 +112,7 @@ pub mod path_loading {
                 Self::Init(cmd) => cmd.run(),
                 #[cfg(feature = "lsp")]
                 Self::Lsp(cmd) => cmd.run(default_db_path),
+                Self::Match(cmd) => cmd.run(),
                 Self::Parse(cmd) => cmd.run(),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Status(cmd) => cmd.run(default_db_path),
@@ -183,6 +187,22 @@ pub mod path_loading {
             let loader = self.load_args.get()?;
             let db_path = self.db_args.get_or(default_db_path);
             self.lsp_args.run(db_path, loader)
+        }
+    }
+
+    /// Match stanza queries against a source file.
+    #[derive(clap::Parser)]
+    pub struct Match {
+        #[clap(flatten)]
+        load_args: PathLoaderArgs,
+        #[clap(flatten)]
+        match_args: MatchArgs,
+    }
+
+    impl Match {
+        pub fn run(self) -> anyhow::Result<()> {
+            let loader = self.load_args.get()?;
+            self.match_args.run(loader)
         }
     }
 
@@ -264,6 +284,7 @@ pub mod provided_languages {
     use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
+    use crate::cli::r#match::MatchArgs;
     use crate::cli::status::StatusArgs;
     use crate::cli::test::TestArgs;
     use crate::loader::LanguageConfiguration;
@@ -277,6 +298,7 @@ pub mod provided_languages {
         Init(Init),
         #[cfg(feature = "lsp")]
         Lsp(Lsp),
+        Match(Match),
         Parse(Parse),
         Query(Query),
         Status(Status),
@@ -295,6 +317,7 @@ pub mod provided_languages {
                 Self::Init(cmd) => cmd.run(),
                 #[cfg(feature = "lsp")]
                 Self::Lsp(cmd) => cmd.run(default_db_path, configurations),
+                Self::Match(cmd) => cmd.run(configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Status(cmd) => cmd.run(default_db_path),
@@ -377,6 +400,22 @@ pub mod provided_languages {
             let loader = self.load_args.get(configurations)?;
             let db_path = self.db_args.get_or(default_db_path);
             self.lsp_args.run(db_path, loader)
+        }
+    }
+
+    /// Match stanza queries against a source file.
+    #[derive(clap::Parser)]
+    pub struct Match {
+        #[clap(flatten)]
+        load_args: LanguageConfigurationsLoaderArgs,
+        #[clap(flatten)]
+        match_args: MatchArgs,
+    }
+
+    impl Match {
+        pub fn run(self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            let loader = self.load_args.get(configurations)?;
+            self.match_args.run(loader)
         }
     }
 
