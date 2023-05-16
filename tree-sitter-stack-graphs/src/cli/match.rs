@@ -36,8 +36,8 @@ pub struct MatchArgs {
     pub file_path: PathBuf,
 
     /// Only match stanza on the given line.
-    #[clap(long, short = 'L')]
-    pub line: Option<usize>,
+    #[clap(long, value_name = "LINE_NUMBER", short = 'S')]
+    pub stanza: Vec<usize>,
 }
 
 impl MatchArgs {
@@ -49,21 +49,25 @@ impl MatchArgs {
         };
         let source = file_reader.get(&self.file_path)?;
         let tree = parse(lc.language, &self.file_path, source)?;
-        if let Some(line) = self.line {
-            let stanza = lc
-                .sgl
-                .tsg
-                .stanzas
-                .iter()
-                .find(|s| s.range.start.row <= line - 1 && line - 1 <= s.range.end.row)
-                .ok_or_else(|| anyhow!("No stanza on {}:{}", lc.sgl.tsg_path().display(), line))?;
-            stanza.try_visit_matches(&tree, source, |mat| {
-                print_matches(lc.sgl.tsg_path(), &self.file_path, source, mat)
-            })?;
-        } else {
+        if self.stanza.is_empty() {
             lc.sgl.tsg.try_visit_matches(&tree, source, true, |mat| {
                 print_matches(lc.sgl.tsg_path(), &self.file_path, source, mat)
             })?;
+        } else {
+            for line in &self.stanza {
+                let stanza = lc
+                    .sgl
+                    .tsg
+                    .stanzas
+                    .iter()
+                    .find(|s| s.range.start.row <= line - 1 && line - 1 <= s.range.end.row)
+                    .ok_or_else(|| {
+                        anyhow!("No stanza on {}:{}", lc.sgl.tsg_path().display(), line)
+                    })?;
+                stanza.try_visit_matches(&tree, source, |mat| {
+                    print_matches(lc.sgl.tsg_path(), &self.file_path, source, mat)
+                })?;
+            }
         }
         Ok(())
     }
