@@ -13,6 +13,7 @@ use std::path::PathBuf;
 /// CLI arguments for using a database.
 #[derive(Args)]
 pub struct DatabaseArgs {
+    /// Path of the indexing database to use.
     #[clap(
         long,
         short = 'D',
