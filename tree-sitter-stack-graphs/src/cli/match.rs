@@ -106,10 +106,8 @@ fn print_matches(
     }
     println!("  and captured");
     for (name, quantifier, nodes) in mat.named_captures() {
-        let mut first = true;
-        for node in nodes {
-            if first {
-                first = false;
+        for (idx, node) in nodes.enumerate() {
+            if idx == 0 {
                 print!(
                     "    @{}{}{} = ",
                     name,
