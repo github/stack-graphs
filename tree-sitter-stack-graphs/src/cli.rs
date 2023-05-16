@@ -190,7 +190,7 @@ pub mod path_loading {
         }
     }
 
-    /// Match command
+    /// Match stanza queries against a source file.
     #[derive(clap::Parser)]
     pub struct Match {
         #[clap(flatten)]
@@ -403,7 +403,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Match command
+    /// Match stanza queries against a source file.
     #[derive(clap::Parser)]
     pub struct Match {
         #[clap(flatten)]
