@@ -114,11 +114,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge ref -> @constant.lexical_scope
 }
 
-(_expression/scope_resolution !scope name:(_))@_scope_res {
+(_primary/scope_resolution !scope name:(_))@_scope_res {
     ; FIXME resolve via "<::>"
 }
 
-(_expression/scope_resolution scope:(constant)@name)@scope_res {
+(_primary/scope_resolution scope:(constant)@name)@scope_res {
     node ref
     attr (ref) node_reference = @name
     edge ref -> @scope_res.lexical_scope
@@ -126,7 +126,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @name.type -> ref
 }
 
-(_expression/scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
+(_primary/scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
+    edge @scope.lexical_scope -> @scope_res.lexical_scope
+
     node ref
     attr (ref) node_reference = @name
     edge ref -> @scope.type
