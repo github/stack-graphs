@@ -258,6 +258,7 @@ pub mod provided_languages {
 
     use crate::cli::clean::CleanArgs;
     use crate::cli::index::IndexArgs;
+    use crate::cli::init::InitArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
     #[cfg(feature = "lsp")]
     use crate::cli::lsp::LspArgs;
@@ -273,6 +274,7 @@ pub mod provided_languages {
     pub enum Subcommands {
         Clean(Clean),
         Index(Index),
+        Init(Init),
         #[cfg(feature = "lsp")]
         Lsp(Lsp),
         Parse(Parse),
@@ -290,6 +292,7 @@ pub mod provided_languages {
             match self {
                 Self::Clean(cmd) => cmd.run(default_db_path),
                 Self::Index(cmd) => cmd.run(default_db_path, configurations),
+                Self::Init(cmd) => cmd.run(),
                 #[cfg(feature = "lsp")]
                 Self::Lsp(cmd) => cmd.run(default_db_path, configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
@@ -336,6 +339,19 @@ pub mod provided_languages {
             let loader = self.load_args.get(configurations)?;
             let db_path = self.db_args.get_or(default_db_path);
             self.index_args.run(&db_path, loader)
+        }
+    }
+
+    /// Inititialize a new stack graphs project for a tree-sitter language.
+    #[derive(clap::Parser)]
+    pub struct Init {
+        #[clap(flatten)]
+        init_args: InitArgs,
+    }
+
+    impl Init {
+        pub fn run(self) -> anyhow::Result<()> {
+            self.init_args.run()
         }
     }
 
