@@ -17,14 +17,12 @@ use std::path::PathBuf;
 use super::util::ConsoleFileLogger;
 use super::util::FileLogger;
 
-/// Status of files in the database
 #[derive(Args)]
 #[clap(group(
     ArgGroup::new("paths")
         .required(true)
-        .args(&["source-paths", "all"]),
+        .args(&["source_paths", "all"]),
 ))]
-
 pub struct StatusArgs {
     /// Source file or directory paths.
     #[clap(
@@ -33,7 +31,7 @@ pub struct StatusArgs {
     )]
     pub source_paths: Vec<PathBuf>,
 
-    /// List all data from the database.
+    /// Show status of all indexed source paths.
     #[clap(long, short = 'a')]
     pub all: bool,
 

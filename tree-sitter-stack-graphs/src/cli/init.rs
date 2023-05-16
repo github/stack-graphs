@@ -40,11 +40,15 @@ static VALID_CRATE_VERSION: Lazy<Regex> =
 static VALID_DEPENDENCY_VERSION: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[~^]?[0-9]+(\.[0-9]+(\.[0-9]+)?)?$").unwrap());
 
-/// Initialize project
 #[derive(Args)]
 pub struct InitArgs {
-    /// Project directory path.
-    #[clap(value_name = "PROJECT_PATH", required = false, default_value = ".", value_hint = ValueHint::AnyPath)]
+    /// Project directory path. (Or repository directory path when --internal is specified.)
+    #[clap(
+        value_name = "PROJECT_PATH",
+        required = false,
+        default_value = ".",
+        value_hint = ValueHint::AnyPath,
+    )]
     pub project_path: PathBuf,
 
     /// Disable console interaction. All input values must be provided through the appropriate options.

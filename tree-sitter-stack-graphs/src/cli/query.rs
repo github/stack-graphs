@@ -27,7 +27,6 @@ use super::util::Logger;
 use super::util::SourcePosition;
 use super::util::SourceSpan;
 
-/// Analyze sources
 #[derive(Args)]
 pub struct QueryArgs {
     /// Wait for user input before starting analysis. Useful for profiling.

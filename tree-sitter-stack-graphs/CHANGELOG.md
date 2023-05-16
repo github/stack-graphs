@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Added
 
 - A new `analyze` command that computes stack graphs and partial paths for all given source files and directories. The command does not produce any output at the moment. Analysis per file can be limited using the `--max-file-time` flag.
+- A new `match` command executes the query patterns from the TSG source and outputs the matches with captured nodes to the console. The `--stanza/-S` flag can be used to select specific stanzas to match by giving the line number where the stanza appears in the source. (Any line that is part of the stanza will work.)
 
 #### Changed
 
