@@ -34,10 +34,9 @@ use super::util::ExistingPathBufValueParser;
 use super::util::FileLogger;
 use super::util::Logger;
 
-/// Analyze sources
 #[derive(Args)]
 pub struct IndexArgs {
-    /// Source file or directory paths.
+    /// Source file or directory paths to index.
     #[clap(
         value_name = "SOURCE_PATH",
         required = true,
@@ -46,7 +45,7 @@ pub struct IndexArgs {
     )]
     pub source_paths: Vec<PathBuf>,
 
-    /// Continue analysis from the given file
+    /// Continue indexing from the given file.
     #[clap(
         long,
         value_name = "SOURCE_PATH",
@@ -62,7 +61,7 @@ pub struct IndexArgs {
     #[clap(long, short = 'f')]
     pub force: bool,
 
-    /// Hide failure error details.
+    /// Hide details of indexing errors on files.
     #[clap(long)]
     pub hide_error_details: bool,
 

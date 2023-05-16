@@ -12,16 +12,14 @@ use stack_graphs::storage::SQLiteWriter;
 use std::path::Path;
 use std::path::PathBuf;
 
-/// Clean database
 #[derive(Args)]
 #[clap(group(
     ArgGroup::new("paths")
         .required(true)
-        .args(&["source-paths", "all", "delete"]),
+        .args(&["source_paths", "all", "delete"]),
 ))]
-
 pub struct CleanArgs {
-    /// Source file or directory paths.
+    /// Source file or directory paths for which to clean indexing data.
     #[clap(
         value_name = "SOURCE_PATH",
         value_hint = ValueHint::AnyPath,

@@ -117,7 +117,7 @@ pub mod path_loading {
         }
     }
 
-    /// Clean command
+    /// Clean the indexing database.
     #[derive(clap::Parser)]
     pub struct Clean {
         #[clap(flatten)]
@@ -133,7 +133,7 @@ pub mod path_loading {
         }
     }
 
-    /// Index command
+    /// Index source files into the database.
     #[derive(clap::Parser)]
     pub struct Index {
         #[clap(flatten)]
@@ -152,7 +152,7 @@ pub mod path_loading {
         }
     }
 
-    /// Init command
+    /// Inititialize a new stack graphs project for a tree-sitter language.
     #[derive(clap::Parser)]
     pub struct Init {
         #[clap(flatten)]
@@ -165,7 +165,7 @@ pub mod path_loading {
         }
     }
 
-    /// Lsp command
+    /// Run an LSP server.
     #[cfg(feature = "lsp")]
     #[derive(clap::Parser)]
     pub struct Lsp {
@@ -186,7 +186,7 @@ pub mod path_loading {
         }
     }
 
-    /// Parse command
+    /// Parse a source file and show the parse tree.
     #[derive(clap::Parser)]
     pub struct Parse {
         #[clap(flatten)]
@@ -202,7 +202,7 @@ pub mod path_loading {
         }
     }
 
-    /// Query command
+    /// Query the database to resolve references.
     #[derive(clap::Parser)]
     pub struct Query {
         #[clap(flatten)]
@@ -218,7 +218,7 @@ pub mod path_loading {
         }
     }
 
-    /// Status command
+    /// Show indexing status for source files.
     #[derive(clap::Parser)]
     pub struct Status {
         #[clap(flatten)]
@@ -234,7 +234,7 @@ pub mod path_loading {
         }
     }
 
-    /// Test command
+    /// Run test files and show results.
     #[derive(clap::Parser)]
     pub struct Test {
         #[clap(flatten)]
@@ -258,6 +258,7 @@ pub mod provided_languages {
 
     use crate::cli::clean::CleanArgs;
     use crate::cli::index::IndexArgs;
+    use crate::cli::init::InitArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
     #[cfg(feature = "lsp")]
     use crate::cli::lsp::LspArgs;
@@ -273,6 +274,7 @@ pub mod provided_languages {
     pub enum Subcommands {
         Clean(Clean),
         Index(Index),
+        Init(Init),
         #[cfg(feature = "lsp")]
         Lsp(Lsp),
         Parse(Parse),
@@ -290,6 +292,7 @@ pub mod provided_languages {
             match self {
                 Self::Clean(cmd) => cmd.run(default_db_path),
                 Self::Index(cmd) => cmd.run(default_db_path, configurations),
+                Self::Init(cmd) => cmd.run(),
                 #[cfg(feature = "lsp")]
                 Self::Lsp(cmd) => cmd.run(default_db_path, configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
@@ -300,7 +303,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Clean command
+    /// Clean the indexing database.
     #[derive(clap::Parser)]
     pub struct Clean {
         #[clap(flatten)]
@@ -316,7 +319,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Index command
+    /// Index source files into the database.
     #[derive(clap::Parser)]
     pub struct Index {
         #[clap(flatten)]
@@ -339,7 +342,20 @@ pub mod provided_languages {
         }
     }
 
-    /// Lsp command
+    /// Inititialize a new stack graphs project for a tree-sitter language.
+    #[derive(clap::Parser)]
+    pub struct Init {
+        #[clap(flatten)]
+        init_args: InitArgs,
+    }
+
+    impl Init {
+        pub fn run(self) -> anyhow::Result<()> {
+            self.init_args.run()
+        }
+    }
+
+    /// Run an LSP server.
     #[cfg(feature = "lsp")]
     #[derive(clap::Parser)]
     pub struct Lsp {
@@ -364,7 +380,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Parse command
+    /// Parse a source file and show the parse tree.
     #[derive(clap::Parser)]
     pub struct Parse {
         #[clap(flatten)]
@@ -380,7 +396,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Query command
+    /// Query the database to resolve references.
     #[derive(clap::Parser)]
     pub struct Query {
         #[clap(flatten)]
@@ -396,7 +412,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Status command
+    /// Show indexing status for source files.
     #[derive(clap::Parser)]
     pub struct Status {
         #[clap(flatten)]
@@ -412,7 +428,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Test command
+    /// Run test files and show results.
     #[derive(clap::Parser)]
     pub struct Test {
         #[clap(flatten)]
