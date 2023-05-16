@@ -28,12 +28,12 @@ const MAX_TEXT_LENGTH: usize = 16;
 pub struct MatchArgs {
     /// Input file path.
     #[clap(
-        value_name = "FILE_PATH",
+        value_name = "SOURCE_PATH",
         required = true,
         value_hint = ValueHint::AnyPath,
         value_parser = ExistingPathBufValueParser,
     )]
-    pub file_path: PathBuf,
+    pub source_path: PathBuf,
 
     /// Only match stanza on the given line.
     #[clap(long, value_name = "LINE_NUMBER", short = 'S')]
@@ -43,15 +43,15 @@ pub struct MatchArgs {
 impl MatchArgs {
     pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
         let mut file_reader = FileReader::new();
-        let lc = match loader.load_for_file(&self.file_path, &mut file_reader, &NoCancellation)? {
+        let lc = match loader.load_for_file(&self.source_path, &mut file_reader, &NoCancellation)? {
             Some(lc) => lc,
             None => return Err(anyhow!("No stack graph language found")),
         };
-        let source = file_reader.get(&self.file_path)?;
-        let tree = parse(lc.language, &self.file_path, source)?;
+        let source = file_reader.get(&self.source_path)?;
+        let tree = parse(lc.language, &self.source_path, source)?;
         if self.stanza.is_empty() {
             lc.sgl.tsg.try_visit_matches(&tree, source, true, |mat| {
-                print_matches(lc.sgl.tsg_path(), &self.file_path, source, mat)
+                print_matches(lc.sgl.tsg_path(), &self.source_path, source, mat)
             })?;
         } else {
             for line in &self.stanza {
@@ -65,7 +65,7 @@ impl MatchArgs {
                         anyhow!("No stanza on {}:{}", lc.sgl.tsg_path().display(), line)
                     })?;
                 stanza.try_visit_matches(&tree, source, |mat| {
-                    print_matches(lc.sgl.tsg_path(), &self.file_path, source, mat)
+                    print_matches(lc.sgl.tsg_path(), &self.source_path, source, mat)
                 })?;
             }
         }
