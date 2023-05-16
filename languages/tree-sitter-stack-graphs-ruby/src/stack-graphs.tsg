@@ -44,11 +44,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (program)@prog {
     node @prog.defs
     node @prog.lexical_scope
+    node @prog.root_scope
+    attr (@prog.root_scope) pop_symbol = "<::>"
 
     edge @prog.lexical_scope -> @prog.defs
     edge @prog.lexical_scope -> ROOT_NODE
-
-    ; FIXME add definition "<::>"
+    edge ROOT_NODE -> @prog.root_scope
+    edge @prog.root_scope -> @prog.defs
 }
 
 (program (_)@stmt)@prog {
@@ -124,8 +126,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge ref -> @constant.lexical_scope
 }
 
-(_primary/scope_resolution !scope name:(_))@_scope_res {
-    ; FIXME resolve via "<::>"
+(_primary/scope_resolution !scope name:(_)@name)@scope_res {
+    node scope
+    attr (scope) push_symbol = "<::>"
+    edge scope -> @scope_res.lexical_scope
+
+    node ref
+    attr (ref) node_reference = @name
+    edge ref -> scope
 }
 
 (_primary/scope_resolution scope:(constant)@name)@scope_res {
