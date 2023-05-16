@@ -64,6 +64,7 @@ pub mod init;
 pub mod load;
 #[cfg(feature = "lsp")]
 pub mod lsp;
+pub mod r#match;
 pub mod parse;
 pub mod query;
 pub mod status;
@@ -83,6 +84,7 @@ pub mod path_loading {
     use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
+    use crate::cli::r#match::MatchArgs;
     use crate::cli::status::StatusArgs;
     use crate::cli::test::TestArgs;
 
@@ -95,6 +97,7 @@ pub mod path_loading {
         Init(Init),
         #[cfg(feature = "lsp")]
         Lsp(Lsp),
+        Match(Match),
         Parse(Parse),
         Query(Query),
         Status(Status),
@@ -109,6 +112,7 @@ pub mod path_loading {
                 Self::Init(cmd) => cmd.run(),
                 #[cfg(feature = "lsp")]
                 Self::Lsp(cmd) => cmd.run(default_db_path),
+                Self::Match(cmd) => cmd.run(),
                 Self::Parse(cmd) => cmd.run(),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Status(cmd) => cmd.run(default_db_path),
@@ -117,7 +121,7 @@ pub mod path_loading {
         }
     }
 
-    /// Clean command
+    /// Clean the indexing database.
     #[derive(clap::Parser)]
     pub struct Clean {
         #[clap(flatten)]
@@ -133,7 +137,7 @@ pub mod path_loading {
         }
     }
 
-    /// Index command
+    /// Index source files into the database.
     #[derive(clap::Parser)]
     pub struct Index {
         #[clap(flatten)]
@@ -152,7 +156,7 @@ pub mod path_loading {
         }
     }
 
-    /// Init command
+    /// Inititialize a new stack graphs project for a tree-sitter language.
     #[derive(clap::Parser)]
     pub struct Init {
         #[clap(flatten)]
@@ -165,7 +169,7 @@ pub mod path_loading {
         }
     }
 
-    /// Lsp command
+    /// Run an LSP server.
     #[cfg(feature = "lsp")]
     #[derive(clap::Parser)]
     pub struct Lsp {
@@ -186,7 +190,23 @@ pub mod path_loading {
         }
     }
 
-    /// Parse command
+    /// Match stanza queries against a source file.
+    #[derive(clap::Parser)]
+    pub struct Match {
+        #[clap(flatten)]
+        load_args: PathLoaderArgs,
+        #[clap(flatten)]
+        match_args: MatchArgs,
+    }
+
+    impl Match {
+        pub fn run(self) -> anyhow::Result<()> {
+            let loader = self.load_args.get()?;
+            self.match_args.run(loader)
+        }
+    }
+
+    /// Parse a source file and show the parse tree.
     #[derive(clap::Parser)]
     pub struct Parse {
         #[clap(flatten)]
@@ -202,7 +222,7 @@ pub mod path_loading {
         }
     }
 
-    /// Query command
+    /// Query the database to resolve references.
     #[derive(clap::Parser)]
     pub struct Query {
         #[clap(flatten)]
@@ -218,7 +238,7 @@ pub mod path_loading {
         }
     }
 
-    /// Status command
+    /// Show indexing status for source files.
     #[derive(clap::Parser)]
     pub struct Status {
         #[clap(flatten)]
@@ -234,7 +254,7 @@ pub mod path_loading {
         }
     }
 
-    /// Test command
+    /// Run test files and show results.
     #[derive(clap::Parser)]
     pub struct Test {
         #[clap(flatten)]
@@ -258,11 +278,13 @@ pub mod provided_languages {
 
     use crate::cli::clean::CleanArgs;
     use crate::cli::index::IndexArgs;
+    use crate::cli::init::InitArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
     #[cfg(feature = "lsp")]
     use crate::cli::lsp::LspArgs;
     use crate::cli::parse::ParseArgs;
     use crate::cli::query::QueryArgs;
+    use crate::cli::r#match::MatchArgs;
     use crate::cli::status::StatusArgs;
     use crate::cli::test::TestArgs;
     use crate::loader::LanguageConfiguration;
@@ -273,8 +295,10 @@ pub mod provided_languages {
     pub enum Subcommands {
         Clean(Clean),
         Index(Index),
+        Init(Init),
         #[cfg(feature = "lsp")]
         Lsp(Lsp),
+        Match(Match),
         Parse(Parse),
         Query(Query),
         Status(Status),
@@ -290,8 +314,10 @@ pub mod provided_languages {
             match self {
                 Self::Clean(cmd) => cmd.run(default_db_path),
                 Self::Index(cmd) => cmd.run(default_db_path, configurations),
+                Self::Init(cmd) => cmd.run(),
                 #[cfg(feature = "lsp")]
                 Self::Lsp(cmd) => cmd.run(default_db_path, configurations),
+                Self::Match(cmd) => cmd.run(configurations),
                 Self::Parse(cmd) => cmd.run(configurations),
                 Self::Query(cmd) => cmd.run(default_db_path),
                 Self::Status(cmd) => cmd.run(default_db_path),
@@ -300,7 +326,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Clean command
+    /// Clean the indexing database.
     #[derive(clap::Parser)]
     pub struct Clean {
         #[clap(flatten)]
@@ -316,7 +342,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Index command
+    /// Index source files into the database.
     #[derive(clap::Parser)]
     pub struct Index {
         #[clap(flatten)]
@@ -339,7 +365,20 @@ pub mod provided_languages {
         }
     }
 
-    /// Lsp command
+    /// Inititialize a new stack graphs project for a tree-sitter language.
+    #[derive(clap::Parser)]
+    pub struct Init {
+        #[clap(flatten)]
+        init_args: InitArgs,
+    }
+
+    impl Init {
+        pub fn run(self) -> anyhow::Result<()> {
+            self.init_args.run()
+        }
+    }
+
+    /// Run an LSP server.
     #[cfg(feature = "lsp")]
     #[derive(clap::Parser)]
     pub struct Lsp {
@@ -364,7 +403,23 @@ pub mod provided_languages {
         }
     }
 
-    /// Parse command
+    /// Match stanza queries against a source file.
+    #[derive(clap::Parser)]
+    pub struct Match {
+        #[clap(flatten)]
+        load_args: LanguageConfigurationsLoaderArgs,
+        #[clap(flatten)]
+        match_args: MatchArgs,
+    }
+
+    impl Match {
+        pub fn run(self, configurations: Vec<LanguageConfiguration>) -> anyhow::Result<()> {
+            let loader = self.load_args.get(configurations)?;
+            self.match_args.run(loader)
+        }
+    }
+
+    /// Parse a source file and show the parse tree.
     #[derive(clap::Parser)]
     pub struct Parse {
         #[clap(flatten)]
@@ -380,7 +435,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Query command
+    /// Query the database to resolve references.
     #[derive(clap::Parser)]
     pub struct Query {
         #[clap(flatten)]
@@ -396,7 +451,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Status command
+    /// Show indexing status for source files.
     #[derive(clap::Parser)]
     pub struct Status {
         #[clap(flatten)]
@@ -412,7 +467,7 @@ pub mod provided_languages {
         }
     }
 
-    /// Test command
+    /// Run test files and show results.
     #[derive(clap::Parser)]
     pub struct Test {
         #[clap(flatten)]

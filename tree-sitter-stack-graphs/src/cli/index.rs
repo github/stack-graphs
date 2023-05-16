@@ -27,33 +27,30 @@ use crate::NoCancellation;
 
 use super::util::duration_from_seconds_str;
 use super::util::iter_files_and_directories;
-use super::util::path_exists;
 use super::util::sha1;
 use super::util::wait_for_input;
 use super::util::ConsoleLogger;
+use super::util::ExistingPathBufValueParser;
 use super::util::FileLogger;
 use super::util::Logger;
 
-/// Analyze sources
 #[derive(Args)]
 pub struct IndexArgs {
-    /// Source file or directory paths.
+    /// Source file or directory paths to index.
     #[clap(
         value_name = "SOURCE_PATH",
         required = true,
         value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
-        validator_os = path_exists,
+        value_parser = ExistingPathBufValueParser,
     )]
     pub source_paths: Vec<PathBuf>,
 
-    /// Continue analysis from the given file
+    /// Continue indexing from the given file.
     #[clap(
         long,
         value_name = "SOURCE_PATH",
         value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
-        validator_os = path_exists,
+        value_parser = ExistingPathBufValueParser,
     )]
     pub continue_from: Option<PathBuf>,
 
@@ -64,7 +61,7 @@ pub struct IndexArgs {
     #[clap(long, short = 'f')]
     pub force: bool,
 
-    /// Hide failure error details.
+    /// Hide details of indexing errors on files.
     #[clap(long)]
     pub hide_error_details: bool,
 
@@ -72,7 +69,7 @@ pub struct IndexArgs {
     #[clap(
         long,
         value_name = "SECONDS",
-        parse(try_from_str = duration_from_seconds_str),
+        value_parser = duration_from_seconds_str,
     )]
     pub max_file_time: Option<Duration>,
 

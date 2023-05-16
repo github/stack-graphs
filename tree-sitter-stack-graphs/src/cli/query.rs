@@ -27,7 +27,6 @@ use super::util::Logger;
 use super::util::SourcePosition;
 use super::util::SourceSpan;
 
-/// Analyze sources
 #[derive(Args)]
 pub struct QueryArgs {
     /// Wait for user input before starting analysis. Useful for profiling.
@@ -70,7 +69,7 @@ pub struct Definition {
         value_name = "SOURCE_POSITION",
         required = true,
         value_hint = ValueHint::AnyPath,
-        parse(try_from_str),
+        value_parser,
     )]
     pub references: Vec<SourcePosition>,
 }
