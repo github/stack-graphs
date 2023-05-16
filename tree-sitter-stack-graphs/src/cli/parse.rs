@@ -20,7 +20,6 @@ use crate::BuildError;
 
 use super::util::ExistingPathBufValueParser;
 
-/// Parse file
 #[derive(Args)]
 pub struct ParseArgs {
     /// Source file path to parse.

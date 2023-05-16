@@ -10,7 +10,6 @@ use clap::Args;
 use clap::ValueHint;
 use std::path::PathBuf;
 
-/// CLI arguments for using a database.
 #[derive(Args)]
 pub struct DatabaseArgs {
     /// Path of the indexing database to use.

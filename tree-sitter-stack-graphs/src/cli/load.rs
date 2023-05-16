@@ -16,7 +16,6 @@ use crate::loader::Loader;
 use crate::loader::DEFAULT_BUILTINS_PATHS;
 use crate::loader::DEFAULT_TSG_PATHS;
 
-/// CLI arguments for creating a path based loader.
 #[derive(Args)]
 pub struct PathLoaderArgs {
     /// The TSG file to use for stack graph construction.

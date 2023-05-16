@@ -34,7 +34,6 @@ use super::util::ExistingPathBufValueParser;
 use super::util::FileLogger;
 use super::util::Logger;
 
-/// Analyze sources
 #[derive(Args)]
 pub struct IndexArgs {
     /// Source file or directory paths to index.

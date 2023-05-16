@@ -17,7 +17,6 @@ use std::path::PathBuf;
 use super::util::ConsoleFileLogger;
 use super::util::FileLogger;
 
-/// Status of files in the database
 #[derive(Args)]
 #[clap(group(
     ArgGroup::new("paths")

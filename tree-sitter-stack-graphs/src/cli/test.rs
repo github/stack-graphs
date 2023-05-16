@@ -35,7 +35,6 @@ use super::util::iter_files_and_directories;
 use super::util::ConsoleFileLogger;
 use super::util::FileLogger;
 
-/// Run tests
 #[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
     Output filenames can be specified using placeholders based on the input file.
