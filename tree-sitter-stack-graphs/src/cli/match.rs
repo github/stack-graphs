@@ -135,7 +135,7 @@ fn print_node_text(node: Node, source_path: &Path, source: &str) -> anyhow::Resu
         .collect();
     print!("{}", summary.blue());
     if summary.len() < text.len() {
-        print!("{}", "...".dimmed());
+        print!("{}", "…".dimmed());
     }
     print!("\"");
     print!(
