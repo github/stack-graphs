@@ -44,13 +44,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (program)@prog {
     node @prog.defs
     node @prog.lexical_scope
-    node @prog.root_scope
-    attr (@prog.root_scope) pop_symbol = "<::>"
 
-    edge @prog.lexical_scope -> @prog.defs
+    ;; program lexical scope inherits global scope
     edge @prog.lexical_scope -> ROOT_NODE
-    edge ROOT_NODE -> @prog.root_scope
-    edge @prog.root_scope -> @prog.defs
+
+    ;; program lexical scope inherits global scope via the root
+    ;; scope marker <::>
+    node root_scope
+    attr (root_scope) pop_symbol = "<::>"
+    edge root_scope -> ROOT_NODE
+    edge @prog.lexical_scope -> root_scope
+
+    ;; top-level definitions are accessible from the global scope
+    edge ROOT_NODE -> @prog.defs
 }
 
 (program (_)@stmt)@prog {
