@@ -36,10 +36,8 @@ attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol
 
 attribute node_symbol = node            => symbol = (source-text node), source_node = node
 
-;; Stack Graph Rules
-;; ^^^^^^^^^^^^^^^^^
-
 ;; Program
+;; ^^^^^^^
 
 (program)@prog {
     node @prog.defs
@@ -60,12 +58,15 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (program (_)@stmt)@prog {
+    ;; statements inherit program lexical scope
     edge @stmt.lexical_scope -> @prog.lexical_scope
 
+    ;; program inherits statement definitions
     edge @prog.defs -> @stmt.defs
 }
 
 ;; Statements
+;; ^^^^^^^^^^
 
 [
     (class)
@@ -105,7 +106,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @body.defs -> @stmt.defs
 }
 
-;; Expression
+;; Expressions
+;; ^^^^^^^^^^^
 
 [
     (_primary/constant)
@@ -161,6 +163,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 ;; Comments
+;; ^^^^^^^^
 
 (comment)@comment {
     node @comment.defs
