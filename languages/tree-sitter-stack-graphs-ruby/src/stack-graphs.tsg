@@ -40,8 +40,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ^^^^^^^
 
 (program)@prog {
-    node @prog.defs
+    node @prog.lexical_defs
     node @prog.lexical_scope
+    node @prog.root_defs
 
     ;; program lexical scope inherits global scope
     edge @prog.lexical_scope -> ROOT_NODE
@@ -54,7 +55,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @prog.lexical_scope -> root_scope
 
     ;; top-level definitions are accessible from the global scope
-    edge ROOT_NODE -> @prog.defs
+    edge ROOT_NODE -> @prog.lexical_defs
+    edge ROOT_NODE -> @prog.root_defs
 }
 
 (program (_)@stmt)@prog {
@@ -62,7 +64,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @stmt.lexical_scope -> @prog.lexical_scope
 
     ;; program inherits statement definitions
-    edge @prog.defs -> @stmt.defs
+    edge @prog.lexical_defs -> @stmt.lexical_defs
+    edge @prog.root_defs -> @stmt.root_defs
 }
 
 ;; Statements
@@ -72,12 +75,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (class)
     (uninterpreted)
 ]@stmt {
-    node @stmt.defs
+    node @stmt.lexical_defs
     node @stmt.lexical_scope
+    node @stmt.root_defs
 }
 
 (class name:(_)@name)@class {
-    edge @class.defs -> @name.def
+    edge @class.lexical_defs -> @name.lexical_def
+    edge @class.root_defs -> @name.root_def
 }
 
 (class name:(_)@name body:(_)@body)@class {
@@ -85,12 +90,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @body.lexical_scope -> @class.lexical_scope
 
     ;; class body consists of body definitions
-    edge @name.body -> @body.defs
+    edge @name.body -> @body.lexical_defs
+
+    ;; root definitions are exposed upwards
+    edge @class.root_defs -> @body.root_defs
 }
 
 (body_statement)@body {
-    node @body.defs
+    node @body.lexical_defs
     node @body.lexical_scope
+    node @body.root_defs
 }
 
 (body_statement (_)@stmt)@body {
@@ -98,7 +107,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @stmt.lexical_scope -> @body.lexical_scope
 
     ;; body definitions consists of statement definitions
-    edge @body.defs -> @stmt.defs
+    edge @body.lexical_defs -> @stmt.lexical_defs
+    edge @body.root_defs -> @stmt.root_defs
 }
 
 ;; Expressions
@@ -106,18 +116,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 [
     (_primary/constant)
+    (_primary/scope_resolution)
     (assignment)
     (integer)
-    (scope_resolution)
 ]@expr {
-    node @expr.defs
+    node @expr.lexical_defs
     node @expr.lexical_scope
+    node @expr.root_defs
 }
 
 [
     (assignment left:(_)@name)
 ]@expr {
-    edge @expr.defs -> @name.def
+    edge @expr.lexical_defs -> @name.lexical_def
+    edge @expr.root_defs -> @name.root_def
 
 }
 
@@ -148,6 +160,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;     .body    The body of this definition. This node should be connected
 ;;              to the definitions that are members of this definition. 
 
+[
+    (constant)
+    (scope_resolution)
+]@identifier {
+    node @identifier.body
+    node @identifier.lexical_def
+    node @identifier.ref
+    node @identifier.root_def
+    node @identifier.value
+}
+
+;;;; References
+;;;; ``````````
+
 (constant)@constant {
     node ref
     attr (ref) node_reference = @constant
@@ -155,12 +181,28 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node scope_sep
     attr (scope_sep) push_symbol = "::"
 
-    ; edge @constant.value -> ref
-    let @constant.value = ref
+    edge @constant.value -> ref
     edge ref -> scope_sep
-    ; edge scope_sep -> @constant.ref
-    let @constant.ref = scope_sep
+    edge scope_sep -> @constant.ref
 }
+
+(scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
+    edge @scope_res.value -> @name.value
+    edge @name.ref -> @scope.value
+    edge @scope.ref -> @scope_res.ref
+}
+
+(scope_resolution !scope name:(_)@name)@scope_res {
+    node root_scope
+    attr (root_scope) symbol_reference = "<::>"
+
+    edge @scope_res.value -> @name.value
+    edge @name.ref -> root_scope
+    edge root_scope -> @scope_res.ref
+}
+
+;;;; Definitions
+;;;; ```````````
 
 (constant)@constant {
     node def
@@ -169,48 +211,32 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node scope_sep
     attr (scope_sep) pop_symbol = "::"
 
-    ; edge @constant.def -> scope_sep
-    let @constant.def = scope_sep
+    edge @constant.lexical_def -> scope_sep
     edge scope_sep -> def
-    ; edge def -> @constant.body
-    let @constant.body = def
+    edge def -> @constant.body
 }
 
 (scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
-    ; edge @scope_res.value -> @name.value
-    let @scope_res.value = @name.value
-    edge @name.ref -> @scope.value
-    ; edge @scope.ref -> @scope_res.ref
-    let @scope_res.ref = @scope.ref
+    edge @scope_res.lexical_def -> @scope.lexical_def
+    edge @scope_res.root_def -> @scope.root_def
+    edge @scope.body -> @name.lexical_def
+    edge @name.body -> @scope_res.body
 }
 
 (scope_resolution !scope name:(_)@name)@scope_res {
-    node root_scope
-    attr (root_scope) symbol_reference = "<::>"
-
-    ; edge @scope_res.value -> @name.value
-    let @scope_res.value = @name.value
-    edge @name.ref -> root_scope
-    ; edge root_scope -> @scope_res.ref
-    let @scope_res.ref = root_scope
-}
-
-(scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
-    ; edge @scope_res.def -> @scope.def
-    let @scope_res.def = @scope.def
-    edge @scope.body -> @name.def
-    ; edge @name.body -> @scope_res.body
-    let @scope_res.body = @name.body
-}
-
-(scope_resolution !scope name:(_)) {
-    ;; FIXME can this occur in a definition position?
+    edge @scope_res.root_def -> @name.lexical_def
+    edge @name.body -> @scope_res.body
 }
 
 ;; Comments
 ;; ^^^^^^^^
 
 (comment)@comment {
-    node @comment.defs
+    node @comment.body
+    node @comment.lexical_def
+    node @comment.lexical_defs
     node @comment.lexical_scope
+    node @comment.root_def
+    node @comment.root_defs
+    node @comment.value
 }
