@@ -76,23 +76,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @stmt.lexical_scope
 }
 
-(class name:(constant)@name)@class {
-    node @class.def
-    attr (@class.def) node_definition = @name
-    edge @class.defs -> @class.def
+(class name:(_)@name)@class {
+    edge @class.defs -> @name.def
 }
 
-(class name:(scope_resolution scope:(_)@scope name:(_)@name))@class {
-    node @scope.def
-    attr (@scope.def) node_definition = @scope
-    node @class.def
-    attr (@class.def) node_definition = @name
-    edge @class.defs -> @scope.def
-    edge @scope.def -> @class.def
-}
+(class name:(_)@name body:(_)@body)@class {
+    ;; body inherits class lexical scope
+    edge @body.lexical_scope -> @class.lexical_scope
 
-(class body:(_)@body)@class {
-    edge @class.def -> @body.defs
+    ;; class body consists of body definitions
+    edge @name.body -> @body.defs
 }
 
 (body_statement)@body {
@@ -101,8 +94,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (body_statement (_)@stmt)@body {
+    ;; statements inherits body lexical scope
     edge @stmt.lexical_scope -> @body.lexical_scope
 
+    ;; body definitions consists of statement definitions
     edge @body.defs -> @stmt.defs
 }
 
@@ -117,49 +112,99 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ]@expr {
     node @expr.defs
     node @expr.lexical_scope
-    node @expr.type
 }
 
 [
-    (assignment left:(constant)@name)
+    (assignment left:(_)@name)
 ]@expr {
-    node def
-    attr (def) node_definition = @name
-    edge @expr.defs -> def
+    edge @expr.defs -> @name.def
+
 }
 
-(_expression/constant)@constant {
+[
+    (_primary/constant)
+    (_primary/scope_resolution)
+]@name {
+    edge @name.ref -> @name.lexical_scope
+}
+
+;; Identifiers
+;; ^^^^^^^^^^^
+
+;; Identifiers are single or scoped names and can appear in reference
+;; and definition positions. These rules create both reference and
+;; definition nodes, and ensure both support arbirarily deep nesting.
+;;
+;; The nodes available to connect the refences are:
+;;     .ref     The reference. This node should be connected to the
+;;              lexical scope where the definition should resolve.
+;;     .value   The value the reference resolves to. References that
+;;              need to be resolved in this value should connect to
+;;              this node.
+;;
+;; The nodes available to connect the definitions are:
+;;     .def     The definition. Scopes exposing the definition should
+;;              create an edge to this node.
+;;     .body    The body of this definition. This node should be connected
+;;              to the definitions that are members of this definition. 
+
+(constant)@constant {
     node ref
     attr (ref) node_reference = @constant
-    edge ref -> @constant.lexical_scope
+
+    node scope_sep
+    attr (scope_sep) push_symbol = "::"
+
+    ; edge @constant.value -> ref
+    let @constant.value = ref
+    edge ref -> scope_sep
+    ; edge scope_sep -> @constant.ref
+    let @constant.ref = scope_sep
 }
 
-(_primary/scope_resolution !scope name:(_)@name)@scope_res {
-    node scope
-    attr (scope) push_symbol = "<::>"
-    edge scope -> @scope_res.lexical_scope
+(constant)@constant {
+    node def
+    attr (def) node_definition = @constant
 
-    node ref
-    attr (ref) node_reference = @name
-    edge ref -> scope
+    node scope_sep
+    attr (scope_sep) pop_symbol = "::"
+
+    ; edge @constant.def -> scope_sep
+    let @constant.def = scope_sep
+    edge scope_sep -> def
+    ; edge def -> @constant.body
+    let @constant.body = def
 }
 
-(_primary/scope_resolution scope:(constant)@name)@scope_res {
-    node ref
-    attr (ref) node_reference = @name
-    edge ref -> @scope_res.lexical_scope
-
-    edge @name.type -> ref
+(scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
+    ; edge @scope_res.value -> @name.value
+    let @scope_res.value = @name.value
+    edge @name.ref -> @scope.value
+    ; edge @scope.ref -> @scope_res.ref
+    let @scope_res.ref = @scope.ref
 }
 
-(_primary/scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
-    edge @scope.lexical_scope -> @scope_res.lexical_scope
+(scope_resolution !scope name:(_)@name)@scope_res {
+    node root_scope
+    attr (root_scope) symbol_reference = "<::>"
 
-    node ref
-    attr (ref) node_reference = @name
-    edge ref -> @scope.type
+    ; edge @scope_res.value -> @name.value
+    let @scope_res.value = @name.value
+    edge @name.ref -> root_scope
+    ; edge root_scope -> @scope_res.ref
+    let @scope_res.ref = root_scope
+}
 
-    edge @scope_res.type -> ref
+(scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
+    ; edge @scope_res.def -> @scope.def
+    let @scope_res.def = @scope.def
+    edge @scope.body -> @name.def
+    ; edge @name.body -> @scope_res.body
+    let @scope_res.body = @name.body
+}
+
+(scope_resolution !scope name:(_)) {
+    ;; FIXME can this occur in a definition position?
 }
 
 ;; Comments
