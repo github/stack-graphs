@@ -93,7 +93,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @name.ref -> @class.lexical_scope
 }
 
-(class name:(_)@name) {
+(class name:(_)@name body:(_)@body) {
     node dot
     attr (dot) pop_symbol = "."
 
@@ -102,6 +102,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     edge @name.body -> dot
     edge dot -> def
+    edge def -> @body.lexical_defs
 }
 
 [
@@ -146,17 +147,21 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (call)
     (integer)
     (method)
+    (singleton_method)
 ]@expr {
     node @expr.lexical_defs
     node @expr.lexical_scope
     node @expr.root_defs
+    node @expr.expr_value
 }
 
 [
     (_primary/constant)
+    (_primary/identifier)
     (_primary/scope_resolution)
 ]@name {
     edge @name.ref -> @name.lexical_scope
+    edge @name.expr_value -> @name.value
 }
 
 (assignment left:(_)@name right:(_)@value)@assign {
@@ -166,13 +171,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @value.lexical_scope -> @assign.lexical_scope
 }
 
-(call receiver:(_)@recv_name method:(_)@mthd_name)@call {
+(call receiver:(_)@recv method:(_)@mthd_name)@call {
     node dot
     attr (dot) push_symbol = "."
 
+    edge @call.expr_value -> @mthd_name.value
     edge @mthd_name.ref -> dot
-    edge dot -> @recv_name.value
-    edge @recv_name.ref -> @call.lexical_scope
+    edge dot -> @recv.expr_value
+    edge @recv.lexical_scope -> @call.lexical_scope
 }
 
 (method name:(_)@name)@method {
