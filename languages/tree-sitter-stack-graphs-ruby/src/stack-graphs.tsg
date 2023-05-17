@@ -81,13 +81,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (class name:(_)@name)@class {
+    ;; expose the class definition
     edge @class.lexical_defs -> @name.lexical_def
     edge @class.root_defs -> @name.root_def
+
+    ;; resolve the class in the lexical scope
+    edge @name.ref -> @class.lexical_scope
 }
 
 (class name:(_)@name body:(_)@body)@class {
     ;; body inherits class lexical scope
     edge @body.lexical_scope -> @class.lexical_scope
+
+    ;; body inherits other definitions of this class
+    edge @body.lexical_scope -> @name.value
 
     ;; class body consists of body definitions
     edge @name.body -> @body.lexical_defs
@@ -125,12 +132,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @expr.root_defs
 }
 
-[
-    (assignment left:(_)@name)
-]@expr {
-    edge @expr.lexical_defs -> @name.lexical_def
-    edge @expr.root_defs -> @name.root_def
+(assignment left:(_)@name right:(_)@value)@assign {
+    edge @assign.lexical_defs -> @name.lexical_def
+    edge @assign.root_defs -> @name.root_def
 
+    edge @value.lexical_scope -> @assign.lexical_scope
 }
 
 [
