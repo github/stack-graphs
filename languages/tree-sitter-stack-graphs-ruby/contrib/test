@@ -2,4 +2,4 @@
 
 set -eu
 
-cargo run --features cli -- test -V --output-mode always "$@"
+cargo run --features cli -- test -V=test.html --output-mode always "$@"
