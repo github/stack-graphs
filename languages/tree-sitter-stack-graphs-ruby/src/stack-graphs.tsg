@@ -73,6 +73,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 [
     (class)
+    (module)
     (uninterpreted)
 ]@stmt {
     node @stmt.lexical_defs
@@ -80,7 +81,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @stmt.root_defs
 }
 
-(class name:(_)@name)@class {
+[
+    (class name:(_)@name)
+    (module name:(_)@name)
+]@class {
     ;; expose the class definition
     edge @class.lexical_defs -> @name.lexical_def
     edge @class.root_defs -> @name.root_def
@@ -89,7 +93,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @name.ref -> @class.lexical_scope
 }
 
-(class name:(_)@name body:(_)@body)@class {
+[
+    (class name:(_)@name body:(_)@body)
+    (module name:(_)@name body:(_)@body)
+]@class {
     ;; body inherits class lexical scope
     edge @body.lexical_scope -> @class.lexical_scope
 
