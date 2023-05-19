@@ -76,9 +76,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (module)
     (uninterpreted)
 ]@stmt {
+    node @stmt.instance_defs
     node @stmt.lexical_defs
     node @stmt.lexical_scope
     node @stmt.root_defs
+    node @stmt.static_defs
 }
 
 [
@@ -93,16 +95,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @name.ref -> @class.lexical_scope
 }
 
-(class name:(_)@name body:(_)@body) {
+(class body:(_)@body) {
     node dot
     attr (dot) pop_symbol = "."
 
     node def
     attr (def) pop_symbol = "new"
 
-    edge @name.body -> dot
+    edge @body.static_defs -> dot
     edge dot -> def
-    edge def -> @body.lexical_defs
+    edge def -> @body.instance_defs
 }
 
 [
@@ -117,15 +119,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     ;; class body consists of body definitions
     edge @name.body -> @body.lexical_defs
+    edge @body.lexical_defs -> @body.static_defs
 
     ;; root definitions are exposed upwards
     edge @class.root_defs -> @body.root_defs
 }
 
 (body_statement)@body {
+    node @body.instance_defs
     node @body.lexical_defs
     node @body.lexical_scope
     node @body.root_defs
+    node @body.static_defs
 }
 
 (body_statement (_)@stmt)@body {
@@ -134,6 +139,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     ;; body definitions consists of statement definitions
     edge @body.lexical_defs -> @stmt.lexical_defs
+    edge @body.instance_defs -> @stmt.instance_defs
+    edge @body.static_defs -> @stmt.static_defs
     edge @body.root_defs -> @stmt.root_defs
 }
 
@@ -151,6 +158,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ]@expr {
     node @expr.lexical_defs
     node @expr.lexical_scope
+    node @expr.instance_defs
+    node @expr.static_defs
     node @expr.root_defs
     node @expr.expr_value
 }
@@ -188,9 +197,21 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node def
     attr (def) node_definition = @name
 
-    edge @method.lexical_defs -> dot
+    edge @method.instance_defs -> dot
     edge dot -> def
 }
+
+(singleton_method name:(_)@name)@method {
+    node dot
+    attr (dot) pop_symbol = "."
+
+    node def
+    attr (def) node_definition = @name
+
+    edge @method.static_defs -> dot
+    edge dot -> def
+}
+
 
 ;; Identifiers
 ;; ^^^^^^^^^^^
@@ -294,10 +315,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (comment)@comment {
     node @comment.body
+    node @comment.instance_defs
     node @comment.lexical_def
     node @comment.lexical_defs
     node @comment.lexical_scope
     node @comment.root_def
     node @comment.root_defs
+    node @comment.static_defs
     node @comment.value
 }
