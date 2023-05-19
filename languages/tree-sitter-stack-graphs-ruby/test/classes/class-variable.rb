@@ -8,3 +8,6 @@ end
   A::FOO
 # ^ defined: 1
 #    ^ defined: 2
+
+  FOO
+# ^ defined: 5
