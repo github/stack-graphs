@@ -12,4 +12,3 @@ end
 
   Foo.bar
 #     ^ defined: 5
-

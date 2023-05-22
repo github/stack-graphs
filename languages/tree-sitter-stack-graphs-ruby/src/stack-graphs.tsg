@@ -175,6 +175,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (_primary/identifier)
     (_primary/scope_resolution)
 ]@name {
+    edge @name.ref -> @name.lexical_scope
+}
+
+[
+    (_primary/constant)
+    (_primary/identifier)
+    (_primary/scope_resolution)
+]@name {
     node pop_dot
     attr (pop_dot) pop_symbol = "."
 
@@ -187,7 +195,24 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @name.value -> pop_dot
     edge pop_dot -> push_dot
     edge push_dot -> @name.ref_value
-    edge @name.ref -> @name.lexical_scope
+}
+
+[
+    (_primary/constant)
+    (_primary/scope_resolution)
+]@name {
+    node pop_double_colon
+    attr (pop_double_colon) pop_symbol = "::"
+
+    node push_double_colon
+    attr (push_double_colon) push_symbol = "::"
+
+    ;; The value of the expression is the value if the reference, but only
+    ;; if we are trying to look _inside_ the value. This prevents assignments
+    ;; of the form `foo = bar` to act as aliases.
+    edge @name.value -> pop_double_colon
+    edge pop_double_colon -> push_double_colon
+    edge push_double_colon -> @name.ref_value
 }
 
 (assignment left:(_)@name right:(_)@value)@assign {
