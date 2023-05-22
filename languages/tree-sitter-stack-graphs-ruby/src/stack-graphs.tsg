@@ -40,9 +40,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ^^^^^^^
 
 (program)@prog {
-    node @prog.lexical_defs
+    node @prog.defs
     node @prog.lexical_scope
-    node @prog.root_defs
 
     ;; program lexical scope inherits global scope
     edge @prog.lexical_scope -> ROOT_NODE
@@ -55,8 +54,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @prog.lexical_scope -> root_scope
 
     ;; top-level definitions are accessible from the global scope
-    edge ROOT_NODE -> @prog.lexical_defs
-    edge ROOT_NODE -> @prog.root_defs
+    edge ROOT_NODE -> @prog.defs
 }
 
 (program (_)@stmt)@prog {
@@ -64,8 +62,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @stmt.lexical_scope -> @prog.lexical_scope
 
     ;; program inherits statement definitions
-    edge @prog.lexical_defs -> @stmt.lexical_defs
-    edge @prog.root_defs -> @stmt.root_defs
+    edge @prog.defs -> @stmt.instance_defs
+    edge @prog.defs -> @stmt.root_defs
+    edge @prog.defs -> @stmt.static_defs
 }
 
 ;; Statements
@@ -77,7 +76,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (uninterpreted)
 ]@stmt {
     node @stmt.instance_defs
-    node @stmt.lexical_defs
     node @stmt.lexical_scope
     node @stmt.root_defs
     node @stmt.static_defs
@@ -88,8 +86,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (module name:(_)@name)
 ]@class {
     ;; expose the class definition
-    edge @class.lexical_defs -> @name.lexical_def
     edge @class.root_defs -> @name.root_def
+    edge @class.static_defs -> @name.static_def
 
     ;; resolve the class in the lexical scope
     edge @name.ref -> @class.lexical_scope
@@ -118,8 +116,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @body.lexical_scope -> @name.value
 
     ;; class body consists of body definitions
-    edge @name.body -> @body.lexical_defs
-    edge @body.lexical_defs -> @body.static_defs
+    edge @name.body -> @body.static_defs
 
     ;; root definitions are exposed upwards
     edge @class.root_defs -> @body.root_defs
@@ -127,7 +124,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (body_statement)@body {
     node @body.instance_defs
-    node @body.lexical_defs
     node @body.lexical_scope
     node @body.root_defs
     node @body.static_defs
@@ -138,10 +134,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @stmt.lexical_scope -> @body.lexical_scope
 
     ;; body definitions consists of statement definitions
-    edge @body.lexical_defs -> @stmt.lexical_defs
     edge @body.instance_defs -> @stmt.instance_defs
-    edge @body.static_defs -> @stmt.static_defs
     edge @body.root_defs -> @stmt.root_defs
+    edge @body.static_defs -> @stmt.static_defs
 }
 
 ;; Expressions
@@ -156,12 +151,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (method)
     (singleton_method)
 ]@expr {
-    node @expr.lexical_defs
-    node @expr.lexical_scope
-    node @expr.instance_defs
-    node @expr.static_defs
-    node @expr.root_defs
     node @expr.expr_value
+    node @expr.instance_defs
+    node @expr.lexical_scope
+    node @expr.root_defs
+    node @expr.static_defs
 }
 
 [
@@ -174,8 +168,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 (assignment left:(_)@name right:(_)@value)@assign {
-    edge @assign.lexical_defs -> @name.lexical_def
     edge @assign.root_defs -> @name.root_def
+    edge @assign.static_defs -> @name.static_def
 
     edge @value.lexical_scope -> @assign.lexical_scope
 }
@@ -239,9 +233,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (scope_resolution)
 ]@identifier {
     node @identifier.body
-    node @identifier.lexical_def
     node @identifier.ref
     node @identifier.root_def
+    node @identifier.static_def
     node @identifier.value
 }
 
@@ -293,20 +287,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node scope_sep
     attr (scope_sep) pop_symbol = "::"
 
-    edge @constant.lexical_def -> scope_sep
+    edge @constant.static_def -> scope_sep
     edge scope_sep -> def
     edge def -> @constant.body
 }
 
 (scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
-    edge @scope_res.lexical_def -> @scope.lexical_def
     edge @scope_res.root_def -> @scope.root_def
-    edge @scope.body -> @name.lexical_def
+    edge @scope_res.static_def -> @scope.static_def
+    edge @scope.body -> @name.static_def
     edge @name.body -> @scope_res.body
 }
 
 (scope_resolution !scope name:(_)@name)@scope_res {
-    edge @scope_res.root_def -> @name.lexical_def
+    edge @scope_res.root_def -> @name.static_def
     edge @name.body -> @scope_res.body
 }
 
@@ -316,11 +310,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (comment)@comment {
     node @comment.body
     node @comment.instance_defs
-    node @comment.lexical_def
-    node @comment.lexical_defs
     node @comment.lexical_scope
     node @comment.root_def
     node @comment.root_defs
+    node @comment.static_def
     node @comment.static_defs
     node @comment.value
 }
