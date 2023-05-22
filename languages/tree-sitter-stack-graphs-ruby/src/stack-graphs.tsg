@@ -113,10 +113,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @body.lexical_scope -> @class.lexical_scope
 
     ;; body inherits other definitions of this class
-    edge @body.lexical_scope -> @name.value
+    edge @body.lexical_scope -> @name.ref_value
 
     ;; class body consists of body definitions
-    edge @name.body -> @body.static_defs
+    edge @name.def_value -> @body.static_defs
 
     ;; root definitions are exposed upwards
     edge @class.root_defs -> @body.root_defs
@@ -151,11 +151,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (method)
     (singleton_method)
 ]@expr {
-    node @expr.expr_value
     node @expr.instance_defs
     node @expr.lexical_scope
     node @expr.root_defs
     node @expr.static_defs
+    node @expr.value
 }
 
 [
@@ -164,7 +164,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (_primary/scope_resolution)
 ]@name {
     edge @name.ref -> @name.lexical_scope
-    edge @name.expr_value -> @name.value
+    edge @name.value -> @name.ref_value
 }
 
 (assignment left:(_)@name right:(_)@value)@assign {
@@ -178,9 +178,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node dot
     attr (dot) push_symbol = "."
 
-    edge @call.expr_value -> @mthd_name.value
+    edge @call.value -> @mthd_name.ref_value
     edge @mthd_name.ref -> dot
-    edge dot -> @recv.expr_value
+    edge dot -> @recv.value
     edge @recv.lexical_scope -> @call.lexical_scope
 }
 
@@ -206,7 +206,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge dot -> def
 }
 
-
 ;; Identifiers
 ;; ^^^^^^^^^^^
 
@@ -215,28 +214,28 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; definition nodes, and ensure both support arbitrarily deep nesting.
 ;;
 ;; The nodes available to connect the refences are:
-;;     .ref     The reference. This node should be connected to the
-;;              lexical scope where the definition should resolve.
-;;     .value   The value the reference resolves to. References that
-;;              need to be resolved in this value should connect to
-;;              this node.
+;;     .ref         The reference. This node should be connected to the
+;;                  lexical scope where the definition should resolve.
+;;     .ref_value   The value the reference resolves to. References that
+;;                  need to be resolved in this value should connect to
+;;                  this node.
 ;;
 ;; The nodes available to connect the definitions are:
-;;     .def     The definition. Scopes exposing the definition should
-;;              create an edge to this node.
-;;     .body    The body of this definition. This node should be connected
-;;              to the definitions that are members of this definition.
+;;     .def         The definition. Scopes exposing the definition should
+;;                  create an edge to this node.
+;;     .def_value   The body of this definition. This node should be connected
+;;                  to the definitions that are members of this definition.
 
 [
     (constant)
     (identifier)
     (scope_resolution)
 ]@identifier {
-    node @identifier.body
+    node @identifier.def_value
     node @identifier.ref
+    node @identifier.ref_value
     node @identifier.root_def
     node @identifier.static_def
-    node @identifier.value
 }
 
 ;;;; References
@@ -249,7 +248,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node scope_sep
     attr (scope_sep) push_symbol = "::"
 
-    edge @constant.value -> ref
+    edge @constant.ref_value -> ref
     edge ref -> scope_sep
     edge scope_sep -> @constant.ref
 }
@@ -258,13 +257,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node ref
     attr (ref) node_reference = @identifier
 
-    edge @identifier.value -> ref
+    edge @identifier.ref_value -> ref
     edge ref -> @identifier.ref
 }
 
 (scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
-    edge @scope_res.value -> @name.value
-    edge @name.ref -> @scope.value
+    edge @scope_res.ref_value -> @name.ref_value
+    edge @name.ref -> @scope.ref_value
     edge @scope.ref -> @scope_res.ref
 }
 
@@ -272,7 +271,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node root_scope
     attr (root_scope) symbol_reference = "<::>"
 
-    edge @scope_res.value -> @name.value
+    edge @scope_res.ref_value -> @name.ref_value
     edge @name.ref -> root_scope
     edge root_scope -> @scope_res.ref
 }
@@ -289,31 +288,31 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     edge @constant.static_def -> scope_sep
     edge scope_sep -> def
-    edge def -> @constant.body
+    edge def -> @constant.def_value
 }
 
 (scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
     edge @scope_res.root_def -> @scope.root_def
     edge @scope_res.static_def -> @scope.static_def
-    edge @scope.body -> @name.static_def
-    edge @name.body -> @scope_res.body
+    edge @scope.def_value -> @name.static_def
+    edge @name.def_value -> @scope_res.def_value
 }
 
 (scope_resolution !scope name:(_)@name)@scope_res {
     edge @scope_res.root_def -> @name.static_def
-    edge @name.body -> @scope_res.body
+    edge @name.def_value -> @scope_res.def_value
 }
 
 ;; Comments
 ;; ^^^^^^^^
 
 (comment)@comment {
-    node @comment.body
+    node @comment.def_value
     node @comment.instance_defs
     node @comment.lexical_scope
+    node @comment.ref_value
     node @comment.root_def
     node @comment.root_defs
     node @comment.static_def
     node @comment.static_defs
-    node @comment.value
 }
