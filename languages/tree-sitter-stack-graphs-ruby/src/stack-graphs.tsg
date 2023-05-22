@@ -40,9 +40,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ^^^^^^^
 
 (program)@prog {
-    node @prog.defs
-    node @prog.lexical_scope
-
     ;; program lexical scope inherits global scope
     edge @prog.lexical_scope -> ROOT_NODE
 
@@ -54,17 +51,46 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @prog.lexical_scope -> root_scope
 
     ;; top-level definitions are accessible from the global scope
-    edge ROOT_NODE -> @prog.defs
+    edge ROOT_NODE -> @prog.instance_defs
+    edge ROOT_NODE -> @prog.root_defs
+    edge ROOT_NODE -> @prog.static_defs
 }
 
-(program (_)@stmt)@prog {
-    ;; statements inherit program lexical scope
-    edge @stmt.lexical_scope -> @prog.lexical_scope
+;; Bodies
 
+[
+    (program)
+    (body_statement)
+]@body {
+    node @body.instance_defs
+    node @body.lexical_scope
+    node @body.root_defs
+    node @body.static_defs
+}
+
+[
+    (program        (_)@stmt)@body
+    (body_statement (_)@stmt)@body
+] {
     ;; program inherits statement definitions
-    edge @prog.defs -> @stmt.instance_defs
-    edge @prog.defs -> @stmt.root_defs
-    edge @prog.defs -> @stmt.static_defs
+    edge @body.instance_defs -> @stmt.instance_defs
+    edge @body.root_defs -> @stmt.root_defs
+    edge @body.static_defs -> @stmt.static_defs
+}
+
+[
+    (program        . (_)@first)@body
+    (body_statement . (_)@first)@body
+] {
+    edge @first.lexical_scope -> @body.lexical_scope
+}
+
+[
+    (program        (_)@left . (_)@right)
+    (body_statement (_)@left . (_)@right)
+] {
+    edge @right.lexical_scope -> @left.lexical_scope
+    edge @right.lexical_scope -> @left.local_defs
 }
 
 ;; Statements
@@ -77,6 +103,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ]@stmt {
     node @stmt.instance_defs
     node @stmt.lexical_scope
+    node @stmt.local_defs
     node @stmt.root_defs
     node @stmt.static_defs
 }
@@ -122,28 +149,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @class.root_defs -> @body.root_defs
 }
 
-(body_statement)@body {
-    node @body.instance_defs
-    node @body.lexical_scope
-    node @body.root_defs
-    node @body.static_defs
-}
-
-(body_statement (_)@stmt)@body {
-    ;; statements inherits body lexical scope
-    edge @stmt.lexical_scope -> @body.lexical_scope
-
-    ;; body definitions consists of statement definitions
-    edge @body.instance_defs -> @stmt.instance_defs
-    edge @body.root_defs -> @stmt.root_defs
-    edge @body.static_defs -> @stmt.static_defs
-}
-
 ;; Expressions
 ;; ^^^^^^^^^^^
 
 [
     (_primary/constant)
+    (_primary/identifier)
     (_primary/scope_resolution)
     (assignment)
     (call)
@@ -153,6 +164,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ]@expr {
     node @expr.instance_defs
     node @expr.lexical_scope
+    node @expr.local_defs
     node @expr.root_defs
     node @expr.static_defs
     node @expr.value
@@ -163,15 +175,29 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (_primary/identifier)
     (_primary/scope_resolution)
 ]@name {
+    node pop_dot
+    attr (pop_dot) pop_symbol = "."
+
+    node push_dot
+    attr (push_dot) push_symbol = "."
+
+    ;; The value of the expression is the value if the reference, but only
+    ;; if we are trying to look _inside_ the value. This prevents assignments
+    ;; of the form `foo = bar` to act as aliases.
+    edge @name.value -> pop_dot
+    edge pop_dot -> push_dot
+    edge push_dot -> @name.ref_value
     edge @name.ref -> @name.lexical_scope
-    edge @name.value -> @name.ref_value
 }
 
 (assignment left:(_)@name right:(_)@value)@assign {
+    edge @value.lexical_scope -> @assign.lexical_scope
+
+    edge @assign.local_defs -> @name.local_def
     edge @assign.root_defs -> @name.root_def
     edge @assign.static_defs -> @name.static_def
 
-    edge @value.lexical_scope -> @assign.lexical_scope
+    edge @name.def_value -> @value.value
 }
 
 (call receiver:(_)@recv method:(_)@mthd_name)@call {
@@ -232,6 +258,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (scope_resolution)
 ]@identifier {
     node @identifier.def_value
+    node @identifier.local_def
     node @identifier.ref
     node @identifier.ref_value
     node @identifier.root_def
@@ -291,6 +318,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge def -> @constant.def_value
 }
 
+(identifier)@identifier {
+    node def
+    attr (def) node_definition = @identifier
+
+    edge @identifier.local_def -> def
+    edge def -> @identifier.def_value
+}
+
 (scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
     edge @scope_res.root_def -> @scope.root_def
     edge @scope_res.static_def -> @scope.static_def
@@ -310,6 +345,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @comment.def_value
     node @comment.instance_defs
     node @comment.lexical_scope
+    node @comment.local_def
+    node @comment.local_defs
     node @comment.ref_value
     node @comment.root_def
     node @comment.root_defs
