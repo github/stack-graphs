@@ -66,6 +66,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @body.lexical_scope
     node @body.root_defs
     node @body.static_defs
+
+    edge @body.lexical_scope -> @body.static_defs
+    attr (@body.lexical_scope -> @body.static_defs) precedence = 1
 }
 
 [
@@ -91,6 +94,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ] {
     edge @right.lexical_scope -> @left.lexical_scope
     edge @right.lexical_scope -> @left.local_defs
+    attr (@right.lexical_scope -> @left.local_defs) precedence = 1
 }
 
 ;; Statements
