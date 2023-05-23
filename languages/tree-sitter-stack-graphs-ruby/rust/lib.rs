@@ -32,7 +32,7 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
 pub fn try_language_configuration(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
-    LanguageConfiguration::from_sources(
+    let mut lc = LanguageConfiguration::from_sources(
         tree_sitter_ruby::language(),
         Some(String::from("source.rb")),
         None,
@@ -46,5 +46,21 @@ pub fn try_language_configuration(
         Some(STACK_GRAPHS_BUILTINS_CONFIG),
         FileAnalyzers::new(),
         cancellation_flag,
-    )
+    )?;
+    lc.sgl.functions_mut().add("uuid".into(), UUID);
+    Ok(lc)
+}
+
+struct UUID;
+
+impl tree_sitter_graph::functions::Function for UUID {
+    fn call(
+        &self,
+        _graph: &mut tree_sitter_graph::graph::Graph,
+        _source: &str,
+        parameters: &mut dyn tree_sitter_graph::functions::Parameters,
+    ) -> Result<tree_sitter_graph::graph::Value, tree_sitter_graph::ExecutionError> {
+        parameters.finish()?;
+        Ok(uuid::Uuid::new_v4().to_string().into())
+    }
 }

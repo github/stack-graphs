@@ -30,8 +30,10 @@ cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
 [dependencies]
 anyhow = { version = "1.0", optional = true }
 clap = { version = "4", optional = true, features = ["derive"] }
+tree-sitter-graph = { version = "0.10.0" }
 tree-sitter-stack-graphs = { version = "0.6.0", path = "../../tree-sitter-stack-graphs" }
 tree-sitter-ruby = "0.20.0"
+uuid = { version = "1.3", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 anyhow = "1.0"

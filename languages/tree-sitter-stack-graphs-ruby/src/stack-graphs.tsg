@@ -120,16 +120,52 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @name.ref -> @class.lexical_scope
 }
 
-(class body:(_)@body) {
+(class)@class {
+    node @class.instance
+}
+
+(class name:(_)@name)@class {
     node dot
     attr (dot) pop_symbol = "."
 
     node def
     attr (def) pop_symbol = "new"
 
-    edge @body.static_defs -> dot
+    edge @name.def_value -> dot
     edge dot -> def
-    edge def -> @body.instance_defs
+    edge def -> @class.instance
+}
+
+(class body:(_)@body)@class {
+    edge @class.instance -> @body.instance_defs
+}
+
+(class name:(_)@name)@class {
+    let nonce = (uuid)
+
+    node refine_in
+    attr (refine_in) pop_scoped_symbol = "<refine-in>"
+    ;
+    node push_nonce
+    attr (push_nonce) push_symbol = nonce
+    ;
+    node using
+    attr (using) push_symbol = "<using>"
+    ;
+    edge @class.instance -> refine_in
+    edge refine_in -> push_nonce
+    edge push_nonce -> using
+    edge using -> JUMP_TO_SCOPE_NODE
+
+    node refine
+    attr (refine) pop_scoped_symbol = "<refine>"
+    ;
+    node pop_nonce
+    attr (pop_nonce) pop_symbol = nonce
+    ;
+    edge @name.def_value -> refine
+    edge refine -> pop_nonce
+    edge pop_nonce -> JUMP_TO_SCOPE_NODE
 }
 
 [
@@ -235,6 +271,22 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge @recv.lexical_scope -> @call.lexical_scope
 }
 
+(call receiver:(_)@recv method:(_)@mthd_name)@call {
+    node dot
+    attr (dot) push_symbol = "."
+
+    node refine_scope
+    attr (refine_scope) is_endpoint
+    edge refine_scope -> @call.lexical_scope
+
+    node refine_in
+    attr (refine_in) push_scoped_symbol = "<refine-in>", scope = refine_scope
+
+    edge @mthd_name.ref -> dot
+    edge dot -> refine_in
+    edge refine_in -> @recv.value
+}
+
 (method name:(_)@name)@method {
     node dot
     attr (dot) pop_symbol = "."
@@ -246,6 +298,23 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     edge dot -> def
 }
 
+;; refine
+(call method:(_)@refine arguments:(argument_list (_)@name) block:(do_block body:(_)@body))@call {
+if (eq "refine" (source-text @refine)) {
+    node refine_scope
+    attr (refine_scope) is_endpoint
+
+    node refine
+    attr (refine) push_scoped_symbol = "<refine>", scope = refine_scope
+
+    edge @call.static_defs -> refine
+    edge refine -> @name.ref_value
+    edge @name.ref -> @call.lexical_scope
+
+    edge refine_scope -> @body.instance_defs
+}
+}
+
 (singleton_method name:(_)@name)@method {
     node dot
     attr (dot) pop_symbol = "."
@@ -255,6 +324,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
     edge @method.static_defs -> dot
     edge dot -> def
+}
+
+;; using
+(call method:(_)@using arguments:(argument_list (_)@name))@call {
+if (eq "using" (source-text @using)) {
+    node using
+    attr (using) pop_symbol = "<using>"
+
+    edge @call.local_defs -> using
+    edge using -> @name.ref_value
+    edge @name.ref -> @call.lexical_scope
+}
 }
 
 ;; Identifiers
