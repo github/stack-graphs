@@ -303,8 +303,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 ;; refine
-(call method:(_)@refine arguments:(argument_list (_)@name) block:(do_block body:(_)@body))@call {
-if (eq "refine" (source-text @refine)) {
+(call method:(_)@_mthd_name (#eq? @_mthd_name "refine") arguments:(argument_list (_)@name) block:(do_block body:(_)@body))@call {
     node refine_scope
     attr (refine_scope) is_endpoint
 
@@ -316,7 +315,6 @@ if (eq "refine" (source-text @refine)) {
     edge @name.ref -> @call.lexical_scope
 
     edge refine_scope -> @body.instance_defs
-}
 }
 
 (singleton_method name:(_)@name)@method {
@@ -331,15 +329,13 @@ if (eq "refine" (source-text @refine)) {
 }
 
 ;; using
-(call method:(_)@using arguments:(argument_list (_)@name))@call {
-if (eq "using" (source-text @using)) {
+(call method:(_)@_mthd_name (#eq? @_mthd_name "using") arguments:(argument_list (_)@name))@call {
     node using
     attr (using) pop_symbol = "<using>"
 
     edge @call.local_defs -> using
     edge using -> @name.ref_value
     edge @name.ref -> @call.lexical_scope
-}
 }
 
 ;; Identifiers
