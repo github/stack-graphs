@@ -44,7 +44,7 @@
 
 .sg .node text {
     font-family: monospace;
-    font-size: 20px;
+    font-size: 16px;
 }
 
 /* --- drop scopes --- */
@@ -336,7 +336,6 @@
     list-style-type: none;
     padding: 0px;
     margin-left: 10px;
-    font-size: smaller;
 }
 
 .sg-tooltip-sublist-element {
@@ -371,7 +370,7 @@
     line-height: 30px;
     text-align: center;
     margin: 0px;
-    font-size: 18px;
+    font-size: 14px;
     cursor: pointer;
 }
 
@@ -388,6 +387,7 @@
     min-width: 18px;
     max-width: 300px;
     margin: 0px;
+    font-size: 14px;
 }
 
 #sg-help-toggle:checked ~ .sg-help-content {
@@ -395,7 +395,14 @@
 }
 
 .sg-help-content h1 {
+    font-variant: small-caps;
+    font-weight: bold;
     font-size: inherit;
+    border-bottom: solid 1px #777777;
+}
+
+.sg-help-content h1:first-child {
+    margin-top: 0px;
 }
 
 .sg-help-content kbd {
