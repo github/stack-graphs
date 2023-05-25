@@ -683,7 +683,6 @@ class StackGraph {
             tooltip.add_row("precedence", edge.precedence);
         }
 
-        // TODO: edge doesn't have debug info yet
         if (edge.hasOwnProperty("debug_info") && edge.debug_info.length > 0) {
             tooltip.add_header("debug info");
             for (let { key, value } of edge.debug_info) {

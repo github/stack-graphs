@@ -167,6 +167,7 @@ impl StackGraph {
             source,
             sink,
             precedence,
+            debug_info,
         } in &self.edges.data
         {
             let source_id = source.to_node_id(graph)?;
@@ -180,6 +181,19 @@ impl StackGraph {
                 .ok_or(Error::InvalidGlobalNodeID(sink.local_id))?;
 
             graph.add_edge(source_handle, sink_handle, *precedence);
+
+            // load debug-info of each node
+            if let Some(debug_info) = debug_info {
+                *graph.edge_debug_info_mut(source_handle, sink_handle) = debug_info
+                    .data
+                    .iter()
+                    .fold(crate::graph::DebugInfo::default(), |mut info, entry| {
+                        let key = graph.add_string(&entry.key);
+                        let value = graph.add_string(&entry.value);
+                        info.add(key, value);
+                        info
+                    });
+            }
         }
         Ok(())
     }
@@ -392,6 +406,8 @@ pub struct Edge {
     pub source: NodeID,
     pub sink: NodeID,
     pub precedence: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug_info: Option<DebugInfo>,
 }
 
 impl crate::graph::StackGraph {
@@ -430,7 +446,7 @@ impl crate::graph::StackGraph {
         })
     }
 
-    fn filter_debug_info<'a>(
+    fn filter_node_debug_info<'a>(
         &self,
         _filter: &'a dyn Filter,
         handle: Handle<crate::graph::Node>,
@@ -455,7 +471,7 @@ impl crate::graph::StackGraph {
                     let node = &self[handle];
                     let id = self.filter_node(filter, node.id());
                     let source_info = self.filter_source_info(filter, handle);
-                    let debug_info = self.filter_debug_info(filter, handle);
+                    let debug_info = self.filter_node_debug_info(filter, handle);
 
                     match node {
                         crate::graph::Node::DropScopes(_node) => Node::DropScopes {
@@ -525,10 +541,29 @@ impl crate::graph::StackGraph {
                             source: self.filter_node(filter, self[e.source].id()),
                             sink: self.filter_node(filter, self[e.sink].id()),
                             precedence: e.precedence,
+                            debug_info: self.filter_edge_debug_info(filter, e.source, e.sink),
                         })
                 })
                 .flatten()
                 .collect::<Vec<_>>(),
         }
+    }
+
+    fn filter_edge_debug_info<'a>(
+        &self,
+        _filter: &'a dyn Filter,
+        source_handle: Handle<crate::graph::Node>,
+        sink_handle: Handle<crate::graph::Node>,
+    ) -> Option<DebugInfo> {
+        self.edge_debug_info(source_handle, sink_handle)
+            .map(|info| DebugInfo {
+                data: info
+                    .iter()
+                    .map(|entry| DebugEntry {
+                        key: self[entry.key].to_owned(),
+                        value: self[entry.value].to_owned(),
+                    })
+                    .collect(),
+            })
     }
 }

@@ -68,6 +68,7 @@ fn serde_json_stack_graph() {
                     local_id: 0,
                 },
                 precedence: 0,
+                debug_info: Some(serde::DebugInfo { data: vec![] }),
             }],
         },
     };
@@ -77,6 +78,7 @@ fn serde_json_stack_graph() {
         {
             "edges" : [
                 {
+                    "debug_info" : [],
                     "precedence" : 0,
                     "sink" : {
                         "file" : "index.ts",
@@ -376,6 +378,12 @@ fn can_serialize_graph() {
                     }
                 },
                 {
+                    "debug_info" : [
+                        {
+                            "key" : "dsl_position",
+                            "value" : "line 23 column 4"
+                        }
+                    ],
                     "precedence" : 0,
                     "sink" : {
                         "local_id" : 1
