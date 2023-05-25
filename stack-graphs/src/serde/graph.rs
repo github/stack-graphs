@@ -12,6 +12,7 @@ use thiserror::Error;
 use crate::arena::Handle;
 
 use super::Filter;
+use super::ImplicationFilter;
 use super::NoFilter;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -41,9 +42,10 @@ impl StackGraph {
     }
 
     pub fn from_graph_filter<'a>(graph: &crate::graph::StackGraph, filter: &'a dyn Filter) -> Self {
-        let files = graph.filter_files(filter);
-        let nodes = graph.filter_nodes(filter);
-        let edges = graph.filter_edges(filter);
+        let filter = ImplicationFilter(filter);
+        let files = graph.filter_files(&filter);
+        let nodes = graph.filter_nodes(&filter);
+        let edges = graph.filter_edges(&filter);
         Self {
             files,
             nodes,
