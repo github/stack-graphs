@@ -292,6 +292,19 @@
     padding-top: 8px;
 }
 
+.sg-tooltip-sub-header {
+    font-variant: small-caps;
+    font-style: italic;
+    border-bottom: dashed 1px #555555;
+}
+
+.sg-tooltip-sub-header td {
+    column-span: all;
+}
+
+.sg-tooltip-sub-header:not(:first-child) td {
+    padding-top: 4px;
+}
 
 .sg-tooltip-label {
     font-variant: small-caps;
