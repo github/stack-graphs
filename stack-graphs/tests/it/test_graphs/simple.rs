@@ -112,6 +112,7 @@ pub fn new() -> StackGraph {
     let str_lexical_scope = graph.add_string("lexical_scope");
     let str_pos_one = graph.add_string("line 31 column 20");
     let str_pos_two = graph.add_string("line 8 column 11");
+    let str_pos_three = graph.add_string("line 23 column 4");
     graph
         .node_debug_info_mut(scope_x)
         .add(str_dsl_var, str_arg_scope);
@@ -124,6 +125,9 @@ pub fn new() -> StackGraph {
     graph
         .node_debug_info_mut(scope)
         .add(str_dsl_position, str_pos_two);
+    graph
+        .edge_debug_info_mut(scope, root)
+        .add(str_dsl_position, str_pos_three);
 
     graph
 }

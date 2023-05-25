@@ -329,6 +329,7 @@ use std::time::Instant;
 use thiserror::Error;
 use tree_sitter::Parser;
 use tree_sitter_graph::functions::Functions;
+use tree_sitter_graph::graph::Edge;
 use tree_sitter_graph::graph::Graph;
 use tree_sitter_graph::graph::GraphNode;
 use tree_sitter_graph::graph::GraphNodeRef;
@@ -906,6 +907,12 @@ impl<'a> Builder<'a> {
                 let sink_handle = self.stack_graph.node_for_id(sink_node_id).unwrap();
                 self.stack_graph
                     .add_edge(source_handle, sink_handle, precedence);
+                Self::load_edge_debug_info(
+                    &mut self.stack_graph,
+                    source_handle,
+                    sink_handle,
+                    edge,
+                )?;
             }
         }
 
@@ -1122,7 +1129,32 @@ impl<'a> Builder<'a> {
                     .stack_graph
                     .add_string(&name[DEBUG_ATTR_PREFIX.len()..]);
                 let value = self.stack_graph.add_string(&value);
-                self.stack_graph.node_debug_info_mut(node_handle).add(key, value);
+                self.stack_graph
+                    .node_debug_info_mut(node_handle)
+                    .add(key, value);
+            }
+        }
+        Ok(())
+    }
+
+    fn load_edge_debug_info(
+        stack_graph: &mut StackGraph,
+        source_handle: Handle<Node>,
+        sink_handle: Handle<Node>,
+        edge: &Edge,
+    ) -> Result<(), BuildError> {
+        for (name, value) in edge.attributes.iter() {
+            let name = name.to_string();
+            if name.starts_with(DEBUG_ATTR_PREFIX) {
+                let value = match value {
+                    Value::String(value) => value.clone(),
+                    value => value.to_string(),
+                };
+                let key = stack_graph.add_string(&name[DEBUG_ATTR_PREFIX.len()..]);
+                let value = stack_graph.add_string(&value);
+                stack_graph
+                    .edge_debug_info_mut(source_handle, sink_handle)
+                    .add(key, value);
             }
         }
         Ok(())
