@@ -54,13 +54,17 @@ class StackGraph {
             node_ids.push(path.end_node);
             const nodes = {};
             const edges = {};
-            nodes[this.node_id_to_str(node_ids[0])] = {};
+            nodes[this.node_id_to_str(node_ids[0])] = {
+                stacks: [],
+            };
             for (let i = 1; i < node_ids.length; i++) {
                 const source = node_ids[i - 1];
                 const sink = node_ids[i];
                 const edge_id = this.edge_to_id_str({ source, sink });
                 edges[edge_id] = {};
-                nodes[this.node_id_to_str(sink)] = {};
+                nodes[this.node_id_to_str(sink)] = {
+                    stacks: [],
+                };
                 // create jump edges, which are not part of the graph
                 if (this.N[this.ID[this.node_id_to_str(source)]].type === 'jump_to_scope' && jumps[edge_id] !== true) {
                     jumps[edge_id] = true;
@@ -81,18 +85,26 @@ class StackGraph {
     compute_path_stacks(path) {
         let symbol_stack = null;
         let scope_stack = null;
-        for (let edge of path.edges) {
+        var index = 0;
+        for (; index < path.edges.length; index++) {
+            const edge = path.edges[index];
             const node_id = this.node_id_to_str(edge.source);
             const node = this.N[this.ID[node_id]];
             [symbol_stack, scope_stack] = this.compute_stacks_after_node(node, symbol_stack, scope_stack);
-            path.derived.nodes[node_id].symbol_stack = symbol_stack;
-            path.derived.nodes[node_id].scope_stack = scope_stack;
+            path.derived.nodes[node_id].stacks.push({
+                index,
+                symbol_stack,
+                scope_stack,
+            });
         }
         const node_id = this.node_id_to_str(path.end_node);
         const node = this.N[this.ID[node_id]];
         [symbol_stack, scope_stack] = this.compute_stacks_after_node(node, symbol_stack, scope_stack);
-        path.derived.nodes[node_id].symbol_stack = symbol_stack;
-        path.derived.nodes[node_id].scope_stack = scope_stack;
+        path.derived.nodes[node_id].stacks.push({
+            index,
+            symbol_stack,
+            scope_stack,
+        });
     }
 
     compute_stacks_after_node(node, symbol_stack, scope_stack) {
@@ -631,6 +643,13 @@ class StackGraph {
                 .attr("colspan", "2")
                 .text(label);
         }
+        function add_sub_header(label) {
+            const tr = tbody.append("tr")
+                .attr("class", "sg-tooltip-sub-header");
+            tr.append("td")
+                .attr("colspan", "2")
+                .text(label);
+        }
         function add_row(label, value) {
             const tr = tbody.append("tr");
             tr.append("td").attr("class", "sg-tooltip-label").text(label);
@@ -657,6 +676,7 @@ class StackGraph {
         }
         let tooltip_methods = {
             add_header,
+            add_sub_header,
             add_row,
         };
 
@@ -735,8 +755,11 @@ class StackGraph {
         const node_id = (this.current_node && this.node_to_id_str(this.current_node))
             || (this.current_edge && this.node_id_to_str(this.current_edge.source));
         const node_data = path.derived.nodes[node_id];
-        tooltip.add_row("symbol stack", this.symbol_stack_to_array(node_data.symbol_stack));
-        tooltip.add_row("scope stack", this.scope_stack_to_array(node_data.scope_stack));
+        for (const { index, symbol_stack, scope_stack } of node_data.stacks) {
+            tooltip.add_sub_header(`position ${index}`);
+            tooltip.add_row("symbol stack", this.symbol_stack_to_array(symbol_stack));
+            tooltip.add_row("scope stack", this.scope_stack_to_array(scope_stack));
+        }
     }
 
     tooltip_on_current_path(paths_lock) {

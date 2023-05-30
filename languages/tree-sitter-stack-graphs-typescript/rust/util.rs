@@ -22,7 +22,7 @@ pub const PKG_M_NS: &str = "%PkgM";
 pub fn add_debug_name(graph: &mut StackGraph, node: Handle<Node>, name: &str) {
     let key = graph.add_string("name");
     let value = graph.add_string(name);
-    graph.debug_info_mut(node).add(key, value);
+    graph.node_debug_info_mut(node).add(key, value);
 }
 
 pub fn add_pop(
