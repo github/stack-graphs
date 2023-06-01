@@ -79,6 +79,21 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @node.super_scope
 }
 
+;; Inherited Variables
+;; ^^^^^^^^^^^^^^^^^^^
+
+inherit .bottom
+inherit .class_member_attr_scope
+inherit .class_parent_scope
+inherit .class_self_scope
+inherit .function_returns
+inherit .global
+inherit .global_dot
+inherit .grandparent_module
+inherit .local_scope
+inherit .parent_module
+inherit .super_scope
+
 ; Modules and Imports
 ;---------------------
 
@@ -92,7 +107,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   var parent_module_ref = module_ref
   var grandparent_module_ref = module_ref
 
-  scan filepath {
+  scan FILE_PATH {
     "([^/]+)/"
     {
       edge module_def -> module_def.dot
@@ -144,11 +159,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @mod.global_dot -> @mod.global
   attr (@mod.global_dot) push_symbol = "."
 
-  var @mod::parent_module = parent_module_ref
-  var @mod::grandparent_module = grandparent_module_ref
-  var @mod::bottom = @mod.after_scope
-  var @mod::global = @mod.global
-  var @mod::global_dot = @mod.global_dot
+  let @mod.parent_module = parent_module_ref
+  let @mod.grandparent_module = grandparent_module_ref
+  let @mod.bottom = @mod.after_scope
+  let @mod.global = @mod.global
+  let @mod.global_dot = @mod.global_dot
 }
 
 (import_statement
@@ -252,14 +267,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (import_prefix) @prefix
   (#eq? @prefix ".")) @import
 {
-  edge @prefix.ref -> @import::parent_module
+  edge @prefix.ref -> @import.parent_module
 }
 
 (relative_import
   (import_prefix) @prefix
   (#eq? @prefix "..")) @import
 {
-  edge @prefix.ref -> @import::grandparent_module
+  edge @prefix.ref -> @import.grandparent_module
 }
 
 (relative_import
@@ -367,7 +382,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ]
 {
   edge @stmt.after_scope -> @stmt.before_scope
-  let @stmt::local_scope = @stmt.before_scope
+  let @stmt.local_scope = @stmt.before_scope
 }
 
 [
@@ -385,7 +400,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (function_definition (block) @block)
 {
-  edge @block.before_scope -> @block::local_scope
+  edge @block.before_scope -> @block.local_scope
 }
 
 [
@@ -402,13 +417,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ])
 ] @stmt
 {
-  edge @block.before_scope -> @block::local_scope
+  edge @block.before_scope -> @block.local_scope
   edge @stmt.after_scope -> @block.after_scope
 }
 
 (match_statement (case_clause) @block) @stmt
 {
-  let @block::local_scope = @block.before_scope
+  let @block.local_scope = @block.before_scope
   edge @block.before_scope -> @stmt.before_scope
   edge @stmt.after_scope -> @block.after_scope
 }
@@ -450,17 +465,17 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @func.call -> @func.return_value
   edge @body.before_scope -> @params.after_scope
   edge @body.before_scope -> @func.drop_scope
-  edge @func.drop_scope -> @func::bottom
+  edge @func.drop_scope -> @func.bottom
   attr (@func.drop_scope) type = "drop_scopes"
   attr (@name) node_definition = @name
   attr (@func.call) pop_scoped_symbol = "()"
   edge @params.before_scope -> JUMP_TO_SCOPE_NODE
   attr (@func.return_value) is_exported
-  let @func::function_returns = @func.return_value
+  let @func.function_returns = @func.return_value
 
   ; Prevent functions defined inside of method bodies from being treated like methods
-  let @body::class_self_scope = nil
-  let @body::class_member_attr_scope = nil
+  let @body.class_self_scope = nil
+  let @body.class_member_attr_scope = nil
 }
 
 ;;
@@ -534,8 +549,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     . (identifier) @param)
   body: (block) @body)
 {
-  edge @param.input -> @param::class_self_scope
-  edge @param::class_member_attr_scope -> @param.output
+  edge @param.input -> @param.class_self_scope
+  edge @param.class_member_attr_scope -> @param.output
   edge @param.output -> @body.after_scope
   attr (@param.output) push_node = @param
 }
@@ -586,10 +601,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (tuple_pattern (_) @pattern)
 ] @list
 {
-  let statement_scope = @list::local_scope
-  let @pattern::local_scope = @pattern.pattern_before_scope
-  edge statement_scope -> @pattern::local_scope
-  attr (statement_scope -> @pattern::local_scope) precedence = (+ 1 (child-index @pattern))
+  let statement_scope = @list.local_scope
+  let @pattern.local_scope = @pattern.pattern_before_scope
+  edge statement_scope -> @pattern.local_scope
+  attr (statement_scope -> @pattern.local_scope) precedence = (plus 1 (child-index @pattern))
 
   edge @pattern.pattern_index -> @list.input
   edge @pattern.input -> @pattern.pattern_index
@@ -607,7 +622,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (return_statement (_) @expr) @stmt
 {
-  edge @stmt::function_returns -> @expr.output
+  edge @stmt.function_returns -> @expr.output
 }
 
 (class_definition
@@ -615,8 +630,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   attr (@name) definiens_node = @class
   attr (@name) syntax_type = "class"
-  edge @class.parent_scope -> @class::class_parent_scope
-  edge @class.parent_scope -> @class::local_scope
+  edge @class.parent_scope -> @class.class_parent_scope
+  edge @class.parent_scope -> @class.local_scope
   edge @class.after_scope -> @name
   edge @name -> @class.call
   edge @name -> @class.dot
@@ -634,10 +649,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@name) node_definition = @name
   attr (@class.member_attrs) push_symbol = "."
   attr (@class.self_scope) is_exported
-  let @class::super_scope = @class.super_scope
-  let @class::class_parent_scope = @class.parent_scope
-  let @class::class_self_scope = @class.call_drop
-  let @class::class_member_attr_scope = @class.member_attrs
+  let @class.super_scope = @class.super_scope
+  let @class.class_parent_scope = @class.parent_scope
+  let @class.class_self_scope = @class.call_drop
+  let @class.class_member_attr_scope = @class.member_attrs
 }
 
 (class_definition
@@ -695,7 +710,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@receiver.arg_index) pop_symbol = "0"
   edge @receiver.arg_index -> @receiver.output
 
-  attr (@arg.arg_index) pop_symbol = (+ 1 (child-index @arg))
+  attr (@arg.arg_index) pop_symbol = (plus 1 (child-index @arg))
   edge @arg.arg_index -> @arg.output
 }
 
@@ -724,7 +739,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (#eq? @fn-name "super")
 )
 {
-  edge @call.output -> @call::super_scope
+  edge @call.output -> @call.super_scope
 }
 
 [
@@ -769,9 +784,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (primary_expression/identifier) @id
 {
-  edge @id.output -> @id::local_scope
-  edge @id.output -> @id::class_parent_scope
-  edge @id::local_scope -> @id.input
+  edge @id.output -> @id.local_scope
+  edge @id.output -> @id.class_parent_scope
+  edge @id.local_scope -> @id.input
   attr (@id.input) pop_node = @id
   attr (@id.output) node_reference = @id
 
@@ -781,10 +796,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (pattern/identifier) @id
 {
-  edge @id.output -> @id::local_scope
-  edge @id.output -> @id::class_parent_scope
-  edge @id::local_scope -> @id.input
-  attr (@id::local_scope -> @id.input) precedence = 1
+  edge @id.output -> @id.local_scope
+  edge @id.output -> @id.class_parent_scope
+  edge @id.local_scope -> @id.input
+  attr (@id.local_scope -> @id.input) precedence = 1
   attr (@id.input) node_definition = @id
   attr (@id.output) push_node = @id
 
@@ -796,10 +811,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (expression) @value
   alias: (as_pattern_target (primary_expression/identifier) @id)) @as_pattern
 {
-  edge @id.output -> @id::local_scope
-  edge @id.output -> @id::class_parent_scope
-  edge @id::local_scope -> @id.input
-  attr (@id::local_scope -> @id.input) precedence = 1
+  edge @id.output -> @id.local_scope
+  edge @id.output -> @id.class_parent_scope
+  edge @id.local_scope -> @id.input
+  attr (@id.local_scope -> @id.input) precedence = 1
   attr (@id.input) node_definition = @id
   attr (@id.output) push_node = @id
 
@@ -810,7 +825,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (list) @list
 {
   edge @list.output -> @list.called
-  edge @list.called -> @list::global_dot
+  edge @list.called -> @list.global_dot
   attr (@list.called) push_symbol = "list"
 }
 
