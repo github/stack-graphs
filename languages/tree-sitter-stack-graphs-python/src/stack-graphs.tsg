@@ -57,9 +57,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       edge module_ref.next_ref -> module_ref.dot
       edge module_ref.dot -> module_ref
 
-      attr (module_def) "pop" = $1
+      attr (module_def) pop_symbol = $1
       attr (module_def.dot) pop_symbol = "."
-      attr (module_ref) "push" = $1
+      attr (module_ref) push_symbol = $1
       attr (module_ref.dot) push_symbol = "."
 
       set grandparent_module_ref = parent_module_ref
@@ -81,7 +81,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       edge module_def -> module_def.dot
       edge module_def.dot -> module_def.next_def
 
-      attr (module_def) "definition", "pop" = (replace $1 "\\.py" "")
+      attr (module_def) symbol_definition = (replace $1 "\\.py" ""), source_node = @mod
       attr (module_def.dot) pop_symbol = "."
 
       set module_def = module_def.next_def
@@ -114,8 +114,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   edge @stmt.after_scope -> @root_name.def, "precedence" = 1
   edge @root_name.ref -> root
-  attr (@root_name.ref) "push", "reference"
-  attr (@root_name.def) "pop", "definition"
+  attr (@root_name.ref) node_reference = @root_name
+  attr (@root_name.def) node_definition = @root_name
 }
 
 (import_statement
@@ -124,7 +124,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   edge @stmt.after_scope -> @root_name.def
   edge @root_name.ref -> root
-  attr (@root_name.ref) "push", "reference"
+  attr (@root_name.ref) node_reference = @root_name
 }
 
 (import_from_statement
@@ -132,7 +132,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     . (identifier) @prefix_root_name)) @stmt
 {
   edge @prefix_root_name.ref -> root
-  attr (@prefix_root_name.ref) "push", "reference"
+  attr (@prefix_root_name.ref) node_reference = @prefix_root_name
 }
 
 (import_from_statement
@@ -141,8 +141,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   edge @stmt.after_scope -> @import_root_name.def, "precedence" = 1
   edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.def) "pop", "definition"
-  attr (@import_root_name.ref) "push", "reference"
+  attr (@import_root_name.def) node_definition = @import_root_name
+  attr (@import_root_name.ref) node_reference = @import_root_name
   attr (@import_root_name.ref_dot) push_symbol = "."
 }
 
@@ -152,7 +152,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       . (identifier) @import_root_name))) @stmt
 {
   edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.ref) "push", "reference"
+  attr (@import_root_name.ref) node_reference = @import_root_name
   attr (@import_root_name.ref_dot) push_symbol = "."
 }
 
@@ -186,7 +186,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   edge @stmt.after_scope -> @alias
   edge @alias -> @name.ref
-  attr (@alias) "pop", "definition"
+  attr (@alias) node_definition = @alias
 }
 
 [
@@ -198,8 +198,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       (identifier) @leaf_name .))
 ]
 {
-  attr (@leaf_name.def) "pop", "definition"
-  attr (@leaf_name.ref) "push", "reference"
+  attr (@leaf_name.def) node_definition = @leaf_name
+  attr (@leaf_name.ref) node_reference = @leaf_name
   edge @leaf_name.def -> @leaf_name.ref
 }
 
@@ -222,7 +222,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (dotted_name
     . (identifier) @name))
 {
-  attr (@name.ref) "push", "reference"
+  attr (@name.ref) node_reference = @name
   attr (@name.ref_dot) push_symbol = "."
   edge @name.ref -> @name.ref_dot
   edge @name.ref_dot -> @prefix.ref
@@ -242,7 +242,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       (identifier) @child_name))
 ]
 {
-  attr (@child_name.ref) "push", "reference"
+  attr (@child_name.ref) node_reference = @child_name
   attr (@child_name.ref_dot) push_symbol = "."
   edge @child_name.ref -> @child_name.ref_dot
   edge @child_name.ref_dot -> @parent_name.ref
@@ -252,7 +252,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   module_name: (dotted_name
     . (identifier) @root_name))
 {
-  attr (@root_name.ref) "push", "reference"
+  attr (@root_name.ref) node_reference = @root_name
   edge @root_name.ref -> root
 }
 
@@ -289,8 +289,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @child_name.ref_dot -> @parent_name.ref
   edge @parent_name.def -> @parent_name.def_dot
   edge @parent_name.def_dot -> @child_name.def
-  attr (@child_name.def) "pop", "definition"
-  attr (@child_name.ref) "push","reference"
+  attr (@child_name.def) node_definition = @child_name
+  attr (@child_name.ref) node_reference = @child_name
   attr (@parent_name.def_dot) pop_symbol = "."
   attr (@child_name.ref_dot) push_symbol = "."
 }
@@ -406,7 +406,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @func.drop_scope
   edge @func.drop_scope -> @func::bottom
   attr (@func.drop_scope) "drop"
-  attr (@name) "pop", "definition"
+  attr (@name) node_definition = @name
   attr (@func.call) pop_scoped_symbol = "()"
   attr (@params.before_scope) "jump-to"
   attr (@func.return_value) "endpoint"
@@ -491,13 +491,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @param.input -> @param::class_self_scope
   edge @param::class_member_attr_scope -> @param.output
   edge @param.output -> @body.after_scope
-  attr (@param.output) "push"
+  attr (@param.output) push_node = @param
 }
 
 (parameter/identifier) @param
 {
-  attr (@param.input) "definition", "pop"
-  attr (@param.param_name) "push"
+  attr (@param.input) node_definition = @param
+  attr (@param.param_name) push_node = @param
   edge @param.input -> @param.param_index
   edge @param.input -> @param.param_name
 }
@@ -511,7 +511,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     value: (_) @value) @param
 ]
 {
-  attr (@name) "definition", "pop"
+  attr (@name) node_definition = @name
   attr (@param.param_name) "push" = @name
   edge @name -> @param.param_name
   edge @name -> @param.param_index
@@ -528,7 +528,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (_) @name) @param
 ]
 {
-  attr (@name) "definition", "pop"
+  attr (@name) node_definition = @name
   attr (@param.param_name) "push" = @name
   edge @name -> @param.param_name
   edge @name -> @param.param_index
@@ -584,7 +584,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@class.call_drop) "drop"
   attr (@class.dot) pop_symbol = "."
   attr (@class.self_dot) pop_symbol = "."
-  attr (@name) "pop", "definition"
+  attr (@name) node_definition = @name
   attr (@class.member_attrs) push_symbol = "."
   attr (@class.self_scope) "endpoint"
   let @class::super_scope = @class.super_scope
@@ -704,8 +704,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @name.input -> @expr.input
   attr (@expr.output_dot) push_symbol = "."
   attr (@expr.input_dot) pop_symbol = "."
-  attr (@name.input) "pop"
-  attr (@name.output) "push"
+  attr (@name.input) pop_node = @name
+  attr (@name.output) push_node = @name
 }
 
 (pattern/attribute
@@ -725,10 +725,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @id.output -> @id::local_scope
   edge @id.output -> @id::class_parent_scope
   edge @id::local_scope -> @id.input
-  attr (@id.input) "pop"
-  attr (@id.output) "push", "reference"
+  attr (@id.input) pop_node = @id
+  attr (@id.output) node_reference = @id
 
-  attr (@id.new_binding_pop) "pop", "definition"
+  attr (@id.new_binding_pop) node_definition = @id
   edge @id.new_bindings -> @id.new_binding_pop
 }
 
@@ -737,10 +737,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @id.output -> @id::local_scope
   edge @id.output -> @id::class_parent_scope
   edge @id::local_scope -> @id.input, "precedence" = 1
-  attr (@id.input) "pop", "definition"
-  attr (@id.output) "push"
+  attr (@id.input) node_definition = @id
+  attr (@id.output) push_node = @id
 
-  attr (@id.new_binding_pop) "pop", "definition"
+  attr (@id.new_binding_pop) node_definition = @id
   edge @id.new_bindings -> @id.new_binding_pop
 }
 
@@ -751,8 +751,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @id.output -> @id::local_scope
   edge @id.output -> @id::class_parent_scope
   edge @id::local_scope -> @id.input, "precedence" = 1
-  attr (@id.input) "pop", "definition"
-  attr (@id.output) "push"
+  attr (@id.input) node_definition = @id
+  attr (@id.output) push_node = @id
 
   edge @as_pattern.new_bindings -> @value.new_bindings
   edge @as_pattern.new_bindings -> @id.new_bindings
