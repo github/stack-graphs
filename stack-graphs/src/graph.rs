@@ -1345,6 +1345,9 @@ pub struct SourceInfo {
     /// If you need one of these to make the type checker happy, but you don't have one, just use
     /// lsp_positions::Span::default(), as this will correspond to the all-0s spans which mean "no definiens".
     pub definiens_span: lsp_positions::Span,
+    /// The fully qualified name is a representation of the symbol that captures its name and its
+    /// embedded context (e.g. `foo.bar` for the symbol `bar` defined in the module `foo`).
+    pub fully_qualified_name: Option<Handle<InternedString>>,
 }
 
 impl StackGraph {
@@ -1572,6 +1575,7 @@ impl StackGraph {
                             .map(|cl| self.add_string(&other[cl]))
                             .into(),
                         definiens_span: source_info.definiens_span.clone(),
+                        fully_qualified_name: None,
                     };
                 }
                 if let Some(debug_info) = other.node_debug_info(other_node) {
