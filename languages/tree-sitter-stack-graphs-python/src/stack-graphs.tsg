@@ -36,6 +36,49 @@ attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol
 
 attribute node_symbol = node            => symbol = (source-text node), source_node = node
 
+;; Nodes
+;; ^^^^^
+
+(_)@node {
+  node @node.after_scope
+  node @node.arg_index
+  node @node.arg_name
+  node @node.before_scope
+  node @node.call
+  node @node.call_drop
+  node @node.called
+  node @node.def
+  node @node.def_dot
+  node @node.dot
+  node @node.drop_scope
+  node @node.el_index
+  node @node.file_def
+  node @node.file_ref
+  node @node.global
+  node @node.global_dot
+  node @node.input
+  node @node.input_dot
+  node @node.member_attrs
+  node @node.members
+  node @node.new_binding_pop
+  node @node.new_bindings
+  node @node.new_bindings_pop
+  node @node.output
+  node @node.output_args
+  node @node.output_dot
+  node @node.param_index
+  node @node.param_name
+  node @node.parent_scope
+  node @node.pattern_before_scope
+  node @node.pattern_index
+  node @node.ref
+  node @node.ref_dot
+  node @node.return_value
+  node @node.self_dot
+  node @node.self_scope
+  node @node.super_scope
+}
+
 ; Modules and Imports
 ;---------------------
 
