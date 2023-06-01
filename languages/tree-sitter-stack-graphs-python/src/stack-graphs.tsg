@@ -188,7 +188,7 @@ inherit .super_scope
 
 (import_from_statement
   module_name: (dotted_name
-    . (identifier) @prefix_root_name)) @stmt
+    . (identifier) @prefix_root_name))
 {
   edge @prefix_root_name.ref -> ROOT_NODE
   attr (@prefix_root_name.ref) node_reference = @prefix_root_name
@@ -209,7 +209,7 @@ inherit .super_scope
 (import_from_statement
   name: (aliased_import
     (dotted_name
-      . (identifier) @import_root_name))) @stmt
+      . (identifier) @import_root_name)))
 {
   edge @import_root_name.ref -> @import_root_name.ref_dot
   attr (@import_root_name.ref) node_reference = @import_root_name
@@ -474,8 +474,8 @@ inherit .super_scope
   let @func.function_returns = @func.return_value
 
   ; Prevent functions defined inside of method bodies from being treated like methods
-  let @body.class_self_scope = nil
-  let @body.class_member_attr_scope = nil
+  let @body.class_self_scope = #null
+  let @body.class_member_attr_scope = #null
 }
 
 ;;
@@ -657,7 +657,7 @@ inherit .super_scope
 
 (class_definition
   body: (block
-    (_) @last_stmt .) @body) @class
+    (_) @last_stmt .)) @class
 {
   edge @class.members -> @last_stmt.after_scope
 }
@@ -718,7 +718,7 @@ inherit .super_scope
   arguments: (argument_list
     (keyword_argument
       name: (identifier) @name
-      value: (_) @val) @arg) @args) @call
+      value: (_) @val) @arg) @args)
 {
   edge @args -> @arg.arg_name
   attr (@arg.arg_name) pop_node = @name
@@ -735,8 +735,8 @@ inherit .super_scope
 
 (
   (call
-    function: (identifier) @fn-name) @call
-  (#eq? @fn-name "super")
+    function: (identifier) @_fn_name) @call
+  (#eq? @_fn_name "super")
 )
 {
   edge @call.output -> @call.super_scope
