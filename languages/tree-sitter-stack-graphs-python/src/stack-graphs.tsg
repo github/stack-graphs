@@ -401,7 +401,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   parameters: (parameters) @params
   body: (block) @body) @func
 {
-  attr (@name) "definiens" = @func
+  attr (@name) definiens_node = @func
   edge @func.after_scope -> @name
   edge @name -> @func.call
   edge @func.call -> @func.return_value
@@ -570,7 +570,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (class_definition
   name: (identifier) @name) @class
 {
-  attr (@name) "definiens" = @class
+  attr (@name) definiens_node = @class
   attr (@name) "syntax_type" = "class"
   edge @class.parent_scope -> @class::class_parent_scope
   edge @class.parent_scope -> @class::local_scope
