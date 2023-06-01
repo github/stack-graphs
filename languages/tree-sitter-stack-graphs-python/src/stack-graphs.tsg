@@ -512,7 +512,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ]
 {
   attr (@name) node_definition = @name
-  attr (@param.param_name) "push" = @name
+  attr (@param.param_name) push_node = @name
   edge @name -> @param.param_name
   edge @name -> @param.param_index
   edge @param.input -> @name
@@ -529,7 +529,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ]
 {
   attr (@name) node_definition = @name
-  attr (@param.param_name) "push" = @name
+  attr (@param.param_name) push_node = @name
   edge @name -> @param.param_name
   edge @name -> @param.param_index
   edge @param.input -> @name
@@ -546,13 +546,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @pattern.pattern_index -> @list.input
   edge @pattern.input -> @pattern.pattern_index
-  attr (@pattern.pattern_index) "push" = (child-index @pattern)
+  attr (@pattern.pattern_index) push_symbol = (child-index @pattern)
 }
 
 (parameters
   (_) @param) @params
 {
-  attr (@param.param_index) "push" = (child-index @param)
+  attr (@param.param_index) push_symbol = (child-index @param)
   edge @param.param_index -> @params.before_scope
   edge @params.after_scope -> @param.input
   edge @param.param_name -> @params.before_scope
@@ -648,7 +648,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@receiver.arg_index) pop_symbol = "0"
   edge @receiver.arg_index -> @receiver.output
 
-  attr (@arg.arg_index) "pop" = (+ 1 (child-index @arg))
+  attr (@arg.arg_index) pop_symbol = (+ 1 (child-index @arg))
   edge @arg.arg_index -> @arg.output
 }
 
@@ -659,7 +659,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       value: (_) @val) @arg) @args) @call
 {
   edge @args -> @arg.arg_name
-  attr (@arg.arg_name) "pop" = @name
+  attr (@arg.arg_name) pop_node = @name
   edge @arg.arg_name -> @val.output
 }
 
@@ -667,7 +667,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (expression) @arg) @args
 {
   edge @args -> @arg.arg_index
-  attr (@arg.arg_index) "pop" = (child-index @arg)
+  attr (@arg.arg_index) pop_symbol = (child-index @arg)
   edge @arg.arg_index -> @arg.output
 }
 
@@ -686,7 +686,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ] @tuple
 {
   edge @tuple.output -> @element.el_index
-  attr (@element.el_index) "pop" = (child-index @element)
+  attr (@element.el_index) pop_symbol = (child-index @element)
   edge @element.el_index -> @element.output
 
   edge @tuple.new_bindings -> @element.new_bindings
@@ -788,7 +788,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (list_splat (_) @splatted) @splat
 {
-attr (@splat.new_bindings_pop) "pop" = @splatted, "definition"
+attr (@splat.new_bindings_pop) node_definition = @splatted
 edge @splat.new_bindings -> @splat.new_bindings_pop
 }
 
