@@ -58,7 +58,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       edge module_ref.dot -> module_ref
 
       attr (module_def) "pop" = $1
-      attr (module_def.dot) "pop" = "."
+      attr (module_def.dot) pop_symbol = "."
       attr (module_ref) "push" = $1
       attr (module_ref.dot) "push" = "."
 
@@ -82,7 +82,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       edge module_def.dot -> module_def.next_def
 
       attr (module_def) "definition", "pop" = (replace $1 "\\.py" "")
-      attr (module_def.dot) "pop" = "."
+      attr (module_def.dot) pop_symbol = "."
 
       set module_def = module_def.next_def
       attr (module_def) empty_source_span
@@ -291,7 +291,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @parent_name.def_dot -> @child_name.def
   attr (@child_name.def) "pop", "definition"
   attr (@child_name.ref) "push","reference"
-  attr (@parent_name.def_dot) "pop" = "."
+  attr (@parent_name.def_dot) pop_symbol = "."
   attr (@child_name.ref_dot) "push" = "."
 }
 
@@ -407,7 +407,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @func.drop_scope -> @func::bottom
   attr (@func.drop_scope) "drop"
   attr (@name) "pop", "definition"
-  attr (@func.call) "pop" = "()", "pop-scope"
+  attr (@func.call) pop_scoped_symbol = "()"
   attr (@params.before_scope) "jump-to"
   attr (@func.return_value) "endpoint"
   let @func::function_returns = @func.return_value
@@ -580,10 +580,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @class.self_scope -> @class.self_dot
   edge @class.self_dot -> @class.members
   edge @class.members -> @class.member_attrs
-  attr (@class.call) "pop" = "()", "pop-scope"
+  attr (@class.call) pop_scoped_symbol = "()"
   attr (@class.call_drop) "drop"
-  attr (@class.dot) "pop" = "."
-  attr (@class.self_dot) "pop" = "."
+  attr (@class.dot) pop_symbol = "."
+  attr (@class.self_dot) pop_symbol = "."
   attr (@name) "pop", "definition"
   attr (@class.member_attrs) "push" = "."
   attr (@class.self_scope) "endpoint"
@@ -645,7 +645,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @args -> @arg.arg_index
   edge @receiver -> @receiver.arg_index
 
-  attr (@receiver.arg_index) "pop" = "0"
+  attr (@receiver.arg_index) pop_symbol = "0"
   edge @receiver.arg_index -> @receiver.output
 
   attr (@arg.arg_index) "pop" = (+ 1 (child-index @arg))
@@ -703,7 +703,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @expr.input_dot -> @name.input
   edge @name.input -> @expr.input
   attr (@expr.output_dot) "push" = "."
-  attr (@expr.input_dot) "pop" = "."
+  attr (@expr.input_dot) pop_symbol = "."
   attr (@name.input) "pop"
   attr (@name.output) "push"
 }
