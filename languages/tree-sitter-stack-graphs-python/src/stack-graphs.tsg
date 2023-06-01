@@ -112,7 +112,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   name: (dotted_name
     . (identifier) @root_name)) @stmt
 {
-  edge @stmt.after_scope -> @root_name.def, "precedence" = 1
+  edge @stmt.after_scope -> @root_name.def
+  attr (@stmt.after_scope -> @root_name.def) precedence = 1
   edge @root_name.ref -> root
   attr (@root_name.ref) node_reference = @root_name
   attr (@root_name.def) node_definition = @root_name
@@ -139,7 +140,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   name: (dotted_name
     . (identifier) @import_root_name)) @stmt
 {
-  edge @stmt.after_scope -> @import_root_name.def, "precedence" = 1
+  edge @stmt.after_scope -> @import_root_name.def
+  attr (@stmt.after_scope -> @import_root_name.def) precedence = 1
   edge @import_root_name.ref -> @import_root_name.ref_dot
   attr (@import_root_name.def) node_definition = @import_root_name
   attr (@import_root_name.ref) node_reference = @import_root_name
@@ -261,7 +263,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (identifier) @leaf_name .)
   (wildcard_import) @star) @stmt
 {
-  edge @stmt.after_scope -> @star.ref_dot, "precedence" = 1
+  edge @stmt.after_scope -> @star.ref_dot
+  attr (@stmt.after_scope -> @star.ref_dot) precedence = 1
   edge @star.ref_dot -> @leaf_name.ref
   attr (@star.ref_dot) push_symbol = "."
 }
@@ -542,7 +545,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   let statement_scope = @list::local_scope
   let @pattern::local_scope = @pattern.pattern_before_scope
-  edge statement_scope -> @pattern::local_scope, "precedence" = (+ 1 (child-index @pattern))
+  edge statement_scope -> @pattern::local_scope
+  attr (statement_scope -> @pattern::local_scope) precedence = (+ 1 (child-index @pattern))
 
   edge @pattern.pattern_index -> @list.input
   edge @pattern.input -> @pattern.pattern_index
@@ -736,7 +740,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   edge @id.output -> @id::local_scope
   edge @id.output -> @id::class_parent_scope
-  edge @id::local_scope -> @id.input, "precedence" = 1
+  edge @id::local_scope -> @id.input
+  attr (@id::local_scope -> @id.input) precedence = 1
   attr (@id.input) node_definition = @id
   attr (@id.output) push_node = @id
 
@@ -750,7 +755,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 {
   edge @id.output -> @id::local_scope
   edge @id.output -> @id::class_parent_scope
-  edge @id::local_scope -> @id.input, "precedence" = 1
+  edge @id::local_scope -> @id.input
+  attr (@id::local_scope -> @id.input) precedence = 1
   attr (@id.input) node_definition = @id
   attr (@id.output) push_node = @id
 
