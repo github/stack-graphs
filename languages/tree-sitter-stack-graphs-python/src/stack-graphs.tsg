@@ -408,7 +408,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @params.after_scope
   edge @body.before_scope -> @func.drop_scope
   edge @func.drop_scope -> @func::bottom
-  attr (@func.drop_scope) "drop"
+  attr (@func.drop_scope) type = "drop_scopes"
   attr (@name) node_definition = @name
   attr (@func.call) pop_scoped_symbol = "()"
   attr (@params.before_scope) "jump-to"
@@ -585,7 +585,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @class.self_dot -> @class.members
   edge @class.members -> @class.member_attrs
   attr (@class.call) pop_scoped_symbol = "()"
-  attr (@class.call_drop) "drop"
+  attr (@class.call_drop) type = "drop_scopes"
   attr (@class.dot) pop_symbol = "."
   attr (@class.self_dot) pop_symbol = "."
   attr (@name) node_definition = @name
