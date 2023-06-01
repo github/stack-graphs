@@ -148,12 +148,12 @@ inherit .super_scope
     }
   }
 
-  edge root -> @mod.file_def
-  edge @mod.file_ref -> root
+  edge ROOT_NODE -> @mod.file_def
+  edge @mod.file_ref -> ROOT_NODE
   edge module_def -> @mod.after_scope
 
   edge @mod.before_scope -> @mod.global_dot
-  edge @mod.global -> root
+  edge @mod.global -> ROOT_NODE
   attr (@mod.global) push_symbol = "<builtins>"
 
   edge @mod.global_dot -> @mod.global
@@ -172,7 +172,7 @@ inherit .super_scope
 {
   edge @stmt.after_scope -> @root_name.def
   attr (@stmt.after_scope -> @root_name.def) precedence = 1
-  edge @root_name.ref -> root
+  edge @root_name.ref -> ROOT_NODE
   attr (@root_name.ref) node_reference = @root_name
   attr (@root_name.def) node_definition = @root_name
 }
@@ -182,7 +182,7 @@ inherit .super_scope
     (dotted_name . (identifier) @root_name))) @stmt
 {
   edge @stmt.after_scope -> @root_name.def
-  edge @root_name.ref -> root
+  edge @root_name.ref -> ROOT_NODE
   attr (@root_name.ref) node_reference = @root_name
 }
 
@@ -190,7 +190,7 @@ inherit .super_scope
   module_name: (dotted_name
     . (identifier) @prefix_root_name)) @stmt
 {
-  edge @prefix_root_name.ref -> root
+  edge @prefix_root_name.ref -> ROOT_NODE
   attr (@prefix_root_name.ref) node_reference = @prefix_root_name
 }
 
@@ -313,7 +313,7 @@ inherit .super_scope
     . (identifier) @root_name))
 {
   attr (@root_name.ref) node_reference = @root_name
-  edge @root_name.ref -> root
+  edge @root_name.ref -> ROOT_NODE
 }
 
 (import_from_statement
