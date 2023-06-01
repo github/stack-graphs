@@ -412,7 +412,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@name) node_definition = @name
   attr (@func.call) pop_scoped_symbol = "()"
   attr (@params.before_scope) "jump-to"
-  attr (@func.return_value) "endpoint"
+  attr (@func.return_value) is_exported
   let @func::function_returns = @func.return_value
 
   ; Prevent functions defined inside of method bodies from being treated like methods
@@ -590,7 +590,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@class.self_dot) pop_symbol = "."
   attr (@name) node_definition = @name
   attr (@class.member_attrs) push_symbol = "."
-  attr (@class.self_scope) "endpoint"
+  attr (@class.self_scope) is_exported
   let @class::super_scope = @class.super_scope
   let @class::class_parent_scope = @class.parent_scope
   let @class::class_self_scope = @class.call_drop
