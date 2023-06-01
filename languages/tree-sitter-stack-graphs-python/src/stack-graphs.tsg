@@ -411,7 +411,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@func.drop_scope) type = "drop_scopes"
   attr (@name) node_definition = @name
   attr (@func.call) pop_scoped_symbol = "()"
-  attr (@params.before_scope) "jump-to"
+  edge @params.before_scope -> JUMP_TO_SCOPE_NODE
   attr (@func.return_value) is_exported
   let @func::function_returns = @func.return_value
 
