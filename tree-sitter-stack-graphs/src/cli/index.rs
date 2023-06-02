@@ -356,14 +356,7 @@ impl<'a> Indexer<'a> {
                     tsg_str: &lc.sgl.tsg_source(),
                 })?;
         }
-        for lc in lcs.secondary {
-            let fa = match source_path
-                .file_name()
-                .and_then(|file_name| lc.special_files.get(&file_name.to_string_lossy()))
-            {
-                Some(fa) => fa,
-                None => panic!("secondary language missing analyzer"),
-            };
+        for (_, fa) in lcs.secondary {
             fa.build_stack_graph_into(
                 graph,
                 file,

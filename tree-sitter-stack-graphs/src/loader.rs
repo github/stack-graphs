@@ -348,7 +348,10 @@ pub struct FileLanguageConfigurations<'a> {
     /// The file's primary language. The language configuration's `StackGraphLanguage` should be used to process the file.
     pub primary: Option<&'a LanguageConfiguration>,
     /// Any secondary languages, which have special file analyzers for the file.
-    pub secondary: Vec<&'a LanguageConfiguration>,
+    pub secondary: Vec<(
+        &'a LanguageConfiguration,
+        Arc<dyn FileAnalyzer + Send + Sync>,
+    )>,
 }
 
 impl FileLanguageConfigurations<'_> {
@@ -470,12 +473,11 @@ impl LanguageConfigurationsLoader {
         let primary = LanguageConfiguration::best_for_file(&self.configurations, path, content)?;
         let mut secondary = Vec::new();
         for language in self.configurations.iter() {
-            if path
+            if let Some(fa) = path
                 .file_name()
                 .and_then(|file_name| language.special_files.get(&file_name.to_string_lossy()))
-                .is_some()
             {
-                secondary.push(language);
+                secondary.push((language, fa));
             }
         }
         Ok(FileLanguageConfigurations { primary, secondary })

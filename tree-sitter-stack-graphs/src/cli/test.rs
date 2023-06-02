@@ -211,7 +211,7 @@ impl TestArgs {
             .load_for_file(&load_path, &mut file_reader, cancellation_flag)?
             .primary
         {
-            Some(sgl) => sgl,
+            Some(lc) => lc,
             None => return Ok(TestResult::new()),
         };
 
