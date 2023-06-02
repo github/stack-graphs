@@ -362,7 +362,7 @@ impl<'a> Indexer<'a> {
                 .and_then(|file_name| lc.special_files.get(&file_name.to_string_lossy()))
             {
                 Some(fa) => fa,
-                None => continue, // shouldn't really happen though
+                None => panic!("secondary language missing analyzer"),
             };
             fa.build_stack_graph_into(
                 graph,
