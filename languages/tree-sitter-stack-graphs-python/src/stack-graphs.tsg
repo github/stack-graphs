@@ -268,8 +268,6 @@ inherit .parent_module
       (identifier) @leaf_name .))
 ]
 {
-  attr (@leaf_name.def) node_definition = @leaf_name
-  attr (@leaf_name.ref) node_reference = @leaf_name
   edge @leaf_name.def -> @leaf_name.ref
 }
 
