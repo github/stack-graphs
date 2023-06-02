@@ -201,14 +201,6 @@ inherit .parent_module
 }
 
 (import_from_statement
-  module_name: (dotted_name
-    . (identifier) @prefix_root_name))
-{
-  edge @prefix_root_name.ref -> ROOT_NODE
-  attr (@prefix_root_name.ref) node_reference = @prefix_root_name
-}
-
-(import_from_statement
   name: (dotted_name
     . (identifier) @import_root_name)) @stmt
 {
