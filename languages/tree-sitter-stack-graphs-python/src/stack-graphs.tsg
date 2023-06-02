@@ -259,8 +259,8 @@ inherit .super_scope
 ] @stmt
 {
   edge @stmt.after_scope -> @alias
-  edge @alias -> @name.ref
-  attr (@alias) node_definition = @alias
+  edge @alias.def -> @name.ref
+  attr (@alias.def) node_definition = @alias
 }
 
 [
@@ -473,15 +473,15 @@ inherit .super_scope
   parameters: (parameters) @params
   body: (block) @body) @func
 {
-  attr (@name) definiens_node = @func
-  edge @func.after_scope -> @name
-  edge @name -> @func.call
+  attr (@name.def) definiens_node = @func
+  edge @func.after_scope -> @name.def
+  edge @name.def -> @func.call
   edge @func.call -> @func.return_value
   edge @body.before_scope -> @params.after_scope
   edge @body.before_scope -> @func.drop_scope
   edge @func.drop_scope -> @func.bottom
   attr (@func.drop_scope) type = "drop_scopes"
-  attr (@name) node_definition = @name
+  attr (@name.def) node_definition = @name
   attr (@func.call) pop_scoped_symbol = "()"
   edge @params.before_scope -> JUMP_TO_SCOPE_NODE
   attr (@func.return_value) is_exported
@@ -510,7 +510,7 @@ inherit .super_scope
   (class_definition (block (function_definition name: (_)@name)))
 ]
 {
-  attr (@name) syntax_type = "method"
+  attr (@name.def) syntax_type = "method"
 }
 
 [
@@ -551,7 +551,7 @@ inherit .super_scope
   (function_definition (block (function_definition name: (_)@name)))
 ]
 {
-  attr (@name) syntax_type = "function"
+  attr (@name.def) syntax_type = "function"
 }
 
 ;;
@@ -586,12 +586,12 @@ inherit .super_scope
     value: (_) @value) @param
 ]
 {
-  attr (@name) node_definition = @name
+  attr (@name.def) node_definition = @name
   attr (@param.param_name) push_node = @name
-  edge @name -> @param.param_name
-  edge @name -> @param.param_index
-  edge @param.input -> @name
-  edge @name -> @value.output
+  edge @name.def -> @param.param_name
+  edge @name.def -> @param.param_index
+  edge @param.input -> @name.def
+  edge @name.def -> @value.output
 }
 
 [
@@ -603,11 +603,11 @@ inherit .super_scope
     (_) @name) @param
 ]
 {
-  attr (@name) node_definition = @name
+  attr (@name.def) node_definition = @name
   attr (@param.param_name) push_node = @name
-  edge @name -> @param.param_name
-  edge @name -> @param.param_index
-  edge @param.input -> @name
+  edge @name.def -> @param.param_name
+  edge @name.def -> @param.param_index
+  edge @param.input -> @name.def
 }
 
 [
@@ -642,13 +642,13 @@ inherit .super_scope
 (class_definition
   name: (identifier) @name) @class
 {
-  attr (@name) definiens_node = @class
-  attr (@name) syntax_type = "class"
+  attr (@name.def) definiens_node = @class
+  attr (@name.def) syntax_type = "class"
   edge @class.parent_scope -> @class.class_parent_scope
   edge @class.parent_scope -> @class.local_scope
-  edge @class.after_scope -> @name
-  edge @name -> @class.call
-  edge @name -> @class.dot
+  edge @class.after_scope -> @name.def
+  edge @name.def -> @class.call
+  edge @name.def -> @class.dot
   edge @class.dot -> @class.members
   edge @class.call -> @class.call_drop
   edge @class.call_drop -> @class.self_scope
@@ -660,7 +660,7 @@ inherit .super_scope
   attr (@class.call_drop) type = "drop_scopes"
   attr (@class.dot) pop_symbol = "."
   attr (@class.self_dot) pop_symbol = "."
-  attr (@name) node_definition = @name
+  attr (@name.def) node_definition = @name
   attr (@class.member_attrs) push_symbol = "."
   attr (@class.self_scope) is_exported
   let @class.super_scope = @class.super_scope
