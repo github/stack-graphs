@@ -54,8 +54,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @node.el_index
   node @node.file_def
   node @node.file_ref
-  node @node.global
-  node @node.global_dot
   node @node.input
   node @node.input_dot
   node @node.member_attrs
@@ -165,18 +163,21 @@ inherit .super_scope
   edge @mod.file_ref -> ROOT_NODE
   edge module_def -> @mod.after_scope
 
-  edge @mod.before_scope -> @mod.global_dot
-  edge @mod.global -> ROOT_NODE
-  attr (@mod.global) push_symbol = "<builtins>"
+  node global
+  node global_dot
 
-  edge @mod.global_dot -> @mod.global
-  attr (@mod.global_dot) push_symbol = "."
+  edge @mod.before_scope -> global_dot
+  edge global -> ROOT_NODE
+  attr (global) push_symbol = "<builtins>"
+
+  edge global_dot -> global
+  attr (global_dot) push_symbol = "."
 
   let @mod.parent_module = parent_module_ref
   let @mod.grandparent_module = grandparent_module_ref
   let @mod.bottom = @mod.after_scope
-  let @mod.global = @mod.global
-  let @mod.global_dot = @mod.global_dot
+  let @mod.global = global
+  let @mod.global_dot = global_dot
 }
 
 (import_statement
