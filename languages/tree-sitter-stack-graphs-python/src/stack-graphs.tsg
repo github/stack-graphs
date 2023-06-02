@@ -407,11 +407,6 @@ inherit .parent_module
   edge @stmt.before_scope -> @block.before_scope
 }
 
-(block (_) @stmt . ) @block
-{
-  edge @block.after_scope -> @stmt.after_scope
-}
-
 (function_definition (block) @block)
 {
   edge @block.before_scope -> @block.local_scope
