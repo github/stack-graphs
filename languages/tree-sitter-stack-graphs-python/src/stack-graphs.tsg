@@ -613,17 +613,17 @@ inherit .parent_module
   let statement_scope = @list.local_scope
   let @pattern.local_scope = @pattern.pattern_before_scope
   edge statement_scope -> @pattern.local_scope
-  attr (statement_scope -> @pattern.local_scope) precedence = (plus 1 (child-index @pattern))
+  attr (statement_scope -> @pattern.local_scope) precedence = (plus 1 (named-child-index @pattern))
 
   edge @pattern.pattern_index -> @list.input
   edge @pattern.input -> @pattern.pattern_index
-  attr (@pattern.pattern_index) push_symbol = (child-index @pattern)
+  attr (@pattern.pattern_index) push_symbol = (named-child-index @pattern)
 }
 
 (parameters
   (_) @param) @params
 {
-  attr (@param.param_index) push_symbol = (child-index @param)
+  attr (@param.param_index) push_symbol = (named-child-index @param)
   edge @param.param_index -> @params.before_scope
   edge @params.after_scope -> @param.input
   edge @param.param_name -> @params.before_scope
@@ -720,7 +720,7 @@ inherit .parent_module
   attr (@receiver.arg_index) pop_symbol = "0"
   edge @receiver.arg_index -> @receiver.output
 
-  attr (@arg.arg_index) pop_symbol = (plus 1 (child-index @arg))
+  attr (@arg.arg_index) pop_symbol = (plus 1 (named-child-index @arg))
   edge @arg.arg_index -> @arg.output
 }
 
@@ -758,7 +758,7 @@ inherit .parent_module
 ] @tuple
 {
   edge @tuple.output -> @element.el_index
-  attr (@element.el_index) pop_symbol = (child-index @element)
+  attr (@element.el_index) pop_symbol = (named-child-index @element)
   edge @element.el_index -> @element.output
 
   edge @tuple.new_bindings -> @element.new_bindings
