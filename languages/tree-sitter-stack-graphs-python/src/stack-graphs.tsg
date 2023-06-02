@@ -738,7 +738,7 @@ inherit .parent_module
   (expression) @arg) @args
 {
   edge @args.def -> @arg.arg_index
-  attr (@arg.arg_index) pop_symbol = (child-index @arg)
+  attr (@arg.arg_index) pop_symbol = (named-child-index @arg)
   edge @arg.arg_index -> @arg.output
 }
 
