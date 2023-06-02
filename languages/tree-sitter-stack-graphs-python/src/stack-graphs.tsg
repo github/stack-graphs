@@ -84,13 +84,13 @@ inherit .bottom
 inherit .class_member_attr_scope
 inherit .class_parent_scope
 inherit .class_self_scope
+inherit .class_super_scope
 inherit .function_returns
 inherit .global
 inherit .global_dot
 inherit .grandparent_module
 inherit .local_scope
 inherit .parent_module
-inherit .super_scope
 
 ; Modules and Imports
 ;---------------------
@@ -663,10 +663,10 @@ inherit .super_scope
   attr (@name.def) node_definition = @name
   attr (@class.member_attrs) push_symbol = "."
   attr (@class.self_scope) is_exported
-  let @class.super_scope = @class.super_scope
+  let @class.class_member_attr_scope = @class.member_attrs
   let @class.class_parent_scope = @class.parent_scope
   let @class.class_self_scope = @class.call_drop
-  let @class.class_member_attr_scope = @class.member_attrs
+  let @class.class_super_scope = @class.super_scope
 }
 
 (class_definition
@@ -680,7 +680,7 @@ inherit .super_scope
   superclasses: (argument_list
     (_) @superclass)) @class
 {
-  edge @class.super_scope -> @superclass.output
+  edge @class.class_super_scope -> @superclass.output
 }
 
 (decorated_definition
@@ -753,7 +753,7 @@ inherit .super_scope
   (#eq? @_fn_name "super")
 )
 {
-  edge @call.output -> @call.super_scope
+  edge @call.output -> @call.class_super_scope
 }
 
 [
