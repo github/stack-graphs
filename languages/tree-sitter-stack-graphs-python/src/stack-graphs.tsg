@@ -705,6 +705,7 @@ inherit .parent_module
   edge @call.output -> @call.output_args
   edge @call.output_args -> @fn.output
   attr (@call.output_args) push_scoped_symbol = "()", scope = @args.def
+  attr (@args.def) is_exported
 }
 
 (call
