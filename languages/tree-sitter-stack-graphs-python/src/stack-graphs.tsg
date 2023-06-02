@@ -462,7 +462,7 @@ inherit .parent_module
   parameters: (parameters) @params
   body: (block) @body) @func
 {
-  attr (@name.def) definiens_node = @func
+; attr (@name.def) definiens_node = @func
   edge @func.after_scope -> @name.def
   edge @name.def -> @func.call
   edge @func.call -> @func.return_value
@@ -495,52 +495,52 @@ inherit .parent_module
 ;;
 
 [
-  (class_definition (block (decorated_definition (function_definition name: (_)@name))))
-  (class_definition (block (function_definition name: (_)@name)))
+  (class_definition (block (decorated_definition (function_definition name: (_)@_name))))
+  (class_definition (block (function_definition name: (_)@_name)))
 ]
 {
-  attr (@name.def) syntax_type = "method"
+; attr (@name.def) syntax_type = "method"
 }
 
 [
-  (module (decorated_definition (function_definition name: (_)@name)))
-  (module (function_definition name: (_)@name))
+  (module (decorated_definition (function_definition name: (_)@_name)))
+  (module (function_definition name: (_)@_name))
 
-  (if_statement (block (decorated_definition (function_definition name: (_)@name))))
-  (if_statement (block (function_definition name: (_)@name)))
+  (if_statement (block (decorated_definition (function_definition name: (_)@_name))))
+  (if_statement (block (function_definition name: (_)@_name)))
 
-  (elif_clause (block (decorated_definition (function_definition name: (_)@name))))
-  (elif_clause (block (function_definition name: (_)@name)))
+  (elif_clause (block (decorated_definition (function_definition name: (_)@_name))))
+  (elif_clause (block (function_definition name: (_)@_name)))
 
-  (else_clause (block (decorated_definition (function_definition name: (_)@name))))
-  (else_clause (block (function_definition name: (_)@name)))
+  (else_clause (block (decorated_definition (function_definition name: (_)@_name))))
+  (else_clause (block (function_definition name: (_)@_name)))
 
-  (case_clause (block (decorated_definition (function_definition name: (_)@name))))
-  (case_clause (block (function_definition name: (_)@name)))
+  (case_clause (block (decorated_definition (function_definition name: (_)@_name))))
+  (case_clause (block (function_definition name: (_)@_name)))
 
-  (for_statement (block (decorated_definition (function_definition name: (_)@name))))
-  (for_statement (block (function_definition name: (_)@name)))
+  (for_statement (block (decorated_definition (function_definition name: (_)@_name))))
+  (for_statement (block (function_definition name: (_)@_name)))
 
-  (while_statement (block (decorated_definition (function_definition name: (_)@name))))
-  (while_statement (block (function_definition name: (_)@name)))
+  (while_statement (block (decorated_definition (function_definition name: (_)@_name))))
+  (while_statement (block (function_definition name: (_)@_name)))
 
-  (try_statement (block (decorated_definition (function_definition name: (_)@name))))
-  (try_statement (block (function_definition name: (_)@name)))
+  (try_statement (block (decorated_definition (function_definition name: (_)@_name))))
+  (try_statement (block (function_definition name: (_)@_name)))
 
-  (except_clause (block (decorated_definition (function_definition name: (_)@name))))
-  (except_clause (block (function_definition name: (_)@name)))
+  (except_clause (block (decorated_definition (function_definition name: (_)@_name))))
+  (except_clause (block (function_definition name: (_)@_name)))
 
-  (finally_clause (block (decorated_definition (function_definition name: (_)@name))))
-  (finally_clause (block (function_definition name: (_)@name)))
+  (finally_clause (block (decorated_definition (function_definition name: (_)@_name))))
+  (finally_clause (block (function_definition name: (_)@_name)))
 
-  (with_statement (block (decorated_definition (function_definition name: (_)@name))))
-  (with_statement (block (function_definition name: (_)@name)))
+  (with_statement (block (decorated_definition (function_definition name: (_)@_name))))
+  (with_statement (block (function_definition name: (_)@_name)))
 
-  (function_definition (block (decorated_definition (function_definition name: (_)@name))))
-  (function_definition (block (function_definition name: (_)@name)))
+  (function_definition (block (decorated_definition (function_definition name: (_)@_name))))
+  (function_definition (block (function_definition name: (_)@_name)))
 ]
 {
-  attr (@name.def) syntax_type = "function"
+; attr (@name.def) syntax_type = "function"
 }
 
 ;;
@@ -631,8 +631,8 @@ inherit .parent_module
 (class_definition
   name: (identifier) @name) @class
 {
-  attr (@name.def) definiens_node = @class
-  attr (@name.def) syntax_type = "class"
+; attr (@name.def) definiens_node = @class
+; attr (@name.def) syntax_type = "class"
   edge @class.parent_scope -> @class.class_parent_scope
   edge @class.parent_scope -> @class.local_scope
   edge @class.after_scope -> @name.def
