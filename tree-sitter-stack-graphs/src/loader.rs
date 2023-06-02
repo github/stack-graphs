@@ -101,6 +101,27 @@ impl LanguageConfiguration {
         })
     }
 
+    // Extracted from tree_sitter_loader::Loader::language_configuration_for_file_name
+    fn best_for_file<'a>(
+        languages: &'a Vec<LanguageConfiguration>,
+        path: &Path,
+        content: &mut dyn ContentProvider,
+    ) -> std::io::Result<Option<&'a LanguageConfiguration>> {
+        let mut best_score = -1isize;
+        let mut best = None;
+        for language in languages {
+            if let Some(score) =
+                matches_file(&language.file_types, &language.content_regex, path, content)?
+            {
+                if score > best_score {
+                    best_score = score;
+                    best = Some(language);
+                }
+            }
+        }
+        Ok(best)
+    }
+
     pub fn matches_file(
         &self,
         path: &Path,
@@ -239,12 +260,12 @@ impl Loader {
     }
 
     /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
-    pub fn load_for_file(
-        &mut self,
+    pub fn load_for_file<'a>(
+        &'a mut self,
         path: &Path,
         content: &mut dyn ContentProvider,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<Option<&LanguageConfiguration>, LoadError<'static>> {
+    ) -> Result<FileLanguageConfigurations<'a>, LoadError<'static>> {
         match &mut self.0 {
             LoaderImpl::Paths(loader) => loader.load_for_file(path, content, cancellation_flag),
             LoaderImpl::Provided(loader) => loader.load_for_file(path, content),
@@ -321,6 +342,24 @@ impl Loader {
     }
 }
 
+/// Struct holding the language configurations for a file.
+#[derive(Default)]
+pub struct FileLanguageConfigurations<'a> {
+    /// The file's primary language. The language configuration's `StackGraphLanguage` should be used to process the file.
+    pub primary: Option<&'a LanguageConfiguration>,
+    /// Any secondary languages, which have special file analyzers for the file.
+    pub secondary: Vec<(
+        &'a LanguageConfiguration,
+        Arc<dyn FileAnalyzer + Send + Sync>,
+    )>,
+}
+
+impl FileLanguageConfigurations<'_> {
+    pub fn has_some(&self) -> bool {
+        self.primary.is_some() || !self.secondary.is_empty()
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum LoadError<'a> {
     #[error("{0}")]
@@ -353,7 +392,6 @@ pub enum LoadError<'a> {
     },
     #[error("{inner}")]
     TsgParse {
-        #[source]
         inner: tree_sitter_graph::ParseError,
         tsg_path: PathBuf,
         tsg: Cow<'a, str>,
@@ -427,17 +465,22 @@ impl LanguageConfigurationsLoader {
     }
 
     /// Load a stack graph language for the given file. Loading is based on the loader configuration and the given file path.
-    pub fn load_for_file(
-        &mut self,
+    pub fn load_for_file<'a>(
+        &'a mut self,
         path: &Path,
         content: &mut dyn ContentProvider,
-    ) -> Result<Option<&LanguageConfiguration>, LoadError<'static>> {
+    ) -> Result<FileLanguageConfigurations<'a>, LoadError<'static>> {
+        let primary = LanguageConfiguration::best_for_file(&self.configurations, path, content)?;
+        let mut secondary = Vec::new();
         for language in self.configurations.iter() {
-            if language.matches_file(path, content)? {
-                return Ok(Some(language));
+            if let Some(fa) = path
+                .file_name()
+                .and_then(|file_name| language.special_files.get(&file_name.to_string_lossy()))
+            {
+                secondary.push((language, fa));
             }
         }
-        Ok(None)
+        Ok(FileLanguageConfigurations { primary, secondary })
     }
 }
 
@@ -490,16 +533,16 @@ impl PathLoader {
         Ok(None)
     }
 
-    pub fn load_for_file(
-        &mut self,
+    pub fn load_for_file<'a>(
+        &'a mut self,
         path: &Path,
         content: &mut dyn ContentProvider,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<Option<&LanguageConfiguration>, LoadError<'static>> {
+    ) -> Result<FileLanguageConfigurations<'a>, LoadError<'static>> {
         let selected_language = self.select_language_for_file(path, content)?;
         let language = match selected_language {
             Some(selected_language) => selected_language.clone(),
-            None => return Ok(None),
+            None => return Ok(FileLanguageConfigurations::default()),
         };
         // the borrow checker is a hard master...
         let index = self.cache.iter().position(|e| &e.0 == &language.language);
@@ -531,8 +574,11 @@ impl PathLoader {
                 self.cache.len() - 1
             }
         };
-        let sgl = &mut self.cache[index].1;
-        Ok(Some(sgl))
+        let lc = &self.cache[index].1;
+        Ok(FileLanguageConfigurations {
+            primary: Some(lc),
+            secondary: Vec::default(),
+        })
     }
 
     // Select language for the given file, considering paths and scope fields

@@ -33,6 +33,7 @@ use crate::CancellationFlag;
 use crate::NoCancellation;
 
 use super::util::iter_files_and_directories;
+use super::util::BuildErrorWithSource;
 use super::util::ConsoleFileLogger;
 use super::util::FileLogger;
 
@@ -206,8 +207,11 @@ impl TestArgs {
             test_path.to_path_buf()
         };
         let mut file_reader = MappingFileReader::new(&load_path, test_path);
-        let lc = match loader.load_for_file(&load_path, &mut file_reader, cancellation_flag)? {
-            Some(sgl) => sgl,
+        let lc = match loader
+            .load_for_file(&load_path, &mut file_reader, cancellation_flag)?
+            .primary
+        {
+            Some(lc) => lc,
             None => return Ok(TestResult::new()),
         };
 
@@ -236,7 +240,7 @@ impl TestArgs {
             let result = if let Some(fa) = test_fragment
                 .path
                 .file_name()
-                .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
+                .and_then(|file_name| lc.special_files.get(&file_name.to_string_lossy()))
             {
                 let mut all_paths = test.fragments.iter().map(|f| f.path.as_path());
                 fa.build_stack_graph_into(
@@ -248,19 +252,34 @@ impl TestArgs {
                     &test_fragment.globals,
                     cancellation_flag,
                 )
+                .map_err(|inner| BuildErrorWithSource {
+                    inner,
+                    source_path: test_path.to_path_buf(),
+                    source_str: &test_fragment.source,
+                    tsg_path: PathBuf::new(),
+                    tsg_str: "",
+                })
             } else if lc.matches_file(
                 &test_fragment.path,
                 &mut Some(test_fragment.source.as_ref()),
             )? {
                 globals.clear();
                 test_fragment.add_globals_to(&mut globals);
-                lc.sgl.build_stack_graph_into(
-                    &mut test.graph,
-                    test_fragment.file,
-                    &test_fragment.source,
-                    &globals,
-                    cancellation_flag,
-                )
+                lc.sgl
+                    .build_stack_graph_into(
+                        &mut test.graph,
+                        test_fragment.file,
+                        &test_fragment.source,
+                        &globals,
+                        cancellation_flag,
+                    )
+                    .map_err(|inner| BuildErrorWithSource {
+                        inner,
+                        source_path: test_path.to_path_buf(),
+                        source_str: &test_fragment.source,
+                        tsg_path: lc.sgl.tsg_path().to_path_buf(),
+                        tsg_str: &lc.sgl.tsg_source(),
+                    })
             } else {
                 return Err(anyhow!(
                     "Test fragment {} not supported by language of test file {}",
@@ -270,15 +289,7 @@ impl TestArgs {
             };
             match result {
                 Err(err) => {
-                    file_status.failure(
-                        "failed to build stack graph",
-                        Some(&err.display_pretty(
-                            test_path,
-                            source,
-                            lc.sgl.tsg_path(),
-                            lc.sgl.tsg_source(),
-                        )),
-                    );
+                    file_status.failure("failed to build stack graph", Some(&err.display_pretty()));
                     return Err(anyhow!("Failed to build graph for {}", test_path.display()));
                 }
                 Ok(_) => {}
