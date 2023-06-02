@@ -250,7 +250,7 @@ inherit .parent_module
       alias: (identifier) @alias))
 ] @stmt
 {
-  edge @stmt.after_scope -> @alias
+  edge @stmt.after_scope -> @alias.def
   edge @alias.def -> @name.ref
   attr (@alias.def) node_definition = @alias
 }
