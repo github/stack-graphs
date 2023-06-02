@@ -213,8 +213,6 @@ inherit .parent_module
   edge @stmt.after_scope -> @import_root_name.def
   attr (@stmt.after_scope -> @import_root_name.def) precedence = 1
   edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.def) node_definition = @import_root_name
-  attr (@import_root_name.ref) node_reference = @import_root_name
   attr (@import_root_name.ref_dot) push_symbol = "."
 }
 
@@ -825,12 +823,8 @@ inherit .parent_module
   (expression) @value
   alias: (as_pattern_target (primary_expression/identifier) @id)) @as_pattern
 {
-  edge @id.output -> @id.local_scope
-  edge @id.output -> @id.class_parent_scope
-  edge @id.local_scope -> @id.input
   attr (@id.local_scope -> @id.input) precedence = 1
-  attr (@id.input) node_definition = @id
-  attr (@id.output) push_node = @id
+  attr (@id.input) is_definition
 
   edge @as_pattern.new_bindings -> @value.new_bindings
   edge @as_pattern.new_bindings -> @id.new_bindings
