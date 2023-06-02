@@ -41,8 +41,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (_)@node {
   node @node.after_scope
-  node @node.arg_index
-  node @node.arg_name
   node @node.before_scope
   node @node.call
   node @node.call_drop
@@ -702,10 +700,12 @@ inherit .parent_module
   function: (_) @fn
   arguments: (argument_list) @args) @call
 {
+  node @args.args
+  attr (@args.args) is_exported
+
   edge @call.output -> @call.output_args
   edge @call.output_args -> @fn.output
-  attr (@call.output_args) push_scoped_symbol = "()", scope = @args.def
-  attr (@args.def) is_exported
+  attr (@call.output_args) push_scoped_symbol = "()", scope = @args.args
 }
 
 (call
@@ -714,33 +714,37 @@ inherit .parent_module
   arguments: (argument_list
     (expression) @arg) @args)
 {
-  edge @args.def -> @arg.arg_index
-  edge @receiver -> @receiver.arg_index
+  node receiver_arg_index
+  attr (receiver_arg_index) pop_symbol = "0"
+  edge @args.args -> receiver_arg_index
+  edge receiver_arg_index -> @receiver.output
 
-  attr (@receiver.arg_index) pop_symbol = "0"
-  edge @receiver.arg_index -> @receiver.output
-
-  attr (@arg.arg_index) pop_symbol = (plus 1 (named-child-index @arg))
-  edge @arg.arg_index -> @arg.output
+  ;; FIXME the arguments will also exist with their unshifted indices because of the general
+  ;;       rule below!
+  node arg_index
+  attr (arg_index) pop_symbol = (plus 1 (named-child-index @arg))
+  edge arg_index -> @arg.output
 }
 
 (call
   arguments: (argument_list
     (keyword_argument
       name: (identifier) @name
-      value: (_) @val) @arg) @args)
+      value: (_) @val)) @args)
 {
-  edge @args.def -> @arg.arg_name
-  attr (@arg.arg_name) pop_node = @name
-  edge @arg.arg_name -> @val.output
+  node arg_name
+  edge @args.args -> arg_name
+  attr (arg_name) pop_node = @name
+  edge arg_name -> @val.output
 }
 
 (argument_list
   (expression) @arg) @args
 {
-  edge @args.def -> @arg.arg_index
-  attr (@arg.arg_index) pop_symbol = (named-child-index @arg)
-  edge @arg.arg_index -> @arg.output
+  node arg_index
+  edge @args.args -> arg_index
+  attr (arg_index) pop_symbol = (named-child-index @arg)
+  edge arg_index -> @arg.output
 }
 
 (
