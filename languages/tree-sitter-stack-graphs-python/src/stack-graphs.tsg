@@ -704,7 +704,7 @@ inherit .parent_module
 {
   edge @call.output -> @call.output_args
   edge @call.output_args -> @fn.output
-  attr (@call.output_args) push_scoped_symbol = "()", scope = @args
+  attr (@call.output_args) push_scoped_symbol = "()", scope = @args.def
 }
 
 (call
@@ -713,7 +713,7 @@ inherit .parent_module
   arguments: (argument_list
     (expression) @arg) @args)
 {
-  edge @args -> @arg.arg_index
+  edge @args.def -> @arg.arg_index
   edge @receiver -> @receiver.arg_index
 
   attr (@receiver.arg_index) pop_symbol = "0"
@@ -729,7 +729,7 @@ inherit .parent_module
       name: (identifier) @name
       value: (_) @val) @arg) @args)
 {
-  edge @args -> @arg.arg_name
+  edge @args.def -> @arg.arg_name
   attr (@arg.arg_name) pop_node = @name
   edge @arg.arg_name -> @val.output
 }
@@ -737,7 +737,7 @@ inherit .parent_module
 (argument_list
   (expression) @arg) @args
 {
-  edge @args -> @arg.arg_index
+  edge @args.def -> @arg.arg_index
   attr (@arg.arg_index) pop_symbol = (child-index @arg)
   edge @arg.arg_index -> @arg.output
 }
