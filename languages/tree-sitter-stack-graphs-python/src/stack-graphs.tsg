@@ -782,13 +782,13 @@ inherit .parent_module
 (pattern/attribute
   attribute: (identifier) @name)
 {
-  attr (@name.input) node_definition = @name
+  attr (@name.input) is_definition
 }
 
 (primary_expression/attribute
   attribute: (identifier) @name)
 {
-  attr (@name.output) node_reference = @name
+  attr (@name.output) is_reference
 }
 
 (primary_expression/identifier) @id
