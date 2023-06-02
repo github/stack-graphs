@@ -19,9 +19,14 @@ use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 use tree_sitter_graph::Variables;
 
+use crate::cli::util::duration_from_seconds_str;
+use crate::cli::util::iter_files_and_directories;
+use crate::cli::util::ConsoleFileLogger;
 use crate::cli::util::ExistingPathBufValueParser;
+use crate::cli::util::FileLogger;
 use crate::cli::util::PathSpec;
 use crate::loader::ContentProvider;
 use crate::loader::FileReader;
@@ -29,13 +34,8 @@ use crate::loader::LanguageConfiguration;
 use crate::loader::Loader;
 use crate::test::Test;
 use crate::test::TestResult;
+use crate::CancelAfterDuration;
 use crate::CancellationFlag;
-use crate::NoCancellation;
-
-use super::util::iter_files_and_directories;
-use super::util::BuildErrorWithSource;
-use super::util::ConsoleFileLogger;
-use super::util::FileLogger;
 
 #[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
@@ -128,6 +128,14 @@ pub struct TestArgs {
     /// Do not load builtins for tests.
     #[clap(long)]
     pub no_builtins: bool,
+
+    /// Maximum runtime per test in seconds.
+    #[clap(
+        long,
+        value_name = "SECONDS",
+        value_parser = duration_from_seconds_str,
+    )]
+    pub max_test_time: Option<Duration>,
 }
 
 /// Flag to control output
@@ -158,6 +166,7 @@ impl TestArgs {
             save_visualization: None,
             output_mode: OutputMode::OnFailure,
             no_builtins: false,
+            max_test_time: None,
         }
     }
 
@@ -198,7 +207,7 @@ impl TestArgs {
         loader: &mut Loader,
         file_status: &mut ConsoleFileLogger,
     ) -> anyhow::Result<TestResult> {
-        let cancellation_flag = &NoCancellation;
+        let cancellation_flag = CancelAfterDuration::from_option(self.max_test_time);
 
         // If the file is skipped (ending in .skip) we construct the non-skipped path to see if we would support it.
         let load_path = if test_path.extension().map_or(false, |e| e == "skip") {
@@ -208,7 +217,7 @@ impl TestArgs {
         };
         let mut file_reader = MappingFileReader::new(&load_path, test_path);
         let lc = match loader
-            .load_for_file(&load_path, &mut file_reader, cancellation_flag)?
+            .load_for_file(&load_path, &mut file_reader, cancellation_flag.as_ref())?
             .primary
         {
             Some(lc) => lc,
@@ -250,36 +259,21 @@ impl TestArgs {
                     &test_fragment.source,
                     &mut all_paths,
                     &test_fragment.globals,
-                    cancellation_flag,
+                    cancellation_flag.as_ref(),
                 )
-                .map_err(|inner| BuildErrorWithSource {
-                    inner,
-                    source_path: test_path.to_path_buf(),
-                    source_str: &test_fragment.source,
-                    tsg_path: PathBuf::new(),
-                    tsg_str: "",
-                })
             } else if lc.matches_file(
                 &test_fragment.path,
                 &mut Some(test_fragment.source.as_ref()),
             )? {
                 globals.clear();
                 test_fragment.add_globals_to(&mut globals);
-                lc.sgl
-                    .build_stack_graph_into(
-                        &mut test.graph,
-                        test_fragment.file,
-                        &test_fragment.source,
-                        &globals,
-                        cancellation_flag,
-                    )
-                    .map_err(|inner| BuildErrorWithSource {
-                        inner,
-                        source_path: test_path.to_path_buf(),
-                        source_str: &test_fragment.source,
-                        tsg_path: lc.sgl.tsg_path().to_path_buf(),
-                        tsg_str: &lc.sgl.tsg_source(),
-                    })
+                lc.sgl.build_stack_graph_into(
+                    &mut test.graph,
+                    test_fragment.file,
+                    &test_fragment.source,
+                    &globals,
+                    cancellation_flag.as_ref(),
+                )
             } else {
                 return Err(anyhow!(
                     "Test fragment {} not supported by language of test file {}",
@@ -289,7 +283,18 @@ impl TestArgs {
             };
             match result {
                 Err(err) => {
-                    file_status.failure("failed to build stack graph", Some(&err.display_pretty()));
+                    file_status.failure(
+                        "failed to build stack graph",
+                        Some(&format!(
+                            "{}",
+                            err.display_pretty(
+                                &test.path,
+                                source,
+                                lc.sgl.tsg_path(),
+                                lc.sgl.tsg_source(),
+                            )
+                        )),
+                    );
                     return Err(anyhow!("Failed to build graph for {}", test_path.display()));
                 }
                 Ok(_) => {}
@@ -301,13 +306,13 @@ impl TestArgs {
             partials.find_minimal_partial_path_set_in_file(
                 &test.graph,
                 file,
-                &(cancellation_flag as &dyn CancellationFlag),
+                &cancellation_flag.as_ref(),
                 |g, ps, p| {
                     db.add_partial_path(g, ps, p);
                 },
             )?;
         }
-        let result = test.run(&mut partials, &mut db, cancellation_flag)?;
+        let result = test.run(&mut partials, &mut db, cancellation_flag.as_ref())?;
         let success = self.handle_result(&result, file_status)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
@@ -319,7 +324,7 @@ impl TestArgs {
                 &mut db,
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
-                cancellation_flag,
+                cancellation_flag.as_ref(),
             )?;
         }
         Ok(result)
