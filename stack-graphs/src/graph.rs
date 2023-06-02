@@ -1337,7 +1337,7 @@ pub struct SourceInfo {
     /// The location in its containing file of the source code that this node represents.
     pub span: lsp_positions::Span,
     /// The kind of syntax entity this node represents (e.g. `function`, `class`, `method`, etc.).
-    pub syntax_type: Option<Handle<InternedString>>,
+    pub syntax_type: ControlledOption<Handle<InternedString>>,
     /// The full content of the line containing this node in its source file.
     pub containing_line: ControlledOption<Handle<InternedString>>,
     /// The location in its containing file of the source code that this node's definiens represents.
@@ -1345,6 +1345,9 @@ pub struct SourceInfo {
     /// If you need one of these to make the type checker happy, but you don't have one, just use
     /// lsp_positions::Span::default(), as this will correspond to the all-0s spans which mean "no definiens".
     pub definiens_span: lsp_positions::Span,
+    /// The fully qualified name is a representation of the symbol that captures its name and its
+    /// embedded context (e.g. `foo.bar` for the symbol `bar` defined in the module `foo`).
+    pub fully_qualified_name: ControlledOption<Handle<InternedString>>,
 }
 
 impl StackGraph {
@@ -1565,13 +1568,16 @@ impl StackGraph {
                         span: source_info.span.clone(),
                         syntax_type: source_info
                             .syntax_type
-                            .map(|st| self.add_string(&other[st])),
+                            .into_option()
+                            .map(|st| self.add_string(&other[st]))
+                            .into(),
                         containing_line: source_info
                             .containing_line
                             .into_option()
                             .map(|cl| self.add_string(&other[cl]))
                             .into(),
                         definiens_span: source_info.definiens_span.clone(),
+                        fully_qualified_name: ControlledOption::default(),
                     };
                 }
                 if let Some(debug_info) = other.node_debug_info(other_node) {

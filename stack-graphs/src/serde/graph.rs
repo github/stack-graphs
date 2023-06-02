@@ -141,7 +141,8 @@ impl StackGraph {
                         syntax_type: source_info
                             .syntax_type
                             .as_ref()
-                            .map(|st| graph.add_string(&st)),
+                            .map(|st| graph.add_string(&st))
+                            .into(),
                         ..Default::default()
                     };
                 }
@@ -444,7 +445,7 @@ impl crate::graph::StackGraph {
     ) -> Option<SourceInfo> {
         self.source_info(handle).map(|info| SourceInfo {
             span: info.span.clone(),
-            syntax_type: info.syntax_type.map(|ty| self[ty].to_owned()),
+            syntax_type: info.syntax_type.into_option().map(|ty| self[ty].to_owned()),
         })
     }
 
