@@ -178,6 +178,14 @@ inherit .parent_module
   let @mod.bottom = @mod.after_scope
   let @mod.global = global
   let @mod.global_dot = global_dot
+
+  ;; add a dummy nodes for inherited variables
+  node @mod.class_member_attr_scope
+  node @mod.class_parent_scope
+  node @mod.class_self_scope
+  node @mod.class_super_scope
+  node @mod.function_returns
+  node @mod.local_scope
 }
 
 (import_statement
