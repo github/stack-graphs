@@ -696,9 +696,6 @@ inherit .parent_module
   function: (_) @fn
   arguments: (argument_list) @args) @call
 {
-  node @args.args
-  attr (@args.args) is_exported
-
   edge @call.output -> @call.output_args
   edge @call.output_args -> @fn.output
   attr (@call.output_args) push_scoped_symbol = "()", scope = @args.args
@@ -732,6 +729,11 @@ inherit .parent_module
   edge @args.args -> arg_name
   attr (arg_name) pop_node = @name
   edge arg_name -> @val.output
+}
+
+(argument_list) @args {
+  node @args.args
+  attr (@args.args) is_exported
 }
 
 (argument_list
