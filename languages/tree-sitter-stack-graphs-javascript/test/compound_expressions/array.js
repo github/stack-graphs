@@ -9,7 +9,7 @@ let x = 1;
 
 [y = 1,
     0, y];
-//     ^ defind: 10
+//     ^ defined: 10
 
 /**/ y;
 //   ^ defined: 10
@@ -17,7 +17,7 @@ let x = 1;
 // Flow around
 
 /**/ x;
-//   ^ defineed: 1
+//   ^ defined: 1
 
 let arr = [0, x];
 let x2 = arg[0];

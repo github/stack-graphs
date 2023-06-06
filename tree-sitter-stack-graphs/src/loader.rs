@@ -823,7 +823,7 @@ impl FileReader {
 
 impl ContentProvider for FileReader {
     fn get(&mut self, path: &Path) -> std::io::Result<Option<&str>> {
-        self.get(path).map(|c| Some(c))
+        self.get(path).map(Some)
     }
 }
 

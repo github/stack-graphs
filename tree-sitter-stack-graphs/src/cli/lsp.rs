@@ -9,6 +9,7 @@ use capture_it::capture;
 use clap::Args;
 use crossbeam_channel::RecvTimeoutError;
 use crossbeam_channel::Sender;
+use stack_graphs::storage::SQLiteReader;
 use stack_graphs::storage::SQLiteWriter;
 use stack_graphs::storage::StorageError;
 use std::path::Path;
@@ -20,6 +21,7 @@ use tokio::runtime::Handle;
 use tower_lsp::jsonrpc::Error;
 use tower_lsp::jsonrpc::ErrorCode;
 use tower_lsp::jsonrpc::Result;
+use tower_lsp::lsp_types::notification::Progress;
 use tower_lsp::lsp_types::*;
 use tower_lsp::Client;
 use tower_lsp::LanguageServer;
@@ -32,9 +34,14 @@ use crate::CancelAfterDuration;
 use crate::CancellationFlag;
 
 use super::index::Indexer;
+use super::query::Querier;
+use super::query::QueryError;
+use super::util::duration_from_milliseconds_str;
 use super::util::duration_from_seconds_str;
 use super::util::FileLogger;
 use super::util::Logger;
+use super::util::SourcePosition;
+use super::util::SourceSpan;
 
 #[derive(Args, Clone)]
 pub struct LspArgs {
@@ -42,7 +49,7 @@ pub struct LspArgs {
     #[clap(
         long,
         value_name = "SECONDS",
-        parse(try_from_str = duration_from_seconds_str),
+        value_parser = duration_from_seconds_str,
     )]
     pub max_folder_index_time: Option<Duration>,
 
@@ -50,9 +57,17 @@ pub struct LspArgs {
     #[clap(
         long,
         value_name = "SECONDS",
-        parse(try_from_str = duration_from_seconds_str),
+        value_parser = duration_from_seconds_str,
     )]
     pub max_file_index_time: Option<Duration>,
+
+    /// Maximum query runtime in milliseconds.
+    #[clap(
+        long,
+        value_name = "MILLISECONDS",
+        value_parser = duration_from_milliseconds_str,
+    )]
+    pub max_query_time: Option<Duration>,
 }
 
 impl LspArgs {
@@ -72,6 +87,29 @@ impl LspArgs {
             let stdout = tokio::io::stdout();
             Server::new(stdin, stdout, socket).serve(service).await;
         });
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for LspArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(max_folder_index_time) = self.max_folder_index_time {
+            write!(
+                f,
+                " --max-folder-index-time {}",
+                max_folder_index_time.as_secs()
+            )?;
+        }
+        if let Some(max_file_index_time) = self.max_file_index_time {
+            write!(
+                f,
+                " --max-file-index-time {}",
+                max_file_index_time.as_secs()
+            )?;
+        }
+        if let Some(max_query_time) = self.max_query_time {
+            write!(f, " --max-query-time {}", max_query_time.as_millis())?;
+        }
         Ok(())
     }
 }
@@ -228,12 +266,52 @@ impl Backend {
             })),
         }
     }
+
+    async fn definitions(&self, reference: SourcePosition) -> Vec<SourceSpan> {
+        let mut db = match SQLiteReader::open(&self.db_path) {
+            Ok(db) => db,
+            Err(err) => {
+                self.logger
+                    .error(format!(
+                        "failed to open database {}: {}",
+                        self.db_path.display(),
+                        err
+                    ))
+                    .await;
+                return Vec::default();
+            }
+        };
+
+        let handle = Handle::current();
+        let logger = LspLogger {
+            handle: handle.clone(),
+            logger: self.logger.clone(),
+        };
+        let result = {
+            let mut querier = Querier::new(&mut db, &logger);
+            let cancellation_flag = CancelAfterDuration::from_option(self.args.max_query_time);
+            querier.definitions(reference, cancellation_flag.as_ref())
+        };
+        match result {
+            Ok(result) => result.into_iter().flat_map(|r| r.targets).collect(),
+            Err(QueryError::Cancelled(at)) => {
+                self.logger
+                    .error(format!("query timed out at {}", at,))
+                    .await;
+                return Vec::default();
+            }
+            Err(err) => {
+                self.logger.error(format!("query failed {}", err)).await;
+                return Vec::default();
+            }
+        }
+    }
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        self.logger.info("Initializing").await;
+        self.logger.info(format!("Initialize:{}", self.args)).await;
 
         self.ensure_compatible_database().await?;
 
@@ -261,7 +339,11 @@ impl LanguageServer for Backend {
 
         let result = InitializeResult {
             capabilities: ServerCapabilities {
-                definition_provider: Some(OneOf::Left(true)),
+                definition_provider: Some(OneOf::Right(DefinitionOptions {
+                    work_done_progress_options: WorkDoneProgressOptions {
+                        work_done_progress: true.into(),
+                    },
+                })),
                 text_document_sync: Some(
                     TextDocumentSyncOptions {
                         save: Some(true.into()),
@@ -284,7 +366,12 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        self.logger.info("Initialized").await;
+        self.logger
+            .info(format!(
+                "Initialized with database {}",
+                self.db_path.display()
+            ))
+            .await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -321,7 +408,74 @@ impl LanguageServer for Backend {
                 params.text_document_position_params.position.character + 1
             ))
             .await;
-        Ok(None)
+
+        if let Some(token) = &params.work_done_progress_params.work_done_token {
+            self._client
+                .send_notification::<Progress>(ProgressParams {
+                    token: token.clone(),
+                    value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(
+                        WorkDoneProgressBegin {
+                            title: "Querying".to_string(),
+                            ..Default::default()
+                        },
+                    )),
+                })
+                .await;
+        }
+        let path = match params
+            .text_document_position_params
+            .text_document
+            .uri
+            .to_file_path()
+        {
+            Ok(path) => path,
+            Err(_) => {
+                self.logger
+                    .error(format!(
+                        "Not a supported file path: {}",
+                        params.text_document_position_params.text_document.uri,
+                    ))
+                    .await;
+                return Ok(None);
+            }
+        };
+        let line = params.text_document_position_params.position.line as usize;
+        let column = params.text_document_position_params.position.character as usize;
+        let reference = SourcePosition { path, line, column };
+        let locations = self
+            .definitions(reference)
+            .await
+            .into_iter()
+            .filter_map(|l| l.try_into_location().ok())
+            .collect::<Vec<_>>();
+
+        self.logger
+            .info(format!(
+                "Found {} definitions for {}:{}:{}",
+                locations.len(),
+                params.text_document_position_params.text_document.uri,
+                params.text_document_position_params.position.line + 1,
+                params.text_document_position_params.position.character + 1
+            ))
+            .await;
+        if let Some(token) = &params.work_done_progress_params.work_done_token {
+            self._client
+                .send_notification::<Progress>(ProgressParams {
+                    token: token.clone(),
+                    value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(
+                        WorkDoneProgressEnd {
+                            ..Default::default()
+                        },
+                    )),
+                })
+                .await;
+        }
+
+        match locations.len() {
+            0 => Ok(None),
+            1 => Ok(Some(locations[0].clone().into())),
+            _ => Ok(Some(locations.into())),
+        }
     }
 
     async fn did_change_workspace_folders(&self, params: DidChangeWorkspaceFoldersParams) {
@@ -464,68 +618,83 @@ impl Logger for LspLogger {
 
 impl FileLogger for LspFileLogger<'_> {
     fn default_failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .error(format!("{}: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .error(format!("{}: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .error(format!("{}: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .error(format!("{}: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn skipped(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .info(format!("{}: skipped: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .info(format!("{}: skipped: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn warning(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .warning(format!("{}: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .warning(format!("{}: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn success(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .info(format!("{}: success: {}", path.display(), status))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .info(format!("{}: success: {}", path.display(), status))
+                .await;
+        });
     }
 
     fn processing(&mut self) {
-        self.handle.block_on(capture!(
-            [logger = &self.logger, path = self.path],
-            async move {
-                logger
-                    .info(format!("{}: processing...", path.display()))
-                    .await;
-            }
-        ));
+        let logger = self.logger.clone();
+        let path = self.path.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .info(format!("{}: processing...", path.display()))
+                .await;
+        });
+    }
+}
+
+impl SourceSpan {
+    fn try_into_location(self) -> std::result::Result<Location, ()> {
+        let uri = Url::from_file_path(self.path)?;
+        let start = Position {
+            line: self.span.start.line as u32,
+            character: self.span.start.column.grapheme_offset as u32,
+        };
+        let end = Position {
+            line: self.span.end.line as u32,
+            character: self.span.end.column.grapheme_offset as u32,
+        };
+        let range = Range { start, end };
+        Ok(Location { uri, range })
     }
 }

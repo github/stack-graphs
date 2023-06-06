@@ -17,24 +17,21 @@ use std::path::PathBuf;
 use super::util::ConsoleFileLogger;
 use super::util::FileLogger;
 
-/// Status of files in the database
 #[derive(Args)]
 #[clap(group(
     ArgGroup::new("paths")
         .required(true)
-        .args(&["source-paths", "all"]),
+        .args(&["source_paths", "all"]),
 ))]
-
 pub struct StatusArgs {
     /// Source file or directory paths.
     #[clap(
         value_name = "SOURCE_PATH",
         value_hint = ValueHint::AnyPath,
-        parse(from_os_str),
     )]
     pub source_paths: Vec<PathBuf>,
 
-    /// List all data from the database.
+    /// Show status of all indexed source paths.
     #[clap(long, short = 'a')]
     pub all: bool,
 
@@ -51,6 +48,7 @@ impl StatusArgs {
             self.status(&mut entries)?;
         } else {
             for source_path in &self.source_paths {
+                let source_path = source_path.canonicalize()?;
                 let mut files = db.list_file_or_directory(&source_path)?;
                 let mut entries = files.try_iter()?;
                 self.status(&mut entries)?;
