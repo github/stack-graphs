@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
 use lsp_positions::Offset;
 use lsp_positions::Position;
 use lsp_positions::Span;
@@ -77,6 +78,7 @@ pub fn new() -> StackGraph {
         syntax_type: str_var.into(),
         containing_line: str_line0.into(),
         definiens_span: Span::default(),
+        fully_qualified_name: ControlledOption::default(),
     };
     *graph.source_info_mut(ref_x) = SourceInfo {
         span: Span {
@@ -104,6 +106,7 @@ pub fn new() -> StackGraph {
         syntax_type: str_var.into(),
         containing_line: str_line1.into(),
         definiens_span: Span::default(),
+        fully_qualified_name: ControlledOption::default(),
     };
 
     let str_dsl_var = graph.add_string("dsl_var");

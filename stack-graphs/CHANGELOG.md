@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - New `Defines` and `Refers` assertions test for the presence of definitions and references, respectively, without resolution.
 - A method `StackGraph::get_file` to look up an existing file.
+- A field named `fully_qualified_name` was added to `SourceInfo`.
 
 ### Changed
 

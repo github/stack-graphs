@@ -259,6 +259,9 @@ struct sg_source_info {
     // If you need one of these to make the type checker happy, but you don't have one, just use
     // sg_span::default(), as this will correspond to the all-0s spans which mean "no definiens".
     struct sg_span definiens_span;
+    // The fully qualified name is a representation of the symbol that captures its name and its
+    // embedded context (e.g. `foo.bar` for the symbol `bar` defined in the module `foo`).
+    sg_string_handle fully_qualified_name;
 };
 
 // An array of all of the source information in a stack graph.  Source information is associated
