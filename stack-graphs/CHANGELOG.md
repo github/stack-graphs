@@ -5,22 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.11.0 -- 2023-06-08
 
 ### Added
 
 - New `Defines` and `Refers` assertions test for the presence of definitions and references, respectively, without resolution.
 - A method `StackGraph::get_file` to look up an existing file.
 - A field named `fully_qualified_name` was added to `SourceInfo`.
+- A new `serde` module (requiring the `serde` feature) adds serialization and deserialization of stack graphs and partial paths.
+- Stack graphs can now record debug information for edges as it did for noeds. This is also displayed in the HTML visualization when hovering over an edge arrow.
+- A new `storage` module (requiring the `storage` feature) implements a simple SQLite database for storing stack graphs and partial paths.
+
+### Fixed
+
+- A bug in `PartialPath::concatenate` that prevented stitching partial paths that were joined at a pop or push node.
 
 ### Changed
 
 - The `IncorrectDefinitions` error is renamed to `IncorrectlyDefined`, and `IncorrectDefinitions` is the error used for the `Defines` assertion.
 - The `PartialPaths::find_all_partial_paths_in_file` method has been replaced by `PartialPaths::find_minimal_partial_path_set_in_file`, which computes a smaller set. The `ForwardPartialPathStitcher::find_locally_maximal_partial_path_set` function can be used to compute the set previously returned by `find_all_partial_paths_in_file` from the minimal partial path set.
+- The cycle detection algorithm, which had the dual repsonisbility of detecting path cycles and culling duplicate paths, has been replaced by a new approach consisting of a new cycle detection algorithm and an optional duplicate path detection algorithm. This fixes issues with the old approach which was based on a heuristic and would sometimes keep too many paths, and sometimes throw away too many. The new algorithms are precise instead of using a heuristic and resolve unpredictable resolution behavior.
+- An empty scope stack postcondition is not required anymore for a path to be considered complete. (Symbol stack postconditions must still be empty in complete paths!)
+- The visualization code requires the `visualization` feature instead of the `json` feature, and implies the `serde` feature.
+- A new `CancelAfterDuration` cancellation flag implementation has been added to easily set timeout-based cancellation.
 
 ### Removed
 
 - The method `StackGraph::get_file_unchecked` is removed. Use the new `StackGraph::get_file` instead.
+- All the functionality related to `Path` has been removed in favor of using `PartialPath`. In general, the `Path` behavior of can be achieved by using a `PartialPath` with finite preconditions (i.e., no symbol or scope stack variables), which can be created using `PartialPath::eliminate_precondition_stack_variables`.
 
 ## v0.10.2 -- 2023-01-10
 
