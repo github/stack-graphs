@@ -2225,13 +2225,13 @@ impl PartialPath {
     /// as a parameter, instead of building it up ourselves, so that you have control over which
     /// particular collection type to use, and so that you can reuse result collections across
     /// multiple calls.
-    fn extend<R: Extend<(PartialPath, AppendingCycleDetector<Edge>)>>(
+    fn extend<R: Extend<(PartialPath, AppendingCycleDetector<(), Edge>)>>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
         file: Option<Handle<File>>,
         edges: &mut Appendables<Edge>,
-        path_cycle_detector: AppendingCycleDetector<Edge>,
+        path_cycle_detector: AppendingCycleDetector<(), Edge>,
         result: &mut R,
     ) {
         let extensions = graph.outgoing_edges(self.end_node);

@@ -32,6 +32,7 @@
 use enumset::EnumSet;
 use smallvec::SmallVec;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use crate::arena::Handle;
 use crate::arena::List;
@@ -129,31 +130,42 @@ where
 // ----------------------------------------------------------------------------
 // Cycle detector
 
-pub trait Appendable {
-    type Ctx;
-
+pub trait Appendable<Ctx> {
     fn append_to(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        ctx: &mut Self::Ctx,
+        ctx: &mut Ctx,
         path: &mut PartialPath,
     ) -> Result<(), PathResolutionError>;
-    fn start_node(&self, ctx: &mut Self::Ctx) -> Handle<Node>;
-    fn end_node(&self, ctx: &mut Self::Ctx) -> Handle<Node>;
+    fn start_node(&self, ctx: &mut Ctx) -> Handle<Node>;
+    fn end_node(&self, ctx: &mut Ctx) -> Handle<Node>;
 }
 
-#[derive(Clone)]
-pub struct AppendingCycleDetector<A> {
+pub struct AppendingCycleDetector<Ctx, A>
+where
+    A: Appendable<Ctx>,
+{
     appendages: List<A>,
+    ctx: PhantomData<Ctx>,
+}
+
+impl<Ctx, A: Appendable<Ctx>> Clone for AppendingCycleDetector<Ctx, A> {
+    fn clone(&self) -> Self {
+        Self {
+            appendages: self.appendages.clone(),
+            ctx: PhantomData::default(),
+        }
+    }
 }
 
 pub type Appendables<A> = ListArena<A>;
 
-impl<A: Appendable + Clone> AppendingCycleDetector<A> {
+impl<Ctx, A: Appendable<Ctx> + Clone> AppendingCycleDetector<Ctx, A> {
     pub fn new() -> Self {
         Self {
             appendages: List::empty(),
+            ctx: PhantomData::default(),
         }
     }
 
@@ -173,7 +185,7 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        ctx: &mut A::Ctx,
+        ctx: &mut Ctx,
         appendables: &mut Appendables<A>,
     ) -> Result<EnumSet<Cyclicity>, PathResolutionError> {
         let mut cycles = EnumSet::new();
@@ -223,9 +235,7 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
     }
 }
 
-impl Appendable for Edge {
-    type Ctx = ();
-
+impl Appendable<()> for Edge {
     fn append_to(
         &self,
         graph: &StackGraph,
@@ -245,9 +255,7 @@ impl Appendable for Edge {
     }
 }
 
-impl Appendable for OwnedOrDatabasePath {
-    type Ctx = Database;
-
+impl Appendable<Database> for OwnedOrDatabasePath {
     fn append_to(
         &self,
         graph: &StackGraph,

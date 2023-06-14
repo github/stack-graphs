@@ -463,12 +463,15 @@ impl<'a> Display for DisplaySymbolStackKey<'a> {
 /// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
 pub struct ForwardPartialPathStitcher {
     candidate_partial_paths: Vec<Handle<PartialPath>>,
-    queue: VecDeque<(PartialPath, AppendingCycleDetector<OwnedOrDatabasePath>)>,
+    queue: VecDeque<(
+        PartialPath,
+        AppendingCycleDetector<Database, OwnedOrDatabasePath>,
+    )>,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
     next_iteration: (
         VecDeque<PartialPath>,
-        VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
+        VecDeque<AppendingCycleDetector<Database, OwnedOrDatabasePath>>,
     ),
     appended_paths: Appendables<OwnedOrDatabasePath>,
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
@@ -590,7 +593,7 @@ impl ForwardPartialPathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         partial_path: &PartialPath,
-        cycle_detector: AppendingCycleDetector<OwnedOrDatabasePath>,
+        cycle_detector: AppendingCycleDetector<Database, OwnedOrDatabasePath>,
     ) -> usize {
         self.candidate_partial_paths.clear();
         if graph[partial_path.end_node].is_root() {

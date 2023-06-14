@@ -224,7 +224,7 @@ fn stitching_simple_identity_cycle_is_detected() {
     // test partial path cycle detector
     {
         let mut paths = Appendables::new();
-        let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
+        let mut cd: AppendingCycleDetector<Database, OwnedOrDatabasePath> =
             AppendingCycleDetector::from(&mut paths, p0.into());
         cd.append(&mut paths, p1.into());
         assert_eq!(
@@ -320,7 +320,7 @@ fn stitching_composite_identity_cycle_is_detected() {
     // test joining cycle detector
     {
         let mut paths = Appendables::new();
-        let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
+        let mut cd: AppendingCycleDetector<Database, OwnedOrDatabasePath> =
             AppendingCycleDetector::from(&mut paths, p0.into());
         cd.append(&mut paths, p1.into());
         assert_eq!(
