@@ -56,6 +56,7 @@ use crate::graph::StackGraph;
 use crate::graph::Symbol;
 use crate::paths::Extend;
 use crate::paths::PathResolutionError;
+use crate::stitching::GraphEdges;
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
 use crate::CancellationError;
@@ -2549,7 +2550,7 @@ impl PartialPaths {
                 copious_debugging!("    * visit");
                 visit(graph, self, path);
             } else if !path_cycle_detector
-                .is_cyclic(graph, self, &(), &mut edges)
+                .is_cyclic(graph, self, &GraphEdges(Some(file)), &mut edges)
                 .expect("cyclic test failed when finding partial paths")
                 .is_empty()
             {
@@ -2608,7 +2609,7 @@ impl PartialPaths {
                 visit(graph, self, path.clone());
             }
             if !path_cycle_detector
-                .is_cyclic(graph, &mut partials, &(), &mut edges)
+                .is_cyclic(graph, &mut partials, &GraphEdges(None), &mut edges)
                 .expect("cyclic test failed when finding complete paths")
                 .into_iter()
                 .all(|c| c == Cyclicity::StrengthensPrecondition)

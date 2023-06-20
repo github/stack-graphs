@@ -14,6 +14,7 @@ use stack_graphs::partial::Cyclicity;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::GraphEdges;
 use stack_graphs::CancelAfterDuration;
 use std::time::Duration;
 
@@ -169,7 +170,7 @@ fn finding_simple_identity_cycle_is_detected() {
     {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
-        let ctx = &mut ();
+        let db = &GraphEdges(None);
 
         for edge in &[
             edge(r, foo_ref, 0),
@@ -178,15 +179,14 @@ fn finding_simple_identity_cycle_is_detected() {
         ] {
             cd.append(&mut edges, *edge);
             assert!(cd
-                .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .is_cyclic(&graph, &mut partials, db, &mut edges)
                 .unwrap()
                 .is_empty());
         }
         cd.append(&mut edges, edge(foo_def, r, 0));
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
-            cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
-                .unwrap()
+            cd.is_cyclic(&graph, &mut partials, db, &mut edges).unwrap()
         );
     }
 
@@ -259,7 +259,7 @@ fn finding_composite_identity_cycle_is_detected() {
     {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
-        let ctx = &mut ();
+        let db = &GraphEdges(None);
         for edge in &[
             edge(r, s, 0),
             edge(r, s, 0),
@@ -271,15 +271,14 @@ fn finding_composite_identity_cycle_is_detected() {
         ] {
             cd.append(&mut edges, *edge);
             assert!(cd
-                .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .is_cyclic(&graph, &mut partials, db, &mut edges)
                 .unwrap()
                 .is_empty());
         }
         cd.append(&mut edges, edge(bar_ref, s, 0));
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
-            cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
-                .unwrap()
+            cd.is_cyclic(&graph, &mut partials, db, &mut edges).unwrap()
         );
     }
 

@@ -51,6 +51,7 @@ use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
 use crate::graph::Edge;
+use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
@@ -162,18 +163,6 @@ where
     fn get_appendable<'a>(&'a self, handle: &'a H) -> &'a A;
 }
 
-impl ToAppendable<Handle<PartialPath>, PartialPath> for Database {
-    fn get_appendable<'a>(&'a self, handle: &'a Handle<PartialPath>) -> &'a PartialPath {
-        &self[*handle]
-    }
-}
-
-impl<A: Appendable + Clone> ToAppendable<A, A> for () {
-    fn get_appendable<'a>(&'a self, value: &'a A) -> &'a A {
-        value
-    }
-}
-
 //-------------------------------------------------------------------------------------------------
 // Candidates
 
@@ -188,7 +177,19 @@ pub trait Candidates<H> {
         R: std::iter::Extend<H>;
 }
 
-impl Candidates<Edge> for () {
+//-------------------------------------------------------------------------------------------------
+// FileEdges
+
+/// Acts as a database of the edges in the graph.
+pub struct GraphEdges(pub Option<Handle<File>>);
+
+impl ToAppendable<Edge, Edge> for GraphEdges {
+    fn get_appendable<'a>(&'a self, value: &'a Edge) -> &'a Edge {
+        value
+    }
+}
+
+impl Candidates<Edge> for GraphEdges {
     fn find_candidates<R>(
         &mut self,
         graph: &StackGraph,
@@ -198,7 +199,11 @@ impl Candidates<Edge> for () {
     ) where
         R: std::iter::Extend<Edge>,
     {
-        result.extend(graph.outgoing_edges(path.end_node));
+        result.extend(
+            graph
+                .outgoing_edges(path.end_node)
+                .filter(|e| self.0.map_or(true, |file| graph[e.sink].is_in_file(file))),
+        );
     }
 }
 
@@ -466,6 +471,12 @@ impl std::ops::Index<Handle<PartialPath>> for Database {
     #[inline(always)]
     fn index(&self, handle: Handle<PartialPath>) -> &PartialPath {
         self.partial_paths.get(handle)
+    }
+}
+
+impl ToAppendable<Handle<PartialPath>, PartialPath> for Database {
+    fn get_appendable<'a>(&'a self, handle: &'a Handle<PartialPath>) -> &'a PartialPath {
+        &self[*handle]
     }
 }
 
