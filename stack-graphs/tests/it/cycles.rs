@@ -6,13 +6,14 @@
 // ------------------------------------------------------------------------------------------------
 
 use enumset::enum_set;
+use stack_graphs::arena::Handle;
 use stack_graphs::cycles::Appendables;
 use stack_graphs::cycles::AppendingCycleDetector;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::Cyclicity;
+use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
-use stack_graphs::stitching::OwnedOrDatabasePath;
 use stack_graphs::CancelAfterDuration;
 use std::time::Duration;
 
@@ -224,8 +225,8 @@ fn stitching_simple_identity_cycle_is_detected() {
     // test partial path cycle detector
     {
         let mut paths = Appendables::new();
-        let mut cd: AppendingCycleDetector<Database, OwnedOrDatabasePath> =
-            AppendingCycleDetector::from(&mut paths, p0.into());
+        let mut cd: AppendingCycleDetector<Handle<PartialPath>> =
+            AppendingCycleDetector::from(&mut paths, db[p0].clone());
         cd.append(&mut paths, p1.into());
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
@@ -320,8 +321,8 @@ fn stitching_composite_identity_cycle_is_detected() {
     // test joining cycle detector
     {
         let mut paths = Appendables::new();
-        let mut cd: AppendingCycleDetector<Database, OwnedOrDatabasePath> =
-            AppendingCycleDetector::from(&mut paths, p0.into());
+        let mut cd: AppendingCycleDetector<Handle<PartialPath>> =
+            AppendingCycleDetector::from(&mut paths, db[p0].clone());
         cd.append(&mut paths, p1.into());
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],

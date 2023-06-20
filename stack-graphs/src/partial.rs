@@ -2225,13 +2225,13 @@ impl PartialPath {
     /// as a parameter, instead of building it up ourselves, so that you have control over which
     /// particular collection type to use, and so that you can reuse result collections across
     /// multiple calls.
-    fn extend<R: Extend<(PartialPath, AppendingCycleDetector<(), Edge>)>>(
+    fn extend<R: Extend<(PartialPath, AppendingCycleDetector<Edge>)>>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
         file: Option<Handle<File>>,
         edges: &mut Appendables<Edge>,
-        path_cycle_detector: AppendingCycleDetector<(), Edge>,
+        path_cycle_detector: AppendingCycleDetector<Edge>,
         result: &mut R,
     ) {
         let extensions = graph.outgoing_edges(self.end_node);
@@ -2533,7 +2533,7 @@ impl PartialPaths {
                 copious_debugging!("    * visit");
                 visit(graph, self, path);
             } else if !path_cycle_detector
-                .is_cyclic(graph, self, &mut (), &mut edges)
+                .is_cyclic(graph, self, &(), &mut edges)
                 .expect("cyclic test failed when finding partial paths")
                 .is_empty()
             {
@@ -2592,7 +2592,7 @@ impl PartialPaths {
                 visit(graph, self, path.clone());
             }
             if !path_cycle_detector
-                .is_cyclic(graph, &mut partials, &mut (), &mut edges)
+                .is_cyclic(graph, &mut partials, &(), &mut edges)
                 .expect("cyclic test failed when finding complete paths")
                 .into_iter()
                 .all(|c| c == Cyclicity::StrengthensPrecondition)

@@ -31,21 +31,20 @@
 
 use enumset::EnumSet;
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
-use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::PathResolutionError;
+use crate::stitching::Appendable;
 use crate::stitching::Database;
-use crate::stitching::OwnedOrDatabasePath;
 
 /// Helps detect similar paths in the path-finding algorithm.
 pub struct SimilarPathDetector<P> {
@@ -130,68 +129,130 @@ where
 // ----------------------------------------------------------------------------
 // Cycle detector
 
-pub trait Appendable<Ctx> {
-    fn append_to(
+pub trait Index<'a, H, A>
+where
+    A: Appendable + Clone + 'a,
+{
+    fn get(&'a self, handle: &H) -> Cow<'a, A>;
+}
+
+impl<'a> Index<'a, Handle<PartialPath>, PartialPath> for Database {
+    fn get(&'a self, handle: &Handle<PartialPath>) -> Cow<'a, PartialPath> {
+        Cow::Borrowed(&self[*handle])
+    }
+}
+
+impl<'a, A: Appendable + Clone + 'a> Index<'a, A, A> for () {
+    fn get(&self, value: &A) -> Cow<'a, A> {
+        Cow::Owned(value.clone())
+    }
+}
+
+pub struct Appendables<H>(pub(crate) ListArena<PathOrAppendable<H>>);
+
+impl<H> Appendables<H> {
+    pub fn new() -> Self {
+        Self(ListArena::new())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum PathOrAppendable<H> {
+    Path(PartialPath),
+    Handle(H),
+}
+
+impl<H> PathOrAppendable<H>
+where
+    H: Clone,
+{
+    fn append_to<'a, A, Db>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        ctx: &mut Ctx,
+        db: &'a Db,
         path: &mut PartialPath,
-    ) -> Result<(), PathResolutionError>;
-    fn start_node(&self, ctx: &mut Ctx) -> Handle<Node>;
-    fn end_node(&self, ctx: &mut Ctx) -> Handle<Node>;
-}
+    ) -> Result<(), PathResolutionError>
+    where
+        A: Appendable + Clone + 'a,
+        Db: Index<'a, H, A>,
+    {
+        match self {
+            Self::Path(other) => other.append_to(graph, partials, path),
+            Self::Handle(h) => db.get(h).append_to(graph, partials, path),
+        }
+    }
 
-pub struct AppendingCycleDetector<Ctx, A>
-where
-    A: Appendable<Ctx>,
-{
-    appendages: List<A>,
-    ctx: PhantomData<Ctx>,
-}
+    fn start_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
+    where
+        A: Appendable + Clone + 'a,
+        Db: Index<'a, H, A>,
+    {
+        match self {
+            Self::Path(path) => path.start_node,
+            Self::Handle(h) => db.get(h).start_node(),
+        }
+    }
 
-impl<Ctx, A: Appendable<Ctx>> Clone for AppendingCycleDetector<Ctx, A> {
-    fn clone(&self) -> Self {
-        Self {
-            appendages: self.appendages.clone(),
-            ctx: PhantomData::default(),
+    fn end_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
+    where
+        A: Appendable + Clone + 'a,
+        Db: Index<'a, H, A>,
+    {
+        match self {
+            Self::Path(path) => path.end_node,
+            Self::Handle(h) => db.get(h).end_node(),
         }
     }
 }
 
-pub type Appendables<A> = ListArena<A>;
+#[derive(Clone)]
+pub struct AppendingCycleDetector<H> {
+    appendages: List<PathOrAppendable<H>>,
+}
 
-impl<Ctx, A: Appendable<Ctx> + Clone> AppendingCycleDetector<Ctx, A> {
+impl<H> AppendingCycleDetector<H> {
     pub fn new() -> Self {
         Self {
             appendages: List::empty(),
-            ctx: PhantomData::default(),
         }
     }
 
-    pub fn from(appendables: &mut Appendables<A>, appendage: A) -> Self {
+    pub fn from(appendables: &mut Appendables<H>, path: PartialPath) -> Self {
         let mut result = Self::new();
-        result.appendages.push_front(appendables, appendage);
+        result
+            .appendages
+            .push_front(&mut appendables.0, PathOrAppendable::Path(path));
         result
     }
 
-    pub fn append(&mut self, appendables: &mut Appendables<A>, appendage: A) {
-        self.appendages.push_front(appendables, appendage);
+    pub fn append(&mut self, appendables: &mut Appendables<H>, appendage: H) {
+        self.appendages
+            .push_front(&mut appendables.0, PathOrAppendable::Handle(appendage));
     }
+}
 
+impl<H> AppendingCycleDetector<H>
+where
+    H: Clone,
+{
     /// Tests if the path is cyclic. Returns a vector indicating the kind of cycles that were found.
     /// If appending or concatenating all fragments succeeds, this function will never raise and error.
-    pub fn is_cyclic(
+    pub fn is_cyclic<'a, A, Db>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        ctx: &mut Ctx,
-        appendables: &mut Appendables<A>,
-    ) -> Result<EnumSet<Cyclicity>, PathResolutionError> {
+        db: &'a Db,
+        appendables: &mut Appendables<H>,
+    ) -> Result<EnumSet<Cyclicity>, PathResolutionError>
+    where
+        A: Appendable + Clone + 'a,
+        Db: Index<'a, H, A>,
+    {
         let mut cycles = EnumSet::new();
 
-        let end_node = match self.appendages.clone().pop_front(appendables) {
-            Some(appendage) => appendage.end_node(ctx),
+        let end_node = match self.appendages.clone().pop_front(&mut appendables.0) {
+            Some(appendage) => appendage.end_node(db),
             None => return Ok(cycles),
         };
 
@@ -201,11 +262,11 @@ impl<Ctx, A: Appendable<Ctx> + Clone> AppendingCycleDetector<Ctx, A> {
             // get prefix elements
             let mut prefix_appendages = List::empty();
             loop {
-                let appendable = appendages.pop_front(appendables).cloned();
+                let appendable = appendages.pop_front(&mut appendables.0).cloned();
                 match appendable {
                     Some(appendage) => {
-                        let is_cycle = appendage.start_node(ctx) == end_node;
-                        prefix_appendages.push_front(appendables, appendage);
+                        let is_cycle = appendage.start_node(db) == end_node;
+                        prefix_appendages.push_front(&mut appendables.0, appendage);
                         if is_cycle {
                             break;
                         }
@@ -216,62 +277,18 @@ impl<Ctx, A: Appendable<Ctx> + Clone> AppendingCycleDetector<Ctx, A> {
 
             // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
-            while let Some(appendage) = prefix_appendages.pop_front(appendables) {
-                prefix_path.resolve_to_node(graph, partials, appendage.start_node(ctx))?;
-                appendage.append_to(graph, partials, ctx, &mut prefix_path)?;
+            while let Some(appendage) = prefix_appendages.pop_front(&mut appendables.0) {
+                appendage.append_to(graph, partials, db, &mut prefix_path)?;
             }
 
             // build cyclic path
             let cyclic_path = maybe_cyclic_path
                 .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
-            prefix_path.resolve_to_node(graph, partials, cyclic_path.start_node)?;
-            prefix_path.ensure_no_overlapping_variables(partials, &cyclic_path);
-            prefix_path.concatenate(graph, partials, &cyclic_path)?;
+            cyclic_path.append_to(graph, partials, &mut prefix_path)?;
             if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
                 cycles |= cyclicity;
             }
             maybe_cyclic_path = Some(prefix_path);
         }
-    }
-}
-
-impl Appendable<()> for Edge {
-    fn append_to(
-        &self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        _: &mut (),
-        path: &mut PartialPath,
-    ) -> Result<(), PathResolutionError> {
-        path.append(graph, partials, *self)
-    }
-
-    fn start_node(&self, _: &mut ()) -> Handle<Node> {
-        self.source
-    }
-
-    fn end_node(&self, _: &mut ()) -> Handle<Node> {
-        self.sink
-    }
-}
-
-impl Appendable<Database> for OwnedOrDatabasePath {
-    fn append_to(
-        &self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        db: &mut Database,
-        path: &mut PartialPath,
-    ) -> Result<(), PathResolutionError> {
-        path.ensure_no_overlapping_variables(partials, self.get(db));
-        path.concatenate(graph, partials, self.get(db))
-    }
-
-    fn start_node(&self, db: &mut Database) -> Handle<Node> {
-        self.get(db).start_node
-    }
-
-    fn end_node(&self, db: &mut Database) -> Handle<Node> {
-        self.get(db).end_node
     }
 }

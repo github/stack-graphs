@@ -51,6 +51,7 @@ use crate::arena::SupplementalArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
+use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
@@ -58,8 +59,99 @@ use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::partial::PartialSymbolStack;
+use crate::paths::PathResolutionError;
 use crate::CancellationError;
 use crate::CancellationFlag;
+
+//-------------------------------------------------------------------------------------------------
+// Appendable
+
+/// Something that can be appended to a partial path.
+pub trait Appendable {
+    /// Append this appendable to the given path. Resolving jump nodes and renaming unused_variables
+    /// is part of the responsibility of this method.
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError>;
+
+    /// Return the start node.
+    fn start_node(&self) -> Handle<Node>;
+
+    /// Return the end node.
+    fn end_node(&self) -> Handle<Node>;
+
+    /// Return a Display implementation.
+    fn display<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+        partials: &'a mut PartialPaths,
+    ) -> Box<dyn std::fmt::Display + 'a>;
+}
+
+impl Appendable for Edge {
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        path.resolve_to_node(graph, partials, self.source)?;
+        path.append(graph, partials, *self)
+    }
+
+    fn start_node(&self) -> Handle<Node> {
+        self.source
+    }
+
+    fn end_node(&self) -> Handle<Node> {
+        self.sink
+    }
+
+    fn display<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+        _partials: &'a mut PartialPaths,
+    ) -> Box<dyn std::fmt::Display + 'a> {
+        Box::new(format!(
+            "{} -> {}",
+            self.source.display(graph),
+            self.sink.display(graph)
+        ))
+    }
+}
+
+impl Appendable for PartialPath {
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        path.resolve_to_node(graph, partials, self.start_node)?;
+        path.ensure_no_overlapping_variables(partials, self);
+        path.concatenate(graph, partials, self)?;
+        Ok(())
+    }
+
+    fn start_node(&self) -> Handle<Node> {
+        self.start_node
+    }
+
+    fn end_node(&self) -> Handle<Node> {
+        self.end_node
+    }
+
+    fn display<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+        partials: &'a mut PartialPaths,
+    ) -> Box<dyn std::fmt::Display + 'a> {
+        Box::new(self.display(graph, partials))
+    }
+}
 
 //-------------------------------------------------------------------------------------------------
 // Databases
@@ -463,17 +555,14 @@ impl<'a> Display for DisplaySymbolStackKey<'a> {
 /// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
 pub struct ForwardPartialPathStitcher {
     candidate_partial_paths: Vec<Handle<PartialPath>>,
-    queue: VecDeque<(
-        PartialPath,
-        AppendingCycleDetector<Database, OwnedOrDatabasePath>,
-    )>,
+    queue: VecDeque<(PartialPath, AppendingCycleDetector<Handle<PartialPath>>)>,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
     next_iteration: (
         VecDeque<PartialPath>,
-        VecDeque<AppendingCycleDetector<Database, OwnedOrDatabasePath>>,
+        VecDeque<AppendingCycleDetector<Handle<PartialPath>>>,
     ),
-    appended_paths: Appendables<OwnedOrDatabasePath>,
+    appended_paths: Appendables<Handle<PartialPath>>,
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
@@ -593,7 +682,7 @@ impl ForwardPartialPathStitcher {
         partials: &mut PartialPaths,
         db: &mut Database,
         partial_path: &PartialPath,
-        cycle_detector: AppendingCycleDetector<Database, OwnedOrDatabasePath>,
+        cycle_detector: AppendingCycleDetector<Handle<PartialPath>>,
     ) -> usize {
         self.candidate_partial_paths.clear();
         if graph[partial_path.end_node].is_root() {
@@ -640,7 +729,7 @@ impl ForwardPartialPathStitcher {
                     continue;
                 }
                 copious_debugging!("        is {}", new_partial_path.display(graph, partials));
-                new_cycle_detector.append(&mut self.appended_paths, extension.into());
+                new_cycle_detector.append(&mut self.appended_paths, *extension);
                 let cycles = new_cycle_detector
                     .is_cyclic(graph, partials, db, &mut self.appended_paths)
                     .expect("cyclic test failed when stitching partial paths");
@@ -759,38 +848,5 @@ impl ForwardPartialPathStitcher {
             }
         }
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub enum OwnedOrDatabasePath {
-    Db(Handle<PartialPath>),
-    Owned(PartialPath),
-}
-
-impl OwnedOrDatabasePath {
-    pub(crate) fn get<'a>(&'a self, db: &'a Database) -> &'a PartialPath {
-        match self {
-            Self::Db(path) => &db[*path],
-            Self::Owned(path) => path,
-        }
-    }
-}
-
-impl From<Handle<PartialPath>> for OwnedOrDatabasePath {
-    fn from(value: Handle<PartialPath>) -> Self {
-        Self::Db(value)
-    }
-}
-
-impl From<&Handle<PartialPath>> for OwnedOrDatabasePath {
-    fn from(value: &Handle<PartialPath>) -> Self {
-        Self::Db(*value)
-    }
-}
-
-impl From<PartialPath> for OwnedOrDatabasePath {
-    fn from(value: PartialPath) -> Self {
-        Self::Owned(value)
     }
 }
