@@ -238,6 +238,9 @@ fn can_unify_partial_symbol_stacks() -> Result<(), PathResolutionError> {
         "{}",
     )?;
 
+    verify_not((&[a], var1), (&[], var1))?;
+    verify_not((&[], var1), (&[a], var1))?;
+
     let dot = (".", None);
     let b = ("b", None);
 
@@ -429,6 +432,9 @@ fn can_unify_partial_scope_stacks() -> Result<(), PathResolutionError> {
         "[file(10)],$1",
         "{$2 => ($1)}",
     )?;
+
+    verify_not((&[10], var1), (&[], var1))?;
+    verify_not((&[], var1), (&[10], var1))?;
 
     Ok(())
 }

@@ -724,15 +724,23 @@ impl PartialSymbolStack {
 
         // CASE 3:
         // One of the stacks contains symbols and the other doesn't, and the “empty” stack _does_
-        // have a variable.  That means the answer is YES, and the “empty” side's variable needs to
-        // capture the entirety of the non-empty side.
+        // have a variable.  If both sides have the same variable, the answer is NO. Otherwise,
+        // the answer is YES, and the “empty” side's variable needs to capture the entirety of the
+        // non-empty side.
         //
         //     lhs           rhs
         // ============  ============
+        //  (...) $1      (...) $1      => no
         //  () $1         (stuff)       => yes rhs,  $1 => rhs
         //  () $1         (stuff) $2    => yes rhs,  $1 => rhs
         //  (stuff)       () $2         => yes lhs,  $2 => lhs
         //  (stuff) $1    () $2         => yes lhs,  $2 => lhs
+        match (lhs.variable.into_option(), rhs.variable.into_option()) {
+            (Some(v1), Some(v2)) if v1 == v2 => {
+                return Err(PathResolutionError::ScopeStackUnsatisfied)
+            }
+            _ => {}
+        }
         if lhs.contains_symbols() {
             let rhs_variable = rhs.variable.into_option().unwrap();
             symbol_bindings.add(partials, rhs_variable, lhs, scope_bindings)?;
@@ -1095,15 +1103,23 @@ impl PartialScopeStack {
 
         // CASE 3:
         // One of the stacks contains scopes and the other doesn't, and the “empty” stack _does_
-        // have a variable.  That means the answer is YES, and the “empty” side's variable needs to
-        // capture the entirety of the non-empty side.
+        // have a variable.  If both sides have the same variable, the answer is NO. Otherwise,
+        // the answer is YES, and the “empty” side's variable needs to capture the entirety of the
+        // non-empty side.
         //
         //     lhs           rhs
         // ============  ============
+        //  (...) $1      (...) $1      => no
         //  () $1         (stuff)       => yes rhs,  $1 => rhs
         //  () $1         (stuff) $2    => yes rhs,  $1 => rhs
         //  (stuff)       () $2         => yes lhs,  $2 => lhs
         //  (stuff) $1    () $2         => yes lhs,  $2 => lhs
+        match (lhs.variable.into_option(), rhs.variable.into_option()) {
+            (Some(v1), Some(v2)) if v1 == v2 => {
+                return Err(PathResolutionError::ScopeStackUnsatisfied)
+            }
+            _ => {}
+        }
         if lhs.contains_scopes() {
             let rhs_variable = rhs.variable.into_option().unwrap();
             bindings.add(partials, rhs_variable, lhs)?;
