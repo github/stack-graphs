@@ -1404,12 +1404,12 @@ struct InternalForwardPartialPathStitcher {
     previous_phase_partial_paths: *const PartialPath,
     previous_phase_partial_paths_length: usize,
     is_complete: bool,
-    stitcher: ForwardPartialPathStitcher,
+    stitcher: ForwardPartialPathStitcher<Handle<PartialPath>>,
 }
 
 impl InternalForwardPartialPathStitcher {
     fn new(
-        stitcher: ForwardPartialPathStitcher,
+        stitcher: ForwardPartialPathStitcher<Handle<PartialPath>>,
         partials: &mut PartialPaths,
     ) -> InternalForwardPartialPathStitcher {
         let mut this = InternalForwardPartialPathStitcher {

@@ -31,7 +31,6 @@
 
 use enumset::EnumSet;
 use smallvec::SmallVec;
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::arena::Handle;
@@ -129,22 +128,22 @@ where
 // ----------------------------------------------------------------------------
 // Cycle detector
 
-pub trait Index<'a, H, A>
+pub trait Index<H, A>
 where
-    A: Appendable + Clone + 'a,
+    A: Appendable + Clone,
 {
-    fn get(&'a self, handle: &H) -> Cow<'a, A>;
+    fn get<'a>(&'a self, handle: &'a H) -> &'a A;
 }
 
-impl<'a> Index<'a, Handle<PartialPath>, PartialPath> for Database {
-    fn get(&'a self, handle: &Handle<PartialPath>) -> Cow<'a, PartialPath> {
-        Cow::Borrowed(&self[*handle])
+impl Index<Handle<PartialPath>, PartialPath> for Database {
+    fn get<'a>(&'a self, handle: &'a Handle<PartialPath>) -> &'a PartialPath {
+        &self[*handle]
     }
 }
 
-impl<'a, A: Appendable + Clone + 'a> Index<'a, A, A> for () {
-    fn get(&self, value: &A) -> Cow<'a, A> {
-        Cow::Owned(value.clone())
+impl<A: Appendable + Clone> Index<A, A> for () {
+    fn get<'a>(&'a self, value: &'a A) -> &'a A {
+        value
     }
 }
 
@@ -175,7 +174,7 @@ where
     ) -> Result<(), PathResolutionError>
     where
         A: Appendable + Clone + 'a,
-        Db: Index<'a, H, A>,
+        Db: Index<H, A>,
     {
         match self {
             Self::Path(other) => other.append_to(graph, partials, path),
@@ -186,7 +185,7 @@ where
     fn start_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
     where
         A: Appendable + Clone + 'a,
-        Db: Index<'a, H, A>,
+        Db: Index<H, A>,
     {
         match self {
             Self::Path(path) => path.start_node,
@@ -197,7 +196,7 @@ where
     fn end_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
     where
         A: Appendable + Clone + 'a,
-        Db: Index<'a, H, A>,
+        Db: Index<H, A>,
     {
         match self {
             Self::Path(path) => path.end_node,
@@ -247,7 +246,7 @@ where
     ) -> Result<EnumSet<Cyclicity>, PathResolutionError>
     where
         A: Appendable + Clone + 'a,
-        Db: Index<'a, H, A>,
+        Db: Index<H, A>,
     {
         let mut cycles = EnumSet::new();
 

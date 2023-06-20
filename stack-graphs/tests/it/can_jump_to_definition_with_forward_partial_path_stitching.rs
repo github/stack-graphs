@@ -8,7 +8,9 @@
 use std::collections::BTreeSet;
 
 use pretty_assertions::assert_eq;
+use stack_graphs::arena::Handle;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
@@ -38,7 +40,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
         .iter_nodes()
         .filter(|handle| graph[*handle].is_reference());
     let mut complete_partial_paths = Vec::new();
-    ForwardPartialPathStitcher::find_all_complete_partial_paths(
+    ForwardPartialPathStitcher::<Handle<PartialPath>>::find_all_complete_partial_paths(
         graph,
         &mut partials,
         &mut db,
