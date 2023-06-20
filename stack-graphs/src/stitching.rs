@@ -733,7 +733,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         cycle_detector: AppendingCycleDetector<H>,
     ) -> usize
     where
-        A: Appendable + Clone + 'a,
+        A: Appendable + 'a,
         Db: Candidates<H> + crate::cycles::Index<H, A>,
     {
         self.candidates.clear();
@@ -808,7 +808,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         partials: &mut PartialPaths,
         db: &mut Db,
     ) where
-        A: Appendable + Clone + 'a,
+        A: Appendable + 'a,
         Db: Candidates<H> + crate::cycles::Index<H, A>,
     {
         copious_debugging!("==> Start phase {}", self.phase_number);

@@ -130,7 +130,7 @@ where
 
 pub trait Index<H, A>
 where
-    A: Appendable + Clone,
+    A: Appendable,
 {
     fn get<'a>(&'a self, handle: &'a H) -> &'a A;
 }
@@ -173,7 +173,7 @@ where
         path: &mut PartialPath,
     ) -> Result<(), PathResolutionError>
     where
-        A: Appendable + Clone + 'a,
+        A: Appendable + 'a,
         Db: Index<H, A>,
     {
         match self {
@@ -184,7 +184,7 @@ where
 
     fn start_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
     where
-        A: Appendable + Clone + 'a,
+        A: Appendable + 'a,
         Db: Index<H, A>,
     {
         match self {
@@ -195,7 +195,7 @@ where
 
     fn end_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
     where
-        A: Appendable + Clone + 'a,
+        A: Appendable + 'a,
         Db: Index<H, A>,
     {
         match self {
@@ -245,7 +245,7 @@ where
         appendables: &mut Appendables<H>,
     ) -> Result<EnumSet<Cyclicity>, PathResolutionError>
     where
-        A: Appendable + Clone + 'a,
+        A: Appendable + 'a,
         Db: Index<H, A>,
     {
         let mut cycles = EnumSet::new();
