@@ -43,7 +43,7 @@ use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::PathResolutionError;
 use crate::stitching::Appendable;
-use crate::stitching::Database;
+use crate::stitching::ToAppendable;
 
 /// Helps detect similar paths in the path-finding algorithm.
 pub struct SimilarPathDetector<P> {
@@ -128,25 +128,6 @@ where
 // ----------------------------------------------------------------------------
 // Cycle detector
 
-pub trait Index<H, A>
-where
-    A: Appendable,
-{
-    fn get<'a>(&'a self, handle: &'a H) -> &'a A;
-}
-
-impl Index<Handle<PartialPath>, PartialPath> for Database {
-    fn get<'a>(&'a self, handle: &'a Handle<PartialPath>) -> &'a PartialPath {
-        &self[*handle]
-    }
-}
-
-impl<A: Appendable + Clone> Index<A, A> for () {
-    fn get<'a>(&'a self, value: &'a A) -> &'a A {
-        value
-    }
-}
-
 pub struct Appendables<H>(pub(crate) ListArena<PathOrAppendable<H>>);
 
 impl<H> Appendables<H> {
@@ -174,33 +155,33 @@ where
     ) -> Result<(), PathResolutionError>
     where
         A: Appendable + 'a,
-        Db: Index<H, A>,
+        Db: ToAppendable<H, A>,
     {
         match self {
             Self::Path(other) => other.append_to(graph, partials, path),
-            Self::Handle(h) => db.get(h).append_to(graph, partials, path),
+            Self::Handle(h) => db.get_appendable(h).append_to(graph, partials, path),
         }
     }
 
     fn start_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
     where
         A: Appendable + 'a,
-        Db: Index<H, A>,
+        Db: ToAppendable<H, A>,
     {
         match self {
             Self::Path(path) => path.start_node,
-            Self::Handle(h) => db.get(h).start_node(),
+            Self::Handle(h) => db.get_appendable(h).start_node(),
         }
     }
 
     fn end_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
     where
         A: Appendable + 'a,
-        Db: Index<H, A>,
+        Db: ToAppendable<H, A>,
     {
         match self {
             Self::Path(path) => path.end_node,
-            Self::Handle(h) => db.get(h).end_node(),
+            Self::Handle(h) => db.get_appendable(h).end_node(),
         }
     }
 }
@@ -246,7 +227,7 @@ where
     ) -> Result<EnumSet<Cyclicity>, PathResolutionError>
     where
         A: Appendable + 'a,
-        Db: Index<H, A>,
+        Db: ToAppendable<H, A>,
     {
         let mut cycles = EnumSet::new();
 

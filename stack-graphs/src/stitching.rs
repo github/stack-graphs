@@ -39,7 +39,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 #[cfg(feature = "copious-debugging")]
 use std::fmt::Display;
-use std::ops::Index;
 
 use crate::arena::Arena;
 use crate::arena::Handle;
@@ -150,6 +149,28 @@ impl Appendable for PartialPath {
         partials: &'a mut PartialPaths,
     ) -> Box<dyn std::fmt::Display + 'a> {
         Box::new(self.display(graph, partials))
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// ToAppendable
+
+pub trait ToAppendable<H, A>
+where
+    A: Appendable,
+{
+    fn get_appendable<'a>(&'a self, handle: &'a H) -> &'a A;
+}
+
+impl ToAppendable<Handle<PartialPath>, PartialPath> for Database {
+    fn get_appendable<'a>(&'a self, handle: &'a Handle<PartialPath>) -> &'a PartialPath {
+        &self[*handle]
+    }
+}
+
+impl<A: Appendable + Clone> ToAppendable<A, A> for () {
+    fn get_appendable<'a>(&'a self, value: &'a A) -> &'a A {
+        value
     }
 }
 
@@ -440,7 +461,7 @@ impl Database {
     }
 }
 
-impl Index<Handle<PartialPath>> for Database {
+impl std::ops::Index<Handle<PartialPath>> for Database {
     type Output = PartialPath;
     #[inline(always)]
     fn index(&self, handle: Handle<PartialPath>) -> &PartialPath {
@@ -734,7 +755,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     ) -> usize
     where
         A: Appendable + 'a,
-        Db: Candidates<H> + crate::cycles::Index<H, A>,
+        Db: Candidates<H> + ToAppendable<H, A>,
     {
         self.candidates.clear();
         db.find_candidates(graph, partials, partial_path, &mut self.candidates);
@@ -743,7 +764,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         self.next_iteration.0.reserve(extension_count);
         self.next_iteration.1.reserve(extension_count);
         for extension in &self.candidates {
-            let extension_path = db.get(extension);
+            let extension_path = db.get_appendable(extension);
             copious_debugging!("    Extend {}", partial_path.display(graph, partials));
             copious_debugging!("      with {}", extension_path.display(graph, partials));
 
@@ -809,7 +830,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         db: &mut Db,
     ) where
         A: Appendable + 'a,
-        Db: Candidates<H> + crate::cycles::Index<H, A>,
+        Db: Candidates<H> + ToAppendable<H, A>,
     {
         copious_debugging!("==> Start phase {}", self.phase_number);
         self.queue.extend(
