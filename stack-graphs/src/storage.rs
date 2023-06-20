@@ -679,7 +679,12 @@ impl SQLiteReader {
             for path in stitcher.previous_phase_partial_paths() {
                 self.load_partial_path_extensions(path, cancellation_flag)?;
             }
-            stitcher.process_next_phase(&self.graph, &mut self.partials, &mut self.db);
+            stitcher.process_next_phase(
+                &self.graph,
+                &mut self.partials,
+                &mut self.db,
+                |_, _, _| true,
+            );
             for path in stitcher.previous_phase_partial_paths() {
                 if path.is_complete(&self.graph) {
                     visit(&self.graph, &mut self.partials, path);

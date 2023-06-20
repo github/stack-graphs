@@ -178,7 +178,7 @@ impl Assertion {
         let mut actual_paths = Vec::new();
         for reference in &references {
             let mut reference_paths = Vec::new();
-            ForwardPartialPathStitcher::<Handle<PartialPath>>::find_all_complete_partial_paths(
+            ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 graph,
                 partials,
                 db,

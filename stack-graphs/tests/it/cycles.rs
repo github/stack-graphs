@@ -14,6 +14,7 @@ use stack_graphs::partial::Cyclicity;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::GraphEdges;
 use stack_graphs::CancelAfterDuration;
 use std::time::Duration;
@@ -194,8 +195,9 @@ fn finding_simple_identity_cycle_is_detected() {
     {
         let mut path_count = 0usize;
         let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
-        let result = partials.find_minimal_partial_path_set_in_file(
+        let result = ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &cancellation_flag,
             |_, _, _| path_count += 1,
@@ -286,8 +288,9 @@ fn finding_composite_identity_cycle_is_detected() {
     {
         let mut path_count = 0usize;
         let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
-        let result = partials.find_minimal_partial_path_set_in_file(
+        let result = ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &cancellation_flag,
             |_, _, _| path_count += 1,
@@ -346,8 +349,9 @@ fn appending_eliminating_cycle_terminates() {
     {
         let mut path_count = 0usize;
         let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
-        let result = partials.find_minimal_partial_path_set_in_file(
+        let result = ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &cancellation_flag,
             |_, _, _| path_count += 1,

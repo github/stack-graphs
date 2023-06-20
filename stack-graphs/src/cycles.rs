@@ -265,8 +265,10 @@ where
             let cyclic_path = maybe_cyclic_path
                 .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
             cyclic_path.append_to(graph, partials, &mut prefix_path)?;
-            if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
-                cycles |= cyclicity;
+            if prefix_path.edges.len() > 0 {
+                if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
+                    cycles |= cyclicity;
+                }
             }
             maybe_cyclic_path = Some(prefix_path);
         }

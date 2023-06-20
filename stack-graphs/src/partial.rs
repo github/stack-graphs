@@ -33,7 +33,6 @@
 //!
 //! [concatenate]: struct.PartialPath.html#method.concatenate
 
-use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::num::NonZeroU32;
@@ -46,21 +45,14 @@ use smallvec::SmallVec;
 use crate::arena::Deque;
 use crate::arena::DequeArena;
 use crate::arena::Handle;
-use crate::cycles::Appendables;
-use crate::cycles::AppendingCycleDetector;
 use crate::graph::Edge;
-use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::NodeID;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
-use crate::paths::Extend;
 use crate::paths::PathResolutionError;
-use crate::stitching::GraphEdges;
 use crate::utils::cmp_option;
 use crate::utils::equals_option;
-use crate::CancellationError;
-use crate::CancellationFlag;
 
 //-------------------------------------------------------------------------------------------------
 // Displaying stuff
@@ -2232,54 +2224,6 @@ impl PartialPath {
 
         Ok(())
     }
-
-    /// Attempts to extend one partial path as part of the partial-path-finding algorithm. If a file
-    /// is provided, only outgoing edges that belong to that file are used.  When calling this function,
-    /// you are responsible for ensuring that `graph` already contains data for all of the possible edges
-    /// that we might want to extend `path` with.
-    ///
-    /// The resulting extended partial paths will be added to `result`.  We have you pass that in
-    /// as a parameter, instead of building it up ourselves, so that you have control over which
-    /// particular collection type to use, and so that you can reuse result collections across
-    /// multiple calls.
-    fn extend<R: Extend<(PartialPath, AppendingCycleDetector<Edge>)>>(
-        &self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        file: Option<Handle<File>>,
-        edges: &mut Appendables<Edge>,
-        path_cycle_detector: AppendingCycleDetector<Edge>,
-        result: &mut R,
-    ) {
-        let extensions = graph.outgoing_edges(self.end_node);
-        result.reserve(extensions.size_hint().0);
-        for extension in extensions {
-            copious_debugging!(
-                "      -> with edge {} -> {}",
-                extension.source.display(graph),
-                extension.sink.display(graph)
-            );
-            if let Some(file) = file {
-                if !graph[extension.sink].is_in_file(file) {
-                    copious_debugging!("         * outside file");
-                    continue;
-                }
-            }
-            let mut new_path = self.clone();
-            // If there are errors adding this edge to the partial path, or resolving the resulting
-            // partial path, just skip the edge — it's not a fatal error.
-            if new_path.append(graph, partials, extension).is_err() {
-                copious_debugging!("         * invalid extension");
-                continue;
-            }
-            // We assume languages do not introduce similar paths (paths between the same nodes with
-            // equivalent pre- and postconditions), so we do not guard against that here. We may need
-            // to revisit that assumption in the future.
-            let mut new_cycle_detector = path_cycle_detector.clone();
-            new_cycle_detector.append(edges, extension);
-            result.push((new_path, new_cycle_detector));
-        }
-    }
 }
 
 impl Node {
@@ -2509,142 +2453,6 @@ impl Node {
             Self::Root(_) => {}
             Self::Scope(_) => {}
         };
-        Ok(())
-    }
-}
-
-impl PartialPaths {
-    /// Finds a minimal set of partial paths in a file, calling the `visit` closure for each one.
-    ///
-    /// This function ensures that the set of visited partial paths
-    ///  (a) is minimal, no path can be constructed by stitching other paths in the set, and
-    ///  (b) covers all complete paths, from references to definitions, when used for path stitching
-    ///
-    /// This function will not return until all reachable partial paths have been processed, so
-    /// `graph` must already contain a complete stack graph.  If you have a very large stack graph
-    /// stored in some other storage system, and want more control over lazily loading only the
-    /// necessary pieces, then you should code up your own loop that calls
-    /// [`PartialPath::extend`][] manually.
-    ///
-    /// Caveat: Edges between nodes of different files are not used. Hence the returned set of partial
-    /// paths will not cover paths going through those edges.
-    ///
-    /// [`PartialPath::extend`]: struct.PartialPath.html#method.extend
-    pub fn find_minimal_partial_path_set_in_file<F>(
-        &mut self,
-        graph: &StackGraph,
-        file: Handle<File>,
-        cancellation_flag: &dyn CancellationFlag,
-        mut visit: F,
-    ) -> Result<(), CancellationError>
-    where
-        F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
-    {
-        fn as_complete_as_necessary(graph: &StackGraph, path: &PartialPath) -> bool {
-            path.starts_at_endpoint(graph)
-                && (path.ends_at_endpoint(graph) || graph[path.end_node].is_jump_to())
-        }
-
-        copious_debugging!("Find all partial paths in {}", graph[file]);
-        let mut queue = VecDeque::new();
-        let mut edges = Appendables::new();
-        queue.extend(
-            graph
-                .nodes_for_file(file)
-                .chain(std::iter::once(StackGraph::root_node()))
-                .filter(|node| graph[*node].is_endpoint())
-                .map(|node| {
-                    (
-                        PartialPath::from_node(graph, self, node),
-                        AppendingCycleDetector::new(),
-                    )
-                }),
-        );
-        while let Some((path, path_cycle_detector)) = queue.pop_front() {
-            cancellation_flag.check("finding partial paths in file")?;
-            let is_seed = path.edges.is_empty();
-            copious_debugging!(" => {}", path.display(graph, self));
-            if !is_seed && as_complete_as_necessary(graph, &path) {
-                copious_debugging!("    * visit");
-                visit(graph, self, path);
-            } else if !path_cycle_detector
-                .is_cyclic(graph, self, &GraphEdges(Some(file)), &mut edges)
-                .expect("cyclic test failed when finding partial paths")
-                .is_empty()
-            {
-                copious_debugging!("    * cycle");
-            } else {
-                copious_debugging!("    * extend");
-                path.extend(
-                    graph,
-                    self,
-                    Some(file),
-                    &mut edges,
-                    path_cycle_detector,
-                    &mut queue,
-                );
-            }
-        }
-        Ok(())
-    }
-
-    /// Finds all complete paths reachable from a set of starting nodes, calling the `visit` closure
-    /// for each one.
-    ///
-    /// This function will not return until all reachable paths have been processed, so `graph`
-    /// must already contain a complete stack graph.  If you have a very large stack graph stored
-    /// in some other storage system, and want more control over lazily loading only the necessary
-    /// pieces, then you should code up your own loop that calls [`Path::extend`][] manually.
-    ///
-    /// [`Path::extend`]: struct.Path.html#method.extend
-    pub fn find_all_complete_paths<I, F>(
-        &mut self,
-        graph: &StackGraph,
-        starting_nodes: I,
-        cancellation_flag: &dyn CancellationFlag,
-        mut visit: F,
-    ) -> Result<(), CancellationError>
-    where
-        I: IntoIterator<Item = Handle<Node>>,
-        F: FnMut(&StackGraph, &mut PartialPaths, PartialPath),
-    {
-        copious_debugging!("Find all complete paths from nodes");
-        let mut queue = starting_nodes
-            .into_iter()
-            .filter(|node| graph[*node].is_reference())
-            .map(|node| {
-                let mut p = PartialPath::from_node(graph, self, node);
-                p.eliminate_precondition_stack_variables(self);
-                (p, AppendingCycleDetector::new())
-            })
-            .collect::<VecDeque<_>>();
-        let mut partials = PartialPaths::new();
-        let mut edges = Appendables::new();
-        while let Some((path, path_cycle_detector)) = queue.pop_front() {
-            cancellation_flag.check("finding complete paths")?;
-            if path.is_complete(graph) {
-                copious_debugging!("    * visit");
-                visit(graph, self, path.clone());
-            }
-            if !path_cycle_detector
-                .is_cyclic(graph, &mut partials, &GraphEdges(None), &mut edges)
-                .expect("cyclic test failed when finding complete paths")
-                .into_iter()
-                .all(|c| c == Cyclicity::StrengthensPrecondition)
-            {
-                copious_debugging!("    * cycle");
-            } else {
-                copious_debugging!("    * extend");
-                path.extend(
-                    graph,
-                    self,
-                    None,
-                    &mut edges,
-                    path_cycle_detector,
-                    &mut queue,
-                );
-            }
-        }
         Ok(())
     }
 }

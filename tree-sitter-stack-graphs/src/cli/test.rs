@@ -13,7 +13,6 @@ use itertools::Itertools;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
-use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::serde::Filter;
 use stack_graphs::stitching::Database;
@@ -304,12 +303,13 @@ impl TestArgs {
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
         for file in test.graph.iter_files() {
-            partials.find_minimal_partial_path_set_in_file(
+            ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
                 &test.graph,
+                &mut partials,
                 file,
                 &cancellation_flag.as_ref(),
                 |g, ps, p| {
-                    db.add_partial_path(g, ps, p);
+                    db.add_partial_path(g, ps, p.clone());
                 },
             )?;
         }
@@ -447,7 +447,7 @@ impl TestArgs {
             .filter(|n| filter.include_node(graph, n))
             .collect::<Vec<_>>();
         let mut paths = Vec::new();
-        ForwardPartialPathStitcher::<Handle<PartialPath>>::find_all_complete_partial_paths(
+        ForwardPartialPathStitcher::find_all_complete_partial_paths(
             graph,
             partials,
             db,

@@ -30,6 +30,7 @@ use crate::partial::PartialScopedSymbol;
 use crate::partial::PartialSymbolStack;
 use crate::stitching::Database;
 use crate::stitching::ForwardPartialPathStitcher;
+use crate::stitching::GraphEdges;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -1179,17 +1180,18 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     let partial_path_list = unsafe { &mut *partial_path_list };
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
-    partials
-        .find_minimal_partial_path_set_in_file(
-            graph,
-            file,
-            &AtomicUsizeCancellationFlag(cancellation_flag),
-            |_graph, partials, mut path| {
-                path.ensure_both_directions(partials);
-                partial_path_list.partial_paths.push(path);
-            },
-        )
-        .into()
+    ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+        graph,
+        partials,
+        file,
+        &AtomicUsizeCancellationFlag(cancellation_flag),
+        |_graph, partials, path| {
+            let mut path = path.clone();
+            path.ensure_both_directions(partials);
+            partial_path_list.partial_paths.push(path);
+        },
+    )
+    .into()
 }
 
 /// Finds all complete paths reachable from a set of starting nodes, placing the result into the
@@ -1215,18 +1217,19 @@ pub extern "C" fn sg_partial_path_arena_find_all_complete_paths(
     let path_list = unsafe { &mut *path_list };
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
-    partials
-        .find_all_complete_paths(
-            graph,
-            starting_nodes.iter().copied().map(sg_node_handle::into),
-            &AtomicUsizeCancellationFlag(cancellation_flag),
-            |graph, _partials, path| {
-                if path.is_complete(graph) {
-                    path_list.partial_paths.push(path);
-                }
-            },
-        )
-        .into()
+    ForwardPartialPathStitcher::find_all_complete_partial_paths(
+        graph,
+        partials,
+        &mut GraphEdges(None),
+        starting_nodes.iter().copied().map(sg_node_handle::into),
+        &AtomicUsizeCancellationFlag(cancellation_flag),
+        |graph, _partials, path| {
+            if path.is_complete(graph) {
+                path_list.partial_paths.push(path.clone());
+            }
+        },
+    )
+    .into()
 }
 
 /// A handle to a partial path in a partial path database.  A zero handle represents a missing
@@ -1532,7 +1535,9 @@ pub extern "C" fn sg_forward_partial_path_stitcher_process_next_phase(
     let partials = unsafe { &mut (*partials).inner };
     let db = unsafe { &mut (*db).inner };
     let stitcher = unsafe { &mut *(stitcher as *mut InternalForwardPartialPathStitcher) };
-    stitcher.stitcher.process_next_phase(graph, partials, db);
+    stitcher
+        .stitcher
+        .process_next_phase(graph, partials, db, |_, _, _| true);
     stitcher.update_previous_phase_partial_paths(partials);
 }
 
