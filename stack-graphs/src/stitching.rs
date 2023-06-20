@@ -652,47 +652,21 @@ pub struct ForwardPartialPathStitcher<H> {
 }
 
 impl<H> ForwardPartialPathStitcher<H> {
-    /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack
-    /// graph nodes.
-    pub fn from_nodes<I>(graph: &StackGraph, partials: &mut PartialPaths, starting_nodes: I) -> Self
-    where
-        I: IntoIterator<Item = Handle<Node>>,
-    {
-        let mut appended_paths = Appendables::new();
-        let next_iteration = starting_nodes
-            .into_iter()
-            .map(|handle| {
-                let mut p = PartialPath::from_node(graph, partials, handle);
-                p.eliminate_precondition_stack_variables(partials);
-                let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
-                (p, c)
-            })
-            .unzip();
-        Self {
-            candidates: Vec::new(),
-            queue: VecDeque::new(),
-            next_iteration,
-            appended_paths,
-            similar_path_detector: None,
-            // By default, there's no artificial bound on the amount of work done per phase
-            max_work_per_phase: usize::MAX,
-            #[cfg(feature = "copious-debugging")]
-            phase_number: 1,
-        }
-    }
-
     /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
-    /// paths.
-    pub fn from_partial_paths(
+    /// paths. If the sticher is used to find complete paths, it is the responsibility of the caller
+    /// to ensure precondition variables are eliminated by calling [`PartialPath::eliminate_precondition_stack_variables`][].
+    pub fn from_partial_paths<I>(
         _graph: &StackGraph,
-        partials: &mut PartialPaths,
-        initial_partial_paths: Vec<PartialPath>,
-    ) -> Self {
+        _partials: &mut PartialPaths,
+        initial_partial_paths: I,
+    ) -> Self
+    where
+        I: IntoIterator<Item = PartialPath>,
+    {
         let mut appended_paths = Appendables::new();
         let next_iteration = initial_partial_paths
             .into_iter()
-            .map(|mut p| {
-                p.eliminate_precondition_stack_variables(partials);
+            .map(|p| {
                 let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
                 (p, c)
             })
@@ -900,10 +874,17 @@ impl<H> ForwardPartialPathStitcher<H> {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
-        let starting_nodes = starting_nodes
+        let initial_paths = starting_nodes
             .into_iter()
-            .filter(|n| graph[*n].is_reference());
-        let mut stitcher = ForwardPartialPathStitcher::from_nodes(graph, partials, starting_nodes);
+            .filter(|n| graph[*n].is_reference())
+            .map(|n| {
+                let mut p = PartialPath::from_node(graph, partials, n);
+                p.eliminate_precondition_stack_variables(partials);
+                p
+            })
+            .collect::<Vec<_>>();
+        let mut stitcher =
+            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             stitcher.process_next_phase(graph, partials, db);

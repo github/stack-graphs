@@ -660,8 +660,19 @@ impl SQLiteReader {
         I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
-        let mut stitcher =
-            ForwardPartialPathStitcher::from_nodes(&self.graph, &mut self.partials, starting_nodes);
+        let initial_paths = starting_nodes
+            .into_iter()
+            .map(|n| {
+                let mut p = PartialPath::from_node(&self.graph, &mut self.partials, n);
+                p.eliminate_precondition_stack_variables(&mut self.partials);
+                p
+            })
+            .collect::<Vec<_>>();
+        let mut stitcher = ForwardPartialPathStitcher::from_partial_paths(
+            &self.graph,
+            &mut self.partials,
+            initial_paths,
+        );
         stitcher.set_max_work_per_phase(128);
         while !stitcher.is_complete() {
             cancellation_flag.check("find_all_complete_partial_paths")?;

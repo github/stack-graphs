@@ -1434,7 +1434,7 @@ impl InternalForwardPartialPathStitcher {
 }
 
 /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
-/// nodes.
+/// nodes. The path stitcher will be set up to find complete paths only.
 #[no_mangle]
 pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     graph: *const sg_stack_graph,
@@ -1445,11 +1445,17 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, count) };
-    let stitcher = ForwardPartialPathStitcher::from_nodes(
-        graph,
-        partials,
-        starting_nodes.iter().copied().map(sg_node_handle::into),
-    );
+    let initial_paths = starting_nodes
+        .iter()
+        .copied()
+        .map(sg_node_handle::into)
+        .map(|n| {
+            let mut p = PartialPath::from_node(graph, partials, n);
+            p.eliminate_precondition_stack_variables(partials);
+            p
+        })
+        .collect::<Vec<_>>();
+    let stitcher = ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,
     ))) as *mut _
