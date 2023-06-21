@@ -801,7 +801,7 @@ void sg_partial_path_database_mark_local_nodes(struct sg_partial_path_database *
 struct sg_node_handle_set sg_partial_path_database_local_nodes(const struct sg_partial_path_database *db);
 
 // Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
-// nodes.
+// nodes. The path stitcher will be set up to find complete paths only.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_nodes(const struct sg_stack_graph *graph,
                                                                                      struct sg_partial_path_arena *partials,
                                                                                      size_t count,
