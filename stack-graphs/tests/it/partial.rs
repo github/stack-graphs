@@ -520,6 +520,192 @@ fn can_create_partial_path_from_node() {
 }
 
 #[test]
+fn can_append_edges() -> Result<(), PathResolutionError> {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").expect("");
+    let jump_to_scope_node = StackGraph::jump_to_node();
+    let scope0 = create_scope_node(&mut graph, file, false);
+    let scope1 = create_scope_node(&mut graph, file, false);
+    let foo_ref = create_push_symbol_node(&mut graph, file, "foo", false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+    let bar_ref = create_push_symbol_node(&mut graph, file, "bar", false);
+    let bar_def = create_pop_symbol_node(&mut graph, file, "bar", false);
+    let exported_scope = create_scope_node(&mut graph, file, true);
+    let exported_scope_id = graph[exported_scope].id();
+    let baz_ref = create_push_scoped_symbol_node(&mut graph, file, "baz", exported_scope_id, false);
+    let baz_def = create_pop_scoped_symbol_node(&mut graph, file, "baz", false);
+    let drop_scopes = create_drop_scopes_node(&mut graph, file);
+
+    fn run(
+        graph: &StackGraph,
+        left: NicePartialPath,
+        right: NiceEdge,
+        expected: &str,
+    ) -> Result<(), PathResolutionError> {
+        let mut g = StackGraph::new();
+        g.add_from_graph(graph).expect("");
+
+        let mut ps = PartialPaths::new();
+
+        let mut l = create_partial_path_and_edges(&mut g, &mut ps, left).expect("");
+        let r = create_edge(&mut g, right);
+
+        l.append(graph, &mut ps, r)?;
+        let actual = l.display(&g, &mut ps).to_string();
+        assert_eq!(expected, actual);
+
+        Ok(())
+    }
+
+    fn verify(graph: &StackGraph, left: NicePartialPath, right: NiceEdge, expected: &str) {
+        run(graph, left, right, expected).expect("");
+    }
+
+    fn verify_not(graph: &StackGraph, left: NicePartialPath, right: NiceEdge) {
+        run(graph, left, right, "").expect_err("");
+    }
+
+    verify(
+        &graph,
+        &[foo_ref, scope0],
+        (scope0, foo_def),
+        "<%1> ($1) [test(2) push foo] -> [test(3) pop foo] <%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        &[foo_ref, scope0],
+        (scope0, scope1),
+        "<%1> ($1) [test(2) push foo] -> [test(1) scope] <foo,%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        &[scope0, scope1],
+        (scope1, foo_ref),
+        "<%1> ($1) [test(0) scope] -> [test(2) push foo] <foo,%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        &[foo_def, scope0],
+        (scope0, bar_ref),
+        "<foo,%1> ($1) [test(3) pop foo] -> [test(4) push bar] <bar,%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        &[foo_ref, scope0, foo_def],
+        (foo_def, bar_ref),
+        "<%1> ($1) [test(2) push foo] -> [test(4) push bar] <bar,%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        &[foo_def, scope0, bar_ref],
+        (bar_ref, bar_def),
+        "<foo,%1> ($1) [test(3) pop foo] -> [test(5) pop bar] <%1> ($1)",
+    );
+
+    verify(
+        &graph,
+        &[baz_ref, scope0, baz_def],
+        (baz_def, bar_ref),
+        "<%1> ($1) [test(7) push scoped baz test(6)] -> [test(4) push bar] <bar,%1> ([test(6)],$1)",
+    );
+
+    verify(
+        &graph,
+        &[foo_def, scope0, baz_ref],
+        (baz_ref, baz_def),
+        "<foo,%1> ($1) [test(3) pop foo] -> [test(8) pop scoped baz] <%1> ([test(6)],$1)",
+    );
+
+    verify(
+        &graph,
+        &[scope0, drop_scopes],
+        (drop_scopes, scope1),
+        "<%1> ($1) [test(0) scope] -> [test(1) scope] <%1> ()",
+    );
+
+    verify_not(
+        &graph,
+        &[scope0, drop_scopes, scope1],
+        (scope1, jump_to_scope_node),
+    );
+
+    verify(
+        &graph,
+        &[baz_def, scope0],
+        (scope0, jump_to_scope_node),
+        "<baz/($2),%1> ($1) [test(8) pop scoped baz] -> [jump to scope] <%1> ($2)",
+    );
+
+    verify(
+        &graph,
+        &[baz_ref, scope0],
+        (scope0, jump_to_scope_node),
+        "<%1> ($1) [test(7) push scoped baz test(6)] -> [jump to scope] <baz/([test(6)],$1),%1> ($1)",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn can_append_edges_without_precondition_variables() -> Result<(), PathResolutionError> {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").expect("");
+    let scope0 = create_scope_node(&mut graph, file, false);
+    let foo_ref = create_push_symbol_node(&mut graph, file, "foo", false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+    let bar_ref = create_push_symbol_node(&mut graph, file, "bar", false);
+    let bar_def = create_pop_symbol_node(&mut graph, file, "bar", false);
+
+    fn run(
+        graph: &StackGraph,
+        left: NicePartialPath,
+        right: NiceEdge,
+        expected: &str,
+    ) -> Result<(), PathResolutionError> {
+        let mut g = StackGraph::new();
+        g.add_from_graph(graph).expect("");
+
+        let mut ps = PartialPaths::new();
+
+        let mut l = create_partial_path_and_edges(&mut g, &mut ps, left).expect("");
+        l.eliminate_precondition_stack_variables(&mut ps);
+        let r = create_edge(&mut g, right);
+
+        l.append(graph, &mut ps, r)?;
+        let actual = l.display(&g, &mut ps).to_string();
+        assert_eq!(expected, actual);
+
+        Ok(())
+    }
+
+    fn verify(graph: &StackGraph, left: NicePartialPath, right: NiceEdge, expected: &str) {
+        run(graph, left, right, expected).expect("");
+    }
+
+    fn verify_not(graph: &StackGraph, left: NicePartialPath, right: NiceEdge) {
+        run(graph, left, right, "").expect_err("");
+    }
+
+    verify(
+        &graph,
+        &[foo_ref, scope0, foo_def],
+        (foo_def, bar_ref),
+        "<> () [test(1) push foo] -> [test(3) push bar] <bar> ()",
+    );
+
+    verify_not(&graph, &[scope0], (scope0, bar_def));
+
+    verify_not(&graph, &[foo_ref, scope0, foo_def], (foo_def, bar_def));
+
+    Ok(())
+}
+
+#[test]
 fn can_append_partial_paths() -> Result<(), PathResolutionError> {
     let mut graph = StackGraph::new();
     let file = graph.add_file("test").expect("");
@@ -658,23 +844,60 @@ fn can_append_partial_paths() -> Result<(), PathResolutionError> {
         "<%1> ($1) [test(7) push scoped baz test(6)] -> [jump to scope] <baz/([test(6)],$1),%1> ($1)",
     );
 
-    // verify that without stack variables in the precondition, the precondition cannot grow because of concatenation
-    {
-        let left = &[scope0];
-        let right = &[scope0, bar_def];
+    Ok(())
+}
 
+#[test]
+fn can_append_partial_paths_without_precondition_variables() -> Result<(), PathResolutionError> {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").expect("");
+    let scope0 = create_scope_node(&mut graph, file, false);
+    let foo_ref = create_push_symbol_node(&mut graph, file, "foo", false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+    let bar_ref = create_push_symbol_node(&mut graph, file, "bar", false);
+    let bar_def = create_pop_symbol_node(&mut graph, file, "bar", false);
+
+    fn run(
+        graph: &StackGraph,
+        left: NicePartialPath,
+        right: NicePartialPath,
+        expected: &str,
+    ) -> Result<(), PathResolutionError> {
         let mut g = StackGraph::new();
-        g.add_from_graph(&graph).expect("");
+        g.add_from_graph(graph).expect("");
 
         let mut ps = PartialPaths::new();
+
         let mut l = create_partial_path_and_edges(&mut g, &mut ps, left).expect("");
         l.eliminate_precondition_stack_variables(&mut ps);
         let mut r = create_partial_path_and_edges(&mut g, &mut ps, right).expect("");
 
         r.ensure_no_overlapping_variables(&mut ps, &l);
-        let result = l.concatenate(&g, &mut ps, &r);
-        result.expect_err("");
+        l.concatenate(&g, &mut ps, &r)?;
+        let actual = l.display(&g, &mut ps).to_string();
+        assert_eq!(expected, actual);
+
+        Ok(())
     }
+
+    fn verify(graph: &StackGraph, left: NicePartialPath, right: NicePartialPath, expected: &str) {
+        run(graph, left, right, expected).expect("");
+    }
+
+    fn verify_not(graph: &StackGraph, left: NicePartialPath, right: NicePartialPath) {
+        run(graph, left, right, "").expect_err("");
+    }
+
+    verify(
+        &graph,
+        &[foo_ref, scope0],
+        &[scope0, foo_def, bar_ref],
+        "<> () [test(1) push foo] -> [test(3) push bar] <bar> ()",
+    );
+
+    verify_not(&graph, &[scope0], &[scope0, bar_def]);
+
+    verify_not(&graph, &[foo_ref, scope0, foo_def], &[foo_def, bar_def]);
 
     Ok(())
 }

@@ -2311,9 +2311,9 @@ impl Node {
                         None => return Err(PathResolutionError::MissingAttachedScopeList),
                     };
                     *scope_stack_postcondition = new_scope_stack;
-                } else {
-                    // If the symbol stack postcondition is empty, then we need to update the
-                    // _precondition_ to indicate that the symbol stack needs to contain this scoped
+                } else if symbol_stack_postcondition.has_variable() {
+                    // If the symbol stack postcondition is empty but has a variable, then we can update
+                    // the _precondition_ to indicate that the symbol stack needs to contain this scoped
                     // symbol in order to successfully use this partial path.
                     let scope_stack_variable =
                         PartialPath::fresh_scope_stack_variable_for_partial_stack(
@@ -2327,9 +2327,18 @@ impl Node {
                             scope_stack_variable,
                         )),
                     };
+                    // We simply push to the precondition. The official procedure here
+                    // is to bind the postcondition symbol stack variable to the symbol
+                    // and a fresh variable, and apply that. However, because the variable
+                    // can only be bound in the precondition symbol stack, this amounts to
+                    // pushing the symbol there directly.
                     symbol_stack_precondition.push_back(partials, precondition_symbol);
                     *scope_stack_postcondition =
                         PartialScopeStack::from_variable(scope_stack_variable);
+                } else {
+                    // The symbol stack postcondition is empty and has no variable, so we cannot
+                    // perform the operation.
+                    return Err(PathResolutionError::SymbolStackUnsatisfied);
                 }
             }
             Self::PopSymbol(sink) => {
@@ -2341,15 +2350,24 @@ impl Node {
                     if top.scopes.is_some() {
                         return Err(PathResolutionError::UnexpectedAttachedScopeList);
                     }
-                } else {
-                    // If the symbol stack postcondition is empty, then we need to update the
-                    // _precondition_ to indicate that the symbol stack needs to contain this symbol in
-                    // order to successfully use this partial path.
+                } else if symbol_stack_postcondition.has_variable() {
+                    // If the symbol stack postcondition is empty but has a variable, then we can update
+                    // the _precondition_ to indicate that the symbol stack needs to contain this symbol
+                    // in order to successfully use this partial path.
                     let precondition_symbol = PartialScopedSymbol {
                         symbol: sink.symbol,
                         scopes: ControlledOption::none(),
                     };
+                    // We simply push to the precondition. The official procedure here
+                    // is to bind the postcondition symbol stack variable to the symbol
+                    // and a fresh variable, and apply that. However, because the variable
+                    // can only be bound in the precondition symbol stack, this amounts to
+                    // pushing the symbol there directly.
                     symbol_stack_precondition.push_back(partials, precondition_symbol);
+                } else {
+                    // The symbol stack postcondition is empty and has no variable, so we cannot
+                    // perform the operation.
+                    return Err(PathResolutionError::SymbolStackUnsatisfied);
                 }
             }
             Self::PushScopedSymbol(sink) => {
