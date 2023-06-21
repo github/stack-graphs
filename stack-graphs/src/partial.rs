@@ -471,7 +471,7 @@ impl PartialSymbolStack {
     /// Returns whether this partial symbol stack has a symbol stack variable.
     #[inline(always)]
     pub fn has_variable(&self) -> bool {
-        !self.variable.is_some()
+        self.variable.is_some()
     }
 
     #[inline(always)]
