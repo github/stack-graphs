@@ -196,6 +196,10 @@ where
     }
 }
 
+/// A cycle detector that builds up paths by appending elements to it.
+/// Path elements are stored in a shared arena that must be provided
+/// when calling methods, so that cloning the cycle detector itself is
+/// cheap.
 #[derive(Clone)]
 pub struct AppendingCycleDetector<H> {
     appendages: List<InternedPathOrHandle<H>>,
@@ -251,6 +255,13 @@ where
 
         let mut maybe_cyclic_path = None;
         let mut remaining_appendages = self.appendages;
+        // Unlike the stored appendages, which are stored in a shared arena, we use a _local_
+        // buffer to collect the prefix appendages that we collect for possible cycles. This is
+        // to prevent adding elements to the shared arena for every invocation of this method,
+        // because they would remain in the arena after the method returns. We take care to
+        // minimize (re)allocations by (a) only allocating when a possible cycle is detected,
+        // (b) reserving all necessary space before adding elements, and (c) reusing the buffer
+        // between loop iterations.
         let mut prefix_appendages = Vec::new();
         loop {
             // find cycle length
@@ -270,7 +281,7 @@ where
                 }
             }
 
-            // collect prefix elements
+            // collect prefix elements (reversing their order)
             prefix_appendages.clear();
             prefix_appendages.reserve(cycle_length);
             for _ in 0..cycle_length {
