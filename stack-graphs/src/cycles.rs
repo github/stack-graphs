@@ -250,16 +250,18 @@ where
         };
 
         let mut maybe_cyclic_path = None;
-        let mut appendages = self.appendages;
+        let mut remaining_appendages = self.appendages;
+        let mut prefix_appendages = Vec::new();
         loop {
-            // get prefix elements
-            let mut prefix_appendages = List::empty();
+            // find cycle length
+            let mut counting_appendages = remaining_appendages;
+            let mut cycle_length = 0usize;
             loop {
-                let appendable = appendages.pop_front(&mut appendables.elements).cloned();
+                let appendable = counting_appendages.pop_front(&mut appendables.elements);
                 match appendable {
                     Some(appendage) => {
+                        cycle_length += 1;
                         let is_cycle = appendage.start_node(db, &appendables.interned) == end_node;
-                        prefix_appendages.push_front(&mut appendables.elements, appendage);
                         if is_cycle {
                             break;
                         }
@@ -268,9 +270,20 @@ where
                 }
             }
 
+            // collect prefix elements
+            prefix_appendages.clear();
+            prefix_appendages.reserve(cycle_length);
+            for _ in 0..cycle_length {
+                let appendable = remaining_appendages
+                    .pop_front(&mut appendables.elements)
+                    .expect("")
+                    .clone();
+                prefix_appendages.push(appendable);
+            }
+
             // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
-            while let Some(appendage) = prefix_appendages.pop_front(&mut appendables.elements) {
+            while let Some(appendage) = prefix_appendages.pop() {
                 appendage.append_to(
                     graph,
                     partials,
