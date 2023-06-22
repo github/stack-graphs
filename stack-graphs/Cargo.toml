@@ -15,7 +15,7 @@ edition = "2018"
 [features]
 copious-debugging = []
 serde = ["dep:serde", "lsp-positions/serde"]
-storage = ["rusqlite", "serde"]
+storage = ["rusqlite", "serde", "rmp-serde"]
 visualization = ["serde", "serde_json"]
 
 [lib]
@@ -30,19 +30,20 @@ enumset = "1.0"
 fxhash = "0.2"
 itertools = "0.10"
 libc = "0.2"
-lsp-positions = { version="0.3", path="../lsp-positions" }
-rusqlite = { version = "0.28", optional=true, features = ["bundled", "functions"] }
-serde = { version="1.0", optional=true, features = ["derive"] }
-serde_json = { version="1.0", optional=true }
-smallvec = { version="1.6", features=["union"] }
-thiserror = { version="1.0" }
+lsp-positions = { version = "0.3", path = "../lsp-positions" }
+rmp-serde = { version = "1.1", optional = true }
+rusqlite = { version = "0.28", optional = true, features = ["bundled", "functions"] }
+serde = { version = "1.0", optional = true, features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
+smallvec = { version = "1.6", features = ["union"] }
+thiserror = { version = "1.0" }
 
 [dev-dependencies]
 assert-json-diff = "2"
 itertools = "0.10"
 maplit = "1.0"
 pretty_assertions = "0.7"
-serde_json = { version="1.0" }
+serde_json = { version = "1.0" }
 
 [package.metadata.docs.rs]
 all-features = true
