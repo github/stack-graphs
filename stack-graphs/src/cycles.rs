@@ -33,6 +33,7 @@ use enumset::EnumSet;
 use smallvec::SmallVec;
 use std::collections::HashMap;
 
+use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
@@ -128,21 +129,29 @@ where
 // ----------------------------------------------------------------------------
 // Cycle detector
 
-pub struct Appendables<H>(pub(crate) ListArena<PathOrAppendable<H>>);
+pub struct Appendables<H> {
+    /// List arena for appendable lists
+    elements: ListArena<InternedPathOrHandle<H>>,
+    /// Arena for interned partial paths
+    interned: Arena<PartialPath>,
+}
 
 impl<H> Appendables<H> {
     pub fn new() -> Self {
-        Self(ListArena::new())
+        Self {
+            elements: ListArena::new(),
+            interned: Arena::new(),
+        }
     }
 }
 
 #[derive(Clone)]
-pub(crate) enum PathOrAppendable<H> {
-    Path(PartialPath),
-    Handle(H),
+pub(crate) enum InternedPathOrHandle<H> {
+    Owned(Handle<PartialPath>),
+    Database(H),
 }
 
-impl<H> PathOrAppendable<H>
+impl<H> InternedPathOrHandle<H>
 where
     H: Clone,
 {
@@ -151,6 +160,7 @@ where
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &'a Db,
+        interned: &Arena<PartialPath>,
         path: &mut PartialPath,
     ) -> Result<(), PathResolutionError>
     where
@@ -158,37 +168,37 @@ where
         Db: ToAppendable<H, A>,
     {
         match self {
-            Self::Path(other) => other.append_to(graph, partials, path),
-            Self::Handle(h) => db.get_appendable(h).append_to(graph, partials, path),
+            Self::Owned(h) => interned.get(*h).append_to(graph, partials, path),
+            Self::Database(h) => db.get_appendable(h).append_to(graph, partials, path),
         }
     }
 
-    fn start_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
+    fn start_node<'a, A, Db>(&self, db: &'a Db, interned: &Arena<PartialPath>) -> Handle<Node>
     where
         A: Appendable + 'a,
         Db: ToAppendable<H, A>,
     {
         match self {
-            Self::Path(path) => path.start_node,
-            Self::Handle(h) => db.get_appendable(h).start_node(),
+            Self::Owned(h) => interned.get(*h).start_node,
+            Self::Database(h) => db.get_appendable(h).start_node(),
         }
     }
 
-    fn end_node<'a, A, Db>(&self, db: &'a Db) -> Handle<Node>
+    fn end_node<'a, A, Db>(&self, db: &'a Db, interned: &Arena<PartialPath>) -> Handle<Node>
     where
         A: Appendable + 'a,
         Db: ToAppendable<H, A>,
     {
         match self {
-            Self::Path(path) => path.end_node,
-            Self::Handle(h) => db.get_appendable(h).end_node(),
+            Self::Owned(h) => interned.get(*h).end_node,
+            Self::Database(h) => db.get_appendable(h).end_node(),
         }
     }
 }
 
 #[derive(Clone)]
 pub struct AppendingCycleDetector<H> {
-    appendages: List<PathOrAppendable<H>>,
+    appendages: List<InternedPathOrHandle<H>>,
 }
 
 impl<H> AppendingCycleDetector<H> {
@@ -199,16 +209,19 @@ impl<H> AppendingCycleDetector<H> {
     }
 
     pub fn from(appendables: &mut Appendables<H>, path: PartialPath) -> Self {
+        let h = appendables.interned.add(path);
         let mut result = Self::new();
         result
             .appendages
-            .push_front(&mut appendables.0, PathOrAppendable::Path(path));
+            .push_front(&mut appendables.elements, InternedPathOrHandle::Owned(h));
         result
     }
 
     pub fn append(&mut self, appendables: &mut Appendables<H>, appendage: H) {
-        self.appendages
-            .push_front(&mut appendables.0, PathOrAppendable::Handle(appendage));
+        self.appendages.push_front(
+            &mut appendables.elements,
+            InternedPathOrHandle::Database(appendage),
+        );
     }
 }
 
@@ -231,8 +244,8 @@ where
     {
         let mut cycles = EnumSet::new();
 
-        let end_node = match self.appendages.clone().pop_front(&mut appendables.0) {
-            Some(appendage) => appendage.end_node(db),
+        let end_node = match self.appendages.clone().pop_front(&mut appendables.elements) {
+            Some(appendage) => appendage.end_node(db, &appendables.interned),
             None => return Ok(cycles),
         };
 
@@ -242,11 +255,11 @@ where
             // get prefix elements
             let mut prefix_appendages = List::empty();
             loop {
-                let appendable = appendages.pop_front(&mut appendables.0).cloned();
+                let appendable = appendages.pop_front(&mut appendables.elements).cloned();
                 match appendable {
                     Some(appendage) => {
-                        let is_cycle = appendage.start_node(db) == end_node;
-                        prefix_appendages.push_front(&mut appendables.0, appendage);
+                        let is_cycle = appendage.start_node(db, &appendables.interned) == end_node;
+                        prefix_appendages.push_front(&mut appendables.elements, appendage);
                         if is_cycle {
                             break;
                         }
@@ -257,8 +270,14 @@ where
 
             // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
-            while let Some(appendage) = prefix_appendages.pop_front(&mut appendables.0) {
-                appendage.append_to(graph, partials, db, &mut prefix_path)?;
+            while let Some(appendage) = prefix_appendages.pop_front(&mut appendables.elements) {
+                appendage.append_to(
+                    graph,
+                    partials,
+                    db,
+                    &appendables.interned,
+                    &mut prefix_path,
+                )?;
             }
 
             // build cyclic path
