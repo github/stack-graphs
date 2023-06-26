@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- The `Appendable` trait has been simplified. Its `Ctx` type parameter is gone, in favor of a separate trait `ToAppendable` that is used to find appendables for a handle. The type itself moved from the `cycles` to the `stitching` module.
+- The `ForwardPartialPathStitcher` has been generalized so that it can be used to build paths from a database or from graph edges. It now takes a type parameter indicating the type of candidates it uses. Instead of a `Database` instance, it expects a value that implements the `Candidates` and `ToAppendable` traits. The `ForwardPartialPathStitcher::process_next_phase` expects an additional `extend_until` closure that controls whether the extended paths are considered for further extension or not (using `|_,_,_| true` retains old behavior).
+
+### Fixed
+
+- A panic in `AppendingCycleDetector::is_cyclic` that occurred because variables were not always renamed before attempting to concatenate partial paths.
+- An inverted condition in `PartialSymbolStack::has_variable` that resulted in incorrect return values.
+- A bug in `Partial*Stack::unify` that resulted in recursive bindings (`$1 => SYMBOL,$1`). Any unification that would result in a recursive binding now returns an error.
+- A bug in `PartialPath::append` that would incorrectly allow appending edges that added symbols to the precondition symbol stack, even if that stack had no variable.
+
+### Removed
+
+- The `ForwardPartialPathStitcher::from_nodes` function has been removed. Callers are responsible for creating the right initial paths, which can be done using `PartialPath::from_node`.
+- The `PartialPaths::find_minimal_partial_path_set_in_file` method has been removed in favor of `ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file`.
+- The `PartialPaths::find_all_complete_paths` method has been removed in favor of `ForwardPartialPathStitcher::find_all_complete_partial_paths` using `GraphEdges(None)` for the `db` argument.
+- The `OwnedOrDatabasePath` has been removed because it was obsolete with the changes to `Appendable`.
+
 ## v0.11.0 -- 2023-06-08
 
 ### Added

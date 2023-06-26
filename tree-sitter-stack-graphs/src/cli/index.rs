@@ -11,6 +11,7 @@ use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
@@ -306,12 +307,13 @@ impl<'a> Indexer<'a> {
 
         let mut partials = PartialPaths::new();
         let mut paths = Vec::new();
-        match partials.find_minimal_partial_path_set_in_file(
+        match ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &(&cancellation_flag as &dyn CancellationFlag),
             |_g, _ps, p| {
-                paths.push(p);
+                paths.push(p.clone());
             },
         ) {
             Ok(_) => {}

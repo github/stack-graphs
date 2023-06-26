@@ -12,7 +12,7 @@ use stack_graphs::graph;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::serde;
-use stack_graphs::stitching::Database;
+use stack_graphs::stitching::{Database, ForwardPartialPathStitcher};
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -980,11 +980,16 @@ fn can_serialize_partial_paths() {
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
     for file in graph.iter_files() {
-        partials
-            .find_minimal_partial_path_set_in_file(&graph, file, &NoCancellation, |g, ps, p| {
-                db.add_partial_path(g, ps, p);
-            })
-            .expect("Expect path finding to work");
+        ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+            &graph,
+            &mut partials,
+            file,
+            &NoCancellation,
+            |g, ps, p| {
+                db.add_partial_path(g, ps, p.clone());
+            },
+        )
+        .expect("Expect path finding to work");
     }
     let actual = serde_json::to_value(&db.to_serializable(&graph, &mut partials))
         .expect("Cannot serialize paths");

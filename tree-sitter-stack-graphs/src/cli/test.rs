@@ -303,12 +303,13 @@ impl TestArgs {
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
         for file in test.graph.iter_files() {
-            partials.find_minimal_partial_path_set_in_file(
+            ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
                 &test.graph,
+                &mut partials,
                 file,
                 &cancellation_flag.as_ref(),
                 |g, ps, p| {
-                    db.add_partial_path(g, ps, p);
+                    db.add_partial_path(g, ps, p.clone());
                 },
             )?;
         }
