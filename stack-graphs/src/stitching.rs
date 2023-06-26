@@ -763,16 +763,16 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             .is_cyclic(graph, partials, db, &mut self.appended_paths)
             .expect("cyclic test failed when stitching partial paths");
         let cyclic = match has_precondition_variables {
-            // If the precondition has no variables, we allow cycles that strenghten the
-            // precondition, because we know they cannot strenghten the precondition of
+            // If the precondition has no variables, we allow cycles that strengthen the
+            // precondition, because we know they cannot strengthen the precondition of
             // the overall path.
             false => !cycles
                 .into_iter()
                 .all(|c| c == Cyclicity::StrengthensPrecondition),
             // If the precondition has variables, do not allow any cycles, not even those
             // that strengthen the precondition. This is more strict than necessary. Better
-            // might be to disallow precondition strenghtening cycles only if they would
-            // strenghten the overall path precondition.
+            // might be to disallow precondition strengthening cycles only if they would
+            // strengthen the overall path precondition.
             true => !cycles.is_empty(),
         };
         if cyclic {
