@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The `Appendable` trait has been simplified. It's `Ctx` type parameter is gone, in favor of a separate trait `ToAppendable` that is used to find appendables for a handle. The type itself moved from the `cycles` to the `stitching` module.
+- The `Appendable` trait has been simplified. Its `Ctx` type parameter is gone, in favor of a separate trait `ToAppendable` that is used to find appendables for a handle. The type itself moved from the `cycles` to the `stitching` module.
 - The `ForwardPartialPathStitcher` has been generalized so that it can be used to build paths from a database or from graph edges. It now takes a type parameter indicating the type of candidates it uses. Instead of a `Database` instance, it expects a value that implements the `Candidates` and `ToAppendable` traits. The `ForwardPartialPathStitcher::process_next_phase` expects an additional `extend_until` closure that controls whether the extended paths are considered for further extension or not (using `|_,_,_| true` retains old behavior).
 
 ### Fixed
