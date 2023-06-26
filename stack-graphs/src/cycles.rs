@@ -134,7 +134,7 @@ where
 /// the cycle detectors themselves can be small and cheaply cloned.
 pub struct Appendables<H> {
     /// List arena for appendable lists
-    elements: ListArena<InternedPathOrHandle<H>>,
+    elements: ListArena<InternedOrHandle<H>>,
     /// Arena for interned partial paths
     interned: Arena<PartialPath>,
 }
@@ -148,13 +148,15 @@ impl<H> Appendables<H> {
     }
 }
 
+/// Enum that unifies handles to initial paths interned in the cycle detector, and appended
+/// handles to appendables in the external database.
 #[derive(Clone)]
-pub(crate) enum InternedPathOrHandle<H> {
-    Owned(Handle<PartialPath>),
+enum InternedOrHandle<H> {
+    Interned(Handle<PartialPath>),
     Database(H),
 }
 
-impl<H> InternedPathOrHandle<H>
+impl<H> InternedOrHandle<H>
 where
     H: Clone,
 {
@@ -171,7 +173,7 @@ where
         Db: ToAppendable<H, A>,
     {
         match self {
-            Self::Owned(h) => interned.get(*h).append_to(graph, partials, path),
+            Self::Interned(h) => interned.get(*h).append_to(graph, partials, path),
             Self::Database(h) => db.get_appendable(h).append_to(graph, partials, path),
         }
     }
@@ -182,7 +184,7 @@ where
         Db: ToAppendable<H, A>,
     {
         match self {
-            Self::Owned(h) => interned.get(*h).start_node,
+            Self::Interned(h) => interned.get(*h).start_node,
             Self::Database(h) => db.get_appendable(h).start_node(),
         }
     }
@@ -193,7 +195,7 @@ where
         Db: ToAppendable<H, A>,
     {
         match self {
-            Self::Owned(h) => interned.get(*h).end_node,
+            Self::Interned(h) => interned.get(*h).end_node,
             Self::Database(h) => db.get_appendable(h).end_node(),
         }
     }
@@ -205,7 +207,7 @@ where
 /// cheap.
 #[derive(Clone)]
 pub struct AppendingCycleDetector<H> {
-    appendages: List<InternedPathOrHandle<H>>,
+    appendages: List<InternedOrHandle<H>>,
 }
 
 impl<H> AppendingCycleDetector<H> {
@@ -220,14 +222,14 @@ impl<H> AppendingCycleDetector<H> {
         let mut result = Self::new();
         result
             .appendages
-            .push_front(&mut appendables.elements, InternedPathOrHandle::Owned(h));
+            .push_front(&mut appendables.elements, InternedOrHandle::Interned(h));
         result
     }
 
     pub fn append(&mut self, appendables: &mut Appendables<H>, appendage: H) {
         self.appendages.push_front(
             &mut appendables.elements,
-            InternedPathOrHandle::Database(appendage),
+            InternedOrHandle::Database(appendage),
         );
     }
 }
