@@ -156,6 +156,12 @@ impl Appendable for PartialPath {
 //-------------------------------------------------------------------------------------------------
 // ToAppendable
 
+/// A trait to be implemented on types such as [`Database`][] that allow converting handles
+/// to appendables.
+///
+/// It is very similar to the [`std::ops::Index`] trait, but returns a reference instead
+/// of a value, such that an efficient identifity implementation is possible, that doesn't
+/// require cloning values.
 pub trait ToAppendable<H, A>
 where
     A: Appendable,
@@ -166,6 +172,8 @@ where
 //-------------------------------------------------------------------------------------------------
 // Candidates
 
+/// A trait to support finding candidates for partial path extension. Requires an accompanying
+/// [`ToAppendable`] implementation to convert the candidate handles into [`Appendable`]s.
 pub trait Candidates<H> {
     fn find_candidates<R>(
         &mut self,
