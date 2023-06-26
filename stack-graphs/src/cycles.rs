@@ -129,6 +129,9 @@ where
 // ----------------------------------------------------------------------------
 // Cycle detector
 
+/// An arena used by [`AppendingCycleDetector`][] to store the path component lists.
+/// The arena is shared between all cycle detectors in a path stitching run, so that
+/// the cycle detectors themselves can be small and cheaply cloned.
 pub struct Appendables<H> {
     /// List arena for appendable lists
     elements: ListArena<InternedPathOrHandle<H>>,
