@@ -30,7 +30,7 @@ use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
-const VERSION: usize = 2;
+const VERSION: usize = 3;
 
 const SCHEMA: &str = r#"
         CREATE TABLE metadata (
@@ -40,18 +40,18 @@ const SCHEMA: &str = r#"
             file   TEXT PRIMARY KEY,
             tag    TEXT NOT NULL,
             error  TEXT,
-            json   BLOB NOT NULL
+            value  BLOB NOT NULL
         ) STRICT;
         CREATE TABLE file_paths (
             file     TEXT NOT NULL,
             local_id INTEGER NOT NULL,
-            json     BLOB NOT NULL,
+            value    BLOB NOT NULL,
             FOREIGN KEY(file) REFERENCES graphs(file)
         ) STRICT;
         CREATE TABLE root_paths (
             file         TEXT NOT NULL,
             symbol_stack TEXT NOT NULL,
-            json         BLOB NOT NULL,
+            value        BLOB NOT NULL,
             FOREIGN KEY(file) REFERENCES graphs(file)
         ) STRICT;
     "#;
@@ -75,7 +75,9 @@ pub enum StorageError {
     #[error(transparent)]
     Serde(#[from] serde::Error),
     #[error(transparent)]
-    SerdeJson(#[from] serde_json::Error),
+    RmpSerdeDecode(#[from] rmp_serde::decode::Error),
+    #[error(transparent)]
+    RmpSerdeEncode(#[from] rmp_serde::encode::Error),
 }
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -274,14 +276,14 @@ impl SQLiteWriter {
         error: &str,
     ) -> Result<()> {
         copious_debugging!("--> Store error for {}", file.display());
-        let mut stmt =
-            conn.prepare_cached("INSERT INTO graphs (file, tag, error, json) VALUES (?, ?, ?, ?)")?;
+        let mut stmt = conn
+            .prepare_cached("INSERT INTO graphs (file, tag, error, value) VALUES (?, ?, ?, ?)")?;
         let graph = crate::serde::StackGraph::default();
         stmt.execute((
             &file.to_string_lossy(),
             tag,
             error,
-            &serde_json::to_vec(&graph)?,
+            &rmp_serde::to_vec(&graph)?,
         ))?;
         Ok(())
     }
@@ -319,9 +321,9 @@ impl SQLiteWriter {
         let file_str = graph[file].name();
         copious_debugging!("--> Store graph for {}", file_str);
         let mut stmt =
-            conn.prepare_cached("INSERT INTO graphs (file, tag, json) VALUES (?, ?, ?)")?;
+            conn.prepare_cached("INSERT INTO graphs (file, tag, value) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        stmt.execute((file_str, tag, &serde_json::to_vec(&graph)?))?;
+        stmt.execute((file_str, tag, &rmp_serde::to_vec(&graph)?))?;
         Ok(())
     }
 
@@ -340,9 +342,10 @@ impl SQLiteWriter {
     {
         let file_str = graph[file].name();
         let mut node_stmt =
-            conn.prepare_cached("INSERT INTO file_paths (file, local_id, json) VALUES (?, ?, ?)")?;
-        let mut root_stmt = conn
-            .prepare_cached("INSERT INTO root_paths (file, symbol_stack, json) VALUES (?, ?, ?)")?;
+            conn.prepare_cached("INSERT INTO file_paths (file, local_id, value) VALUES (?, ?, ?)")?;
+        let mut root_stmt = conn.prepare_cached(
+            "INSERT INTO root_paths (file, symbol_stack, value) VALUES (?, ?, ?)",
+        )?;
         #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
         let mut node_path_count = 0usize;
         #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
@@ -361,7 +364,7 @@ impl SQLiteWriter {
                 );
                 let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                root_stmt.execute((file_str, symbol_stack, &serde_json::to_vec(&path)?))?;
+                root_stmt.execute((file_str, symbol_stack, &rmp_serde::to_vec(&path)?))?;
                 root_path_count += 1;
             } else if start_node.is_in_file(file) {
                 copious_debugging!(
@@ -372,7 +375,7 @@ impl SQLiteWriter {
                 node_stmt.execute((
                     file_str,
                     path.start_node.local_id,
-                    &serde_json::to_vec(&path)?,
+                    &rmp_serde::to_vec(&path)?,
                 ))?;
                 node_path_count += 1;
             } else {
@@ -499,8 +502,8 @@ impl SQLiteReader {
         }
         copious_debugging!(" * Load from database");
         let mut stmt = conn.prepare_cached("SELECT json FROM graphs WHERE file = ?")?;
-        let json_graph = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
-        let file_graph = serde_json::from_slice::<serde::StackGraph>(&json_graph)?;
+        let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
+        let file_graph = rmp_serde::from_slice::<serde::StackGraph>(&value)?;
         file_graph.load_into(graph)?;
         Ok(())
     }
@@ -539,24 +542,24 @@ impl SQLiteReader {
         let file = self.graph[file].name();
         let mut stmt = self
             .conn
-            .prepare_cached("SELECT file,json from file_paths WHERE file = ? AND local_id = ?")?;
+            .prepare_cached("SELECT file,value from file_paths WHERE file = ? AND local_id = ?")?;
         let paths = stmt.query_map((file, id.local_id()), |row| {
             let file = row.get::<_, String>(0)?;
-            let json = row.get::<_, Vec<u8>>(1)?;
-            Ok((file, json))
+            let value = row.get::<_, Vec<u8>>(1)?;
+            Ok((file, value))
         })?;
         #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
         let mut count = 0usize;
         for path in paths {
             cancellation_flag.check("loading node paths")?;
-            let (file, json) = path?;
+            let (file, value) = path?;
             Self::load_graph_for_file_inner(
                 &file,
                 &mut self.graph,
                 &mut self.loaded_graphs,
                 &self.conn,
             )?;
-            let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
+            let path = rmp_serde::from_slice::<serde::PartialPath>(&value)?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
             copious_debugging!(
                 "   > Loaded {}",
@@ -593,24 +596,24 @@ impl SQLiteReader {
             }
             let mut stmt = self
                 .conn
-                .prepare_cached("SELECT file,json from root_paths WHERE symbol_stack = ?")?;
+                .prepare_cached("SELECT file,value from root_paths WHERE symbol_stack = ?")?;
             let paths = stmt.query_map([symbol_stack], |row| {
                 let file = row.get::<_, String>(0)?;
-                let json = row.get::<_, Vec<u8>>(1)?;
-                Ok((file, json))
+                let value = row.get::<_, Vec<u8>>(1)?;
+                Ok((file, value))
             })?;
             #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
             let mut count = 0usize;
             for path in paths {
                 cancellation_flag.check("loading root paths")?;
-                let (file, json) = path?;
+                let (file, value) = path?;
                 Self::load_graph_for_file_inner(
                     &file,
                     &mut self.graph,
                     &mut self.loaded_graphs,
                     &self.conn,
                 )?;
-                let path = serde_json::from_slice::<serde::PartialPath>(&json)?;
+                let path = rmp_serde::from_slice::<serde::PartialPath>(&value)?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
                 copious_debugging!(
                     "   > Loaded {}",
