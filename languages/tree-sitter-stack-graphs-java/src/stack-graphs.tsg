@@ -77,7 +77,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   }
 }
 
-(import_declaration (_) @ref) @import {
+(import_declaration (_) @ref (_) @asterisk) @import {
+  node @asterisk.lexical_scope
+  edge @asterisk.lexical_scope -> @import.lexical_scope
   edge @ref.lexical_scope -> @import.lexical_scope
 }
 
@@ -447,12 +449,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @method.defs -> @param.def
 }
 
-(formal_parameter type: (type_identifier)) @param {
+(formal_parameter type: (type_identifier) @type) @param {
   node @param.lexical_scope
   node @param.def
+  node def__typeof
+
+  edge @type.lexical_scope -> @param.lexical_scope
+
+
+  attr (def__typeof) pop_symbol = ":"
+  edge def__typeof -> @type.type
+
 }
 
-(formal_parameter type: (array_type (_)) @type (_) @name) @param
+(formal_parameter type: [(array_type) (integral_type) (generic_type) (boolean_type)] @type (_) @name) @param
 {
   node @param.def
   node @param.lexical_scope
