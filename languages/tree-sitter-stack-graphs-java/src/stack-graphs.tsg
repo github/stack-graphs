@@ -447,7 +447,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @method.defs -> @param.def
 }
 
-(formal_parameter type: (_) @type (_) @name) @param
+(formal_parameter type: (type_identifier)) @param {
+  node @param.lexical_scope
+  node @param.def
+}
+
+(formal_parameter type: (array_type (_)) @type (_) @name) @param
 {
   node @param.def
   node @param.lexical_scope
