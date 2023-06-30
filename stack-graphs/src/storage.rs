@@ -31,7 +31,6 @@ use crate::stitching::Database;
 use crate::stitching::ForwardCandidates;
 use crate::CancellationError;
 use crate::CancellationFlag;
-use crate::NoCancellation;
 
 const VERSION: usize = 5;
 
@@ -720,17 +719,13 @@ impl PartialSymbolStack {
     }
 }
 
-impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database> for SQLiteReader {
+impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, StorageError> for SQLiteReader {
     fn load_forward_candidates(
         &mut self,
         path: &PartialPath,
-        _cancellation_flag: &dyn CancellationFlag,
-    ) -> std::result::Result<(), CancellationError> {
-        // TODO what about other errors?
-        match self.load_partial_path_extensions(path, &NoCancellation) {
-            Err(StorageError::Cancelled(msg)) => Err(CancellationError(msg)),
-            _ => Ok(()),
-        }
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> std::result::Result<(), StorageError> {
+        self.load_partial_path_extensions(path, cancellation_flag)
     }
 
     fn get_forward_candidates<R>(&mut self, path: &PartialPath, result: &mut R)
