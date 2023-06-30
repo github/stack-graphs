@@ -447,6 +447,16 @@ impl SQLiteReader {
         })
     }
 
+    /// Clear all data that has been loaded into this reader instance.
+    pub fn clear(&mut self) {
+        self.loaded_graphs.clear();
+        self.loaded_node_paths.clear();
+        self.loaded_root_paths.clear();
+        self.graph = StackGraph::new();
+        self.partials = PartialPaths::new();
+        self.db = Database::new();
+    }
+
     /// Get the file's status in the database. If a tag is provided, it must match or the file
     /// is reported missing.
     pub fn status_for_file<T: AsRef<str>>(
