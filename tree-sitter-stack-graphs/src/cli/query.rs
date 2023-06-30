@@ -9,6 +9,7 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteReader;
 use std::path::Path;
@@ -184,7 +185,8 @@ impl<'a> Querier<'a> {
             };
 
             let mut reference_paths = Vec::new();
-            if let Err(err) = self.db.find_all_complete_partial_paths(
+            if let Err(err) = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+                self.db,
                 std::iter::once(node),
                 &cancellation_flag,
                 |_g, _ps, p| {
@@ -253,6 +255,12 @@ pub enum QueryError {
     ReadError(#[from] std::io::Error),
     #[error(transparent)]
     StorageError(#[from] stack_graphs::storage::StorageError),
+}
+
+impl From<stack_graphs::CancellationError> for QueryError {
+    fn from(value: stack_graphs::CancellationError) -> Self {
+        Self::Cancelled(value.0)
+    }
 }
 
 impl From<crate::CancellationError> for QueryError {
