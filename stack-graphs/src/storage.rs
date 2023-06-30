@@ -736,7 +736,7 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, StorageError>
             .find_candidate_partial_paths(&self.graph, &mut self.partials, path, result);
     }
 
-    fn get_graph_and_partials(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
+    fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
         (&self.graph, &mut self.partials, &self.db)
     }
 }

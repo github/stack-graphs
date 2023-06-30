@@ -172,14 +172,16 @@ where
 //-------------------------------------------------------------------------------------------------
 // Candidates
 
-/// A trait to support finding candidates for partial path extension. Requires an accompanying
-/// [`ToAppendable`] implementation to convert the candidate handles into [`Appendable`]s.
+/// A trait to support finding candidates for partial path extension. The candidates are represented
+/// by handles `H`, which are mapped to appendables `A` using the database `Db`. Loading errors are
+/// reported as values of the `Err` type.
 pub trait ForwardCandidates<H, A, Db, Err>
 where
     A: Appendable,
     Db: ToAppendable<H, A>,
 {
-    /// Load possible forward candidates for the given partial path.
+    /// Load possible forward candidates for the given partial path into this candidates instance.
+    /// Must be called before [`get_forward_candidates`] to allow lazy-loading implementations.
     fn load_forward_candidates(
         &mut self,
         _path: &PartialPath,
@@ -189,13 +191,14 @@ where
     }
 
     /// Get forward candidates for extending the given partial path and add them to the provided
-    /// result instance. If the trait implementation loads data lazily, this only considers already
-    /// loaded data.
+    /// result instance. If this instance loads data lazily, this only considers previously loaded
+    /// data.
     fn get_forward_candidates<R>(&mut self, path: &PartialPath, result: &mut R)
     where
         R: std::iter::Extend<H>;
 
-    fn get_graph_and_partials(&mut self) -> (&StackGraph, &mut PartialPaths, &Db);
+    /// Get the graph, partial path arena, and database backing this candidates instance.
+    fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Db);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -235,7 +238,7 @@ impl ForwardCandidates<Edge, Edge, GraphEdges, CancellationError> for GraphEdgeC
         }));
     }
 
-    fn get_graph_and_partials(&mut self) -> (&StackGraph, &mut PartialPaths, &GraphEdges) {
+    fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &GraphEdges) {
         (self.graph, self.partials, &self.edges)
     }
 }
@@ -592,7 +595,7 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, CancellationE
             .find_candidate_partial_paths(self.graph, self.partials, path, result);
     }
 
-    fn get_graph_and_partials(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
+    fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
         (self.graph, self.partials, self.database)
     }
 }
@@ -837,7 +840,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         Db: ToAppendable<H, A>,
         C: ForwardCandidates<H, A, Db, Err>,
     {
-        let (graph, partials, db) = candidates.get_graph_and_partials();
+        let (graph, partials, db) = candidates.get_graph_partials_and_db();
         copious_debugging!("    Extend {}", partial_path.display(graph, partials));
 
         // check is path is cyclic, in which case we do not extend it
@@ -873,7 +876,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         self.next_iteration.0.reserve(extension_count);
         self.next_iteration.1.reserve(extension_count);
         for extension in &self.candidates {
-            let (graph, partials, db) = candidates.get_graph_and_partials();
+            let (graph, partials, db) = candidates.get_graph_partials_and_db();
             let extension_path = db.get_appendable(extension);
             copious_debugging!("      with {}", extension_path.display(graph, partials));
 
@@ -941,7 +944,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         );
         let mut work_performed = 0;
         while let Some((partial_path, cycle_detector)) = self.queue.pop_front() {
-            let (graph, partials, _) = candidates.get_graph_and_partials();
+            let (graph, partials, _) = candidates.get_graph_partials_and_db();
             copious_debugging!(
                 "--> Candidate partial path {}",
                 partial_path.display(graph, partials)
@@ -1058,7 +1061,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         Err: std::convert::From<CancellationError>,
     {
         let mut stitcher = {
-            let (graph, partials, _) = candidates.get_graph_and_partials();
+            let (graph, partials, _) = candidates.get_graph_partials_and_db();
             let initial_paths = starting_nodes
                 .into_iter()
                 .filter(|n| graph[*n].is_reference())
@@ -1076,7 +1079,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 candidates.load_forward_candidates(path, cancellation_flag)?;
             }
             stitcher.process_next_phase(candidates, |_, _, _| true);
-            let (graph, partials, _) = candidates.get_graph_and_partials();
+            let (graph, partials, _) = candidates.get_graph_partials_and_db();
             for path in stitcher.previous_phase_partial_paths() {
                 if path.is_complete(graph) {
                     visit(graph, partials, path);
