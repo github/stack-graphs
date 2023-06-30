@@ -174,7 +174,7 @@ where
 
 /// A trait to support finding candidates for partial path extension. Requires an accompanying
 /// [`ToAppendable`] implementation to convert the candidate handles into [`Appendable`]s.
-pub trait ForwardCandidates<H, A, Db>
+pub trait ForwardCandidates<H, A, Db, Err>
 where
     A: Appendable,
     Db: ToAppendable<H, A>,
@@ -184,7 +184,7 @@ where
         &mut self,
         _path: &PartialPath,
         _cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<(), CancellationError> {
+    ) -> Result<(), Err> {
         Ok(())
     }
 
@@ -224,7 +224,7 @@ impl<'a> GraphEdgeCandidates<'a> {
     }
 }
 
-impl ForwardCandidates<Edge, Edge, GraphEdges> for GraphEdgeCandidates<'_> {
+impl ForwardCandidates<Edge, Edge, GraphEdges, CancellationError> for GraphEdgeCandidates<'_> {
     fn get_forward_candidates<R>(&mut self, path: &PartialPath, result: &mut R)
     where
         R: std::iter::Extend<Edge>,
@@ -569,7 +569,9 @@ impl<'a> DatabaseCandidates<'a> {
     }
 }
 
-impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database> for DatabaseCandidates<'_> {
+impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, CancellationError>
+    for DatabaseCandidates<'_>
+{
     fn get_forward_candidates<R>(&mut self, path: &PartialPath, result: &mut R)
     where
         R: std::iter::Extend<Handle<PartialPath>>,
@@ -812,7 +814,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
     /// you are responsible for ensuring that `db` already contains all of the possible appendables
     /// that we might want to extend `partial_path` with.
-    fn extend<A, Db, C>(
+    fn extend<A, Db, C, Err>(
         &mut self,
         candidates: &mut C,
         partial_path: &PartialPath,
@@ -821,7 +823,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     where
         A: Appendable,
         Db: ToAppendable<H, A>,
-        C: ForwardCandidates<H, A, Db>,
+        C: ForwardCandidates<H, A, Db, Err>,
     {
         let (graph, partials, db) = candidates.get_graph_and_partials();
         copious_debugging!("    Extend {}", partial_path.display(graph, partials));
@@ -911,11 +913,11 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     /// or not. It is not called on the initial paths.
     ///
     /// [`previous_phase_partial_paths`]: #method.previous_phase_partial_paths
-    pub fn process_next_phase<A, Db, C, E>(&mut self, candidates: &mut C, extend_while: E)
+    pub fn process_next_phase<A, Db, C, E, Err>(&mut self, candidates: &mut C, extend_while: E)
     where
         A: Appendable,
         Db: ToAppendable<H, A>,
-        C: ForwardCandidates<H, A, Db>,
+        C: ForwardCandidates<H, A, Db, Err>,
         E: Fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
     {
         copious_debugging!("==> Start phase {}", self.phase_number);
@@ -1029,18 +1031,19 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     /// [`process_next_phase`][] manually.
     ///
     /// [`process_next_phase`]: #method.process_next_phase
-    pub fn find_all_complete_partial_paths<I, F, A, Db, C>(
+    pub fn find_all_complete_partial_paths<I, F, A, Db, C, Err>(
         candidates: &mut C,
         starting_nodes: I,
         cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
-    ) -> Result<(), CancellationError>
+    ) -> Result<(), Err>
     where
         I: IntoIterator<Item = Handle<Node>>,
         A: Appendable,
         Db: ToAppendable<H, A>,
-        C: ForwardCandidates<H, A, Db>,
+        C: ForwardCandidates<H, A, Db, Err>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
+        Err: std::convert::From<CancellationError>,
     {
         let mut stitcher = {
             let (graph, partials, _) = candidates.get_graph_and_partials();
