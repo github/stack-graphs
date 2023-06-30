@@ -16,6 +16,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::serde::Filter;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
 use std::path::PathBuf;
@@ -481,9 +482,7 @@ impl TestArgs {
             .collect::<Vec<_>>();
         let mut paths = Vec::new();
         ForwardPartialPathStitcher::find_all_complete_partial_paths(
-            graph,
-            partials,
-            db,
+            &mut DatabaseCandidates::new(graph, partials, db),
             references.clone(),
             &cancellation_flag,
             |_, _, p| {
