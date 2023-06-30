@@ -174,8 +174,8 @@ where
 
 /// A trait to support finding candidates for partial path extension. Requires an accompanying
 /// [`ToAppendable`] implementation to convert the candidate handles into [`Appendable`]s.
-pub trait Candidates<H> {
-    fn find_candidates<R>(
+pub trait ForwardCandidates<H> {
+    fn find_forward_candidates<R>(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -197,8 +197,8 @@ impl ToAppendable<Edge, Edge> for GraphEdges {
     }
 }
 
-impl Candidates<Edge> for GraphEdges {
-    fn find_candidates<R>(
+impl ForwardCandidates<Edge> for GraphEdges {
+    fn find_forward_candidates<R>(
         &mut self,
         graph: &StackGraph,
         _partials: &mut PartialPaths,
@@ -488,8 +488,8 @@ impl ToAppendable<Handle<PartialPath>, PartialPath> for Database {
     }
 }
 
-impl Candidates<Handle<PartialPath>> for Database {
-    fn find_candidates<R>(
+impl ForwardCandidates<Handle<PartialPath>> for Database {
+    fn find_forward_candidates<R>(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
@@ -752,7 +752,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     ) -> usize
     where
         A: Appendable,
-        Db: Candidates<H> + ToAppendable<H, A>,
+        Db: ForwardCandidates<H> + ToAppendable<H, A>,
     {
         copious_debugging!("    Extend {}", partial_path.display(graph, partials));
 
@@ -782,7 +782,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 
         // find candidates to append
         self.candidates.clear();
-        db.find_candidates(graph, partials, partial_path, &mut self.candidates);
+        db.find_forward_candidates(graph, partials, partial_path, &mut self.candidates);
 
         // try to extend path with candidates
         let extension_count = self.candidates.len();
@@ -848,7 +848,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         extend_while: E,
     ) where
         A: Appendable,
-        Db: Candidates<H> + ToAppendable<H, A>,
+        Db: ForwardCandidates<H> + ToAppendable<H, A>,
         E: Fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
     {
         copious_debugging!("==> Start phase {}", self.phase_number);
@@ -974,7 +974,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     where
         I: IntoIterator<Item = Handle<Node>>,
         A: Appendable,
-        Db: Candidates<H> + ToAppendable<H, A>,
+        Db: ForwardCandidates<H> + ToAppendable<H, A>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
         let initial_paths = starting_nodes
