@@ -507,7 +507,7 @@ impl SQLiteReader {
     }
 
     /// Ensure the graph for the given file is loaded.
-    pub fn load_graph_for_file(&mut self, file: &str) -> Result<()> {
+    pub fn load_graph_for_file(&mut self, file: &str) -> Result<Handle<File>> {
         Self::load_graph_for_file_inner(file, &mut self.graph, &mut self.loaded_graphs, &self.conn)
     }
 
@@ -516,21 +516,21 @@ impl SQLiteReader {
         graph: &mut StackGraph,
         loaded_graphs: &mut HashSet<String>,
         conn: &Connection,
-    ) -> Result<()> {
+    ) -> Result<Handle<File>> {
         copious_debugging!("--> Load graph for {}", file);
         if !loaded_graphs.insert(file.to_string()) {
             copious_debugging!(" * Already loaded");
-            return Ok(());
+            return Ok(graph.get_file(file).expect("loaded file to exist"));
         }
         copious_debugging!(" * Load from database");
         let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
         let file_graph = rmp_serde::from_slice::<serde::StackGraph>(&value)?;
         file_graph.load_into(graph)?;
-        Ok(())
+        Ok(graph.get_file(file).expect("loaded file to exist"))
     }
 
-    pub fn load_graph_for_file_or_directory(
+    pub fn load_graphs_for_file_or_directory(
         &mut self,
         file_or_directory: &Path,
         cancellation_flag: &dyn CancellationFlag,

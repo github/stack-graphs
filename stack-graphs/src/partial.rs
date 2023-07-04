@@ -2625,6 +2625,7 @@ impl PartialPaths {
         }
     }
 
+    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
     pub(crate) fn clear(&mut self) {
         self.partial_symbol_stacks.clear();
         self.partial_scope_stacks.clear();

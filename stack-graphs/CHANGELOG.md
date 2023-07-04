@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - New `SQLiteReader::clear` and `SQLiteReader::clear_paths` methods that make it easier to reuse instances.
+- The method `SQLiteReader::load_graph_for_file` now returns the file handle for the loaded file.
 
 ### Changed
 
 - The `Appendable` trait has been simplified. Its `Ctx` type parameter is gone, in favor of a separate trait `ToAppendable` that is used to find appendables for a handle. The type itself moved from the `cycles` to the `stitching` module.
 - The `ForwardPartialPathStitcher` has been generalized so that it can be used to build paths from a database or from graph edges. It now takes a type parameter indicating the type of candidates it uses. Instead of a `Database` instance, it expects a value that implements the `Candidates` and `ToAppendable` traits. The `ForwardPartialPathStitcher::process_next_phase` expects an additional `extend_until` closure that controls whether the extended paths are considered for further extension or not (using `|_,_,_| true` retains old behavior).
 - The SQLite database implementation is using a new schema which stores binary instead of JSON values, resulting in faster write times and smaller databases.
+- Renamed method `SQLiteReader::load_graph_for_file_or_directory` to `SQLiteReader::load_graphs_for_file_or_directory`.
 
 ### Fixed
 

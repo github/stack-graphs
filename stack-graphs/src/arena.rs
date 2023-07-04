@@ -183,6 +183,7 @@ impl<T> Arena<T> {
 
     /// Clear the arena, keeping underlying allocated capacity.  After this, all previous handles into
     /// the arena are invalid.
+    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
     #[inline(always)]
     pub(crate) fn clear(&mut self) {
         self.items.clear();
@@ -289,6 +290,7 @@ impl<H, T> SupplementalArena<H, T> {
 
     /// Clear the supplemantal arena, keeping underlying allocated capacity.  After this,
     /// all previous handles into the arena are invalid.
+    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
     #[inline(always)]
     pub(crate) fn clear(&mut self) {
         self.items.clear();

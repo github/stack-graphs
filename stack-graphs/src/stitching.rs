@@ -251,6 +251,7 @@ impl Database {
 
     /// Clear the database.  After this, all previous handles into the database are
     /// invalid.
+    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
     pub(crate) fn clear(&mut self) {
         self.partial_paths.clear();
         self.local_nodes.clear();
