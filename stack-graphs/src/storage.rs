@@ -523,7 +523,7 @@ impl SQLiteReader {
             return Ok(());
         }
         copious_debugging!(" * Load from database");
-        let mut stmt = conn.prepare_cached("SELECT json FROM graphs WHERE file = ?")?;
+        let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
         let file_graph = rmp_serde::from_slice::<serde::StackGraph>(&value)?;
         file_graph.load_into(graph)?;
