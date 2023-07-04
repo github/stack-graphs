@@ -181,6 +181,13 @@ impl<T> Arena<T> {
         }
     }
 
+    /// Clear the arena, keeping underlying allocated capacity.  After this, all previous handles into
+    /// the arena are invalid.
+    #[inline(always)]
+    pub(crate) fn clear(&mut self) {
+        self.items.clear();
+    }
+
     /// Adds a new instance to this arena, returning a stable handle to it.
     ///
     /// Note that we do not deduplicate instances of `T` in any way.  If you add two instances that
@@ -278,6 +285,13 @@ impl<H, T> SupplementalArena<H, T> {
             items: vec![MaybeUninit::uninit()],
             _phantom: PhantomData,
         }
+    }
+
+    /// Clear the supplemantal arena, keeping underlying allocated capacity.  After this,
+    /// all previous handles into the arena are invalid.
+    #[inline(always)]
+    pub(crate) fn clear(&mut self) {
+        self.items.clear();
     }
 
     /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental

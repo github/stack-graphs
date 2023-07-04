@@ -447,6 +447,28 @@ impl SQLiteReader {
         })
     }
 
+    /// Clear all data that has been loaded into this reader instance.
+    /// After this call, all existing handles from this reader are invalid.
+    pub fn clear(&mut self) {
+        self.loaded_graphs.clear();
+        self.graph = StackGraph::new();
+
+        self.loaded_node_paths.clear();
+        self.loaded_root_paths.clear();
+        self.partials.clear();
+        self.db.clear();
+    }
+
+    /// Clear path data that has been loaded into this reader instance.
+    /// After this call, all node handles remain valid, but all path data
+    /// is invalid.
+    pub fn clear_paths(&mut self) {
+        self.loaded_node_paths.clear();
+        self.loaded_root_paths.clear();
+        self.partials.clear();
+        self.db.clear();
+    }
+
     /// Get the file's status in the database. If a tag is provided, it must match or the file
     /// is reported missing.
     pub fn status_for_file<T: AsRef<str>>(

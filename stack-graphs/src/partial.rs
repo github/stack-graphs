@@ -2624,4 +2624,10 @@ impl PartialPaths {
             partial_path_edges: Deque::new_arena(),
         }
     }
+
+    pub(crate) fn clear(&mut self) {
+        self.partial_symbol_stacks.clear();
+        self.partial_scope_stacks.clear();
+        self.partial_path_edges.clear();
+    }
 }

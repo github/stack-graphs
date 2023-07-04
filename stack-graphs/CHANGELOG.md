@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- New `SQLiteReader::clear` and `SQLiteReader::clear_paths` methods that make it easier to reuse instances.
+
 ### Changed
 
 - The `Appendable` trait has been simplified. Its `Ctx` type parameter is gone, in favor of a separate trait `ToAppendable` that is used to find appendables for a handle. The type itself moved from the `cycles` to the `stitching` module.
