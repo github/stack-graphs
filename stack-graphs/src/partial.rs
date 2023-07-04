@@ -2610,6 +2610,7 @@ struct Join {
 
 /// Manages the state of a collection of partial paths built up as part of the partial-path-finding
 /// algorithm or path-stitching algorithm.
+#[derive(Clone)]
 pub struct PartialPaths {
     pub(crate) partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
     pub(crate) partial_scope_stacks: DequeArena<Handle<Node>>,

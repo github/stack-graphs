@@ -227,6 +227,7 @@ impl Candidates<Edge> for GraphEdges {
 /// We've written the path-stitching algorithm so that you have a chance to only load in the
 /// partial paths that are actually needed, placing them into a `Database` instance as they're
 /// needed.
+#[derive(Clone)]
 pub struct Database {
     pub(crate) partial_paths: Arena<PartialPath>,
     pub(crate) local_nodes: HandleSet<Node>,

@@ -173,6 +173,20 @@ impl<T> Drop for Arena<T> {
     }
 }
 
+impl<T> Clone for Arena<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        let mut items = Vec::with_capacity(self.items.len());
+        items.extend((0..self.items.len()).map(|_| MaybeUninit::uninit()));
+        unsafe {
+            std::ptr::copy_nonoverlapping(self.items.as_ptr(), items.as_mut_ptr(), self.items.len())
+        };
+        Self { items }
+    }
+}
+
 impl<T> Arena<T> {
     /// Creates a new arena.
     pub fn new() -> Arena<T> {
@@ -267,6 +281,23 @@ impl<H, T> Drop for SupplementalArena<H, T> {
         unsafe {
             let items = std::mem::transmute::<_, &mut [T]>(&mut self.items[1..]) as *mut [T];
             items.drop_in_place();
+        }
+    }
+}
+
+impl<H, T> Clone for SupplementalArena<H, T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        let mut items = Vec::with_capacity(self.items.len());
+        items.extend((0..self.items.len()).map(|_| MaybeUninit::uninit()));
+        unsafe {
+            std::ptr::copy_nonoverlapping(self.items.as_ptr(), items.as_mut_ptr(), self.items.len())
+        };
+        Self {
+            items,
+            _phantom: PhantomData::default(),
         }
     }
 }
@@ -374,6 +405,15 @@ pub struct HandleSet<T> {
     _phantom: PhantomData<T>,
 }
 
+impl<T> Clone for HandleSet<T> {
+    fn clone(&self) -> Self {
+        Self {
+            elements: self.elements.clone(),
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
 impl<T> HandleSet<T> {
     /// Creates a new, empty handle set.
     pub fn new() -> HandleSet<T> {
@@ -457,6 +497,7 @@ pub struct List<T> {
 
 #[doc(hidden)]
 #[repr(C)]
+#[derive(Clone)]
 pub struct ListCell<T> {
     head: T,
     // The value of this handle will be EMPTY_LIST_HANDLE if this is the last element of the list.
@@ -610,6 +651,7 @@ pub struct ReversibleList<T> {
 
 #[repr(C)]
 #[doc(hidden)]
+#[derive(Clone)]
 pub struct ReversibleListCell<T> {
     head: T,
     tail: Handle<ReversibleListCell<T>>,
