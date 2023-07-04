@@ -283,7 +283,7 @@ impl SQLiteWriter {
             &file.to_string_lossy(),
             tag,
             error,
-            &rmp_serde::to_vec(&graph)?,
+            &rmp_serde::to_vec_named(&graph)?,
         ))?;
         Ok(())
     }
@@ -323,7 +323,7 @@ impl SQLiteWriter {
         let mut stmt =
             conn.prepare_cached("INSERT INTO graphs (file, tag, value) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        stmt.execute((file_str, tag, &rmp_serde::to_vec(&graph)?))?;
+        stmt.execute((file_str, tag, &rmp_serde::to_vec_named(&graph)?))?;
         Ok(())
     }
 
@@ -364,7 +364,7 @@ impl SQLiteWriter {
                 );
                 let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                root_stmt.execute((file_str, symbol_stack, &rmp_serde::to_vec(&path)?))?;
+                root_stmt.execute((file_str, symbol_stack, &rmp_serde::to_vec_named(&path)?))?;
                 root_path_count += 1;
             } else if start_node.is_in_file(file) {
                 copious_debugging!(
@@ -375,7 +375,7 @@ impl SQLiteWriter {
                 node_stmt.execute((
                     file_str,
                     path.start_node.local_id,
-                    &rmp_serde::to_vec(&path)?,
+                    &rmp_serde::to_vec_named(&path)?,
                 ))?;
                 node_path_count += 1;
             } else {
