@@ -986,7 +986,7 @@ inherit .undefined
   edge @fun_decl.value_this -> @body.after_scope
 
   ; function values have a jump node that lets params connect up to actual arguments
-  attr (@fun_decl.value_arg_scope) "jump-to"
+  edge @fun_decl.value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
 (function_declaration
@@ -1056,7 +1056,7 @@ inherit .undefined
   edge @fun_decl.value_this -> @body.after_scope
 
   ; function values have a jump node that lets params connect up to actual arguments
-  attr (@fun_decl.value_arg_scope) "jump-to"
+  edge @fun_decl.value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
 (generator_function_declaration
@@ -1187,7 +1187,7 @@ inherit .undefined
   edge @method_def.method_value_this -> @body.after_scope
 
   ; method values have a jump node that lets params connect up to actual arguments
-  attr (@method_def.method_value_arg_scope) "jump-to"
+  edge @method_def.method_value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
 (method_definition
@@ -2061,7 +2061,7 @@ inherit .undefined
   edge @fun.value_this -> @body.after_scope
 
   ; function values have a jump node that lets params connect up to actual arguments
-  attr (@fun.value_arg_scope) "jump-to"
+  edge @fun.value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
 (function
@@ -2120,7 +2120,7 @@ inherit .undefined
   edge @fun.value_this -> @body.after_scope
 
   ; function values have a jump node that lets params connect up to actual arguments
-  attr (@fun.value_arg_scope) "jump-to"
+  edge @fun.value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
 ; arrow functions returning exprs need special rules for getting the return value hooked up
@@ -2210,7 +2210,7 @@ inherit .undefined
   edge @fun.value_this -> @body.after_scope
 
   ; function values have a jump node that lets params connect up to actual arguments
-  attr (@fun.value_arg_scope) "jump-to"
+  edge @fun.value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
 (generator_function
