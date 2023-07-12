@@ -452,7 +452,7 @@ inherit .return_or_yield
   edge @export_clause.source -> @source.push_exports_guard
 
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
-  scan @source {
+  scan (source-text @source) {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) push_symbol = $1
     }
@@ -637,7 +637,7 @@ inherit .return_or_yield
   edge @export_statement.after_scope -> @export_statement.before_scope
 
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
-  scan @source {
+  scan (source-text @source) {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) push_symbol = $1
     }
@@ -658,7 +658,7 @@ inherit .return_or_yield
   edge @export_statement.after_scope -> @export_statement.before_scope
 
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
-  scan @source {
+  scan (source-text @source) {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) push_symbol = $1
     }
@@ -728,7 +728,7 @@ inherit .return_or_yield
   edge @import_clause.before_scope -> @import_stmt.before_scope
   edge @import_stmt.after_scope -> @import_clause.after_scope
 
-  scan @source {
+  scan (source-text @source) {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) push_symbol = $1
     }
