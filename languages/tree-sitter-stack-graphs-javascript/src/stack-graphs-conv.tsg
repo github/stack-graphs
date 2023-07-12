@@ -214,7 +214,71 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ## Nodes
 
 (_)@node {
-
+  @node.after_scope
+  @node.arg_arguments
+  @node.arg_arguments_dot
+  @node.arg_index
+  @node.arg_scope
+  @node.arg_scope_no_this
+  @node.arg_this
+  @node.arguments_pop
+  @node.arguments_push
+  @node.before_scope
+  @node.boundvar_pop
+  @node.call
+  @node.constructor
+  @node.constructor_guard
+  @node.covalue
+  @node.default_guard
+  @node.definiens_hook
+  @node.drop
+  @node.element_index_push
+  @node.element_index_push_dot
+  @node.element_pop_dot
+  @node.exports
+  @node.exports_pop
+  @node.field_pop_dot
+  @node.guard_default
+  @node.guard_this
+  @node.ignore_guard
+  @node.index_pop
+  @node.method_value
+  @node.method_value_arg_scope
+  @node.method_value_call
+  @node.method_value_drop
+  @node.method_value_return
+  @node.method_value_this
+  @node.method_value_this_guard
+  @node.module_guard
+  @node.module_pop
+  @node.module_scope
+  @node.new_bindings
+  @node.number_prototype
+  @node.number_prototype_toString_method_value
+  @node.number_prototype_toString_method_value_return
+  @node.number_prototype_valueOf_method_value
+  @node.pop
+  @node.pop_dot
+  @node.pop_guard_default
+  @node.push
+  @node.push_dot
+  @node.push_exports_guard
+  @node.push_guard_default
+  @node.push_guard_exports
+  @node.return_guard
+  @node.rhsvar_before_scope
+  @node.rhsvar_value
+  @node.source
+  @node.string_prototype
+  @node.this_pop
+  @node.this_push
+  @node.value
+  @node.value_arg_scope
+  @node.value_call
+  @node.value_drop
+  @node.value_return
+  @node.value_this
+  @node.value_this_guard
 }
 
 
