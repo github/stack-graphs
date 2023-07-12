@@ -292,9 +292,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; ## Inherited
 
 inherit .null
+inherit .string
 
 (program)@prog {
   node @prog.null
+  node @prog.string
 }
 
 ;; ## Programs
@@ -1659,7 +1661,7 @@ inherit .null
   edge @string.after_scope -> @string.before_scope
 
   ; the value of a string is the string primitive
-  edge @string.value -> @string::string
+  edge @string.value -> @string.string
 }
 
 
