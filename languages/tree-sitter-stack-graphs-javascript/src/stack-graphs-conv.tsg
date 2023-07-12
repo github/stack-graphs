@@ -3229,13 +3229,17 @@ inherit .return_or_yield
   edge @array_pat.after_scope -> @last_el_pat.after_scope
 }
 
+; array pattern
+(array_pattern)@array_pat {
+  edge @array_pat.element_index_push_dot -> @array_pat.covalue
+  attr (@array_pat.element_index_push_dot) push_symbol = "."
+}
+
 ; array pattern elements
 (array_pattern (_)@element_pat)@array_pat {
   attr (@element_pat.element_index_push) push_symbol = (named-child-index @element_pat)
-  attr (@array_pat.element_index_push_dot) push_symbol = "."
   edge @element_pat.covalue -> @element_pat.element_index_push
   edge @element_pat.element_index_push -> @array_pat.element_index_push_dot
-  edge @array_pat.element_index_push_dot -> @array_pat.covalue
 
   edge @array_pat.new_bindings -> @element_pat.new_bindings
 }
