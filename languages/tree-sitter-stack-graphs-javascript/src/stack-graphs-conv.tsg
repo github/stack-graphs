@@ -1,0 +1,3283 @@
+;; # JavaScript
+
+;; This file defines StackGraph queries for JavaScript. It is written as a
+;; semi-literate file, which is to say, comments starting with `;;` can be
+;; treated as Markdown. This file can therefore be converted into a
+;; corresponding pure Markdown document by removing the StackGraph comments, and
+;; wrapping the uncommented code in Markdown code blocks.
+
+;; This file has a number of sections that it's divided into, and it's useful to
+;; provide an overview here. Aside from conventions, the queries are broken up
+;; into groups by what kind of syntactic objects the group covers. There are
+;; Programs, Statements, Expressions, Patterns, and Special Cases.
+
+;; Within each major section, we break things down by the particular syntactic
+;; form under consideration. Some particular syntactic forms are not one of the
+;; main forms listed, but are tightly associated with other forms -- for
+;; example, the branches of an `if` statement are not statements nor
+;; expressions, they're simply components of an `if` statement. In that
+;; situation, we group them with the primary statement that they're associated
+;; with, where possible, and nearby when not.
+
+;; Additionally, some syntactic constructs have arbitrary numbers of child
+;; nodes,  which requires us to explain how to relate them as sequences of
+;; nodes. In such cases, we have associated queries with the node type in
+;; question.
+
+;; ## Design Conventions
+
+;; The general convention for how JavaScript is translated into a Stack Graph is
+;; to treat the graph as a reverse Control Flow Graph. There are some corner
+;; cases for which that analogy doesn't quite work, but it's sufficient for
+;; conveying the overall approach. Many things matter for name resolution in a
+;; Control Flow Graph, but one of the only ones we can really encode into a
+;; Stack Graph, and arguably the most important one, is the flow of the variable
+;; environment, and so we create scope nodes for those.
+
+;; In particular, for each node, during an execution traversal, there is an
+;; incoming variable environment that the node will be executed in, and an
+;; outgoing variable environment that resulted from executing the node and all
+;; the various variable assignments and updates inside it.
+
+;; An example helps, so let's consider a simplified case: `if` statement with a
+;; mandatory `else` branch. If we were to implement an execution function for
+;; this fictionalized language, there would be some environment that goes into
+;; the execution at the whole `if-then-else` statement, an environment that goes
+;; into the evaluation of the test, an environment that comes out of the test
+;; (because the test could be something like `x++` which changes the
+;; environment), an environment which goes into each branch (which happens to be
+;; the same one that came out of the test), and an environment that comes out of
+;; each of the branches. So each major AST node has a pair of environments
+;; associated with it: the incoming one to execute it in, and the outcoming node
+;; that resulted from executing.
+
+;; We therefore would implement `if-then-else` statements like so:
+
+;; ``````stgdoc
+;; (if_then_else
+;;   (_)@test
+;;   (_)@consequent
+;;   (_)alternative)@if_stmt {
+;;
+;;   edge @test.before_scope -> @if_stmt.before_scope
+;;   edge @consequent.before_scope -> @test.after_scope
+;;   edge @alternative.before_scope -> @test.after_scope
+;;   edge @if_stmt.after_scope -> @consequent.after_scope
+;;   edge @if_stmt.after_scope -> @alternative.after_scope
+;;
+;; }
+;; ``````
+;;
+;; Another important way that things build scopes is through values. When an
+;; expression is executed and returns a value, that value in many ways acts like
+;; a sub-environment, at least in that the value has different parts that can be
+;; accessed in various ways. For a simple value, as constructed by a number
+;; literal expression, the number itself has no parts. So it has an associated
+;; value scope node in the graph, but no edges coming off that:
+
+;; ``````stgdoc
+;; (number)@num {
+;;   attr @num.value "pop" = "NUM_VAL"
+;; }
+;; ``````
+
+;; Why we use a `pop` attribute here isn't deeply important so we'll gloss over
+;; it.
+
+;; All kinds of expressions have values, what precisely goes into them depends
+;; on what the expression is. Objects, for instance, would have corresponding
+;; values that point to the values of each of the keys in the object. Arrays
+;; would have values that point to the values of each of the indexes.
+
+;; The primary purpose of values is to act as the targets of assignments, so
+;; that names can resolve to something in code. Normally we care only about the
+;; location of the assignment, of course, but we also need to be able to do
+;; further lookup on the values. For instance, in an expression like `x.y.z`,
+;; we need to look up `x` of course, but also then further look up `y` on that,
+;; and then `z`. So whatever `x` is assigned to has to also be present in the
+;; graph as something which can itself have stuff hanging off it that can be
+;; used for lookup.
+
+;; If you were to run some JavaScript to test whether or not number literals
+;; have parts (really, members/fields), you'd discover that actually they do,
+;; but not because of which number they are. Rather, their parts are for builtin
+;; functionality like `toString`. To handle this, we can point the value to some
+;; shared global variable that represents the prototype for the number, like so:
+
+;; ``````stgdoc
+;; (number)@num {
+;;   attr @num.value "pop" = "NUM_VAL"
+;;   edge @num.value -> @num::number_prototype
+;; }
+;; ``````
+
+;; In the preamble definition for the `program` node type, we could then also
+;; want to define number prototype, something like this:
+
+;; ``````stgdoc
+;; (program)@prog {
+;;
+;;   ...
+;;
+;;   let @prog::number_prototype = @prog.number_prototype
+;;   edge @prog.number_prototype -> @prog.number_prototype_toString_method_value
+;;   edge @prog.number_prototype -> @prog.number_prototype_valueOf_method_value
+;;   ...etc
+;;
+;;   ...
+;;
+;; }
+;; ``````
+
+;; We would then also want to have a bunch of hand-encoded graphs for the values
+;; of those fields. That would then allow the number values to point to their
+;; prototypes where the fields could be found and used for further lookup on
+;; methods.
+
+;; One caveat of this is that we don't want to get too deep into explaining how
+;; some method might be implemented. Indeed, sometimes we *can't*, because it's
+;; not implementable in JavaScript at all and is instead some primitive function
+;; implemented in the host language. What we want to do, instead, is to provide
+;; just enough implementation that other data can flow through as much as
+;; possible, to prevent calls to primitive methods from blocking downstream name
+;; resolution. For instance, it would be unfortunate if calling `toString` on a
+;; number did not let you look up string fields on the resultant value of the
+;; call, i.e. if `length` in `(5).toString().length` just simply could not be
+;; resolved at all. In such cases, the ideal approach is to implement a bare
+;; minimum of `toString` so that we can recover the fact that its returned
+;; value is a string. E.g.:
+
+;; ``````stgdoc
+;; (program)@prog {
+;;
+;;   ...
+;;
+;;   edge @prog.number_prototype -> @prog.number_prototype_toString_method_value
+;;   edge @prog.number_prototype_toString_method_value -> @prog.number_prototype_toString_method_value_return
+;;   attr @prog.number_prototype_toString_method_value_return "pop" = "GUARD:RETURN"
+;;   edge @prog.number_prototype_toString_method_value_return -> @prog.string_prototype
+;;
+;;   ...
+;;
+;; }
+;; ``````
+
+;; As currently implemented, this document does not contain any rules for
+;; builtins because of the scope of that task, but they are currently in the
+;; pipeline, using the above approach.
+
+;; Something you may notice in the above code snippet is this pop node labelled
+;; `GUARD:RETURN`. This is another part of the design conventions for this
+;; library. We often want to use nodes in the graph to constrain name lookup.
+;; In this case, we want to be able to pinpoint some of the graph nodes
+;; associated with the body of a function as being the values returned by the
+;; function. We do this by creating a so-called guard node, which will only be
+;; traversed if there is a corresponding push somewhere else. We would generate
+;; such a push node precisely when we call a function. This lets us treat the
+;; function *ASTs* as if they have parts that we can inspect *in the graph*.
+
+;; By convention, this library of queries prefixes all guard nodes with "GUARD:"
+;; to distinguish them from nodes that more directly correspond to aspects of
+;; execution such as member lookup (labelled with ".") or variable lookup
+;; (labelled with the variable name itself). The current names used for guard
+;; nodes are
+
+;; - `GUARD:RETURN` - used for the AST nodes for values returned by a function
+;;   in the function body
+;; - `GUARD:THIS` - used for the implicit `this` argument of a function inside
+;;   its body
+;; - `GUARD:CONSTRUCTOR` - used for the constructor method inside a `Class`
+;; - `GUARD:MODULE` - used for the final scope of the module
+;; - `GUARD:EXPORTS` - used for the names exported by the module
+;; - `GUARD:DEFAULT` - used for the default export value
+
+
+;; ## Nodes
+
+(_)@node {
+
+}
+
+
+;; ## Programs
+
+;; ### Attributes Defined on Programs
+;; TODO
+
+;; ### Program Queries
+
+(program)@prog {
+  scan filepath {
+    "([^/]+)\.js$" {
+      attr @prog.module_pop "definition", "pop" = $1
+      attr @prog.module_pop "no_span"
+    }
+  }
+
+  edge @prog.before_scope -> root
+
+  attr @prog.module_scope "pop" = "GUARD:MODULE"
+  edge root -> @prog.module_pop
+  edge @prog.module_pop -> @prog.module_scope
+  edge @prog.module_scope -> @prog.after_scope
+
+  attr @prog "no_span"
+  attr @prog.module_pop "no_span"
+  attr @prog.module_scope "no_span"
+  attr @prog.exports "no_span"
+  attr @prog.exports_pop "no_span"
+  attr @prog.before_scope "no_span"
+  attr @prog.after_scope "no_span"
+
+  let @prog::prog = @prog
+  let @prog::exports = @prog.exports
+  attr @prog.exports_pop "pop" = "GUARD:EXPORTS"
+  edge @prog.module_pop -> @prog.exports_pop
+  edge @prog.exports_pop -> @prog.exports
+}
+
+; programs, first statement
+(program
+  .
+  (_)@first_stmt)@prog {
+
+  ; scopes flow from the program into the first statement
+  edge @first_stmt.before_scope -> @prog.before_scope
+}
+
+; program, between statements
+(program
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+
+  ; scopes flow from the left statement to the right one
+  edge @right_stmt.before_scope -> @left_stmt.after_scope
+}
+
+; program, last statement
+(program
+  (_)@last_stmt
+  .)@prog {
+
+  ; scopes flow from the last statement to the program
+  edge @prog.after_scope -> @last_stmt.after_scope
+}
+
+(hash_bang_line)@hashbang {
+  edge @hashbang.after_scope -> @hashbang.before_scope
+}
+
+(comment)@comment {
+  edge @comment.after_scope -> @comment.before_scope
+}
+
+
+
+;; ## Statements
+
+;; ### Attributes Defined on Statements
+;; TODO
+
+;; ### Statement Queries
+
+;; #### Export
+
+; exports of just names
+; eg
+;  export { foo, bar as baz };
+(export_statement
+  (export_clause)@export_clause
+  !source)@export_stmt {
+
+  edge @export_clause.source -> @export_clause.before_scope
+
+  ; scope flows through the export clause
+  edge @export_clause.before_scope -> @export_stmt.before_scope
+  edge @export_stmt.after_scope -> @export_clause.after_scope
+}
+
+(export_statement
+  (export_clause)@export_clause
+  source:(_)@source)@export_stmt {
+
+  edge @export_clause.source -> @source.push_exports_guard
+
+  attr @source.push_exports_guard "push" = "GUARD:EXPORTS"
+  scan @source {
+    "\"([^/\"]+)\.js\"$" {
+      attr @source.push "push" = $1
+    }
+  }
+  edge @source.push_exports_guard -> @source.push
+  edge @source.push -> root
+
+  edge @export_clause.before_scope -> @export_stmt.before_scope
+  edge @export_stmt.after_scope -> @export_clause.after_scope
+
+
+}
+
+(export_statement
+  (declaration)@decl)@export_stmt {
+  edge @decl.before_scope -> @export_stmt.before_scope
+  edge @export_stmt.after_scope -> @decl.after_scope
+}
+
+(export_statement
+  declaration: [
+    (function_declaration name:(identifier)@name)
+    (generator_function_declaration name:(identifier)@name)
+    (class_declaration name:(identifier)@name)
+    (lexical_declaration (variable_declarator name:(identifier)@name))
+    (variable_declaration (variable_declarator name:(identifier)@name))
+  ]@decl)@export_stmt {
+
+  ; TODO this doesn't support destructuring exports
+
+  attr @name.pop "pop" = @name, "definition"
+  attr @name.push "push" = @name
+  edge @export_stmt::exports -> @name.pop
+  edge @name.pop -> @decl.value
+}
+
+; TODO
+; export let [x,y] = [1,2];
+(export_statement
+  declaration: [
+    (lexical_declaration
+      (variable_declarator
+        name: [
+          (object_pattern)
+          (array_pattern)
+        ]@pattern))
+    (variable_declaration
+      (variable_declarator
+        name: [
+          (object_pattern)
+          (array_pattern)
+        ]@pattern))
+  ])@export_stmt {
+
+  edge @export_stmt::exports -> @pattern.new_bindings
+
+}
+
+; LATER-TODO tree sitter doesn't yet support empty switch bodies
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(export_clause)@export_clause {
+  edge @export_clause.after_scope -> @export_clause.before_scope
+}
+
+(export_clause
+  (_)@export)@export_clause {
+
+  edge @export.source -> @export_clause.source
+}
+
+(export_clause
+  .
+  (_)@first_export)@export_clause {
+
+  edge @first_export.before_scope -> @export_clause.before_scope
+}
+
+(export_clause
+  (_)@left_export
+  .
+  (_)@right_export) {
+
+  edge @right_export.before_scope -> @left_export.after_scope
+}
+
+(export_clause
+  (_)@last_export
+  .)@export_clause {
+
+  edge @export_clause.after_scope -> @last_export.after_scope
+}
+
+(export_specifier)@export_specifier {
+  edge @export_specifier.after_scope -> @export_specifier.before_scope
+}
+
+(
+  (export_specifier
+    name:(_)@name
+    !alias)@export_specifier
+
+  (#not-eq? @name "default")
+) {
+
+  attr @name.pop "pop" = @name, "definition"
+  attr @name.push "push" = @name, "reference"
+  edge @name.pop -> @name.push
+  edge @name.push -> @export_specifier.source
+
+  edge @export_specifier::exports -> @name.pop
+}
+
+(
+  (export_specifier
+    name:(_)@name
+    alias:(_)@alias)@export_specifier
+
+  (#not-eq? @alias "default")
+
+) {
+
+  attr @alias.pop "pop" = @alias, "definition"
+  attr @name.push "push" = @name, "reference"
+  edge @alias.pop -> @name.push
+  edge @name.push -> @export_specifier.source
+
+  edge @export_specifier::exports -> @alias.pop
+}
+
+(
+  (export_specifier
+    name:(_)@name
+    !alias)@export_specifier
+
+  (#eq? @name "default")
+
+) {
+
+  attr @export_specifier.pop_guard_default "pop" = "GUARD:DEFAULT"
+  attr @export_specifier.push_guard_default "push" = "GUARD:DEFAULT"
+  edge @export_specifier::exports -> @export_specifier.pop_guard_default
+  edge @export_specifier.pop_guard_default -> @export_specifier.push_guard_default
+  edge @export_specifier.push_guard_default -> @export_specifier.source
+
+}
+
+(
+  (export_specifier
+    name:(_)@name
+    alias:(_)@alias)@export_specifier
+
+  (#eq? @alias "default")
+
+) {
+
+  attr @name.push "push" = @name
+  attr @export_specifier.guard_default "pop" = "GUARD:DEFAULT"
+  edge @name.push -> @export_specifier.source
+  edge @export_specifier.guard_default -> @name.push
+  edge @export_specifier::exports -> @export_specifier.guard_default
+}
+
+; simple default exports
+; export default ...;
+
+(export_statement
+  value:(_)@default_expr)@export_stmt {
+
+  attr @export_stmt.default_guard "pop" = "GUARD:DEFAULT", "definition"
+  edge @default_expr.before_scope -> @export_stmt.before_scope
+  edge @export_stmt.after_scope -> @default_expr.after_scope
+  edge @export_stmt::exports -> @export_stmt.default_guard
+  edge @export_stmt.default_guard -> @default_expr.value
+}
+
+; aggregated exports
+; export * from "foo.js";
+(export_statement
+  .
+  source:(_)@source)@export_statement {
+
+  edge @export_statement.after_scope -> @export_statement.before_scope
+
+  attr @source.push_exports_guard "push" = "GUARD:EXPORTS"
+  scan @source {
+    "\"([^/\"]+)\.js\"$" {
+      attr @source.push "push" = $1
+    }
+  }
+
+  edge @export_statement::exports -> @source.push_exports_guard
+  edge @source.push_exports_guard -> @source.push
+  edge @source.push -> root
+
+}
+
+; namespace exports
+; export * as foo from "bar.js";
+(export_statement
+  (namespace_export (_)@alias)
+  source:(_)@source)@export_statement {
+
+  edge @export_statement.after_scope -> @export_statement.before_scope
+
+  attr @source.push_exports_guard "push" = "GUARD:EXPORTS"
+  scan @source {
+    "\"([^/\"]+)\.js\"$" {
+      attr @source.push "push" = $1
+    }
+  }
+  attr @alias.pop "pop" = @alias, "definition"
+  attr @alias.pop_dot "pop" = "."
+  edge @export_statement::exports -> @alias.pop
+  edge @alias.pop -> @alias.pop_dot
+  edge @alias.pop_dot -> @source.push_exports_guard
+  edge @source.push_exports_guard -> @source.push
+  edge @source.push -> root
+
+}
+
+
+
+;; #### Import
+
+; https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
+
+
+; import "foo.js";
+; only used for side effects not imports.
+; HACK this is not a good solution, but we can't do better with the
+; current tree sitter grammar
+(import_statement)@import_stmt {
+  edge @import_stmt.after_scope -> @import_stmt.before_scope
+}
+
+; import * as name from "module-name";
+(import_clause
+  (namespace_import)@namespace_import)@import_clause {
+
+  edge @namespace_import.before_scope -> @import_clause.before_scope
+  edge @import_clause.after_scope -> @namespace_import.after_scope
+  edge @namespace_import.source -> @import_clause.source
+}
+
+(namespace_import (identifier)@imported_as)@namespace_import {
+
+  edge @namespace_import.after_scope -> @namespace_import.before_scope
+
+  attr @imported_as.pop "pop" = @imported_as, "definition"
+  attr @imported_as.pop_dot "pop" = "."
+  edge @imported_as.pop -> @imported_as.pop_dot
+  edge @imported_as.pop_dot -> @namespace_import.source
+
+  edge @namespace_import.after_scope -> @imported_as.pop
+
+}
+
+; import { export1 } from "module-name";
+; import { export1 as alias1 } from "module-name";
+; import { export1 , export2 } from "module-name";
+; import { export1 , export2 as alias2 , [...] } from "module-name";
+
+(import_statement
+  (import_clause)@import_clause
+  source:(_)@source)@import_stmt {
+
+  edge @import_clause.before_scope -> @import_stmt.before_scope
+  edge @import_stmt.after_scope -> @import_clause.after_scope
+
+  scan @source {
+    "\"([^/\"]+)\.js\"$" {
+      attr @source.push "push" = $1
+    }
+  }
+  attr @source.push_guard_exports "push" = "GUARD:EXPORTS"
+  edge @source.push_guard_exports -> @source.push
+  edge @source.push -> root
+  edge @import_clause.source -> @source.push_guard_exports
+
+}
+
+(import_clause
+  (named_imports)@named_imports)@import_clause {
+
+  edge @named_imports.before_scope -> @import_clause.before_scope
+  edge @import_clause.after_scope -> @named_imports.after_scope
+  edge @named_imports.source -> @import_clause.source
+
+}
+
+; LATER-TODO tree sitter doesn't yet support empty named imports
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(named_imports)@named_imports {
+  edge @named_imports.after_scope -> @named_imports.before_scope
+}
+
+(named_imports
+  (import_specifier)@import_specifier)@named_imports {
+
+  edge @import_specifier.source -> @named_imports.source
+}
+
+(named_imports
+  .
+  (import_specifier)@first_import)@named_imports {
+
+  edge @first_import.before_scope -> @named_imports.before_scope
+}
+
+(named_imports
+  (import_specifier)@left_import
+  .
+  (import_specifier)@right_import) {
+
+  edge @right_import.before_scope -> @left_import.after_scope
+}
+
+(named_imports
+  (import_specifier)@last_import
+  .)@named_imports {
+
+  edge @named_imports.after_scope -> @last_import.after_scope
+}
+
+(
+
+  (import_specifier
+    name:(_)@name
+    !alias)@import_specifier
+
+  (#not-eq? @name "default")
+
+) {
+
+  edge @import_specifier.after_scope -> @import_specifier.before_scope
+
+  attr @name.pop "pop" = @name, "definition"
+  attr @name.push "push" = @name, "reference"
+  edge @name.pop -> @name.push
+  edge @name.push -> @import_specifier.source
+  edge @import_specifier.after_scope -> @name.pop
+
+}
+
+(
+
+  (import_specifier
+    name:(_)@name
+    alias:(_)@alias)@import_specifier
+
+  (#not-eq? @name "default")
+
+) {
+
+  edge @import_specifier.after_scope -> @import_specifier.before_scope
+
+  attr @alias.pop "pop" = @alias, "definition"
+  attr @name.push "push" = @name, "reference"
+  edge @alias.pop -> @name.push
+  edge @name.push -> @import_specifier.source
+  edge @import_specifier.after_scope -> @alias.pop
+
+}
+
+; (import_statement
+;   (import_clause
+;     (named_imports
+;       (import_specifier
+;         name:(_)@name
+;         alias:(_)@alias)))
+;   source: (_)@mod_name)@import_stmt {
+;
+;   ; scope passes through, augmented by the identifier
+;   scan @mod_name {
+;     "\"([^/\"]+)\.js\"$" {
+;       attr @mod_name.push "push" = $1, "reference"
+;     }
+;   }
+;   edge @mod_name.push -> root
+;
+;   attr @name "push", "reference"
+;   attr @name.push_dot "push" = "."
+;   edge @name.push_dot -> @mod_name.push
+;   edge @name -> @name.push_dot
+;
+;   attr @alias "pop", "definition"
+;   edge @alias -> @name
+;
+;   edge @import_stmt.after_scope -> @alias
+; }
+
+
+; TODO import defaultExport, { export1 [ , [...] ] } from "module-name";
+; TODO import defaultExport, * as name from "module-name";
+; TODO var promise = import("module-name");
+
+; import defaultExport from "module-name";
+(import_clause
+  (identifier)@default_name)@import_clause {
+
+  edge @import_clause.after_scope -> @import_clause.before_scope
+
+  attr @default_name.pop "pop" = @default_name, "definition"
+  attr @default_name.push_guard_default "push" = "GUARD:DEFAULT"
+  edge @default_name.pop -> @default_name.push_guard_default
+  edge @default_name.push_guard_default -> @import_clause.source
+
+  edge @import_clause.after_scope -> @default_name.pop
+
+}
+
+
+
+;; #### Debugger
+
+(debugger_statement)@debugger_stmt {
+  ; scopes flow through unchanged
+  edge @debugger_stmt.after_scope -> @debugger_stmt.before_scope
+}
+
+
+
+;; #### Expression
+
+(expression_statement (_)@inner)@expr_stmt {
+
+  ; scopes flow in then back out
+  edge @inner.before_scope -> @expr_stmt.before_scope
+  edge @expr_stmt.after_scope -> @inner.after_scope
+}
+
+
+
+;; #### Declarations
+
+;; ##### Variable Declarations
+
+(variable_declaration
+  (variable_declarator
+    name:(identifier)@name))@decl {
+
+  attr @name.pop "pop", "definition"
+  edge @decl.after_scope -> @name.pop
+}
+
+(lexical_declaration
+  (variable_declarator
+    name:(identifier)@name))@decl {
+
+  attr @name.pop "pop", "definition"
+  edge @decl.after_scope -> @name.pop
+}
+
+(variable_declaration
+  (variable_declarator
+    !value))@decl {
+
+  edge @decl.after_scope -> @decl.before_scope
+}
+
+(lexical_declaration
+  (variable_declarator
+    !value))@decl {
+
+  edge @decl.after_scope -> @decl.before_scope
+}
+
+(variable_declaration
+  (variable_declarator
+    name:(identifier)@name
+    value:(_)@initializer))@decl {
+
+  edge @name.pop -> @initializer.value
+  edge @decl.value -> @initializer.value
+  edge @initializer.before_scope -> @decl.before_scope
+  edge @decl.after_scope -> @initializer.after_scope
+}
+
+(lexical_declaration
+  (variable_declarator
+    name:(identifier)@name
+    value:(_)@initializer))@decl {
+
+  edge @name.pop -> @initializer.value
+  edge @decl.value -> @initializer.value
+  edge @initializer.before_scope -> @decl.before_scope
+  edge @decl.after_scope -> @initializer.after_scope
+}
+
+(variable_declaration
+  (variable_declarator
+    name:[(object_pattern) (array_pattern)]@pat
+    value:(_)@initializer))@decl {
+
+  edge @initializer.before_scope -> @decl.before_scope
+  edge @pat.before_scope -> @initializer.after_scope
+  edge @decl.after_scope -> @pat.after_scope
+
+  edge @pat.covalue -> @initializer.value
+}
+
+(lexical_declaration
+  (variable_declarator
+    name:[(object_pattern) (array_pattern)]@pat
+    value:(_)@initializer))@decl {
+
+  edge @initializer.before_scope -> @decl.before_scope
+  edge @pat.before_scope -> @initializer.after_scope
+  edge @decl.after_scope -> @pat.after_scope
+
+  edge @pat.covalue -> @initializer.value
+}
+
+
+
+;; ##### Function Declarations
+
+(function_declaration
+  name:(_)@name
+  parameters:(_)@call_sig
+  body:(_)@body)@fun_decl {
+
+  attr @name.pop "syntax_type" = "function"
+
+  ; scope flows across the decl
+  edge @fun_decl.after_scope -> @fun_decl.before_scope
+
+  ; with an augmentation for the function
+  attr @name.pop "pop" = @name, "definition"
+  edge @fun_decl.after_scope -> @name.pop
+  edge @name.pop -> @fun_decl.value
+
+  ; function values have drop nodes that handle closures, that points to the
+  ; before scope for the function
+  attr @fun_decl.value_drop "drop"
+  edge @fun_decl.value_drop -> @fun_decl.before_scope
+
+  ; the call sig's before scope comes from the drop node then flows into the body
+  edge @call_sig.before_scope -> @fun_decl.value_drop
+  attr @call_sig.this_pop "pop" = "this", "definition"
+  attr @call_sig.this_push "push" = "this"
+  edge @call_sig.this_pop -> @call_sig.this_push
+  edge @call_sig.this_push -> @fun_decl.value_arg_scope
+  edge @call_sig.before_scope -> @call_sig.this_pop
+  attr @call_sig.arguments_pop "pop" = "arguments", "definition"
+  attr @call_sig.arguments_push "push" = "arguments"
+  edge @call_sig.arguments_pop -> @call_sig.arguments_push
+  edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
+  edge @call_sig.before_scope -> @call_sig.arguments_pop
+  edge @body.before_scope -> @call_sig.after_scope
+
+
+  ; function values have call nodes
+  attr @fun_decl.value_call "pop" = "()", "pop-scope"
+  edge @fun_decl.value -> @fun_decl.value_call
+
+  ; function values have return nodes which need to be visible for returns
+  attr @fun_decl.value_return "endpoint"
+  attr @fun_decl.value_return "pop" = "GUARD:RETURN"
+  edge @fun_decl.value_call -> @fun_decl.value_return
+  let @body::return_or_yield = @fun_decl.value_return
+
+  ; method values have this nodes which need to be visible for constructor calls
+  attr @fun_decl.value_this "push" = "this"
+  attr @fun_decl.value_this_guard "endpoint"
+  attr @fun_decl.value_this_guard "pop" = "GUARD:THIS"
+  edge @fun_decl.value_call -> @fun_decl.value_this_guard
+  edge @fun_decl.value_this_guard -> @fun_decl.value_this
+  edge @fun_decl.value_this -> @body.after_scope
+
+  ; function values have a jump node that lets params connect up to actual arguments
+  attr @fun_decl.value_arg_scope "jump-to"
+}
+
+(function_declaration
+  parameters:
+    (formal_parameters (_)@param))@fun_decl {
+
+  ; parameters jump to the pushed argument scope
+  attr @param.arg_index "push" = (child-index @param)
+  edge @param.covalue -> @param.arg_index
+  edge @param.arg_index -> @fun_decl.value_arg_scope
+}
+
+
+;; ##### Generator Function Declarations
+
+(generator_function_declaration
+  name:(_)@name
+  parameters:(_)@call_sig
+  body:(_)@body)@fun_decl {
+
+  attr @name.pop "syntax_type" = "function"
+
+  ; scope flows across the decl
+  edge @fun_decl.after_scope -> @fun_decl.before_scope
+
+  ; with an augmentation for the function
+  attr @name.pop "pop" = @name, "definition"
+  edge @fun_decl.after_scope -> @name.pop
+  edge @name.pop -> @fun_decl.value
+
+  ; function values have drop nodes that handle closures, that points to the
+  ; before scope of the declaration
+  attr @fun_decl.value_drop "drop"
+  edge @fun_decl.value_drop -> @fun_decl.before_scope
+
+
+  ; the call sig's before scope comes from the drop node then flows into the body
+  edge @call_sig.before_scope -> @fun_decl.value_drop
+  attr @call_sig.this_pop "pop" = "this", "definition"
+  attr @call_sig.this_push "push" = "this"
+  edge @call_sig.this_pop -> @call_sig.this_push
+  edge @call_sig.this_push -> @fun_decl.value_arg_scope
+  edge @call_sig.before_scope -> @call_sig.this_pop
+  attr @call_sig.arguments_pop "pop" = "arguments", "definition"
+  attr @call_sig.arguments_push "push" = "arguments"
+  edge @call_sig.arguments_pop -> @call_sig.arguments_push
+  edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
+  edge @call_sig.before_scope -> @call_sig.arguments_pop
+  edge @body.before_scope -> @call_sig.after_scope
+
+  ; function values have call nodes
+  attr @fun_decl.value_call "pop" = "()", "pop-scope"
+  edge @fun_decl.value -> @fun_decl.value_call
+
+  ; function values have return nodes which need to be visible for returns
+  attr @fun_decl.value_return "endpoint"
+  attr @fun_decl.value_return "pop" = "GUARD:RETURN"
+  edge @fun_decl.value_call -> @fun_decl.value_return
+  let @body::return_or_yield = @fun_decl.value_return
+
+  ; method values have this nodes which need to be visible for constructor calls
+  attr @fun_decl.value_this "push" = "this"
+  attr @fun_decl.value_this_guard "endpoint"
+  attr @fun_decl.value_this_guard "pop" = "GUARD:THIS"
+  edge @fun_decl.value_call -> @fun_decl.value_this_guard
+  edge @fun_decl.value_this_guard -> @fun_decl.value_this
+  edge @fun_decl.value_this -> @body.after_scope
+
+  ; function values have a jump node that lets params connect up to actual arguments
+  attr @fun_decl.value_arg_scope "jump-to"
+}
+
+(generator_function_declaration
+  parameters:
+    (formal_parameters (_)@param))@fun_decl {
+
+  ; parameters jump to the pushed argument scope
+  attr @param.arg_index "push" = (child-index @param)
+  edge @param.covalue -> @param.arg_index
+  edge @param.arg_index -> @fun_decl.value_arg_scope
+}
+
+
+
+;; #### Classes
+
+(class_declaration
+  name:(_)@name
+  body:(_)@body)@class_decl {
+
+  attr @name.pop "syntax_type" = "class"
+
+  attr @name.pop "pop" = @name, "definition"
+  edge @class_decl.after_scope -> @name.pop
+  edge @name.pop -> @class_decl.value
+
+  edge @body.before_scope -> @class_decl.before_scope
+  edge @class_decl.value -> @body.after_scope
+  edge @class_decl.after_scope -> @class_decl.before_scope
+}
+
+(class_declaration
+  (class_heritage (_)@name))@class_decl {
+
+  edge @name.before_scope -> @class_decl.before_scope
+  edge @class_decl.value -> @name.value
+}
+
+
+; LATER-TODO tree sitter doesn't yet support empty switch bodies
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(class_body)@class_body {
+  edge @class_body.after_scope -> @class_body.before_scope
+}
+
+(class_body
+  .
+  (_)@first_decl)@class_body {
+
+  edge @first_decl.before_scope -> @class_body.before_scope
+}
+
+(class_body
+  (_)@left_decl
+  .
+  (_)@right_decl) {
+
+  edge @right_decl.before_scope -> @left_decl.after_scope
+}
+
+(class_body
+  (_)@last_decl
+  .)@class_body {
+
+  edge @class_body.after_scope -> @last_decl.after_scope
+}
+
+
+(
+  (method_definition
+    name:(_)@name)@method_def
+  (#eq? @name "constructor")
+) {
+  ; augmentation for the constructor
+  attr @name.constructor_guard "pop" = "GUARD:CONSTRUCTOR", "definition"
+  edge @method_def.after_scope -> @name.constructor_guard
+  edge @name.constructor_guard -> @method_def.method_value
+}
+
+(
+  (method_definition
+    name:(_)@name)@method_def
+  (#not-eq? @name "constructor")
+) {
+  ; augmentation for the method
+  attr @name.pop "pop" = @name, "definition"
+  attr @name.pop_dot "pop" = "."
+  edge @method_def.after_scope -> @name.pop_dot
+  edge @name.pop_dot -> @name.pop
+  edge @name.pop -> @method_def.method_value
+}
+
+(method_definition
+  name:(_)@name
+  parameters:(_)@call_sig
+  body:(_)@body)@method_def {
+
+  attr @name.pop "syntax_type" = "method"
+
+  ; scope flows across the decl
+  edge @method_def.after_scope -> @method_def.before_scope
+
+  ; method values have drop nodes that handle closures, that points to the
+  ; before scope from method def
+  attr @method_def.method_value_drop "drop"
+  edge @method_def.method_value_drop -> @method_def.before_scope
+
+  ; the call sig's before scope comes from the drop node then flows into the body
+  edge @call_sig.before_scope -> @method_def.method_value_drop
+  edge @body.before_scope -> @call_sig.after_scope
+
+  ; method values have call nodes
+  attr @method_def.method_value_call "pop" = "()", "pop-scope"
+  edge @method_def.method_value -> @method_def.method_value_call
+
+  ; method values have return nodes which need to be visible for returns
+  attr @method_def.method_value_return "endpoint"
+  attr @method_def.method_value_return "pop" = "GUARD:RETURN"
+  edge @method_def.method_value_call -> @method_def.method_value_return
+  let @body::return_or_yield = @method_def.method_value_return
+
+  ; method values have this nodes which need to be visible for constructor calls
+  attr @method_def.method_value_this "push" = "this"
+  attr @method_def.method_value_this_guard "endpoint"
+  attr @method_def.method_value_this_guard "pop" = "GUARD:THIS"
+  edge @method_def.method_value_call -> @method_def.method_value_this_guard
+  edge @method_def.method_value_this_guard -> @method_def.method_value_this
+  edge @method_def.method_value_this -> @body.after_scope
+
+  ; method values have a jump node that lets params connect up to actual arguments
+  attr @method_def.method_value_arg_scope "jump-to"
+}
+
+(method_definition
+  parameters:
+    (formal_parameters (_)@param))@method_def {
+
+  ; parameters jump to the pushed argument scope
+  attr @param.arg_index "push" = (child-index @param)
+  edge @param.covalue -> @param.arg_index
+  edge @param.arg_index -> @method_def.method_value_arg_scope
+}
+
+
+
+(field_definition
+  property:(property_identifier)@property)@field_def {
+
+  attr @property.pop "pop" = @property, "definition"
+  attr @property.pop_dot "pop" = "."
+  edge @field_def.after_scope -> @property.pop_dot
+  edge @property.pop_dot -> @property.pop
+}
+
+(field_definition
+  !value)@field_def {
+
+  edge @field_def.after_scope -> @field_def.before_scope
+}
+
+(field_definition
+  property:(_)@property
+  value:(_)@value)@field_def {
+
+  edge @value.before_scope -> @field_def.before_scope
+  edge @field_def.after_scope -> @value.after_scope
+  edge @property.pop -> @value.value
+}
+
+
+
+;; #### Statement Block
+
+; statement block, first statement
+(statement_block
+  .
+  (_)@first_stmt)@block {
+
+  ; scope flows from block to first statement
+  edge @first_stmt.before_scope -> @block.before_scope
+}
+
+; statement block, between statements
+(statement_block
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+  ; scope flows from left to right
+  edge @right_stmt.before_scope -> @left_stmt.after_scope
+}
+
+; statement block, last statement
+(statement_block
+  (_)@last_stmt
+  .)@block {
+  ; scope flows from last statement to block
+  edge @block.after_scope -> @last_stmt.after_scope
+}
+
+
+
+
+
+;; #### If
+
+(if_statement
+  condition:(_)@condition)@if_stmt {
+
+  ; scopes flow from the if statement to the condition
+  edge @condition.before_scope -> @if_stmt.before_scope
+}
+
+(if_statement
+  condition:(_)@condition
+  consequence:(_)@consequence)@if_stmt {
+
+  ; scopes flow from the condition to the consequence, then to the if statement
+  edge @consequence.before_scope -> @condition.after_scope
+  edge @if_stmt.after_scope -> @consequence.after_scope
+}
+
+(if_statement
+  condition:(_)@condition
+  alternative:(_)@alternative)@if_stmt {
+
+  ; scopes flow from the condition to the alternative, then to the if statement
+  edge @alternative.before_scope -> @condition.after_scope
+  edge @if_stmt.after_scope -> @alternative.after_scope
+}
+
+(else_clause (_)@inner)@else_clause {
+
+  ; scopes flow in and right back out
+  edge @inner.before_scope -> @else_clause.before_scope
+  edge @else_clause.after_scope -> @inner.after_scope
+}
+
+
+
+
+;; #### Switch
+
+(switch_statement
+  value:(_)@value
+  body:(switch_body)@body)@switch_stmt {
+
+  ; scopes flow into the value then into the body then back out to the switch
+  edge @value.before_scope -> @switch_stmt.before_scope
+  edge @body.before_scope -> @value.after_scope
+  edge @switch_stmt.after_scope -> @body.after_scope
+}
+
+; LATER-TODO tree sitter doesn't yet support empty switch bodies
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(switch_body)@switch_body {
+  edge @switch_body.after_scope -> @switch_body.before_scope
+}
+
+; switch body, first choice
+(switch_body
+  .
+  (_)@first_choice)@switch_body {
+
+  ; scopes flow from the body into the first choice
+  edge @first_choice.before_scope -> @switch_body.before_scope
+}
+
+; switch body, between choices
+(switch_body
+  (_)@left_choice
+  .
+  (_)@right_choice) {
+
+  ; scopes flow left to right
+  edge @right_choice.before_scope -> @left_choice.after_scope
+}
+
+; switch body, last choice
+(switch_body
+  (_)@last_choice
+  .)@switch_body {
+
+  ; scope flows out to the switch body
+  edge @switch_body.after_scope -> @last_choice.after_scope
+}
+
+; LATER-TODO tree sitter doesnt yet support switch case's with no statements
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(switch_case)@switch_case {
+  edge @switch_case.after_scope -> @switch_case.before_scope
+}
+
+; switch case, non-empty statements, first statement
+(switch_case
+  value:(_)@value
+  .
+  (_)@first_stmt)@switch_case {
+
+  ; scopes flow into the value then into the first statement
+  edge @value.before_scope -> @switch_case.before_scope
+  edge @first_stmt.before_scope -> @value.after_scope
+}
+
+; switch case, non-empty statements, between statement
+(switch_case
+  value:(_)
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+
+  ; scopes flow left to right
+  edge @right_stmt.before_scope -> @left_stmt.after_scope
+}
+
+; switch case, non-empty statements, last statement
+(switch_case
+  value:(_)
+  (_)@last_stmt
+  .)@switch_case {
+
+  ; scopes flow out from the last statement to the case
+  edge @switch_case.after_scope -> @last_stmt.after_scope
+}
+
+; LATER-TODO tree sitter doesnt yet support empty defaults
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(switch_default)@switch_default {
+  edge @switch_default.after_scope -> @switch_default.before_scope
+}
+
+; switch default, non-empty statements, first statement
+(switch_default
+  .
+  (_)@first_stmt)@switch_default {
+
+  ; scopes flow into the first statement
+  edge @first_stmt.before_scope -> @switch_default.before_scope
+}
+
+; switch default, non-empty statements, between statements
+(switch_default
+  (_)@left_stmt
+  .
+  (_)@right_stmt) {
+
+  ; scopes flow left to right
+  edge @right_stmt.before_scope -> @left_stmt.after_scope
+}
+
+; switch default, non-empty statements, last statement
+(switch_default
+  (_)@last_stmt
+  .)@switch_default {
+
+  ; scopes flow out to the default
+  edge @switch_default.after_scope -> @last_stmt.after_scope
+}
+
+
+
+;; #### For
+
+(for_statement
+  initializer:(_)@initializer
+  condition:(_)@condition
+  increment:(_)@increment
+  body:(_)@body)@for_stmt {
+
+  ; scopes flow from statement to initializer then test then body then increment
+  edge @initializer.before_scope -> @for_stmt.before_scope
+  edge @condition.before_scope -> @initializer.after_scope
+  edge @body.before_scope -> @condition.after_scope
+  edge @increment.before_scope -> @body.after_scope
+
+  ; scopes also from from the body back into the condition
+  edge @condition.before_scope -> @body.after_scope
+
+  ; scopes also flow from condition out to statement
+  edge @for_stmt.after_scope -> @condition.after_scope
+}
+
+
+
+;; #### For In
+
+(for_in_statement
+  left:(_)@left
+  right:(_)@right
+  body:(_)@body)@for_in_stmt {
+
+  ; scopes flow from statement to right then to body then back out
+  edge @right.before_scope -> @for_in_stmt.before_scope
+  edge @body.before_scope -> @right.after_scope
+  edge @for_in_stmt.after_scope -> @body.after_scope
+}
+
+(for_in_statement
+  left:(identifier)@left
+  right:(_)@right
+  body:(_)@body) {
+
+  attr @left.pop "pop", "definition"
+  edge @left.pop -> @right.value
+  edge @body.before_scope -> @left.pop
+}
+
+
+
+;; #### While
+
+(while_statement
+  condition:(_)@condition
+  body:(_)@body)@while_stmt {
+
+  ; scopes flow from while to condition then to body then back out
+  edge @condition.before_scope -> @while_stmt.before_scope
+  edge @body.before_scope -> @condition.after_scope
+  edge @while_stmt.after_scope -> @body.after_scope
+
+  ; scopes also flow back into the condition
+  edge @condition.before_scope -> @body.after_scope
+}
+
+
+
+;; #### Do
+
+(do_statement
+  body:(_)@body
+  condition:(_)@condition)@do_stmt {
+
+  ; scopes flow from statement to body then condition then back to statement
+  edge @body.before_scope -> @do_stmt.before_scope
+  edge @condition.before_scope -> @body.after_scope
+  edge @do_stmt.after_scope -> @condition.after_scope
+
+  ; scopes also flow back to the body from the condition
+  edge @body.before_scope -> @condition.after_scope
+
+}
+
+
+
+;; #### Try
+
+(try_statement
+  body:(_)@body)@try_stmt {
+
+  ; scopes flow into the body then back out
+  edge @body.before_scope -> @try_stmt.before_scope
+  edge @try_stmt.after_scope -> @body.after_scope
+
+}
+
+(try_statement
+  body:(_)@body
+  handler:(_)@handler)@try_stmt {
+
+  ; scopes flow from body to handler then back out
+  edge @handler.before_scope -> @body.after_scope
+  edge @try_stmt.after_scope -> @handler.after_scope
+}
+
+(try_statement
+  body:(_)@body
+  finalizer:(_)@finalizer)@try_stmt {
+
+  ; scopes flow from body to finalizer then back out
+  edge @finalizer.before_scope -> @body.after_scope
+  edge @try_stmt.after_scope -> @finalizer.after_scope
+}
+
+(try_statement
+  handler:(_)@handler
+  finalizer:(_)@finalizer)@try_stmt {
+
+  ; scopes flow from handler to finalizer then back out
+  edge @finalizer.before_scope -> @handler.after_scope
+  edge @try_stmt.after_scope -> @finalizer.after_scope
+}
+
+(catch_clause body:(_)@body)@catch_clause {
+  ; scopes flow in then back out
+  edge @body.before_scope -> @catch_clause.before_scope
+  edge @catch_clause.after_scope -> @body.after_scope
+}
+
+(catch_clause
+  parameter:(identifier)@name
+  body:(_)@body) {
+
+  attr @name.pop "pop", "definition"
+  edge @body.before_scope -> @name.pop
+}
+
+(finally_clause body:(_)@body)@finally_clause {
+  ; scopes flow in thenback out
+  edge @body.before_scope -> @finally_clause.before_scope
+  edge @finally_clause.after_scope -> @body.after_scope
+}
+
+
+
+;; #### With
+
+(with_statement
+  object:(_)@object
+  body:(_)@body)@with_stmt {
+
+  ; scopes flow from the statement into the object then into the body then back out
+  edge @object.before_scope -> @with_stmt.before_scope
+  edge @body.before_scope -> @object.after_scope
+  edge @with_stmt.after_scope -> @body.after_scope
+
+  attr @object.push_dot "push" = "."
+  edge @object.push_dot -> @object.value
+  edge @body.before_scope -> @object.push_dot
+}
+
+
+
+;; #### Break
+
+(break_statement)@break_stmt {
+  ; scopes flow through unchanged
+  edge @break_stmt.after_scope -> @break_stmt.before_scope
+}
+
+
+
+;; #### Continue
+
+(continue_statement)@continue_stmt {
+  ; scopes flow through unchanged
+  edge @continue_stmt.after_scope -> @continue_stmt.before_scope
+}
+
+
+
+;; #### Return
+
+; LATER-TODO tree sitter doesn't let us express empty returns currently
+(return_statement)@return_stmt {
+  ; scopes flow through unchanged
+  edge @return_stmt.after_scope -> @return_stmt.before_scope
+}
+
+(return_statement
+  (_)@returned_expr)@return_stmt {
+  ; scopes flow through the returned expresssion
+  edge @returned_expr.before_scope -> @return_stmt.before_scope
+  edge @return_stmt.after_scope -> @returned_expr.after_scope
+
+  ; return statements hook up to the call node of the function value
+  edge @return_stmt::return_or_yield -> @returned_expr.value
+}
+
+
+
+;; #### Throw
+
+(throw_statement (_)@thrown_expr)@throw_stmt {
+  ; scopes flow through the returned expresssion
+  edge @thrown_expr.before_scope -> @throw_stmt.before_scope
+  edge @throw_stmt.after_scope -> @thrown_expr.after_scope
+}
+
+
+
+;; #### Empty
+
+(empty_statement)@empty_stmt {
+  ; scopes flow through unchaged
+  edge @empty_stmt.after_scope -> @empty_stmt.before_scope
+}
+
+
+
+;; #### Labeled
+
+(labeled_statement (_)@inner)@labeled_stmt {
+  ; scopes flow through the inner statement then back out
+  edge @inner.before_scope -> @labeled_stmt.before_scope
+  edge @labeled_stmt.after_scope -> @inner.after_scope
+}
+
+
+
+;; ## Expressions
+
+;; ### Attributes Defined on Expressions
+;; TODO
+
+;; ### Expression Queries
+
+
+;; #### Parenthesized
+
+(parenthesized_expression (_)@inner)@parens {
+  ; scopes flow right through
+  edge @inner.before_scope -> @parens.before_scope
+  edge @parens.after_scope -> @inner.after_scope
+
+  ; as do values
+  edge @parens.value -> @inner.value
+}
+
+
+;; #### Strings
+
+(string)@string {
+  ; scopes don't change
+  edge @string.after_scope -> @string.before_scope
+
+  ; the value of a string is the string primitive
+  edge @string.value -> @string::string
+}
+
+
+;; #### Template Strings
+
+; template_strings w/ no substitutions
+; LATER-TODO tree sitter queries don't let us find the absence of substitutions
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(template_string)@template_string {
+  edge @template_string.after_scope -> @template_string.before_scope
+}
+
+; nonempty template string, value
+; LATER-TODO this isn't really right, but it gets flows through the template string
+; which may be useful
+(template_string (template_substitution (_)@inner_expr))@template_string {
+  ; the value of a template string is a template string value built from the values of its substitutions
+  ; attr @template_string.value "template_string_value"
+  edge @template_string.value -> @inner_expr.value
+}
+
+; nonempty template string, first substitution
+(template_string . (template_substitution (_)@first_inner_expr))@template_string {
+  ; scopes propagate into the first subtitution of the template string
+  edge @first_inner_expr.before_scope -> @template_string.before_scope
+}
+
+; nonempty template string, between substitutions
+(template_string
+  (template_substitution (_)@left_inner_expr)
+  .
+  (template_substitution (_)@right_inner_expr))@template_string {
+  ; scopes propagate from left substitutions to right substitutions
+  edge @right_inner_expr.before_scope -> @left_inner_expr.after_scope
+}
+
+; nonempty template string, last substitution
+(template_string . (template_substitution (_)@last_inner_expr))@template_string {
+  ; scopes propagate out of the last substitution to the template string
+  edge @template_string.after_scope -> @last_inner_expr.after_scope
+}
+
+
+
+;; #### Numbers
+
+(number)@number {
+  ; scopes don't change
+  edge @number.after_scope -> @number.before_scope
+
+  ; the value of a number is the number primitive
+  edge @number.value -> @number::number
+}
+
+
+;; #### Variables
+
+(primary_expression/identifier)@variable {
+  ; scopes don't change
+  edge @variable.after_scope -> @variable.before_scope
+
+  ; value is a lookup, ie a push
+  attr @variable.value "push", "reference"
+  edge @variable.value -> @variable.before_scope
+}
+
+
+;; #### Booleans
+
+(true)@true {
+  ; scopes don't change
+  edge @true.after_scope -> @true.before_scope
+
+  ; the value of true is a boolean primitive
+  edge @true.value -> @true::boolean
+}
+
+(false)@false {
+  ; scopes don't change
+  edge @false.after_scope -> @false.before_scope
+
+  ; the value of false is a boolean primitive
+  edge @false.value -> @false::boolean
+}
+
+
+;; #### This
+
+(this)@this {
+  ; scopes don't change
+  edge @this.after_scope -> @this.before_scope
+
+  ; this is a lookup, ie a push
+  attr @this.value "push" = "this", "reference"
+  edge @this.value -> @this.before_scope
+}
+
+
+;; #### Super
+
+(super)@super {
+  ; scopes don't change
+  edge @super.after_scope -> @super.before_scope
+}
+
+
+;; #### Null
+
+(null)@null {
+  ; scopes don't change
+  edge @null.after_scope -> @null.before_scope
+
+  ; the value of null is the null primitive
+  edge @null.value -> @null::null
+}
+
+
+;; #### Undefined
+
+(undefined)@undefined {
+  ; scopes don't change
+  edge @undefined.after_scope -> @undefined.before_scope
+
+  ; the value of undefined is the undefined primitive
+  edge @undefined.value -> @undefined::undefined
+}
+
+
+;; #### Regular Expressions
+
+(regex)@regex {
+  ; scopes don't change
+  edge @regex.after_scope -> @regex.before_scope
+
+  ; the value of a regex is the Regex prototype
+  edge @regex.value -> @regex::Regex_prototype
+}
+
+
+;; #### Spread Elements
+
+(spread_element (_)@expr)@spread_elem {
+  ; scopes flow in then right back out
+  edge @expr.before_scope -> @spread_elem.before_scope
+  edge @spread_elem.after_scope -> @expr.after_scope
+}
+
+
+;; #### Objects
+
+; empty objects
+; LATER-TODO currently unsupported by tree sitter queries
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(object)@object_expr {
+  edge @object_expr.after_scope -> @object_expr.before_scope
+}
+
+; non-empty objects, scopes, first entry
+(object
+  .
+  (_)@first_entry)@object_expr {
+  ; scopes propagate from the object to the first entry
+  edge @first_entry.before_scope -> @object_expr.before_scope
+}
+
+; non-empty objects, scopes, between entries
+(object
+  (_)@left_entry
+  .
+  (_)@right_entry
+)@object_expr {
+  ; scopes propagate from left entries to right entries
+  edge @right_entry.before_scope -> @left_entry.after_scope
+}
+
+; non-empty objects, scopes, last entry
+(object
+  (_)@last_entry
+  .)@object_expr {
+  ; scopes propagate from the last entry back to the object
+  edge @object_expr.after_scope -> @last_entry.after_scope
+}
+
+; shorthand property identifier
+(object
+  (shorthand_property_identifier)@keyval)@object {
+
+  ; scopes flow into rhsvar, and also straight across b/c they can't be modified
+  edge @keyval.rhsvar_before_scope -> @keyval.before_scope
+  edge @keyval.after_scope -> @keyval.before_scope
+
+  ; shorthand property identifiers have secret variable exprs
+  attr @keyval.rhsvar_value "push" = @keyval, "reference"
+  edge @keyval.rhsvar_value -> @keyval.rhsvar_before_scope
+
+  ; shorthand property identifiers augment the object value with a member binding
+  attr @keyval.boundvar_pop "pop" = @keyval, "definition"
+
+  attr @object.field_pop_dot "pop" = "."
+  edge @keyval.boundvar_pop -> @keyval.rhsvar_value
+  edge @object.field_pop_dot -> @keyval.boundvar_pop
+  edge @object.value -> @object.field_pop_dot
+
+}
+
+; pairs
+(object
+  (pair
+    key:(_)@key
+    value: (_)@value)@pair)@object {
+
+  ; scopes flow into values then back to the pair
+  edge @value.before_scope -> @pair.before_scope
+  edge @pair.after_scope -> @value.after_scope
+
+  ; pairs augment the object value with a member binding
+
+  ; This is done differently depending on what the key is. See next rules.
+  ; attr @key.pop "pop" = @key, "definition"
+  attr @key.pop "definition"
+
+  attr @object.field_pop_dot "pop" = "."
+  edge @key.pop -> @value.value
+  edge @object.field_pop_dot -> @key.pop
+  edge @object.value -> @object.field_pop_dot
+}
+
+(pair key:(property_identifier)@key) {
+  attr @key.pop "pop" = @key
+}
+
+(pair key:(string)@key) {
+  attr @key.pop "pop" = (replace @key "\"" "")
+}
+
+(pair key:(number)@key) {
+  attr @key.pop "pop" = @key
+}
+
+
+
+;; #### Arrays
+
+; empty arrays
+; LATER-TODO currently unsupported by tree sitter queries
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(array)@array_expr {
+  edge @array_expr.after_scope -> @array_expr.before_scope
+}
+
+; nonempty arrays, first element
+(array
+  .
+  (_)@first_element)@array_expr {
+  ; scopes propagate into the first element of the array
+  edge @first_element.before_scope -> @array_expr.before_scope
+}
+
+; nonempty arrays, between elements
+(array
+  (_)@left_element
+  .
+  (_)@right_element) {
+  ; scopes propagate from left elements to right elements
+  edge @right_element.before_scope -> @left_element.after_scope
+}
+
+; nonempty arrays, last element
+(array
+  (_)@last_element
+  .)@array_expr {
+  ; scopes propagate out of the last element to the array
+  edge @array_expr.after_scope -> @last_element.after_scope
+}
+
+; elements at indices
+(array (_)@element)@array_expr {
+  attr @array_expr.element_pop_dot "pop" = "."
+  attr @element.index_pop "pop" = (child-index @element), "definition"
+  edge @array_expr.element_pop_dot -> @element.index_pop
+  edge @array_expr.value -> @array_expr.element_pop_dot
+  edge @element.index_pop -> @element.value
+}
+
+
+
+;; #### Formal Parameters
+
+; LATER-TODO scope propagation through empty formal parameters
+; currently unsupported by tree sitter queries
+; THIS IS A HUGE HACK AND MUST BE FIXED
+
+(formal_parameters)@formal_params {
+  edge @formal_params.after_scope -> @formal_params.before_scope
+}
+
+; first parameter
+(formal_parameters
+  .
+  (_)@first_param)@formal_params {
+
+  edge @first_param.before_scope -> @formal_params.before_scope
+}
+
+; between parameters
+(formal_parameters
+  (_)@left_param
+  .
+  (_)@right_param) {
+
+  ; scope flows left to right
+  edge @right_param.before_scope -> @left_param.after_scope
+}
+
+; last parameter
+(formal_parameters
+  (_)@last_param
+  .)@formal_params {
+
+  ; scope flows from the param to the call sig
+  edge @formal_params.after_scope -> @last_param.after_scope
+}
+
+
+
+;; #### Function Literals
+
+; functions with names
+(function
+  name:(_)@name
+  parameters:(_)@call_sig)@fun {
+
+  attr @name.pop "syntax_type" = "function"
+
+  ; if the function has a name, this is bound the callsig's before scope
+  attr @name.pop "pop" = @name, "definition"
+  edge @call_sig.before_scope -> @name.pop
+  edge @name.pop -> @fun.value
+}
+
+
+; function
+(function
+  parameters:(_)@call_sig
+  body:(_)@body)@fun {
+
+  ; scope flows across the decl
+  edge @fun.after_scope -> @fun.before_scope
+
+  ; function values have drop nodes that handle closures, that points to the
+  ; before scope from the function
+  attr @fun.value_drop "drop"
+  edge @fun.value_drop -> @fun.before_scope
+
+  ; the call sig's before scope comes from the drop node,
+  ; then flows into the body, and includes a variable binding for "this"
+  edge @call_sig.before_scope -> @fun.value_drop
+  attr @call_sig.this_pop "pop" = "this", "definition"
+  attr @call_sig.this_push "push" = "this"
+  edge @call_sig.this_pop -> @call_sig.this_push
+  edge @call_sig.this_push -> @fun.value_arg_scope
+  edge @call_sig.before_scope -> @call_sig.this_pop
+  attr @call_sig.arguments_pop "pop" = "arguments", "definition"
+  attr @call_sig.arguments_push "push" = "arguments"
+  edge @call_sig.arguments_pop -> @call_sig.arguments_push
+  edge @call_sig.arguments_push -> @fun.value_arg_scope
+  edge @call_sig.before_scope -> @call_sig.arguments_pop
+  edge @body.before_scope -> @call_sig.after_scope
+
+  ; function values have call nodes
+  attr @fun.value_call "pop" = "()", "pop-scope"
+  edge @fun.value -> @fun.value_call
+
+  ; function values have return nodes which need to be visible for returns
+  attr @fun.value_return "endpoint"
+  attr @fun.value_return "pop" = "GUARD:RETURN"
+  edge @fun.value_call -> @fun.value_return
+  let @body::return_or_yield = @fun.value_return
+
+  ; function values have this nodes which need to be visible for method calls
+  attr @fun.value_this "push" = "this"
+  attr @fun.value_this_guard "endpoint"
+  attr @fun.value_this_guard "pop" = "GUARD:THIS"
+  edge @fun.value_call -> @fun.value_this_guard
+  edge @fun.value_this_guard -> @fun.value_this
+  edge @fun.value_this -> @body.after_scope
+
+  ; function values have a jump node that lets params connect up to actual arguments
+  attr @fun.value_arg_scope "jump-to"
+}
+
+(function
+  parameters:
+    (formal_parameters (_)@param))@fun {
+
+  ; parameters jump to the pushed argument scope
+  attr @param.arg_index "push" = (child-index @param)
+  edge @param.covalue -> @param.arg_index
+  edge @param.arg_index -> @fun.value_arg_scope
+}
+
+
+
+;; #### Arrow Function Literals
+
+; function
+[
+  (arrow_function
+    parameters:(_)@call_sig
+    body:(_)@body)@fun
+
+  (arrow_function
+    parameter:(_)@call_sig
+      body:(_)@body)@fun
+] {
+
+  ; scope flows across the decl
+  edge @fun.after_scope -> @fun.before_scope
+
+  ; function values have drop nodes that handle closures, that points to the
+  ; before scope from the function
+  attr @fun.value_drop "drop"
+  edge @fun.value_drop -> @fun.before_scope
+
+  ; the call sig's before scope comes from the drop node then flows into the body
+  edge @call_sig.before_scope -> @fun.value_drop
+  edge @body.before_scope -> @call_sig.after_scope
+
+  ; function values have call nodes
+  attr @fun.value_call "pop" = "()", "pop-scope"
+  edge @fun.value -> @fun.value_call
+
+  ; function values have return nodes which need to be visible for returns
+  attr @fun.value_return "endpoint"
+  attr @fun.value_return "pop" = "GUARD:RETURN"
+  edge @fun.value_call -> @fun.value_return
+  let @body::return_or_yield = @fun.value_return
+
+  ; function values have this nodes which need to be visible for method calls
+  attr @fun.value_this "push" = "this"
+  attr @fun.value_this_guard "endpoint"
+  attr @fun.value_this_guard "pop" = "GUARD:THIS"
+  edge @fun.value_call -> @fun.value_this_guard
+  edge @fun.value_this_guard -> @fun.value_this
+  edge @fun.value_this -> @body.after_scope
+
+  ; function values have a jump node that lets params connect up to actual arguments
+  attr @fun.value_arg_scope "jump-to"
+}
+
+; arrow functions returning exprs need special rules for getting the return value hooked up
+(arrow_function
+  body:(expression)@return_expr) {
+  edge @return_expr::return_or_yield -> @return_expr.value
+}
+
+(arrow_function
+  parameter:(_)@param)@fun {
+
+  ; scope flows from the param right back out
+  edge @param.after_scope -> @param.before_scope
+
+  ; but augmented with a pop, b/c it's not a pattern
+  attr @param.pop "pop" = @param, "definition"
+  edge @param.pop -> @param.covalue
+  edge @param.after_scope -> @param.pop
+
+  ; parameters jump to the pushed argument scope
+  attr @param.arg_index "push" = "0"
+  edge @param.covalue -> @param.arg_index
+  edge @param.arg_index -> @fun.value_arg_scope
+}
+
+(arrow_function
+  parameters:
+    (formal_parameters (_)@param))@fun {
+
+  ; parameters jump to the pushed argument scope
+  attr @param.arg_index "push" = (child-index @param)
+  edge @param.covalue -> @param.arg_index
+  edge @param.arg_index -> @fun.value_arg_scope
+}
+
+
+
+;; #### Generator Function Literals
+
+; generator functions with names
+(generator_function
+  name:(_)@name
+  parameters:(_)@call_sig)@fun {
+
+  attr @name.pop "syntax_type" = "function"
+
+  ; if the function has a name, this is bound the callsig's before scope
+  attr @name.pop "pop" = @name, "definition"
+  edge @call_sig.before_scope -> @name.pop
+  edge @name.pop -> @fun.value
+}
+
+
+; generator function
+(generator_function
+  parameters:(_)@call_sig
+  body:(_)@body)@fun {
+
+  ; scope flows across the decl
+  edge @fun.after_scope -> @fun.before_scope
+
+  ; function values have drop nodes that handle closures, that points to the
+  ; before scope from the function
+  attr @fun.value_drop "drop"
+  edge @fun.value_drop -> @fun.before_scope
+
+  ; the call sig's before scope comes from the drop node then flows into the body
+  edge @call_sig.before_scope -> @fun.value_drop
+  edge @body.before_scope -> @call_sig.after_scope
+
+  ; function values have call nodes
+  attr @fun.value_call "pop" = "()", "pop-scope"
+  edge @fun.value -> @fun.value_call
+
+  ; function values have return nodes which need to be visible for returns
+  attr @fun.value_return "endpoint"
+  attr @fun.value_return "pop" = "GUARD:RETURN"
+  edge @fun.value_call -> @fun.value_return
+  let @body::return_or_yield = @fun.value_return
+
+  ; function values have this nodes which need to be visible for method calls
+  attr @fun.value_this "push" = "this"
+  attr @fun.value_this_guard "endpoint"
+  attr @fun.value_this_guard "pop" = "GUARD:THIS"
+  edge @fun.value_call -> @fun.value_this_guard
+  edge @fun.value_this_guard -> @fun.value_this
+  edge @fun.value_this -> @body.after_scope
+
+  ; function values have a jump node that lets params connect up to actual arguments
+  attr @fun.value_arg_scope "jump-to"
+}
+
+(generator_function
+  parameters:
+    (formal_parameters (_)@param))@fun {
+
+  ; parameters jump to the pushed argument scope
+  attr @param.arg_index "push" = (child-index @param)
+  edge @param.covalue -> @param.arg_index
+  edge @param.arg_index -> @fun.value_arg_scope
+}
+
+
+;; #### Function Calls
+
+; calls, functions
+(call_expression
+  function:(_)@function
+  arguments:(_)@arguments)@call_expr {
+
+  ; scopes flow from call expressions into the function
+  edge @function.before_scope -> @call_expr.before_scope
+  edge @arguments.before_scope -> @function.after_scope
+  edge @call_expr.after_scope -> @arguments.after_scope
+}
+
+; calls, values
+(call_expression
+  function:(_)@function
+  arguments:(_)@arguments)@call_expr {
+
+  ; value is a call, ie a push "()" node w/ "push-scope" @arguments
+  attr @call_expr.return_guard "push" = "GUARD:RETURN"
+  attr @call_expr.call "push" = "()", "push-scope" = @arguments.arg_scope
+  edge @call_expr.value -> @call_expr.return_guard
+  edge @call_expr.return_guard -> @call_expr.call
+  edge @call_expr.call -> @function.value
+
+  attr @arguments.arg_this "pop" = "this", "definition"
+  edge @arguments.arg_scope -> @arguments.arg_this
+
+  edge @arguments.arg_scope -> @arguments.arg_scope_no_this
+
+  attr @arguments.arg_arguments "pop" = "arguments", "definition"
+  attr @arguments.arg_arguments_dot "pop" = "."
+  edge @arguments.arg_scope -> @arguments.arg_arguments
+  edge @arguments.arg_arguments -> @arguments.arg_arguments_dot
+  edge @arguments.arg_arguments_dot -> @arguments.arg_scope_no_this
+  edge @arguments.arg_arguments -> @call_expr::arguments_prototype
+}
+
+; special case to make `this` bind correctly in calls of the forms `x.f(...)`
+; and `x[f](...)`
+(call_expression
+  function:[
+    (member_expression object:(_)@object)
+    (subscript_expression object:(_)@object)
+  ]
+  arguments:(_)@arguments) {
+
+  edge @arguments.arg_this -> @object.value
+}
+
+
+; TODO this should eventually be removed and replaced with a version that only
+; applies to the negation of (member_expression), but that's not supported by
+; tree-sitter currently
+(call_expression
+  function: (_)@function
+  arguments:(_)@arguments)@call_expr {
+
+  edge @arguments.arg_this -> @call_expr::null
+}
+(call_expression
+  arguments:(arguments (_)@arg)@arguments) {
+
+  attr @arg.arg_index "pop" = (child-index @arg)
+  edge @arguments.arg_scope_no_this -> @arg.arg_index
+  edge @arg.arg_index -> @arg.value
+}
+
+
+
+;; #### Arguments
+
+; LATER-TODO currently unsupported by tree sitter queries
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(arguments)@arguments {
+  edge @arguments.after_scope -> @arguments.before_scope
+}
+
+(arguments
+  .
+  (_)@first_arg)@arguments {
+
+  edge @first_arg.before_scope -> @arguments.before_scope
+}
+
+(arguments
+  (_)@left_arg
+  .
+  (_)@right_arg) {
+
+  edge @right_arg.before_scope -> @left_arg.after_scope
+}
+
+(arguments
+  (_)@last_arg
+  .)@arguments {
+
+  edge @arguments.after_scope -> @last_arg.after_scope
+}
+
+
+
+;; #### Property Access
+
+;; ##### Member Expressions
+
+(member_expression
+  object: (_)@object
+  property: (_)@property)@member_expr {
+
+  ; scopes flow into object then back out
+  edge @object.before_scope -> @member_expr.before_scope
+  edge @member_expr.after_scope -> @object.after_scope
+
+  ; value is a member projection on the value of the object ie. a push then push dot
+  attr @property.push "push", "reference"
+  ;attr @member_expr.value "push" = @property.pop
+  attr @member_expr.push_dot "push" = "."
+  edge @property.push -> @member_expr.push_dot
+  ;edge @member_expr.value -> @member_expr.push_dot
+  edge @member_expr.value -> @property.push
+  edge @member_expr.push_dot -> @object.value
+}
+
+;; ##### Subscript Expressions
+
+(subscript_expression
+  object: (_)@object
+  index: (_)@index)@subscript_expression {
+
+  ; scopes flow left to right
+  edge @object.before_scope -> @subscript_expression.before_scope
+  edge @index.before_scope -> @object.after_scope
+  edge @subscript_expression.after_scope -> @index.after_scope
+
+  ; value is a subscript lookup, ie a push then push dot
+
+  ; this is done differently depending on what the index is
+  ; attr @index.push "push" = @index, "reference"
+
+}
+
+(subscript_expression
+  object: (_)@object
+  index: (string)@index)@subscript_expression {
+
+  attr @index.push "reference"
+
+  attr @index.push_dot "push" = "."
+  edge @subscript_expression.value -> @index.push
+  edge @index.push -> @index.push_dot
+  edge @index.push_dot -> @object.value
+  attr @index.push "push" = (replace @index "\"" "")
+}
+
+(subscript_expression
+  object: (_)@object
+  index: (number)@index)@subscript_expression {
+
+  attr @index.push "reference"
+
+  attr @index.push_dot "push" = "."
+  edge @subscript_expression.value -> @index.push
+  edge @index.push -> @index.push_dot
+  edge @index.push_dot -> @object.value
+  attr @index.push "push" = @index
+}
+
+
+
+;; #### Constructor Calls
+
+(new_expression
+  constructor:(_)@constructor
+  arguments:(_)@arguments)@new_expr {
+
+  edge @constructor.before_scope -> @new_expr.before_scope
+  edge @arguments.before_scope -> @constructor.after_scope
+  edge @new_expr.after_scope -> @arguments.after_scope
+
+  attr @new_expr.call "push" = "()", "push-scope" = @arguments.arg_scope
+
+  ; we guard for constructors for the case where we have a "true" class
+  attr @constructor.constructor "push" = "GUARD:CONSTRUCTOR"
+  edge @new_expr.call -> @constructor.constructor
+  edge @constructor.constructor -> @constructor.value
+
+  ; and also just go right to the value incase we have a function-as-constructor
+  edge @new_expr.call -> @constructor.value
+
+
+
+  ; value coming from the constructor call
+  attr @new_expr.guard_this "push" = "GUARD:THIS"
+  edge @new_expr.value -> @new_expr.guard_this
+  edge @new_expr.guard_this -> @new_expr.call
+
+  ; value coming from the field decls in the class
+  edge @new_expr.value -> @constructor.value
+
+  attr @arguments.arg_this "pop" = "this", "definition"
+  edge @arguments.arg_scope -> @arguments.arg_this
+  edge @arguments.arg_this -> @new_expr::empty_object
+}
+
+(new_expression
+  arguments:(arguments (_)@arg)@arguments) {
+
+  attr @arg.arg_index "pop" = (child-index @arg)
+  edge @arguments.arg_scope -> @arg.arg_index
+  edge @arg.arg_index -> @arg.value
+}
+
+
+
+;; #### Await
+
+(await_expression (_)@awaited)@await_expr {
+  ; scopes flow into the inner expression then back out
+  edge @awaited.before_scope -> @await_expr.before_scope
+  edge @await_expr.after_scope -> @awaited.after_scope
+
+  ; value is just propagated up
+  edge @await_expr.value -> @awaited.value
+}
+
+
+
+;; #### Update Expressions
+
+(update_expression argument: (_)@argument)@update_expr {
+  ; scope propagates through the operand then is updated by the expr
+  edge @argument.before_scope -> @update_expr.before_scope
+  edge @update_expr.after_scope -> @argument.after_scope
+  ; LATER-TODO this isn't quite right because the update argument can't be an arbitrary expr
+  ; eg f(x)++ doesn't make any sense, you have to have something more like
+  ; (update_expression argument: (lvar)@argument)
+  attr @argument.pop "pop", "definition"
+  edge @update_expr.value -> @argument.value
+  edge @update_expr.after_scope -> @argument.pop
+  edge @argument.pop -> @argument.value
+}
+
+
+;; #### Binary Expressions
+
+(binary_expression left: (_)@left right: (_)@right)@binary_expr {
+  ; scopes propagate left to right through the operands unchanged by the binop itself
+  edge @left.before_scope -> @binary_expr.before_scope
+  edge @right.before_scope -> @left.after_scope
+  edge @binary_expr.after_scope -> @right.after_scope
+
+  ; value is a binary op value built from the operands
+  ; LATER-TODO this isn't quite correct but it permits flow through the expression
+  ; which can be useful
+  ; attr @binary_expr.value "binary_operation_value"
+  edge @binary_expr.value -> @left.value
+  edge @binary_expr.value -> @right.value
+}
+
+
+;; #### Unary Expressions
+
+(unary_expression argument: (_)@argument)@unary_expr {
+  ; scope propagates through the operand
+  edge @argument.before_scope -> @unary_expr.before_scope
+  edge @unary_expr.after_scope -> @argument.after_scope
+
+  ; value is a unaryop value built from the operand
+  ; LATER-TODO this isn't quite correct but it permits flow through the expression
+  ; which can be useful
+  ; attr @unary_expr.value "unary_operation_value"
+  edge @unary_expr.value -> @argument.value
+}
+
+
+
+;; #### Assignment Expressions;
+
+; scopes on RHS, values
+(assignment_expression
+  left: (_)@left
+  right: (_)@right)@assignment_expr {
+
+  ; scopes flow into the RHS then back out to the whole expr,
+  ; augmented (in subsequent rules) by the LHS
+  edge @right.before_scope -> @assignment_expr.before_scope
+  edge @left.before_scope -> @right.after_scope
+  edge @assignment_expr.after_scope -> @left.after_scope
+
+  ; value of the whole thing is value of the RHS
+  edge @assignment_expr.value -> @right.value
+}
+
+; augmentation of scope via identifiers
+(assignment_expression
+  left: (identifier)@left
+  right: (_)@right)@assignment_expr {
+
+  ; augments the scope by adding a lookup edge, ie. a pop
+  attr @left.pop "pop" = @left, "definition"
+  edge @assignment_expr.after_scope -> @left.pop
+  edge @left.pop -> @right.value
+
+  ; ensure the scope flows through the identifier
+  edge @left.after_scope -> @left.before_scope
+}
+
+; assignment to direct fields on `this`
+(assignment_expression
+  left: (member_expression
+    object:(this)@this
+    property:(_)@property)
+  right: (_)@right)@assignment_expr {
+
+  ; HACK
+  attr @this.drop "drop"
+  edge @this.drop -> @this.pop
+  attr @this.pop "pop" = "this"
+  attr @this.pop_dot "pop" = "."
+  attr @property.pop "pop" = @property, "definition"
+  edge @assignment_expr.after_scope -> @this.drop
+  edge @assignment_expr.after_scope -> @this.pop
+  edge @this.pop -> @this.pop_dot
+  edge @this.pop_dot -> @property.pop
+  edge @property.pop -> @right.value
+}
+
+; augmentation of scope via _destructuring_patterns
+(assignment_expression
+  left: [(object_pattern) (array_pattern)]@left
+  right: (_)@right)@assignment_expr {
+
+  ; scope flows from LHS into pattern then back to assignment
+  edge @left.before_scope -> @right.after_scope
+  edge @assignment_expr.after_scope -> @left.after_scope
+}
+
+
+
+;; #### Augmented Assignment Expressions
+
+(augmented_assignment_expression
+  left: (_)@left
+  right: (_)@right)@augmented_assignment_expr {
+
+  ; scopes flow into the RHS then back out to the whole expr, augmented by the LHS
+  edge @right.before_scope -> @augmented_assignment_expr.before_scope
+  edge @augmented_assignment_expr.after_scope -> @right.after_scope
+}
+
+(augmented_assignment_expression
+  left:(identifier)@left
+  right:(_)@right)@augmented_assignment_expr {
+
+  ; augment the scope
+  attr @left.pop "pop" = @left, "definition"
+  attr @left.push "push" = @left, "reference"
+  edge @left.push -> @augmented_assignment_expr.before_scope
+  edge @left.pop -> @left.push
+  edge @left.pop -> @right.value
+  edge @augmented_assignment_expr.after_scope -> @left.pop
+}
+
+
+;; #### Comma Operator / Sequence Expressions
+
+(sequence_expression
+  left: (_)@left
+  right: (_)@right)@sequence_expr {
+
+  ; scopes propagate left to right
+  edge @left.before_scope -> @sequence_expr.before_scope
+  edge @right.before_scope -> @left.after_scope
+  edge @sequence_expr.after_scope -> @right.after_scope
+
+  ; the value is just the value of the right
+  edge @sequence_expr.value -> @right.value
+}
+
+
+;; #### Ternary Expression
+
+(ternary_expression
+  condition: (_)@condition
+  consequence: (_)@consequence
+  alternative: (_)@alternative)@ternary_expr {
+
+  ; scopes propagate into condition, then into each branch
+  edge @condition.before_scope -> @ternary_expr.before_scope
+  edge @consequence.before_scope -> @condition.after_scope
+  edge @alternative.before_scope -> @condition.after_scope
+  edge @ternary_expr.after_scope -> @consequence.after_scope
+  edge @ternary_expr.after_scope -> @alternative.after_scope
+
+  ; value of the whole thing is a conditional value from the operands
+  edge @ternary_expr.value -> @consequence.value
+  edge @ternary_expr.value -> @alternative.value
+}
+
+
+
+;; #### Yield
+
+(yield_expression (_)@yielded_expr)@yield_expr {
+  ; scopes flow in to the yielded expression then back out
+  edge @yielded_expr.before_scope -> @yield_expr.before_scope
+  edge @yield_expr.after_scope -> @yielded_expr.after_scope
+
+  ; yield expressions hook up to the call node of the function value
+  edge @yield_expr::return_or_yield -> @yielded_expr.value
+}
+
+
+
+;; #### Class Expressions
+
+(class
+  body:(_)@body)@class {
+
+  edge @body.before_scope -> @class.before_scope
+  edge @class.value -> @body.after_scope
+  edge @class.after_scope -> @class.before_scope
+}
+
+(class
+  name:(_)@name
+  body:(_)@body)@class {
+  
+  attr @name.pop "syntax_type" = "class"
+
+  attr @name.pop "pop" = @name, "definition"
+  edge @body.before_scope -> @name.pop
+  edge @name.pop -> @class.value
+}
+
+(class
+  (class_heritage (_)@name))@class {
+
+  edge @name.before_scope -> @class.before_scope
+  edge @class.value -> @name.value
+}
+
+
+
+;; ## Patterns
+
+;; Patterns introduce at least two interesting problems to the task of name
+;; resolution. On the one hand, patterns by themselves are rich in structure
+;; and binding possibilities. On the other, they function to pull apart
+;; structure in ways that we would like to make use of in resolving names. Let's
+;; look at these in order.
+
+;; ### Binding Possibilities
+
+;; If names could only be bound directly either on the LHS of an assignment, or
+;; as the formal parameters to a function, or in related places like as
+;; arguments to increment or decrement operators, then there would be little
+;; trouble saying where a name is bound. But consider a destructuring assignment
+;; such as this:
+
+;; ``````javascript
+;; let [x,y,z] = arr;
+;; ``````
+
+;; This assignment has variable names on the LHS of an assignment, sure, but not
+;; directly as the LHS. Rather they're buried down inside a pattern. Here they
+;; aren't very deep, just one node below the root of the LHS, but they can be
+;; arbitrarily far down:
+
+;; ``````javascript
+;; let [x, [y, [z, w], q], r] = arr;
+;; ``````
+
+;; On top of this, patterns in JavaScript permit default assignments, such as
+
+;; ``````javascript
+;; let [x, y = 1] = arr;
+;; ``````
+
+;; These default values can be the result of a computation itself containing
+;; variables, such as
+
+;; ``````javascript
+;; let [x, y = 2*z] = arr;
+;; ``````
+
+;; Additionally, those variables referenced in the default value are evaluated
+;; *after* the RHS of the assignment. In the following code, `z` is incremented
+;; and becomes `2`, and then `x` is assigned to that value. The array on the RHS
+;; is only one element long, so the `y` variable gets assigned the default value
+;; of `2*z`, which is computed *after* the increment, and so is `2*2` or `4`.
+
+;; ``````javascript
+;; let z = 1;
+;; let [x, y = 2*z] = [z++];
+;; ``````
+
+;; To complicated matters further, the default value can reference the *bound
+;; variables to its left*. For instance:
+
+;; ``````javascript
+;; let [x, y = x+1] = arr;
+;; ``````
+
+;; All of this leads to some very interesting and tricky problems for name
+;; resolution. The flow of the environment is as follows: First, the environment
+;; flows into the RHS of the assignment and is updated by whatever evaluations
+;; happen there, then it flows out of the RHS and into the LHS, where it goes
+;; through each pattern in the LHS parse tree, in a left-to-right, depth-first
+;; traversal. Patterns with no default assignments do nothing to the environment
+;; but patterns with a default will pass the environment to the default value,
+;; where it may be updated by the evaluation, and then passed further along.
+;; Each variable, whether bare or on the left of an assignment, also has to
+;; extend the environment because those variables come into scope further along.
+
+;; ### Structure Decomposition
+
+;; Let's now look at how patterns decompose structure. Let's consider the effect
+;; of an assignment such as this:
+
+;; ``````javascript
+;; let [x,y] = [1,2];
+;; ``````
+
+;; This assignment binds `x` to `1` and `y` to `2`. It's equivalent to doing
+
+;; ``````javascript
+;; let x = 1, y = 2;
+;; ``````
+
+;; Except, unlike the latter, the array destructuring does not have any obvious
+;; pairing up of the names with the expressions that give them their values.
+;; Now, perhaps there's some clever hack we can perform for this special case
+;; where the RHS is a structure like `[1,2]` where it's manifestly clear out to
+;; pair things up, but of course the RHS can come from anywhere. It can come
+;; from a local variable assignment:
+
+;; ``````javascript
+;; let arr = [1,2];
+;; let [x,y] = arr;
+;; ``````
+
+;; Or a function call:
+
+;; ``````javascript
+;; function foo(arr) {
+;;   let [x,y] = arr;
+;;   ...
+;; }
+;; foo([1,2]);
+;; ``````
+
+;; Or any other number of places. We would like *all* of these to permit at
+;; least *some* amount of name resolution so that we can find that `x` is `1`
+;; and `y` is `2`. This should extend also to objects, not just arrays.
+
+;; The approach we take is to recognize a general pattern of equivalence, which
+;; the above double-let assignment is related special case. For arrays, all
+;; destructuring assignments of the form
+
+;; ``````javascript
+;; let [..., pat_i, ...] = arr;
+;; ``````
+
+;; are equivalent to
+
+;; ``````javascript
+;; let pat_i = arr[i];
+;; ``````
+
+;; For any pattern `pat` and expression `arr`. So for instance the simple case
+;; of a pattern expression and an array literal
+
+;; ``````javascript
+;; let [x,y] = [1,2];
+;; ``````
+
+;; is equivalent to a pair of lets
+
+;; ``````javascript
+;; let x = [1,2][0];
+;; let y = [1,2][1];
+;; ``````
+
+;; Modulo any change in side effects from duplicating the array syntactically,
+;; these two are equivalent and this would be a valid code transformation. Or if
+;; the pattern were an embedded array destructuring like so:
+
+;; ``````javascript
+;; let [x, [y,z]] = [1, [2,3]];
+;; ``````
+
+;; then this would be equivalent to
+
+;; ``````javascript
+;; let x = [1, [2,3]][0];
+;; let [y,z] = [1, [2,3]][1];
+;; ``````
+
+;; And of course the second let here would similarly unfold to be equivalent to
+;; a pair of assignments, giving us
+
+;; ``````javascript
+;; let x = [1, [2,3]][0];
+;; let y = [1, [2,3]][1][0];
+;; let z = [1, [2,3]][1][1];
+;; ``````
+
+;; Similarly for objects, we have the following destructuring equivalence that
+;; says an assignment like this:
+
+;; ``````javascript
+;; let {..., k: pat, ...} = obj;
+;; ``````
+
+;; is equivalent to
+
+;; ``````javascript
+;; let pat = obj[k];
+;; ``````
+
+;; for all patterns `pat` and expressions `obj`.
+
+;; This lets us then conclude that whatever the graphs are that we generate for
+;; patterns ought to be equivalent to the graphs we would general for using
+;; array indexing and object indexing. Since array and object indexing are fully
+;; capable of participating in name resolution, if we can achieve this
+;; equivalence, patterns can also fully participate as well, and we'll be able
+;; to say that the assignment `let [x,y] = [1,2]` yields the name `x` resolving
+;; to `1` and `y` to `2`, as well as many many more complicated cases.
+
+;; As mentioned in the intro to this doc, assignments point to values. The
+;; simplest way to do this, in the absence of patterns, is just to have an edge
+;; from the after scope of the assignment to a pop node for the variable,
+;; and then to the value node of the RHS, so for `let x = 1;` it'd be like so:
+
+;; ``````
+;; after_scope ---> POP "x" ---> value_node_for_1
+;; ``````
+
+;; But the above discussion of destructuring complicates this. What we do to
+;; address this is introduce the notion of a "covalue". Just as we can say that
+;; an expression *has* a value, or produces a value, etc., we'll say that a
+;; pattern *consumes* a value. Expressions have values going "out", while
+;; patterns have values coming "in". And so like expressions have an associated
+;; `value` node in the graph, patterns have an associated `covalue` node. The
+;; covalue corresponds to an incoming value.
+
+;; We build covalues similar to how we build values. Consider the value for an
+;; array such as `["foo", "bar"]`, which will be a scope node with pop nodes
+;; going out to the values of the strings, like so:
+
+;; ``````
+;;                            ,---> POP 0 ---> value_node_of_foo
+;; value_node_of_the_array ---|
+;;                            `---> POP 1 ---> value_node_of_bar
+;; ``````
+
+;; Similarly, a covalue for an array pattern will also have nodes for the
+;; sub-patterns and nodes for the first and second indexes. But rather than pop
+;; nodes, which show you where the 0th and 1st elements are, they'll be push
+;; nodes to establish the lookup of those elements. The edges will therefore
+;; go the other way around. So for a pattern like `[x,y]`, we have the graph
+
+;; ``````
+;;                                 ,--- PUSH 0 <--- covalue_node_of_x
+;; covalue_node_of_the_pattern <---|
+;;                                 `--- PUSH 1 <--- covalue_node_of_y
+;; ``````
+
+;; For readers familiar with category theory's notion of duality, this explains
+;; why these are called "covalues". The general schema here is that where values
+;; have pops, covalues have pushes, and all the arrows get flipped.
+
+;; ### Attributes Defined on Patterns
+;; TODO
+
+;; ### Pattern Queries
+
+;; #### Variable Patterns
+
+; scope propagation through identifier patterns
+(pattern/identifier)@ident_pat {
+
+  ; scope flows through, binding via a pop edge that goes to an unknown value
+  attr @ident_pat.pop "pop" = @ident_pat, "definition"
+  edge @ident_pat.pop -> @ident_pat.covalue
+  edge @ident_pat.after_scope -> @ident_pat.before_scope
+  edge @ident_pat.after_scope -> @ident_pat.pop
+
+  edge @ident_pat.new_bindings -> @ident_pat.pop
+}
+
+
+;; #### Object Patterns
+
+; LATER-TODO scope propagation through empty object patterns
+; currently unsupported by tree sitter queries
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(object_pattern)@object_pat {
+  edge @object_pat.after_scope -> @object_pat.before_scope
+}
+
+; scope propagation through object patterns, first entry
+(object_pattern
+  .
+  (_)@first_entry)@object_pat {
+
+  ; scope propagates from object pattern to entry
+  edge @first_entry.before_scope -> @object_pat.before_scope
+}
+
+; scope propagation through object patterns, between entries
+(object_pattern
+  (_)@left_entry
+  .
+  (_)@right_entry) {
+
+  ; scope propagates from left entry to right entry
+  edge @right_entry.before_scope -> @left_entry.after_scope
+}
+
+; scope propagation through object patterns, last entry
+(object_pattern
+  (_)@last_entry
+  .)@object_pat {
+
+  ; scope propagates out from last entry to object pattern
+  edge @object_pat.after_scope -> @last_entry.after_scope
+}
+
+; covalue propagation through object patterns
+(object_pattern
+  (_)@entry)@object_pat {
+
+  ; covalues flow into entries unchanged
+  edge @entry.covalue -> @object_pat.covalue
+
+  edge @object_pat.new_bindings -> @entry.new_bindings
+}
+
+; object entry pair patterns
+(pair_pattern
+  key:(_)@key
+  value:(_)@value_pat)@pair_pat {
+
+  ; covalues flow in dotted
+  attr @key.push_dot "push" = "."
+  edge @value_pat.covalue -> @key.push
+  edge @key.push -> @key.push_dot
+  edge @key.push_dot -> @pair_pat.covalue
+  ; scope flows into value pattern then back out
+  edge @value_pat.before_scope -> @pair_pat.before_scope
+  edge @pair_pat.after_scope -> @value_pat.after_scope
+
+  edge @pair_pat.new_bindings -> @value_pat.new_bindings
+}
+
+(pair_pattern
+  key:(property_identifier)@key)@pair_pattern {
+
+    attr @key.push "push" = @key, "reference"
+}
+
+(pair_pattern
+  key:(string)@key)@pair_pattern {
+
+    attr @key.push "push" = (replace @key "\"" ""), "reference"
+}
+
+; LATER-TODO the left pattern has to be a name, it cant be another pattern
+; object entry assignment patterns
+(object_assignment_pattern
+  left:(_)@left_pat
+  right:(_)@right_expr)@object_assignment_pat {
+
+  ; scope flows both THROUGH and AROUND the RHS, because it's a
+  ; by-passable default not a guaranteed value
+
+  ; here we go around
+  edge @left_pat.before_scope -> @object_assignment_pat.before_scope
+
+  ; and here we go through
+  edge @right_expr.before_scope -> @object_assignment_pat.before_scope
+  edge @left_pat.before_scope -> @right_expr.after_scope
+
+  ; and in either case we come out the LHS
+  edge @object_assignment_pat.after_scope -> @left_pat.after_scope
+
+  ; covalues flow both in from the outside and also from the right expression
+  edge @left_pat.covalue -> @object_assignment_pat.covalue
+  edge @left_pat.covalue -> @right_expr.value
+
+  edge @object_assignment_pat.new_bindings -> @left_pat.new_bindings
+
+}
+
+; if the object assignment pattern happens to have an identifier on the LHS it also binds
+(object_assignment_pattern
+  left:(shorthand_property_identifier_pattern)@left_pat
+  right:(_)@right_expr)@object_assignment_pat {
+
+  edge @left_pat.after_scope -> @left_pat.before_scope
+
+  attr @left_pat.push "push" = @left_pat, "reference"
+  attr @left_pat.push_dot "push" = "."
+  attr @left_pat.pop "pop" = @left_pat, "definition"
+  edge @left_pat.pop -> @left_pat.push
+  edge @left_pat.push -> @left_pat.push_dot
+  edge @left_pat.push_dot -> @left_pat.covalue
+  edge @object_assignment_pat.after_scope -> @left_pat.pop
+
+  edge @object_assignment_pat.new_bindings -> @left_pat.pop
+}
+
+
+;; #### Array Patterns
+
+; LATER-TODO scope propagation through empty array patterns
+; currently unsupported by tree sitter queries
+; THIS IS A HUGE HACK AND MUST BE FIXED
+(array_pattern)@array_pat {
+  edge @array_pat.after_scope -> @array_pat.before_scope
+}
+
+; scope propagation through array patterns, first element
+(array_pattern
+  .
+  (_)@first_el_pat)@array_pat {
+
+  ; scope flows into the first element
+  edge @first_el_pat.before_scope -> @array_pat.before_scope
+}
+
+; scope propagation through array patterns, between element
+(array_pattern
+  (_)@left_el_pat
+  .
+  (_)@right_el_pat) {
+
+  ; scope flows from left to right
+  edge @right_el_pat.before_scope -> @left_el_pat.after_scope
+}
+
+; scope propagation through array patterns, last element
+(array_pattern
+  (_)@last_el_pat
+  .)@array_pat {
+
+  ; scope flow out from the last element
+  edge @array_pat.after_scope -> @last_el_pat.after_scope
+}
+
+; array pattern elements
+(array_pattern (_)@element_pat)@array_pat {
+  attr @element_pat.element_index_push "push" = (child-index @element_pat), "reference"
+  attr @array_pat.element_index_push_dot "push" = "."
+  edge @element_pat.covalue -> @element_pat.element_index_push
+  edge @element_pat.element_index_push -> @array_pat.element_index_push_dot
+  edge @array_pat.element_index_push_dot -> @array_pat.covalue
+
+  edge @array_pat.new_bindings -> @element_pat.new_bindings
+}
+
+
+;; #### Assignment Patterns
+
+; scope propagation through assignment patterns
+(assignment_pattern
+  left:(_)@left_pat
+  right:(_)@right_expr)@assignment_pat {
+
+  ; scope flows both THROUGH and AROUND the RHS, because it's a
+  ; by-passable default not a guaranteed value
+
+  ; here we go around
+  edge @left_pat.before_scope -> @assignment_pat.before_scope
+
+  ; and here we go through
+  edge @right_expr.before_scope -> @assignment_pat.before_scope
+  edge @left_pat.before_scope -> @right_expr.after_scope
+
+  ; the pattern's covalue is the whole thing's, and also the RHS
+  edge @left_pat.covalue -> @assignment_pat.covalue
+  edge @left_pat.covalue -> @right_expr.value
+
+  ; and in either case we come out the LHS
+  edge @assignment_pat.after_scope -> @left_pat.after_scope
+
+  edge @assignment_pat.new_bindings -> @left_pat.new_bindings
+}
+
+
+;; #### Rest Patterns
+
+(rest_pattern (_)@name)@rest_pat {
+  ; scope flows through, binding via a pop edge that goes to an unknown value
+
+  attr @rest_pat.pop "pop" = @name, "definition"
+  edge @rest_pat.after_scope -> @rest_pat.before_scope
+  edge @rest_pat.after_scope -> @rest_pat.pop
+}
+
+
+
+;; ## Special Cases
+;;
+;; There are a number of annoying features that libraries make use of to
+;; effectively add features to JavaScript. While they don't technically change
+;; the language in any way, they're broad design patterns that are meant to be
+;; used *as if* these things were more language level than not. These often make
+;; it hard to do analysis without actually running code, and so instead, we
+;; define some special case queries that treat these techniques as if they were
+;; indeed core features of the language.
+;;
+;; ### Extend
+;;
+;; The extend method is a mass assignment of values to keys on objects and gets
+;; used a bunch for building module export objects. We special case it here so
+;; that we can do lookup on it because the extend method itself is dependent on
+;; state and mutability, and has no good analytical explanation within the
+;; Stack Graph formalism.
+;;
+;; Since we can't extend the actual value, but only the syntactic references to
+;; it in the SG formalism, we treat extend as a kind of shadowing binder,
+;; similar to how we treat `+=` or `*=`.
+
+(
+  (call_expression
+    function: (member_expression
+      object: (identifier)@object
+      property: (_)@extend)
+    arguments: (arguments (object)@new_fields))@call_expr
+  (#eq? @extend "extend")
+) {
+
+  attr @object.pop "pop" = @object, "definition"
+  edge @call_expr.after_scope -> @object.pop
+  edge @object.pop -> @new_fields.value
+
+}
+
+;; ### CommonJS-style Exports
+
+;; CommonJS introduced an export style for pre-ES6 JavaScript that permitted
+;; modules to export functions using an exports object bound to a top-level
+;; variable `exports`. For instance, to export something as `foo`, we would do:
+
+;; ``````javascript
+;; exports.foo = 1;
+;; ``````
+
+;; If we then imported with `require`, the exports object would have `foo` as
+;; a field. Alternatively, we can also specify the entire export object, using
+
+;; ``````javascript
+;; module.exports = my_exported_object;
+;; ``````
+
+(
+  (assignment_expression
+    left: (member_expression
+      object:(identifier)@exports
+      property:(_)@property)
+    right: (_)@right)@assignment_expr
+  (#eq? @exports "exports")
+) {
+
+  attr @property.pop "pop" = @property, "definition"
+  attr @property.pop_dot "pop" = "."
+  edge @assignment_expr::exports -> @property.pop_dot
+  edge @property.pop_dot -> @property.pop
+  edge @property.pop -> @right.value
+}
+
+(
+  (assignment_expression
+    left: (member_expression
+      object:(identifier)@module
+      property:(_)@exports)
+    right: (_)@right)@assignment_expr
+  (#eq? @module "module")
+  (#eq? @exports "exports")
+) {
+
+  edge @assignment_expr::exports -> @right.value
+}
+
+;; ## CommonJS-style Imports
+
+;; Similar to exports, CommonJS also defines a way to do imports. In general,
+;; these look like `require(expr)`, but in practice the expression is a string
+;; constant, which is the only case we hand.
+
+(
+  (call_expression
+    function:(_)@require
+    arguments:(arguments (string)@mod_name))@call_expr
+  (#eq? @require "require")
+) {
+
+  scan @mod_name {
+    "\"([^/\"]+)\.js\"$" {
+      attr @mod_name.push "push" = $1
+    }
+  }
+
+  attr @mod_name.module_guard "push" = "GUARD:EXPORTS"
+  edge @call_expr.value -> @mod_name.module_guard
+  edge @mod_name.module_guard -> @mod_name.push
+  edge @mod_name.push -> root
+
+}
+
+
+;; ## Definiens Rules
+
+;; These rules explain how defined names relate to syntactic definitions
+;; of various forms. Sometimes that's declared function names mapping to
+;; the entire function declaration, and sometimes that's variables in an
+;; assignment being mapped to the thing it's assigned to. The purpose of
+;; these is not to augment stack graphs, per se, but to permit syntax
+;; oriented tools that need to know about approximate call graphs, etc.
+
+;; ### Basic Definiens Rules
+
+;; These rules are all about declarations and terms that have the names
+;; directly in them.
+
+(class_declaration
+  name:(_)@name
+  body:(_)@body)@class_decl {
+
+  attr @name.pop "definiens" = @class_decl
+
+}
+
+(function_declaration
+  name:(_)@name
+  parameters:(_)@call_sig
+  body:(_)@body)@fun_decl {
+
+  attr @name.pop "definiens" = @fun_decl
+
+}
+
+(generator_function_declaration
+  name:(_)@name
+  parameters:(_)@call_sig
+  body:(_)@body)@fun_decl {
+
+  attr @name.pop "definiens" = @fun_decl
+
+}
+
+(method_definition
+  name:(_)@name
+  parameters:(_)@call_sig
+  body:(_)@body)@method_def {
+
+  attr @name.pop "definiens" = @method_def
+
+}
+
+(function
+  name:(_)@name
+  parameters:(_)@call_sig)@fun {
+
+  attr @name.pop "definiens" = @fun
+
+}
+
+(generator_function
+  name:(_)@name
+  parameters:(_)@call_sig)@fun {
+
+  attr @name.pop "definiens" = @fun
+
+}
+
+(class
+  name:(_)@name
+  body:(_)@body)@class {
+  
+  attr @name.pop "definiens" = @class
+
+}
+
+;; ### Assignment-like Rules
+
+;; These rules make up for the fact that JavaScript permits way more
+;; kinds of definitions/declarations than just those that show up in
+;; syntactic declarations of the thing in question.
+
+;; These rules are currently way less precise than we would like but
+;; do provide at least some information about definiens for these
+;; kinds of definitions.
+
+(assignment_expression
+  left: (identifier)@left
+  right: [
+    (function)
+    (generator_function)
+    (arrow_function)
+  ]@right) {
+
+  attr @left.pop "definiens" = @right
+
+}
+
+(assignment_expression
+  left: (member_expression property:(_)@left)
+  right:  [
+    (function)
+    (generator_function)
+    (arrow_function)
+  ]@right) {
+
+  attr @left.ignore_guard "pop" = "GUARD:GANDALF"
+  attr @left.definiens_hook "pop" = @left, "definition"
+  attr @left.definiens_hook "definiens" = @right
+  edge root -> @left.ignore_guard
+  edge @left.ignore_guard -> @left.definiens_hook
+}
+
+(variable_declaration
+  (variable_declarator
+    name:(identifier)@name
+    value: [
+      (function)
+      (generator_function)
+      (arrow_function)
+    ]@initializer)) {
+
+  attr @name.pop "definiens" = @initializer
+
+}
+
+(lexical_declaration
+  (variable_declarator
+    name:(identifier)@name
+    value: [
+      (function)
+      (generator_function)
+      (arrow_function)
+    ]@initializer)) {
+
+  attr @name.pop "definiens" = @initializer
+
+}
+
+(pair
+  key: (_)@name
+  value: [
+    (function)
+    (generator_function)
+    (arrow_function)
+  ]@value) {
+
+attr @name.ignore_guard "pop" = "GUARD:GANDALF"
+attr @name.definiens_hook "pop" = @name, "definition"
+attr @name.definiens_hook "definiens" = @value
+edge root -> @name.ignore_guard
+edge @name.ignore_guard -> @name.definiens_hook
+
+}
