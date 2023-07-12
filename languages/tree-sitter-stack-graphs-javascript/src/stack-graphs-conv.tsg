@@ -231,67 +231,75 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ## Nodes
 
 (_)@node {
-  node @node.after_scope
-  node @node.arg_arguments
-  node @node.arg_arguments_dot
-  node @node.arg_index
-  node @node.arg_scope
-  node @node.arg_scope_no_this
-  node @node.arg_this
-  node @node.arguments_pop
-  node @node.arguments_push
-  node @node.before_scope
-  node @node.boundvar_pop
-  node @node.call
-  node @node.constructor
-  node @node.constructor_guard
-  node @node.covalue
-  node @node.default_guard
-  node @node.definiens_hook
-  node @node.drop
-  node @node.element_index_push
-  node @node.element_index_push_dot
-  node @node.element_pop_dot
-  node @node.exports
-  node @node.exports_pop
-  node @node.field_pop_dot
-  node @node.guard_default
-  node @node.guard_this
-  node @node.ignore_guard
-  node @node.index_pop
-  node @node.method_value
-  node @node.method_value_arg_scope
-  node @node.method_value_call
-  node @node.method_value_drop
-  node @node.method_value_return
-  node @node.method_value_this
-  node @node.method_value_this_guard
-  node @node.module_guard
-  node @node.module_pop
-  node @node.module_scope
-  node @node.new_bindings
-  node @node.pop
-  node @node.pop_dot
-  node @node.pop_guard_default
-  node @node.push
-  node @node.push_dot
-  node @node.push_exports_guard
-  node @node.push_guard_default
-  node @node.push_guard_exports
-  node @node.return_guard
-  node @node.rhsvar_before_scope
-  node @node.rhsvar_value
-  node @node.source
-  node @node.string_prototype
-  node @node.this_pop
-  node @node.this_push
-  node @node.value
-  node @node.value_arg_scope
-  node @node.value_call
-  node @node.value_drop
-  node @node.value_return
-  node @node.value_this
-  node @node.value_this_guard
+    node @node.after_scope
+    node @node.arg_arguments
+    node @node.arg_arguments_dot
+    node @node.arg_index
+    node @node.arg_scope
+    node @node.arg_scope_no_this
+    node @node.arg_this
+    node @node.arguments_pop
+    node @node.arguments_push
+    node @node.before_scope
+    node @node.boundvar_pop
+    node @node.call
+    node @node.constructor
+    node @node.constructor_guard
+    node @node.covalue
+    node @node.default_guard
+    node @node.definiens_hook
+    node @node.drop
+    node @node.element_index_push
+    node @node.element_index_push_dot
+    node @node.element_pop_dot
+    node @node.exports
+    node @node.exports_pop
+    node @node.field_pop_dot
+    node @node.guard_default
+    node @node.guard_this
+    node @node.ignore_guard
+    node @node.index_pop
+    node @node.index_push
+    node @node.label_guard
+    node @node.label_pop
+    node @node.label_push
+    node @node.member_pop
+    node @node.member_push
+    node @node.method_value
+    node @node.method_value_arg_scope
+    node @node.method_value_call
+    node @node.method_value_drop
+    node @node.method_value_return
+    node @node.method_value_this
+    node @node.method_value_this_guard
+    node @node.module_guard
+    node @node.module_pop
+    node @node.module_scope
+    node @node.name_pop
+    node @node.name_push
+    node @node.new_bindings
+    node @node.pop
+    node @node.pop_dot
+    node @node.pop_guard_default
+    node @node.push
+    node @node.push_dot
+    node @node.push_exports_guard
+    node @node.push_guard_default
+    node @node.push_guard_exports
+    node @node.return_guard
+    node @node.rhsvar_before_scope
+    node @node.rhsvar_value
+    node @node.source
+    node @node.string_prototype
+    node @node.this_pop
+    node @node.this_push
+    node @node.value
+    node @node.value_arg_scope
+    node @node.value_call
+    node @node.value_drop
+    node @node.value_return
+    node @node.value_this
+    node @node.value_this_guard
 }
 
 
@@ -322,41 +330,41 @@ inherit .builtins_undefined
 ;; ### Program Queries
 
 (program)@prog {
-  scan FILE_PATH {
-    "([^/]+)\.js$" {
-      attr (@prog.module_pop) symbol_definition = $1, source_node = @prog
-      attr (@prog.module_pop) empty_source_span
+    scan FILE_PATH {
+        "([^/]+)\.js$" {
+            attr (@prog.module_pop) symbol_definition = $1, source_node = @prog
+            attr (@prog.module_pop) empty_source_span
+        }
     }
-  }
 
-  edge @prog.before_scope -> ROOT_NODE
+    edge @prog.before_scope -> ROOT_NODE
 
-  attr (@prog.module_scope) pop_symbol = "GUARD:MODULE"
-  edge ROOT_NODE -> @prog.module_pop
-  edge @prog.module_pop -> @prog.module_scope
-  edge @prog.module_scope -> @prog.after_scope
+    attr (@prog.module_scope) pop_symbol = "GUARD:MODULE"
+    edge ROOT_NODE -> @prog.module_pop
+    edge @prog.module_pop -> @prog.module_scope
+    edge @prog.module_scope -> @prog.after_scope
 
-  attr (@prog) empty_source_span
-  attr (@prog.module_pop) empty_source_span
-  attr (@prog.module_scope) empty_source_span
-  attr (@prog.exports) empty_source_span
-  attr (@prog.exports_pop) empty_source_span
-  attr (@prog.before_scope) empty_source_span
-  attr (@prog.after_scope) empty_source_span
+    attr (@prog) empty_source_span
+    attr (@prog.module_pop) empty_source_span
+    attr (@prog.module_scope) empty_source_span
+    attr (@prog.exports) empty_source_span
+    attr (@prog.exports_pop) empty_source_span
+    attr (@prog.before_scope) empty_source_span
+    attr (@prog.after_scope) empty_source_span
 
-  attr (@prog.exports_pop) pop_symbol = "GUARD:EXPORTS"
-  edge @prog.module_pop -> @prog.exports_pop
-  edge @prog.exports_pop -> @prog.exports
+    attr (@prog.exports_pop) pop_symbol = "GUARD:EXPORTS"
+    edge @prog.module_pop -> @prog.exports_pop
+    edge @prog.exports_pop -> @prog.exports
 
-  ;; builtin types
-  node @prog.builtins_number
-  node @prog.builtins_string
-  node @prog.builtins_boolean
-  node @prog.builtins_null
-  node @prog.builtins_undefined
-  node @prog.builtins_Regex_prototype
-  node @prog.builtins_arguments_prototype
-  node @prog.builtins_empty_object
+    ;; builtin types
+    node @prog.builtins_number
+    node @prog.builtins_string
+    node @prog.builtins_boolean
+    node @prog.builtins_null
+    node @prog.builtins_undefined
+    node @prog.builtins_Regex_prototype
+    node @prog.builtins_arguments_prototype
+    node @prog.builtins_empty_object
 }
 
 ; programs, first statement
@@ -899,8 +907,6 @@ inherit .builtins_undefined
   (variable_declarator
     name:(identifier)@name))@variable_decl
 {
-    node @variable_decl.name_pop
-    
     attr (@variable_decl.name_pop) node_definition = @name
     edge @variable_decl.after_scope -> @variable_decl.name_pop
     attr (@variable_decl.after_scope -> @variable_decl.name_pop) precedence = 1
@@ -911,8 +917,6 @@ inherit .builtins_undefined
   (variable_declarator
     name:(identifier)@name))@lexical_decl
 {
-
-    node @lexical_decl.name_pop
 
     attr (@lexical_decl.name_pop) node_definition = @name
     edge @lexical_decl.after_scope -> @lexical_decl.name_pop
@@ -1317,36 +1321,33 @@ inherit .builtins_undefined
 
 ;; #### If
 
-(if_statement
-  condition:(_)@condition)@if_stmt {
-
-  ; scopes flow from the if statement to the condition
-  edge @condition.before_scope -> @if_stmt.before_scope
+(if_statement condition:(_)@condition)@if_stmt {
+    ; scopes flow from the if statement to the condition
+    edge @condition.before_scope -> @if_stmt.before_scope
 }
 
 (if_statement
   condition:(_)@condition
-  consequence:(_)@consequence)@if_stmt {
-
-  ; scopes flow from the condition to the consequence, then to the if statement
-  edge @consequence.before_scope -> @condition.after_scope
-  edge @if_stmt.after_scope -> @consequence.after_scope
+  consequence:(_)@consequence)@if_stmt
+{
+    ; scopes flow from the condition to the consequence, then to the if statement
+    edge @consequence.before_scope -> @condition.after_scope
+    edge @if_stmt.after_scope -> @consequence.after_scope
 }
 
 (if_statement
   condition:(_)@condition
-  alternative:(_)@alternative)@if_stmt {
-
-  ; scopes flow from the condition to the alternative, then to the if statement
-  edge @alternative.before_scope -> @condition.after_scope
-  edge @if_stmt.after_scope -> @alternative.after_scope
+  alternative:(_)@alternative)@if_stmt
+{
+    ; scopes flow from the condition to the alternative, then to the if statement
+    edge @alternative.before_scope -> @condition.after_scope
+    edge @if_stmt.after_scope -> @alternative.after_scope
 }
 
 (else_clause (_)@inner)@else_clause {
-
-  ; scopes flow in and right back out
-  edge @inner.before_scope -> @else_clause.before_scope
-  edge @else_clause.after_scope -> @inner.after_scope
+    ; scopes flow in and right back out
+    edge @inner.before_scope -> @else_clause.before_scope
+    edge @else_clause.after_scope -> @inner.after_scope
 }
 
 
@@ -1356,12 +1357,12 @@ inherit .builtins_undefined
 
 (switch_statement
   value:(_)@value
-  body:(switch_body)@body)@switch_stmt {
-
-  ; scopes flow into the value then into the body then back out to the switch
-  edge @value.before_scope -> @switch_stmt.before_scope
-  edge @body.before_scope -> @value.after_scope
-  edge @switch_stmt.after_scope -> @body.after_scope
+  body:(switch_body)@body)@switch_stmt
+{
+    ; scopes flow into the value then into the body then back out to the switch
+    edge @value.before_scope -> @switch_stmt.before_scope
+    edge @body.before_scope -> @value.after_scope
+    edge @switch_stmt.after_scope -> @body.after_scope
 }
 
 ; LATER-TODO tree sitter doesn't yet support empty switch bodies
@@ -1373,46 +1374,46 @@ inherit .builtins_undefined
 ; switch body, first choice
 (switch_body
   .
-  (_)@first_choice)@switch_body {
-
-  ; scopes flow from the body into the first choice
-  edge @first_choice.before_scope -> @switch_body.before_scope
+  (_)@first_choice)@switch_body
+{
+    ; scopes flow from the body into the first choice
+    edge @first_choice.before_scope -> @switch_body.before_scope
 }
 
 ; switch body, between choices
 (switch_body
   (_)@left_choice
   .
-  (_)@right_choice) {
-
-  ; scopes flow left to right
-  edge @right_choice.before_scope -> @left_choice.after_scope
+  (_)@right_choice)
+{
+    ; scopes flow left to right
+    edge @right_choice.before_scope -> @left_choice.after_scope
 }
 
 ; switch body, last choice
 (switch_body
   (_)@last_choice
-  .)@switch_body {
-
-  ; scope flows out to the switch body
-  edge @switch_body.after_scope -> @last_choice.after_scope
+  .)@switch_body
+{
+    ; scope flows out to the switch body
+    edge @switch_body.after_scope -> @last_choice.after_scope
 }
 
 ; LATER-TODO tree sitter doesnt yet support switch case's with no statements
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (switch_case)@switch_case {
-  edge @switch_case.after_scope -> @switch_case.before_scope
+    edge @switch_case.after_scope -> @switch_case.before_scope
 }
 
 ; switch case, non-empty statements, first statement
 (switch_case
   value:(_)@value
   .
-  (_)@first_stmt)@switch_case {
-
-  ; scopes flow into the value then into the first statement
-  edge @value.before_scope -> @switch_case.before_scope
-  edge @first_stmt.before_scope -> @value.after_scope
+  (_)@first_stmt)@switch_case
+{
+    ; scopes flow into the value then into the first statement
+    edge @value.before_scope -> @switch_case.before_scope
+    edge @first_stmt.before_scope -> @value.after_scope
 }
 
 ; switch case, non-empty statements, between statement
@@ -1420,10 +1421,10 @@ inherit .builtins_undefined
   value:(_)
   (_)@left_stmt
   .
-  (_)@right_stmt) {
-
-  ; scopes flow left to right
-  edge @right_stmt.before_scope -> @left_stmt.after_scope
+  (_)@right_stmt)
+{
+    ; scopes flow left to right
+    edge @right_stmt.before_scope -> @left_stmt.after_scope
 }
 
 ; switch case, non-empty statements, last statement
@@ -1445,29 +1446,31 @@ inherit .builtins_undefined
 ; switch default, non-empty statements, first statement
 (switch_default
   .
-  (_)@first_stmt)@switch_default {
-
-  ; scopes flow into the first statement
-  edge @first_stmt.before_scope -> @switch_default.before_scope
+  (_)@first_stmt)@switch_default
+{
+    ; scopes flow into the first statement
+    edge @first_stmt.before_scope -> @switch_default.before_scope
 }
 
 ; switch default, non-empty statements, between statements
 (switch_default
   (_)@left_stmt
   .
-  (_)@right_stmt) {
+  (_)@right_stmt)
+{
 
-  ; scopes flow left to right
-  edge @right_stmt.before_scope -> @left_stmt.after_scope
+    ; scopes flow left to right
+    edge @right_stmt.before_scope -> @left_stmt.after_scope
 }
 
 ; switch default, non-empty statements, last statement
 (switch_default
   (_)@last_stmt
-  .)@switch_default {
+  .)@switch_default
+{
 
-  ; scopes flow out to the default
-  edge @switch_default.after_scope -> @last_stmt.after_scope
+    ; scopes flow out to the default
+    edge @switch_default.after_scope -> @last_stmt.after_scope
 }
 
 
@@ -1478,19 +1481,20 @@ inherit .builtins_undefined
   initializer:(_)@initializer
   condition:(_)@condition
   increment:(_)@increment
-  body:(_)@body)@for_stmt {
+  body:(_)@body)@for_stmt
+{
 
-  ; scopes flow from statement to initializer then test then body then increment
-  edge @initializer.before_scope -> @for_stmt.before_scope
-  edge @condition.before_scope -> @initializer.after_scope
-  edge @body.before_scope -> @condition.after_scope
-  edge @increment.before_scope -> @body.after_scope
+    ; scopes flow from statement to initializer then test then body then increment
+    edge @initializer.before_scope -> @for_stmt.before_scope
+    edge @condition.before_scope -> @initializer.after_scope
+    edge @body.before_scope -> @condition.after_scope
+    edge @increment.before_scope -> @body.after_scope
 
-  ; scopes also from from the body back into the condition
+    ; scopes also from from the body back into the condition
     edge @condition.before_scope -> @increment.after_scope
 
-  ; scopes also flow from condition out to statement
-  edge @for_stmt.after_scope -> @condition.after_scope
+    ; scopes also flow from condition out to statement
+    edge @for_stmt.after_scope -> @condition.after_scope
 }
 
 
@@ -1500,12 +1504,13 @@ inherit .builtins_undefined
 (for_in_statement
   left:(_)@_left
   right:(_)@right
-  body:(_)@body)@for_in_stmt {
+  body:(_)@body)@for_in_stmt
+{
 
-  ; scopes flow from statement to right then to body then back out
-  edge @right.before_scope -> @for_in_stmt.before_scope
-  edge @body.before_scope -> @right.after_scope
-  edge @for_in_stmt.after_scope -> @body.after_scope
+    ; scopes flow from statement to right then to body then back out
+    edge @right.before_scope -> @for_in_stmt.before_scope
+    edge @body.before_scope -> @right.after_scope
+    edge @for_in_stmt.after_scope -> @body.after_scope
 }
 
 (for_in_statement
@@ -1526,15 +1531,16 @@ inherit .builtins_undefined
 
 (while_statement
   condition:(_)@condition
-  body:(_)@body)@while_stmt {
+  body:(_)@body)@while_stmt
+{
 
-  ; scopes flow from while to condition then to body then back out
-  edge @condition.before_scope -> @while_stmt.before_scope
-  edge @body.before_scope -> @condition.after_scope
-  edge @while_stmt.after_scope -> @body.after_scope
+    ; scopes flow from while to condition then to body then back out
+    edge @condition.before_scope -> @while_stmt.before_scope
+    edge @body.before_scope -> @condition.after_scope
+    edge @while_stmt.after_scope -> @body.after_scope
 
-  ; scopes also flow back into the condition
-  edge @condition.before_scope -> @body.after_scope
+    ; scopes also flow back into the condition
+    edge @condition.before_scope -> @body.after_scope
 }
 
 
@@ -1543,15 +1549,16 @@ inherit .builtins_undefined
 
 (do_statement
   body:(_)@body
-  condition:(_)@condition)@do_stmt {
+  condition:(_)@condition)@do_stmt
+{
 
-  ; scopes flow from statement to body then condition then back to statement
-  edge @body.before_scope -> @do_stmt.before_scope
-  edge @condition.before_scope -> @body.after_scope
-  edge @do_stmt.after_scope -> @condition.after_scope
+    ; scopes flow from statement to body then condition then back to statement
+    edge @body.before_scope -> @do_stmt.before_scope
+    edge @condition.before_scope -> @body.after_scope
+    edge @do_stmt.after_scope -> @condition.after_scope
 
-  ; scopes also flow back to the body from the condition
-  edge @body.before_scope -> @condition.after_scope
+    ; scopes also flow back to the body from the condition
+    edge @body.before_scope -> @condition.after_scope
 
 }
 
@@ -1560,45 +1567,49 @@ inherit .builtins_undefined
 ;; #### Try
 
 (try_statement
-  body:(_)@body)@try_stmt {
+  body:(_)@body)@try_stmt
+{
 
-  ; scopes flow into the body then back out
-  edge @body.before_scope -> @try_stmt.before_scope
-  edge @try_stmt.after_scope -> @body.after_scope
+    ; scopes flow into the body then back out
+    edge @body.before_scope -> @try_stmt.before_scope
+    edge @try_stmt.after_scope -> @body.after_scope
 
 }
 
 (try_statement
   body:(_)@body
-  handler:(_)@handler)@try_stmt {
+  handler:(_)@handler)@try_stmt
+{
 
-  ; scopes flow from body to handler then back out
-  edge @handler.before_scope -> @body.after_scope
-  edge @try_stmt.after_scope -> @handler.after_scope
+    ; scopes flow from body to handler then back out
+    edge @handler.before_scope -> @body.after_scope
+    edge @try_stmt.after_scope -> @handler.after_scope
 }
 
 (try_statement
   body:(_)@body
-  finalizer:(_)@finalizer)@_try_stmt {
+  finalizer:(_)@finalizer)@_try_stmt
+{
 
-  ; scopes flow from body to finalizer then back out
-  edge @finalizer.before_scope -> @body.after_scope
+    ; scopes flow from body to finalizer then back out
+    edge @finalizer.before_scope -> @body.after_scope
 
 }
 
 (try_statement
   handler:(_)@handler
-  finalizer:(_)@finalizer)@try_stmt {
+  finalizer:(_)@finalizer)@try_stmt
+{
 
-  ; scopes flow from handler to finalizer then back out
-  edge @finalizer.before_scope -> @handler.after_scope
-  edge @try_stmt.after_scope -> @finalizer.after_scope
+    ; scopes flow from handler to finalizer then back out
+    edge @finalizer.before_scope -> @handler.after_scope
+    edge @try_stmt.after_scope -> @finalizer.after_scope
 }
 
 (catch_clause body:(_)@body)@catch_clause {
-  ; scopes flow in then back out
-  edge @body.before_scope -> @catch_clause.before_scope
-  edge @catch_clause.after_scope -> @body.after_scope
+    ; scopes flow in then back out
+    edge @body.before_scope -> @catch_clause.before_scope
+    edge @catch_clause.after_scope -> @body.after_scope
 }
 
 (catch_clause
@@ -1612,9 +1623,9 @@ inherit .builtins_undefined
 }
 
 (finally_clause body:(_)@body)@finally_clause {
-  ; scopes flow in thenback out
-  edge @body.before_scope -> @finally_clause.before_scope
-  edge @finally_clause.after_scope -> @body.after_scope
+    ; scopes flow in thenback out
+    edge @body.before_scope -> @finally_clause.before_scope
+    edge @finally_clause.after_scope -> @body.after_scope
 }
 
 
@@ -1623,12 +1634,13 @@ inherit .builtins_undefined
 
 (with_statement
   object:(_)@object
-  body:(_)@body)@with_stmt {
+  body:(_)@body)@with_stmt
+{
 
-  ; scopes flow from the statement into the object then into the body then back out
-  edge @object.before_scope -> @with_stmt.before_scope
-  edge @body.before_scope -> @object.after_scope
-  edge @with_stmt.after_scope -> @body.after_scope
+    ; scopes flow from the statement into the object then into the body then back out
+    edge @object.before_scope -> @with_stmt.before_scope
+    edge @body.before_scope -> @object.after_scope
+    edge @with_stmt.after_scope -> @body.after_scope
 
     attr (@with_stmt.push_dot) push_symbol = "GUARD:MEMBER"
     edge @with_stmt.push_dot -> @object.value
@@ -1640,14 +1652,11 @@ inherit .builtins_undefined
 ;; #### Break
 
 (break_statement)@break_stmt {
-  ; scopes flow through unchanged
-  edge @break_stmt.after_scope -> @break_stmt.before_scope
+    ; scopes flow through unchanged
+    edge @break_stmt.after_scope -> @break_stmt.before_scope
 }
 
 (break_statement (_)@label)@break_stmt {
-
-    node @break_stmt.label_push
-    node @break_stmt.label_guard
 
     attr (@break_stmt.label_guard) push_symbol = "GUARD:LABEL"
     attr (@break_stmt.label_push) node_reference = @label
@@ -1661,14 +1670,11 @@ inherit .builtins_undefined
 ;; #### Continue
 
 (continue_statement)@continue_stmt {
-  ; scopes flow through unchanged
-  edge @continue_stmt.after_scope -> @continue_stmt.before_scope
+    ; scopes flow through unchanged
+    edge @continue_stmt.after_scope -> @continue_stmt.before_scope
 }
 
 (continue_statement (_)@label)@continue_stmt {
-
-    node @continue_stmt.label_push
-    node @continue_stmt.label_guard
 
     attr (@continue_stmt.label_guard) push_symbol = "GUARD:LABEL"
     attr (@continue_stmt.label_push) node_reference = @label
@@ -1725,19 +1731,14 @@ inherit .builtins_undefined
     body:(_)@inner)@labeled_stmt
 {
 
-    node @labeled_stmt.before_scope
-    node @labeled_stmt.after_scope
-    node @labeled_stmt.label_pop
-    node @labeled_stmt.label_guard
-
     attr (@labeled_stmt.label_guard) pop_symbol = "GUARD:LABEL"
     attr (@labeled_stmt.label_pop) node_definition = @label
 
-  ; scopes flow through the inner statement then back out
-  edge @inner.before_scope -> @labeled_stmt.before_scope
+    ; scopes flow through the inner statement then back out
+    edge @inner.before_scope -> @labeled_stmt.before_scope
     edge @inner.before_scope -> @labeled_stmt.label_guard
     edge @labeled_stmt.label_guard -> @labeled_stmt.label_pop
-  edge @labeled_stmt.after_scope -> @inner.after_scope
+    edge @labeled_stmt.after_scope -> @inner.after_scope
 }
 
 
@@ -1926,6 +1927,13 @@ inherit .builtins_undefined
 
 ;; #### Objects
 
+(object)@object {
+
+    attr (@object.member_pop) pop_symbol = "GUARD:MEMBER"
+    edge @object.value -> @object.member_pop
+
+}
+
 ; empty objects
 ; LATER-TODO currently unsupported by tree sitter queries
 ; THIS IS A HUGE HACK AND MUST BE FIXED
@@ -1960,64 +1968,108 @@ inherit .builtins_undefined
 }
 
 ; shorthand property identifier
-(object
-  (shorthand_property_identifier)@keyval)@object {
+(object (shorthand_property_identifier)@keyval)@object {
+
+  node rhsvar_before_scope
+  node rhsvar_after_scope
+  node rhsvar_value
+  node key_pop
+
+  attr (rhsvar_value) node_reference = @keyval
+  attr (key_pop) node_definition = @keyval
 
   ; scopes flow into rhsvar, and also straight across b/c they can't be modified
-  edge @keyval.rhsvar_before_scope -> @keyval.before_scope
-  edge @keyval.after_scope -> @keyval.before_scope
+  edge rhsvar_before_scope -> @keyval.before_scope
+  edge rhsvar_after_scope -> rhsvar_before_scope
+  edge @keyval.after_scope -> rhsvar_after_scope
 
-  ; shorthand property identifiers have secret variable exprs
-  attr (@keyval.rhsvar_value) node_reference = @keyval
-  edge @keyval.rhsvar_value -> @keyval.rhsvar_before_scope
+  edge rhsvar_value -> rhsvar_before_scope
 
   ; shorthand property identifiers augment the object value with a member binding
-  attr (@keyval.boundvar_pop) node_definition = @keyval
-
-  attr (@object.field_pop_dot) pop_symbol = "."
-  edge @keyval.boundvar_pop -> @keyval.rhsvar_value
-  edge @object.field_pop_dot -> @keyval.boundvar_pop
-  edge @object.value -> @object.field_pop_dot
-
+  edge key_pop -> rhsvar_value
+  edge @object.member_pop -> key_pop
 }
 
 ; pairs
-(object
-  (pair
-    key:(_)@key
-    value: (_)@value)@pair)@object {
 
-  ; scopes flow into values then back to the pair
-  edge @value.before_scope -> @pair.before_scope
-  edge @pair.after_scope -> @value.after_scope
+(computed_property_name (_)@expr)@computed_property_name {
 
-  ; pairs augment the object value with a member binding
+    node @computed_property_name.before_scope
+    node @computed_property_name.after_scope
 
-  ; This is done differently depending on what the key is. See next rules.
-  ; attr (@key.pop) node_definition = @key
-  attr (@key.pop) node_definition = @key
+    edge @expr.before_scope -> @computed_property_name.before_scope
+    edge @computed_property_name.after_scope -> @expr.after_scope
 
-  attr (@object.field_pop_dot) pop_symbol = "."
-  edge @key.pop -> @value.value
-  edge @object.field_pop_dot -> @key.pop
-  edge @object.value -> @object.field_pop_dot
 }
 
-(pair key:(property_identifier)@key) {
-  attr (@key.pop) pop_node = @key
+(object
+  (pair
+    key:(_)@_key
+    value: (_)@value)@pair)@object {
+
+    ; pairs augment the object value with a member binding
+    node @pair.key_pop
+
+    ; This is done differently depending on what the key is. See next rules.
+    ; attr @key.pop "pop" = @key, "definition"
+    
+    edge @pair.key_pop -> @value.value
+    edge @object.member_pop -> @pair.key_pop
+
+}
+
+(pair
+    key:(property_identifier)@key
+    value:(_)@value)@pair
+{
+
+    attr (@pair.key_pop) node_definition = @key
+
+    ; scopes flow into the value, then back to the pair
+    edge @value.before_scope -> @pair.before_scope
+    edge @pair.after_scope -> @value.after_scope
+
 }
 
 (pair key:(string)@key) {
   attr (@key.pop) pop_symbol = (replace @key "\"" "")
 }
 
-(pair key:(number)@key) {
-  attr (@key.pop) pop_node = @key
+(pair
+    key:(number)@key
+    value:(_)@value)@pair
+{
+
+    attr (@pair.key_pop) node_definition = @key
+
+    ; scopes flow into the value, then back to the pair
+    edge @value.before_scope -> @pair.before_scope
+    edge @pair.after_scope -> @value.after_scope
+
+}
+
+(pair
+    key:(computed_property_name)@key
+    value:(_)@value)@pair
+{
+
+    ; scopes flow into the key, then out to the value, then back to the pair
+    edge @key.before_scope -> @pair.before_scope
+    edge @value.before_scope -> @key.after_scope
+    edge @pair.after_scope -> @value.after_scope
+
 }
 
 
 
 ;; #### Arrays
+
+(array)@array_expr {
+
+    attr (@array_expr.element_pop_dot) pop_symbol = "GUARD:MEMBER"
+    edge @array_expr.value -> @array_expr.element_pop_dot
+
+}
 
 ; empty arrays
 ; LATER-TODO currently unsupported by tree sitter queries
@@ -2053,11 +2105,13 @@ inherit .builtins_undefined
 
 ; elements at indices
 (array (_)@element)@array_expr {
-  attr (@array_expr.element_pop_dot) pop_symbol = "."
-  attr (@element.index_pop) pop_symbol = (child-index @element)
-  edge @array_expr.element_pop_dot -> @element.index_pop
-  edge @array_expr.value -> @array_expr.element_pop_dot
-  edge @element.index_pop -> @element.value
+
+    node element_index_pop
+
+    attr (element_index_pop) symbol_definition = (named-child-index @element)
+    edge @array_expr.element_pop_dot -> element_index_pop
+    edge element_index_pop -> @element.value
+
 }
 
 
@@ -2435,64 +2489,62 @@ inherit .builtins_undefined
 
 (member_expression
   object: (_)@object
-  property: (_)@property)@member_expr {
+  property: (_)@property)@member_expr
+{
+
+    node member_push
+    node property_push
 
   ; scopes flow into object then back out
   edge @object.before_scope -> @member_expr.before_scope
   edge @member_expr.after_scope -> @object.after_scope
 
   ; value is a member projection on the value of the object ie. a push then push dot
-  attr (@property.push) node_reference = @property
-  ;attr (@member_expr.value) push_node = @property.pop
-  attr (@member_expr.push_dot) push_symbol = "."
-  edge @property.push -> @member_expr.push_dot
-  ;edge @member_expr.value -> @member_expr.push_dot
-  edge @member_expr.value -> @property.push
-  edge @member_expr.push_dot -> @object.value
+    attr (member_push) push_symbol = "GUARD:MEMBER"
+    attr (property_push) node_reference = @property
+    edge property_push -> member_push
+    edge @member_expr.value -> property_push
+    edge member_push -> @object.value
+
 }
 
 ;; ##### Subscript Expressions
 
 (subscript_expression
   object: (_)@object
-  index: (_)@index)@subscript_expression {
+  index: (_)@index)@subscript_expr {
 
   ; scopes flow left to right
-  edge @object.before_scope -> @subscript_expression.before_scope
+    edge @object.before_scope -> @subscript_expr.before_scope
   edge @index.before_scope -> @object.after_scope
-  edge @subscript_expression.after_scope -> @index.after_scope
+    edge @subscript_expr.after_scope -> @index.after_scope
 
   ; value is a subscript lookup, ie a push then push dot
+    attr (@subscript_expr.push_dot) push_symbol = "GUARD:MEMBER"
+    edge @subscript_expr.push_dot -> @object.value
 
   ; this is done differently depending on what the index is
-  ; attr (@index.push) node_reference = @index
+    ; attr @index.push "push" = @index, "reference"
+    edge @subscript_expr.value -> @subscript_expr.index_push
+    edge @subscript_expr.index_push -> @subscript_expr.push_dot
 
 }
 
 (subscript_expression
-  object: (_)@object
-  index: (string)@index)@subscript_expression {
+  object: (_)@_object
+  index: (string)@index)@subscript_expr
+{
 
-  attr (@index.push) node_reference = @index
-
-  attr (@index.push_dot) push_symbol = "."
-  edge @subscript_expression.value -> @index.push
-  edge @index.push -> @index.push_dot
-  edge @index.push_dot -> @object.value
-  attr (@index.push) push_symbol = (replace @index "\"" "")
+    attr (@subscript_expr.index_push) push_symbol = (replace (source-text @index) "[\"\']" "")
 }
 
 (subscript_expression
-  object: (_)@object
-  index: (number)@index)@subscript_expression {
+  object: (_)@_object
+  index: (number)@index)@subscript_expr
+{
 
-  attr (@index.push) node_reference = @index
+    attr (@subscript_expr.index_push) node_reference = @index
 
-  attr (@index.push_dot) push_symbol = "."
-  edge @subscript_expression.value -> @index.push
-  edge @index.push -> @index.push_dot
-  edge @index.push_dot -> @object.value
-  attr (@index.push) push_node = @index
 }
 
 
@@ -2564,10 +2616,10 @@ inherit .builtins_undefined
   ; LATER-TODO this isn't quite right because the update argument can't be an arbitrary expr
   ; eg f(x)++ doesn't make any sense, you have to have something more like
   ; (update_expression argument: (lvar)@argument)
-  attr (@argument.pop) node_definition = @argument
+    attr (@update_expr.pop) node_definition = @argument
   edge @update_expr.value -> @argument.value
-  edge @update_expr.after_scope -> @argument.pop
-  edge @argument.pop -> @argument.value
+    edge @update_expr.after_scope -> @update_expr.pop
+    edge @update_expr.pop -> @argument.value
 }
 
 
@@ -2626,13 +2678,13 @@ inherit .builtins_undefined
   left: (identifier)@left
   right: (_)@right)@assignment_expr {
 
-  ; augments the scope by adding a lookup edge, ie. a pop
-  attr (@left.pop) node_definition = @left
-  edge @assignment_expr.after_scope -> @left.pop
-  edge @left.pop -> @right.value
+    ; augments the scope by adding a lookup edge, ie. a pop
+    attr (@assignment_expr.pop) node_definition = @left
+    edge @assignment_expr.after_scope -> @assignment_expr.pop
+    edge @assignment_expr.pop -> @right.value
 
-  ; ensure the scope flows through the identifier
-  edge @left.after_scope -> @left.before_scope
+    ; ensure the scope flows through the identifier
+    edge @left.after_scope -> @left.before_scope
 }
 
 ; assignment to direct fields on `this`
@@ -2683,12 +2735,13 @@ inherit .builtins_undefined
   right:(_)@right)@augmented_assignment_expr {
 
   ; augment the scope
-  attr (@left.pop) node_definition = @left
-  attr (@left.push) node_reference = @left
-  edge @left.push -> @augmented_assignment_expr.before_scope
-  edge @left.pop -> @left.push
-  edge @left.pop -> @right.value
-  edge @augmented_assignment_expr.after_scope -> @left.pop
+    attr (@augmented_assignment_expr.pop) node_definition = @left
+    attr (@augmented_assignment_expr.push) node_reference = @left
+    edge @augmented_assignment_expr.push -> @augmented_assignment_expr.before_scope
+    edge @augmented_assignment_expr.pop -> @augmented_assignment_expr.push
+    edge @augmented_assignment_expr.pop -> @right.value
+    edge @augmented_assignment_expr.after_scope -> @augmented_assignment_expr.pop
+
 }
 
 
