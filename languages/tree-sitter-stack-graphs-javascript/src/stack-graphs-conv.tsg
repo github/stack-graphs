@@ -236,6 +236,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.arg_arguments_dot
     node @node.arg_index
     node @node.arg_scope
+    attr (@node.arg_scope) is_exported
     node @node.arg_scope_no_this
     node @node.arg_this
     node @node.arguments_pop
@@ -1032,14 +1033,12 @@ inherit .return_or_yield
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun_decl.value_return) is_endpoint
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
   let @body.return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) push_symbol = "this"
-  attr (@fun_decl.value_this_guard) is_endpoint
   attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
   edge @fun_decl.value_this_guard -> @fun_decl.value_this
@@ -1085,7 +1084,7 @@ inherit .return_or_yield
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> @fun_decl.value_drop
-  attr (@call_sig.this_pop) symbol_definition = "this", source_name = @call_sig
+  attr (@call_sig.this_pop) symbol_definition = "this", source_node = @call_sig
   attr (@call_sig.this_push) push_symbol = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun_decl.value_arg_scope
@@ -1102,14 +1101,12 @@ inherit .return_or_yield
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun_decl.value_return) is_endpoint
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
   let @body.return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) push_symbol = "this"
-  attr (@fun_decl.value_this_guard) is_endpoint
   attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
   edge @fun_decl.value_this_guard -> @fun_decl.value_this
@@ -1233,14 +1230,12 @@ inherit .return_or_yield
   edge @method_def.method_value -> @method_def.method_value_call
 
   ; method values have return nodes which need to be visible for returns
-  attr (@method_def.method_value_return) is_endpoint
   attr (@method_def.method_value_return) pop_symbol = "GUARD:RETURN"
   edge @method_def.method_value_call -> @method_def.method_value_return
   let @body.return_or_yield = @method_def.method_value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@method_def.method_value_this) push_symbol = "this"
-  attr (@method_def.method_value_this_guard) is_endpoint
   attr (@method_def.method_value_this_guard) pop_symbol = "GUARD:THIS"
   edge @method_def.method_value_call -> @method_def.method_value_this_guard
   edge @method_def.method_value_this_guard -> @method_def.method_value_this
@@ -2205,14 +2200,12 @@ inherit .return_or_yield
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun.value_return) is_endpoint
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
-  attr (@fun.value_this_guard) is_endpoint
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
@@ -2264,14 +2257,12 @@ inherit .return_or_yield
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun.value_return) is_endpoint
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
-  attr (@fun.value_this_guard) is_endpoint
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
@@ -2354,14 +2345,12 @@ inherit .return_or_yield
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun.value_return) is_endpoint
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
-  attr (@fun.value_this_guard) is_endpoint
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
