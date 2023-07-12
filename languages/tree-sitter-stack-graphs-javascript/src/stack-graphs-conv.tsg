@@ -546,10 +546,10 @@ inherit .undefined
 
 (
   (export_specifier
-    name:(_)@name
+    name:(_)@_name
     !alias)@export_specifier
 
-  (#eq? @name "default")
+  (#eq? @_name "default")
 
 ) {
 
@@ -564,9 +564,9 @@ inherit .undefined
 (
   (export_specifier
     name:(_)@name
-    alias:(_)@alias)@export_specifier
+    alias:(_)@_alias)@export_specifier
 
-  (#eq? @alias "default")
+  (#eq? @_alias "default")
 
 ) {
 
@@ -1443,7 +1443,7 @@ inherit .undefined
 ;; #### For In
 
 (for_in_statement
-  left:(_)@left
+  left:(_)@_left
   right:(_)@right
   body:(_)@body)@for_in_stmt {
 
@@ -1704,7 +1704,7 @@ inherit .undefined
 (template_string
   (template_substitution (_)@left_inner_expr)
   .
-  (template_substitution (_)@right_inner_expr))@template_string {
+  (template_substitution (_)@right_inner_expr))@_template_string {
   ; scopes propagate from left substitutions to right substitutions
   edge @right_inner_expr.before_scope -> @left_inner_expr.after_scope
 }
@@ -1843,7 +1843,7 @@ inherit .undefined
   (_)@left_entry
   .
   (_)@right_entry
-)@object_expr {
+)@_object_expr {
   ; scopes propagate from left entries to right entries
   edge @right_entry.before_scope -> @left_entry.after_scope
 }
@@ -2279,7 +2279,7 @@ inherit .undefined
 ; applies to the negation of (member_expression), but that's not supported by
 ; tree-sitter currently
 (call_expression
-  function: (_)@function
+  function: (_)@_function
   arguments:(_)@arguments)@call_expr {
 
   edge @arguments.arg_this -> @call_expr.null
@@ -2567,7 +2567,7 @@ inherit .undefined
 ;; #### Augmented Assignment Expressions
 
 (augmented_assignment_expression
-  left: (_)@left
+  left: (_)@_left
   right: (_)@right)@augmented_assignment_expr {
 
   ; scopes flow into the RHS then back out to the whole expr, augmented by the LHS
@@ -2984,13 +2984,13 @@ inherit .undefined
 }
 
 (pair_pattern
-  key:(property_identifier)@key)@pair_pattern {
+  key:(property_identifier)@key)@_pair_pattern {
 
     attr (@key.push) node_reference = @key
 }
 
 (pair_pattern
-  key:(string)@key)@pair_pattern {
+  key:(string)@key)@_pair_pattern {
 
     attr (@key.push) symbol_reference = (replace @key "\"" ""), source_node = @key
 }
@@ -3025,7 +3025,7 @@ inherit .undefined
 ; if the object assignment pattern happens to have an identifier on the LHS it also binds
 (object_assignment_pattern
   left:(shorthand_property_identifier_pattern)@left_pat
-  right:(_)@right_expr)@object_assignment_pat {
+  right:(_)@_right_expr)@object_assignment_pat {
 
   edge @left_pat.after_scope -> @left_pat.before_scope
 
@@ -3156,9 +3156,9 @@ inherit .undefined
   (call_expression
     function: (member_expression
       object: (identifier)@object
-      property: (_)@extend)
+      property: (_)@_extend)
     arguments: (arguments (object)@new_fields))@call_expr
-  (#eq? @extend "extend")
+  (#eq? @_extend "extend")
 ) {
 
   attr (@object.pop) node_definition = @object
@@ -3187,10 +3187,10 @@ inherit .undefined
 (
   (assignment_expression
     left: (member_expression
-      object:(identifier)@exports
+      object:(identifier)@_exports
       property:(_)@property)
     right: (_)@right)@assignment_expr
-  (#eq? @exports "exports")
+  (#eq? @_exports "exports")
 ) {
 
   attr (@property.pop) node_definition = @property
@@ -3203,11 +3203,11 @@ inherit .undefined
 (
   (assignment_expression
     left: (member_expression
-      object:(identifier)@module
-      property:(_)@exports)
+      object:(identifier)@_module
+      property:(_)@_exports)
     right: (_)@right)@assignment_expr
-  (#eq? @module "module")
-  (#eq? @exports "exports")
+  (#eq? @_module "module")
+  (#eq? @_exports "exports")
 ) {
 
   edge @assignment_expr.exports -> @right.value
@@ -3221,9 +3221,9 @@ inherit .undefined
 
 (
   (call_expression
-    function:(_)@require
+    function:(_)@_require
     arguments:(arguments (string)@mod_name))@call_expr
-  (#eq? @require "require")
+  (#eq? @_require "require")
 ) {
 
   scan @mod_name {
@@ -3256,7 +3256,7 @@ inherit .undefined
 
 (class_declaration
   name:(_)@name
-  body:(_)@body)@class_decl {
+  body:(_)@_body)@class_decl {
 
   attr (@name.pop) definiens_node = @class_decl
 
@@ -3264,8 +3264,8 @@ inherit .undefined
 
 (function_declaration
   name:(_)@name
-  parameters:(_)@call_sig
-  body:(_)@body)@fun_decl {
+  parameters:(_)@_call_sig
+  body:(_)@_body)@fun_decl {
 
   attr (@name.pop) definiens_node = @fun_decl
 
@@ -3273,8 +3273,8 @@ inherit .undefined
 
 (generator_function_declaration
   name:(_)@name
-  parameters:(_)@call_sig
-  body:(_)@body)@fun_decl {
+  parameters:(_)@_call_sig
+  body:(_)@_body)@fun_decl {
 
   attr (@name.pop) definiens_node = @fun_decl
 
@@ -3282,8 +3282,8 @@ inherit .undefined
 
 (method_definition
   name:(_)@name
-  parameters:(_)@call_sig
-  body:(_)@body)@method_def {
+  parameters:(_)@_call_sig
+  body:(_)@_body)@method_def {
 
   attr (@name.pop) definiens_node = @method_def
 
@@ -3291,7 +3291,7 @@ inherit .undefined
 
 (function
   name:(_)@name
-  parameters:(_)@call_sig)@fun {
+  parameters:(_)@_call_sig)@fun {
 
   attr (@name.pop) definiens_node = @fun
 
@@ -3299,7 +3299,7 @@ inherit .undefined
 
 (generator_function
   name:(_)@name
-  parameters:(_)@call_sig)@fun {
+  parameters:(_)@_call_sig)@fun {
 
   attr (@name.pop) definiens_node = @fun
 
@@ -3307,7 +3307,7 @@ inherit .undefined
 
 (class
   name:(_)@name
-  body:(_)@body)@class {
+  body:(_)@_body)@class {
   
   attr (@name.pop) definiens_node = @class
 
