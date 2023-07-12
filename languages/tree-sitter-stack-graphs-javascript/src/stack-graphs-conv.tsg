@@ -107,7 +107,7 @@
 ;; ``````stgdoc
 ;; (number)@num {
 ;;   attr (@num.value) pop_symbol = "NUM_VAL"
-;;   edge @num.value -> @num::number_prototype
+;;   edge @num.value -> @num.number_prototype
 ;; }
 ;; ``````
 
@@ -115,11 +115,13 @@
 ;; want to define number prototype, something like this:
 
 ;; ``````stgdoc
+;; inherit .number_prototype
+;;
 ;; (program)@prog {
 ;;
 ;;   ...
 ;;
-;;   let @prog::number_prototype = @prog.number_prototype
+;;   node @prog.number_prototype
 ;;   edge @prog.number_prototype -> @prog.number_prototype_toString_method_value
 ;;   edge @prog.number_prototype -> @prog.number_prototype_valueOf_method_value
 ;;   ...etc
