@@ -348,6 +348,7 @@ inherit .builtins_undefined
   edge @prog.module_pop -> @prog.exports_pop
   edge @prog.exports_pop -> @prog.exports
 
+  ;; builtin types
   node @prog.builtins_number
   node @prog.builtins_string
   node @prog.builtins_boolean
