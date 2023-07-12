@@ -1,3 +1,38 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Stack graphs definition for JavaScript
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Global Variables
+;; ^^^^^^^^^^^^^^^^
+
+global FILE_PATH
+global ROOT_NODE
+global JUMP_TO_SCOPE_NODE
+
+
+;; Attribute Shorthands
+;; ^^^^^^^^^^^^^^^^^^^^
+
+attribute node_definition = node        => type = "pop_symbol", node_symbol = node, is_definition
+attribute node_reference = node         => type = "push_symbol", node_symbol = node, is_reference
+attribute pop_node = node               => type = "pop_symbol", node_symbol = node
+attribute pop_scoped_node = node        => type = "pop_scoped_symbol", node_symbol = node
+attribute pop_scoped_symbol = symbol    => type = "pop_scoped_symbol", symbol = symbol
+attribute pop_symbol = symbol           => type = "pop_symbol", symbol = symbol
+attribute push_node = node              => type = "push_symbol", node_symbol = node
+attribute push_scoped_node = node       => type = "push_scoped_symbol", node_symbol = node
+attribute push_scoped_symbol = symbol   => type = "push_scoped_symbol", symbol = symbol
+attribute push_symbol = symbol          => type = "push_symbol", symbol = symbol
+attribute scoped_node_definition = node => type = "pop_scoped_symbol", node_symbol = node, is_definition
+attribute scoped_node_reference = node  => type = "push_scoped_symbol", node_symbol = node, is_reference
+attribute symbol_definition = symbol    => type = "pop_symbol", symbol = symbol, is_definition
+attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol, is_reference
+
+attribute node_symbol = node            => symbol = (source-text node), source_node = node
+
+;; Stack Graph Rules
+;; ^^^^^^^^^^^^^^^^^
+
 ;; # JavaScript
 
 ;; This file defines StackGraph queries for JavaScript. It is written as a
@@ -193,33 +228,6 @@
 ;; - `GUARD:EXPORTS` - used for the names exported by the module
 ;; - `GUARD:DEFAULT` - used for the default export value
 
-;; ## Global Variables
-
-global FILE_PATH
-global ROOT_NODE
-global JUMP_TO_SCOPE_NODE
-
-
-;; ## Attribute Shorthands
-
-attribute node_definition = node        => type = "pop_symbol", node_symbol = node, is_definition
-attribute node_reference = node         => type = "push_symbol", node_symbol = node, is_reference
-attribute pop_node = node               => type = "pop_symbol", node_symbol = node
-attribute pop_scoped_node = node        => type = "pop_scoped_symbol", node_symbol = node
-attribute pop_scoped_symbol = symbol    => type = "pop_scoped_symbol", symbol = symbol
-attribute pop_symbol = symbol           => type = "pop_symbol", symbol = symbol
-attribute push_node = node              => type = "push_symbol", node_symbol = node
-attribute push_scoped_node = node       => type = "push_scoped_symbol", node_symbol = node
-attribute push_scoped_symbol = symbol   => type = "push_scoped_symbol", symbol = symbol
-attribute push_symbol = symbol          => type = "push_symbol", symbol = symbol
-attribute scoped_node_definition = node => type = "pop_scoped_symbol", node_symbol = node, is_definition
-attribute scoped_node_reference = node  => type = "push_scoped_symbol", node_symbol = node, is_reference
-attribute symbol_definition = symbol    => type = "pop_symbol", symbol = symbol, is_definition
-attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol, is_reference
-
-attribute node_symbol = node            => symbol = (source-text node), source_node = node
-
-
 ;; ## Nodes
 
 (_)@node {
@@ -300,16 +308,11 @@ inherit .return_or_yield
 inherit .string
 inherit .undefined
 
-(program)@prog {
-  node @prog.Regex_prototype
-  node @prog.arguments_prototype
-  node @prog.empty_object
-  node @prog.boolean
-  node @prog.null
-  node @prog.number
-  node @prog.string
-  node @prog.undefined
-}
+;; ██████  ██████   ██████   ██████  ██████   █████  ███    ███ ███████ 
+;; ██   ██ ██   ██ ██    ██ ██       ██   ██ ██   ██ ████  ████ ██      
+;; ██████  ██████  ██    ██ ██   ███ ██████  ███████ ██ ████ ██ ███████ 
+;; ██      ██   ██ ██    ██ ██    ██ ██   ██ ██   ██ ██  ██  ██      ██ 
+;; ██      ██   ██  ██████   ██████  ██   ██ ██   ██ ██      ██ ███████
 
 ;; ## Programs
 
@@ -344,6 +347,15 @@ inherit .undefined
   attr (@prog.exports_pop) pop_symbol = "GUARD:EXPORTS"
   edge @prog.module_pop -> @prog.exports_pop
   edge @prog.exports_pop -> @prog.exports
+
+  node @prog.number
+  node @prog.string
+  node @prog.boolean
+  node @prog.null
+  node @prog.undefined
+  node @prog.Regex_prototype
+  node @prog.arguments_prototype
+  node @prog.empty_object
 }
 
 ; programs, first statement
@@ -384,12 +396,24 @@ inherit .undefined
 
 
 
+;; ███████ ████████  █████  ████████ ███████ ███    ███ ███████ ███    ██ ████████ ███████ 
+;; ██         ██    ██   ██    ██    ██      ████  ████ ██      ████   ██    ██    ██      
+;; ███████    ██    ███████    ██    █████   ██ ████ ██ █████   ██ ██  ██    ██    ███████ 
+;;      ██    ██    ██   ██    ██    ██      ██  ██  ██ ██      ██  ██ ██    ██         ██ 
+;; ███████    ██    ██   ██    ██    ███████ ██      ██ ███████ ██   ████    ██    ███████
+
 ;; ## Statements
 
 ;; ### Attributes Defined on Statements
 ;; TODO
 
 ;; ### Statement Queries
+
+;; ███████ ██   ██ ██████   ██████  ██████  ████████ ███████ 
+;; ██       ██ ██  ██   ██ ██    ██ ██   ██    ██    ██      
+;; █████     ███   ██████  ██    ██ ██████     ██    ███████ 
+;; ██       ██ ██  ██      ██    ██ ██   ██    ██         ██ 
+;; ███████ ██   ██ ██       ██████  ██   ██    ██    ███████
 
 ;; #### Export
 
@@ -637,6 +661,12 @@ inherit .undefined
 
 
 
+;; ██ ███    ███ ██████   ██████  ██████  ████████ ███████ 
+;; ██ ████  ████ ██   ██ ██    ██ ██   ██    ██    ██      
+;; ██ ██ ████ ██ ██████  ██    ██ ██████     ██    ███████ 
+;; ██ ██  ██  ██ ██      ██    ██ ██   ██    ██         ██ 
+;; ██ ██      ██ ██       ██████  ██   ██    ██    ███████
+
 ;; #### Import
 
 ; https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
@@ -827,6 +857,18 @@ inherit .undefined
 }
 
 
+
+;; ███    ██  ██████  ██████  ███    ███  █████  ██                                        
+;; ████   ██ ██    ██ ██   ██ ████  ████ ██   ██ ██                                        
+;; ██ ██  ██ ██    ██ ██████  ██ ████ ██ ███████ ██                                        
+;; ██  ██ ██ ██    ██ ██   ██ ██  ██  ██ ██   ██ ██                                        
+;; ██   ████  ██████  ██   ██ ██      ██ ██   ██ ███████                                   
+
+;; ███████ ████████  █████  ████████ ███████ ███    ███ ███████ ███    ██ ████████ ███████ 
+;; ██         ██    ██   ██    ██    ██      ████  ████ ██      ████   ██    ██    ██      
+;; ███████    ██    ███████    ██    █████   ██ ████ ██ █████   ██ ██  ██    ██    ███████ 
+;;      ██    ██    ██   ██    ██    ██      ██  ██  ██ ██      ██  ██ ██    ██         ██ 
+;; ███████    ██    ██   ██    ██    ███████ ██      ██ ███████ ██   ████    ██    ███████ 
 
 ;; #### Debugger
 
@@ -1644,6 +1686,12 @@ inherit .undefined
 }
 
 
+
+;; ███████ ██   ██ ██████  ██████  ███████ ███████ ███████ ██  ██████  ███    ██ ███████ 
+;; ██       ██ ██  ██   ██ ██   ██ ██      ██      ██      ██ ██    ██ ████   ██ ██      
+;; █████     ███   ██████  ██████  █████   ███████ ███████ ██ ██    ██ ██ ██  ██ ███████ 
+;; ██       ██ ██  ██      ██   ██ ██           ██      ██ ██ ██    ██ ██  ██ ██      ██ 
+;; ███████ ██   ██ ██      ██   ██ ███████ ███████ ███████ ██  ██████  ██   ████ ███████
 
 ;; ## Expressions
 
@@ -2669,6 +2717,12 @@ inherit .undefined
 
 
 
+;; ██████   █████  ████████ ████████ ███████ ██████  ███    ██ ███████ 
+;; ██   ██ ██   ██    ██       ██    ██      ██   ██ ████   ██ ██      
+;; ██████  ███████    ██       ██    █████   ██████  ██ ██  ██ ███████ 
+;; ██      ██   ██    ██       ██    ██      ██   ██ ██  ██ ██      ██ 
+;; ██      ██   ██    ██       ██    ███████ ██   ██ ██   ████ ███████
+
 ;; ## Patterns
 
 ;; Patterns introduce at least two interesting problems to the task of name
@@ -3130,6 +3184,12 @@ inherit .undefined
 
 
 
+;; ███████ ██████  ███████  ██████ ██  █████  ██      
+;; ██      ██   ██ ██      ██      ██ ██   ██ ██      
+;; ███████ ██████  █████   ██      ██ ███████ ██      
+;;      ██ ██      ██      ██      ██ ██   ██ ██      
+;; ███████ ██      ███████  ██████ ██ ██   ██ ███████
+
 ;; ## Special Cases
 ;;
 ;; There are a number of annoying features that libraries make use of to
@@ -3239,6 +3299,12 @@ inherit .undefined
 
 }
 
+
+;; ██████  ███████ ███████ ██ ███    ██ ██ ███████ ███    ██ ███████ 
+;; ██   ██ ██      ██      ██ ████   ██ ██ ██      ████   ██ ██      
+;; ██   ██ █████   █████   ██ ██ ██  ██ ██ █████   ██ ██  ██ ███████ 
+;; ██   ██ ██      ██      ██ ██  ██ ██ ██ ██      ██  ██ ██      ██ 
+;; ██████  ███████ ██      ██ ██   ████ ██ ███████ ██   ████ ███████
 
 ;; ## Definiens Rules
 
