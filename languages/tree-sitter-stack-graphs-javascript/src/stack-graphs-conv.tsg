@@ -287,16 +287,26 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; ## Inherited
 
+inherit .Regex_prototype
+inherit .arguments_prototype
+inherit .boolean
+inherit .empty_object
 inherit .exports
 inherit .null
 inherit .number
 inherit .return_or_yield
 inherit .string
+inherit .undefined
 
 (program)@prog {
+  node @node.Regex_prototype
+  node @node.arguments_prototype
+  node @node.empty_object
+  node @prog.boolean
   node @prog.null
   node @prog.number
   node @prog.string
+  node @prog.undefined
 }
 
 ;; ## Programs
@@ -1735,7 +1745,7 @@ inherit .string
   edge @true.after_scope -> @true.before_scope
 
   ; the value of true is a boolean primitive
-  edge @true.value -> @true::boolean
+  edge @true.value -> @true.boolean
 }
 
 (false)@false {
@@ -1743,7 +1753,7 @@ inherit .string
   edge @false.after_scope -> @false.before_scope
 
   ; the value of false is a boolean primitive
-  edge @false.value -> @false::boolean
+  edge @false.value -> @false.boolean
 }
 
 
@@ -1785,7 +1795,7 @@ inherit .string
   edge @undefined.after_scope -> @undefined.before_scope
 
   ; the value of undefined is the undefined primitive
-  edge @undefined.value -> @undefined::undefined
+  edge @undefined.value -> @undefined.undefined
 }
 
 
@@ -1796,7 +1806,7 @@ inherit .string
   edge @regex.after_scope -> @regex.before_scope
 
   ; the value of a regex is the Regex prototype
-  edge @regex.value -> @regex::Regex_prototype
+  edge @regex.value -> @regex.Regex_prototype
 }
 
 
@@ -2247,7 +2257,7 @@ inherit .string
   edge @arguments.arg_scope -> @arguments.arg_arguments
   edge @arguments.arg_arguments -> @arguments.arg_arguments_dot
   edge @arguments.arg_arguments_dot -> @arguments.arg_scope_no_this
-  edge @arguments.arg_arguments -> @call_expr::arguments_prototype
+  edge @arguments.arg_arguments -> @call_expr.arguments_prototype
 }
 
 ; special case to make `this` bind correctly in calls of the forms `x.f(...)`
@@ -2414,7 +2424,7 @@ inherit .string
 
   attr (@arguments.arg_this) pop_symbol = "this", "definition"
   edge @arguments.arg_scope -> @arguments.arg_this
-  edge @arguments.arg_this -> @new_expr::empty_object
+  edge @arguments.arg_this -> @new_expr.empty_object
 }
 
 (new_expression
