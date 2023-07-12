@@ -416,7 +416,7 @@ inherit .undefined
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
   scan @source {
     "\"([^/\"]+)\.js\"$" {
-      attr (@source.push) "push" = $1
+      attr (@source.push) push_symbol = $1
     }
   }
   edge @source.push_exports_guard -> @source.push
@@ -601,7 +601,7 @@ inherit .undefined
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
   scan @source {
     "\"([^/\"]+)\.js\"$" {
-      attr (@source.push) "push" = $1
+      attr (@source.push) push_symbol = $1
     }
   }
 
@@ -622,7 +622,7 @@ inherit .undefined
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
   scan @source {
     "\"([^/\"]+)\.js\"$" {
-      attr (@source.push) "push" = $1
+      attr (@source.push) push_symbol = $1
     }
   }
   attr (@alias.pop) node_definition = @alias
@@ -686,7 +686,7 @@ inherit .undefined
 
   scan @source {
     "\"([^/\"]+)\.js\"$" {
-      attr (@source.push) "push" = $1
+      attr (@source.push) push_symbol = $1
     }
   }
   attr (@source.push_guard_exports) push_symbol = "GUARD:EXPORTS"
@@ -790,7 +790,7 @@ inherit .undefined
 ;   ; scope passes through, augmented by the identifier
 ;   scan @mod_name {
 ;     "\"([^/\"]+)\.js\"$" {
-;       attr (@mod_name.push) "push" = $1, "reference"
+;       attr (@mod_name.push) symbol_reference = $1, source_node = @mod_name
 ;     }
 ;   }
 ;   edge @mod_name.push -> ROOT_NODE
@@ -3228,7 +3228,7 @@ inherit .undefined
 
   scan @mod_name {
     "\"([^/\"]+)\.js\"$" {
-      attr (@mod_name.push) "push" = $1
+      attr (@mod_name.push) push_symbol = $1
     }
   }
 
