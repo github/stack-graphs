@@ -297,16 +297,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; ## Inherited
 
-inherit .Regex_prototype
-inherit .arguments_prototype
-inherit .boolean
-inherit .empty_object
+inherit .builtins_Regex_prototype
+inherit .builtins_arguments_prototype
+inherit .builtins_boolean
+inherit .builtins_empty_object
 inherit .exports
-inherit .null
-inherit .number
+inherit .builtins_null
+inherit .builtins_number
 inherit .return_or_yield
-inherit .string
-inherit .undefined
+inherit .builtins_string
+inherit .builtins_undefined
 
 ;; ██████  ██████   ██████   ██████  ██████   █████  ███    ███ ███████ 
 ;; ██   ██ ██   ██ ██    ██ ██       ██   ██ ██   ██ ████  ████ ██      
@@ -348,14 +348,14 @@ inherit .undefined
   edge @prog.module_pop -> @prog.exports_pop
   edge @prog.exports_pop -> @prog.exports
 
-  node @prog.number
-  node @prog.string
-  node @prog.boolean
-  node @prog.null
-  node @prog.undefined
-  node @prog.Regex_prototype
-  node @prog.arguments_prototype
-  node @prog.empty_object
+  node @prog.builtins_number
+  node @prog.builtins_string
+  node @prog.builtins_boolean
+  node @prog.builtins_null
+  node @prog.builtins_undefined
+  node @prog.builtins_Regex_prototype
+  node @prog.builtins_arguments_prototype
+  node @prog.builtins_empty_object
 }
 
 ; programs, first statement
@@ -1720,7 +1720,7 @@ inherit .undefined
   edge @string.after_scope -> @string.before_scope
 
   ; the value of a string is the string primitive
-  edge @string.value -> @string.string
+  edge @string.value -> @string.builtins_string
 }
 
 
@@ -1772,7 +1772,7 @@ inherit .undefined
   edge @number.after_scope -> @number.before_scope
 
   ; the value of a number is the number primitive
-  edge @number.value -> @number.number
+  edge @number.value -> @number.builtins_number
 }
 
 
@@ -1795,7 +1795,7 @@ inherit .undefined
   edge @true.after_scope -> @true.before_scope
 
   ; the value of true is a boolean primitive
-  edge @true.value -> @true.boolean
+  edge @true.value -> @true.builtins_boolean
 }
 
 (false)@false {
@@ -1803,7 +1803,7 @@ inherit .undefined
   edge @false.after_scope -> @false.before_scope
 
   ; the value of false is a boolean primitive
-  edge @false.value -> @false.boolean
+  edge @false.value -> @false.builtins_boolean
 }
 
 
@@ -1834,7 +1834,7 @@ inherit .undefined
   edge @null.after_scope -> @null.before_scope
 
   ; the value of null is the null primitive
-  edge @null.value -> @null.null
+  edge @null.value -> @null.builtins_null
 }
 
 
@@ -1845,7 +1845,7 @@ inherit .undefined
   edge @undefined.after_scope -> @undefined.before_scope
 
   ; the value of undefined is the undefined primitive
-  edge @undefined.value -> @undefined.undefined
+  edge @undefined.value -> @undefined.builtins_undefined
 }
 
 
@@ -1856,7 +1856,7 @@ inherit .undefined
   edge @regex.after_scope -> @regex.before_scope
 
   ; the value of a regex is the Regex prototype
-  edge @regex.value -> @regex.Regex_prototype
+  edge @regex.value -> @regex.builtins_Regex_prototype
 }
 
 
@@ -2307,7 +2307,7 @@ inherit .undefined
   edge @arguments.arg_scope -> @arguments.arg_arguments
   edge @arguments.arg_arguments -> @arguments.arg_arguments_dot
   edge @arguments.arg_arguments_dot -> @arguments.arg_scope_no_this
-  edge @arguments.arg_arguments -> @call_expr.arguments_prototype
+  edge @arguments.arg_arguments -> @call_expr.builtins_arguments_prototype
 }
 
 ; special case to make `this` bind correctly in calls of the forms `x.f(...)`
@@ -2330,7 +2330,7 @@ inherit .undefined
   function: (_)@_function
   arguments:(_)@arguments)@call_expr {
 
-  edge @arguments.arg_this -> @call_expr.null
+  edge @arguments.arg_this -> @call_expr.builtins_null
 }
 (call_expression
   arguments:(arguments (_)@arg)@arguments) {
@@ -2474,7 +2474,7 @@ inherit .undefined
 
   attr (@arguments.arg_this) symbol_definition = "this", source_node = @arguments
   edge @arguments.arg_scope -> @arguments.arg_this
-  edge @arguments.arg_this -> @new_expr.empty_object
+  edge @arguments.arg_this -> @new_expr.builtins_empty_object
 }
 
 (new_expression
