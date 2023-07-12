@@ -800,7 +800,7 @@ inherit .undefined
 ;   edge @name.push_dot -> @mod_name.push
 ;   edge @name -> @name.push_dot
 ;
-;   attr (@alias) "pop", "definition"
+;   attr (@alias) node_definition = @alias
 ;   edge @alias -> @name
 ;
 ;   edge @import_stmt.after_scope -> @alias
@@ -856,7 +856,7 @@ inherit .undefined
   (variable_declarator
     name:(identifier)@name))@decl {
 
-  attr (@name.pop) "pop", "definition"
+  attr (@name.pop) node_definition = @name, "definition"
   edge @decl.after_scope -> @name.pop
 }
 
@@ -864,7 +864,7 @@ inherit .undefined
   (variable_declarator
     name:(identifier)@name))@decl {
 
-  attr (@name.pop) "pop", "definition"
+  attr (@name.pop) node_definition = @name, "definition"
   edge @decl.after_scope -> @name.pop
 }
 
@@ -1458,7 +1458,7 @@ inherit .undefined
   right:(_)@right
   body:(_)@body) {
 
-  attr (@left.pop) "pop", "definition"
+  attr (@left.pop) node_definition = @left
   edge @left.pop -> @right.value
   edge @body.before_scope -> @left.pop
 }
@@ -1548,7 +1548,7 @@ inherit .undefined
   parameter:(identifier)@name
   body:(_)@body) {
 
-  attr (@name.pop) "pop", "definition"
+  attr (@name.pop) node_definition = @name, "definition"
   edge @body.before_scope -> @name.pop
 }
 
@@ -1901,15 +1901,15 @@ inherit .undefined
 }
 
 (pair key:(property_identifier)@key) {
-  attr (@key.pop) "pop" = @key
+  attr (@key.pop) pop_node = @key
 }
 
 (pair key:(string)@key) {
-  attr (@key.pop) "pop" = (replace @key "\"" "")
+  attr (@key.pop) pop_symbol = (replace @key "\"" "")
 }
 
 (pair key:(number)@key) {
-  attr (@key.pop) "pop" = @key
+  attr (@key.pop) pop_node = @key
 }
 
 
@@ -1951,7 +1951,7 @@ inherit .undefined
 ; elements at indices
 (array (_)@element)@array_expr {
   attr (@array_expr.element_pop_dot) pop_symbol = "."
-  attr (@element.index_pop) "pop" = (child-index @element), "definition"
+  attr (@element.index_pop) pop_symbol = (child-index @element)
   edge @array_expr.element_pop_dot -> @element.index_pop
   edge @array_expr.value -> @array_expr.element_pop_dot
   edge @element.index_pop -> @element.value
@@ -2287,7 +2287,7 @@ inherit .undefined
 (call_expression
   arguments:(arguments (_)@arg)@arguments) {
 
-  attr (@arg.arg_index) "pop" = (child-index @arg)
+  attr (@arg.arg_index) pop_symbol = (child-index @arg)
   edge @arguments.arg_scope_no_this -> @arg.arg_index
   edge @arg.arg_index -> @arg.value
 }
@@ -2432,7 +2432,7 @@ inherit .undefined
 (new_expression
   arguments:(arguments (_)@arg)@arguments) {
 
-  attr (@arg.arg_index) "pop" = (child-index @arg)
+  attr (@arg.arg_index) pop_symbol = (child-index @arg)
   edge @arguments.arg_scope -> @arg.arg_index
   edge @arg.arg_index -> @arg.value
 }
@@ -2461,7 +2461,7 @@ inherit .undefined
   ; LATER-TODO this isn't quite right because the update argument can't be an arbitrary expr
   ; eg f(x)++ doesn't make any sense, you have to have something more like
   ; (update_expression argument: (lvar)@argument)
-  attr (@argument.pop) "pop", "definition"
+  attr (@argument.pop) node_definition = @argument
   edge @update_expr.value -> @argument.value
   edge @update_expr.after_scope -> @argument.pop
   edge @argument.pop -> @argument.value
