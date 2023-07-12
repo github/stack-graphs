@@ -968,7 +968,7 @@ inherit .undefined
 
 
   ; function values have call nodes
-  attr (@fun_decl.value_call) pop_symbol = "()", "pop-scope"
+  attr (@fun_decl.value_call) pop_scoped_symbol = "()"
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
@@ -1038,7 +1038,7 @@ inherit .undefined
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun_decl.value_call) pop_symbol = "()", "pop-scope"
+  attr (@fun_decl.value_call) pop_scoped_symbol = "()"
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
@@ -1169,7 +1169,7 @@ inherit .undefined
   edge @body.before_scope -> @call_sig.after_scope
 
   ; method values have call nodes
-  attr (@method_def.method_value_call) pop_symbol = "()", "pop-scope"
+  attr (@method_def.method_value_call) pop_scoped_symbol = "()"
   edge @method_def.method_value -> @method_def.method_value_call
 
   ; method values have return nodes which need to be visible for returns
@@ -2043,7 +2043,7 @@ inherit .undefined
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun.value_call) pop_symbol = "()", "pop-scope"
+  attr (@fun.value_call) pop_scoped_symbol = "()"
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
@@ -2102,7 +2102,7 @@ inherit .undefined
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun.value_call) pop_symbol = "()", "pop-scope"
+  attr (@fun.value_call) pop_scoped_symbol = "()"
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
@@ -2192,7 +2192,7 @@ inherit .undefined
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun.value_call) pop_symbol = "()", "pop-scope"
+  attr (@fun.value_call) pop_scoped_symbol = "()"
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
@@ -2244,7 +2244,7 @@ inherit .undefined
 
   ; value is a call, ie a push "()" node w/ "push-scope" @arguments
   attr (@call_expr.return_guard) push_symbol = "GUARD:RETURN"
-  attr (@call_expr.call) push_symbol = "()", "push-scope" = @arguments.arg_scope
+  attr (@call_expr.call) push_scoped_symbol = "()", scope = @arguments.arg_scope
   edge @call_expr.value -> @call_expr.return_guard
   edge @call_expr.return_guard -> @call_expr.call
   edge @call_expr.call -> @function.value
@@ -2404,7 +2404,7 @@ inherit .undefined
   edge @arguments.before_scope -> @constructor.after_scope
   edge @new_expr.after_scope -> @arguments.after_scope
 
-  attr (@new_expr.call) push_symbol = "()", "push-scope" = @arguments.arg_scope
+  attr (@new_expr.call) push_scoped_symbol = "()", scope = @arguments.arg_scope
 
   ; we guard for constructors for the case where we have a "true" class
   attr (@constructor.constructor) push_symbol = "GUARD:CONSTRUCTOR"
