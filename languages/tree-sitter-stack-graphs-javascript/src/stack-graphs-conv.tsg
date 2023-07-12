@@ -319,7 +319,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@prog.before_scope) empty_source_span
   attr (@prog.after_scope) empty_source_span
 
-  let @prog::prog = @prog
   let @prog::exports = @prog.exports
   attr (@prog.exports_pop) pop_symbol = "GUARD:EXPORTS"
   edge @prog.module_pop -> @prog.exports_pop
