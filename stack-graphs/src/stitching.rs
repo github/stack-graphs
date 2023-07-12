@@ -39,7 +39,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 #[cfg(feature = "copious-debugging")]
 use std::fmt::Display;
-use std::ops::Index;
 
 use crate::arena::Arena;
 use crate::arena::Handle;
@@ -51,6 +50,8 @@ use crate::arena::SupplementalArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
+use crate::graph::Edge;
+use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::graph::Symbol;
@@ -58,8 +59,161 @@ use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::partial::PartialSymbolStack;
+use crate::paths::PathResolutionError;
 use crate::CancellationError;
 use crate::CancellationFlag;
+
+//-------------------------------------------------------------------------------------------------
+// Appendable
+
+/// Something that can be appended to a partial path.
+pub trait Appendable {
+    /// Append this appendable to the given path. Resolving jump nodes and renaming unused_variables
+    /// is part of the responsibility of this method.
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError>;
+
+    /// Return the start node.
+    fn start_node(&self) -> Handle<Node>;
+
+    /// Return the end node.
+    fn end_node(&self) -> Handle<Node>;
+
+    /// Return a Display implementation.
+    fn display<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+        partials: &'a mut PartialPaths,
+    ) -> Box<dyn std::fmt::Display + 'a>;
+}
+
+impl Appendable for Edge {
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        path.resolve_to_node(graph, partials, self.source)?;
+        path.append(graph, partials, *self)
+    }
+
+    fn start_node(&self) -> Handle<Node> {
+        self.source
+    }
+
+    fn end_node(&self) -> Handle<Node> {
+        self.sink
+    }
+
+    fn display<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+        _partials: &'a mut PartialPaths,
+    ) -> Box<dyn std::fmt::Display + 'a> {
+        Box::new(format!(
+            "{} -> {}",
+            self.source.display(graph),
+            self.sink.display(graph)
+        ))
+    }
+}
+
+impl Appendable for PartialPath {
+    fn append_to(
+        &self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &mut PartialPath,
+    ) -> Result<(), PathResolutionError> {
+        path.resolve_to_node(graph, partials, self.start_node)?;
+        path.ensure_no_overlapping_variables(partials, self);
+        path.concatenate(graph, partials, self)?;
+        Ok(())
+    }
+
+    fn start_node(&self) -> Handle<Node> {
+        self.start_node
+    }
+
+    fn end_node(&self) -> Handle<Node> {
+        self.end_node
+    }
+
+    fn display<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+        partials: &'a mut PartialPaths,
+    ) -> Box<dyn std::fmt::Display + 'a> {
+        Box::new(self.display(graph, partials))
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+// ToAppendable
+
+/// A trait to be implemented on types such as [`Database`][] that allow converting handles
+/// to appendables.
+///
+/// It is very similar to the [`std::ops::Index`] trait, but returns a reference instead
+/// of a value, such that an efficient identifity implementation is possible, that doesn't
+/// require cloning values.
+pub trait ToAppendable<H, A>
+where
+    A: Appendable,
+{
+    fn get_appendable<'a>(&'a self, handle: &'a H) -> &'a A;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Candidates
+
+/// A trait to support finding candidates for partial path extension. Requires an accompanying
+/// [`ToAppendable`] implementation to convert the candidate handles into [`Appendable`]s.
+pub trait Candidates<H> {
+    fn find_candidates<R>(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &PartialPath,
+        result: &mut R,
+    ) where
+        R: std::iter::Extend<H>;
+}
+
+//-------------------------------------------------------------------------------------------------
+// FileEdges
+
+/// Acts as a database of the edges in the graph.
+pub struct GraphEdges(pub Option<Handle<File>>);
+
+impl ToAppendable<Edge, Edge> for GraphEdges {
+    fn get_appendable<'a>(&'a self, value: &'a Edge) -> &'a Edge {
+        value
+    }
+}
+
+impl Candidates<Edge> for GraphEdges {
+    fn find_candidates<R>(
+        &mut self,
+        graph: &StackGraph,
+        _partials: &mut PartialPaths,
+        path: &PartialPath,
+        result: &mut R,
+    ) where
+        R: std::iter::Extend<Edge>,
+    {
+        result.extend(
+            graph
+                .outgoing_edges(path.end_node)
+                .filter(|e| self.0.map_or(true, |file| graph[e.sink].is_in_file(file))),
+        );
+    }
+}
 
 //-------------------------------------------------------------------------------------------------
 // Databases
@@ -320,11 +474,42 @@ impl Database {
     }
 }
 
-impl Index<Handle<PartialPath>> for Database {
+impl std::ops::Index<Handle<PartialPath>> for Database {
     type Output = PartialPath;
     #[inline(always)]
     fn index(&self, handle: Handle<PartialPath>) -> &PartialPath {
         self.partial_paths.get(handle)
+    }
+}
+
+impl ToAppendable<Handle<PartialPath>, PartialPath> for Database {
+    fn get_appendable<'a>(&'a self, handle: &'a Handle<PartialPath>) -> &'a PartialPath {
+        &self[*handle]
+    }
+}
+
+impl Candidates<Handle<PartialPath>> for Database {
+    fn find_candidates<R>(
+        &mut self,
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        path: &PartialPath,
+        result: &mut R,
+    ) where
+        R: std::iter::Extend<Handle<PartialPath>>,
+    {
+        if graph[path.end_node].is_root() {
+            // The join node is root, so there's no need to use half-open symbol stacks here, as we
+            // do for [`PartialPath::concatenate`][].
+            let key = SymbolStackKey::from_partial_symbol_stack(
+                partials,
+                self,
+                path.symbol_stack_postcondition,
+            );
+            self.find_candidate_partial_paths_from_root(graph, partials, Some(key), result);
+        } else {
+            self.find_candidate_partial_paths_from_node(graph, partials, path.end_node, result);
+        }
     }
 }
 
@@ -461,46 +646,46 @@ impl<'a> Display for DisplaySymbolStackKey<'a> {
 /// completion, using the [`find_all_complete_partial_paths`][] method.
 ///
 /// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
-pub struct ForwardPartialPathStitcher {
-    candidate_partial_paths: Vec<Handle<PartialPath>>,
-    queue: VecDeque<(PartialPath, AppendingCycleDetector<OwnedOrDatabasePath>)>,
+pub struct ForwardPartialPathStitcher<H> {
+    candidates: Vec<H>,
+    queue: VecDeque<(PartialPath, AppendingCycleDetector<H>)>,
+    // tracks the number of initial paths in the queue because we do not want call
+    // extend_until on those
+    initial_paths: usize,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
-    next_iteration: (
-        VecDeque<PartialPath>,
-        VecDeque<AppendingCycleDetector<OwnedOrDatabasePath>>,
-    ),
-    appended_paths: Appendables<OwnedOrDatabasePath>,
+    next_iteration: (VecDeque<PartialPath>, VecDeque<AppendingCycleDetector<H>>),
+    appended_paths: Appendables<H>,
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
 }
 
-impl ForwardPartialPathStitcher {
-    /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack
-    /// graph nodes.
-    pub fn from_nodes<I>(
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        starting_nodes: I,
-    ) -> ForwardPartialPathStitcher
+impl<H> ForwardPartialPathStitcher<H> {
+    /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
+    /// paths. If the sticher is used to find complete paths, it is the responsibility of the caller
+    /// to ensure precondition variables are eliminated by calling [`PartialPath::eliminate_precondition_stack_variables`][].
+    pub fn from_partial_paths<I>(
+        _graph: &StackGraph,
+        _partials: &mut PartialPaths,
+        initial_partial_paths: I,
+    ) -> Self
     where
-        I: IntoIterator<Item = Handle<Node>>,
+        I: IntoIterator<Item = PartialPath>,
     {
         let mut appended_paths = Appendables::new();
-        let next_iteration = starting_nodes
+        let next_iteration: (VecDeque<_>, VecDeque<_>) = initial_partial_paths
             .into_iter()
-            .map(|handle| {
-                let mut p = PartialPath::from_node(graph, partials, handle);
-                p.eliminate_precondition_stack_variables(partials);
+            .map(|p| {
                 let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
                 (p, c)
             })
             .unzip();
-        ForwardPartialPathStitcher {
-            candidate_partial_paths: Vec::new(),
+        Self {
+            candidates: Vec::new(),
             queue: VecDeque::new(),
+            initial_paths: next_iteration.0.len(),
             next_iteration,
             appended_paths,
             similar_path_detector: None,
@@ -510,36 +695,9 @@ impl ForwardPartialPathStitcher {
             phase_number: 1,
         }
     }
+}
 
-    /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
-    /// paths.
-    pub fn from_partial_paths(
-        _graph: &StackGraph,
-        partials: &mut PartialPaths,
-        initial_partial_paths: Vec<PartialPath>,
-    ) -> ForwardPartialPathStitcher {
-        let mut appended_paths = Appendables::new();
-        let next_iteration = initial_partial_paths
-            .into_iter()
-            .map(|mut p| {
-                p.eliminate_precondition_stack_variables(partials);
-                let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
-                (p, c)
-            })
-            .unzip();
-        ForwardPartialPathStitcher {
-            candidate_partial_paths: Vec::new(),
-            queue: VecDeque::new(),
-            next_iteration,
-            appended_paths,
-            similar_path_detector: None,
-            // By default, there's no artificial bound on the amount of work done per phase
-            max_work_per_phase: usize::MAX,
-            #[cfg(feature = "copious-debugging")]
-            phase_number: 1,
-        }
-    }
-
+impl<H: Clone> ForwardPartialPathStitcher<H> {
     /// Returns an iterator of all of the (possibly incomplete) partial paths that were encountered
     /// during the most recent phase of the algorithm.
     pub fn previous_phase_partial_paths(&self) -> impl Iterator<Item = &PartialPath> + '_ {
@@ -582,49 +740,57 @@ impl ForwardPartialPathStitcher {
     }
 
     /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
-    /// you are responsible for ensuring that `db` already contains all of the possible partial
-    /// paths that we might want to extend `partial_path` with.
-    fn stitch_partial_path(
+    /// you are responsible for ensuring that `db` already contains all of the possible appendables
+    /// that we might want to extend `partial_path` with.
+    fn extend<A, Db>(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        db: &mut Database,
+        db: &mut Db,
         partial_path: &PartialPath,
-        cycle_detector: AppendingCycleDetector<OwnedOrDatabasePath>,
-    ) -> usize {
-        self.candidate_partial_paths.clear();
-        if graph[partial_path.end_node].is_root() {
-            // The join node is root, so there's no need to use half-open symbol stacks here, as we
-            // do for [`PartialPath::concatenate`][].
-            let key = SymbolStackKey::from_partial_symbol_stack(
-                partials,
-                db,
-                partial_path.symbol_stack_postcondition,
-            );
-            db.find_candidate_partial_paths_from_root(
-                graph,
-                partials,
-                Some(key),
-                &mut self.candidate_partial_paths,
-            );
-        } else {
-            db.find_candidate_partial_paths_from_node(
-                graph,
-                partials,
-                partial_path.end_node,
-                &mut self.candidate_partial_paths,
-            );
+        cycle_detector: AppendingCycleDetector<H>,
+    ) -> usize
+    where
+        A: Appendable,
+        Db: Candidates<H> + ToAppendable<H, A>,
+    {
+        copious_debugging!("    Extend {}", partial_path.display(graph, partials));
+
+        // check is path is cyclic, in which case we do not extend it
+        let has_precondition_variables = partial_path.symbol_stack_precondition.has_variable()
+            || partial_path.scope_stack_precondition.has_variable();
+        let cycles = cycle_detector
+            .is_cyclic(graph, partials, db, &mut self.appended_paths)
+            .expect("cyclic test failed when stitching partial paths");
+        let cyclic = match has_precondition_variables {
+            // If the precondition has no variables, we allow cycles that strengthen the
+            // precondition, because we know they cannot strengthen the precondition of
+            // the overall path.
+            false => !cycles
+                .into_iter()
+                .all(|c| c == Cyclicity::StrengthensPrecondition),
+            // If the precondition has variables, do not allow any cycles, not even those
+            // that strengthen the precondition. This is more strict than necessary. Better
+            // might be to disallow precondition strengthening cycles only if they would
+            // strengthen the overall path precondition.
+            true => !cycles.is_empty(),
+        };
+        if cyclic {
+            copious_debugging!("      is discontinued: cyclic");
+            return 0;
         }
 
-        let extension_count = self.candidate_partial_paths.len();
+        // find candidates to append
+        self.candidates.clear();
+        db.find_candidates(graph, partials, partial_path, &mut self.candidates);
+
+        // try to extend path with candidates
+        let extension_count = self.candidates.len();
         self.next_iteration.0.reserve(extension_count);
         self.next_iteration.1.reserve(extension_count);
-        for extension in &self.candidate_partial_paths {
-            let mut extension_path = db[*extension].clone();
-            copious_debugging!("    Extend {}", partial_path.display(graph, partials));
+        for extension in &self.candidates {
+            let extension_path = db.get_appendable(extension);
             copious_debugging!("      with {}", extension_path.display(graph, partials));
-            extension_path.ensure_no_overlapping_variables(partials, partial_path);
-            copious_debugging!("        -> {}", extension_path.display(graph, partials));
 
             let mut new_partial_path = partial_path.clone();
             let mut new_cycle_detector = cycle_detector.clone();
@@ -632,22 +798,12 @@ impl ForwardPartialPathStitcher {
             // partial path, just skip the extension — it's not a fatal error.
             #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
             {
-                if let Err(err) = new_partial_path.concatenate(graph, partials, &extension_path) {
+                if let Err(err) = extension_path.append_to(graph, partials, &mut new_partial_path) {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
                 copious_debugging!("        is {}", new_partial_path.display(graph, partials));
-                new_cycle_detector.append(&mut self.appended_paths, extension.into());
-                let cycles = new_cycle_detector
-                    .is_cyclic(graph, partials, db, &mut self.appended_paths)
-                    .expect("cyclic test failed when stitching partial paths");
-                if !cycles
-                    .into_iter()
-                    .all(|c| c == Cyclicity::StrengthensPrecondition)
-                {
-                    copious_debugging!("        is invalid: cyclic");
-                    continue;
-                }
+                new_cycle_detector.append(&mut self.appended_paths, extension.clone());
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {
                     if similar_path_detector.has_similar_path(
                         graph,
@@ -655,7 +811,7 @@ impl ForwardPartialPathStitcher {
                         &new_partial_path,
                         |ps, left, right| left.equals(ps, right),
                     ) {
-                        copious_debugging!("        is invalid: too many similar");
+                        copious_debugging!("        is rejected: too many similar");
                         continue;
                     }
                 }
@@ -674,19 +830,27 @@ impl ForwardPartialPathStitcher {
 
     /// Runs the next phase of the algorithm.  We will have built up a set of incomplete partial
     /// paths during the _previous_ phase.  Before calling this function, you must ensure that `db`
-    /// contains all of the possible other partial paths that we might want to extend any of those
+    /// contains all of the possible appendables that we might want to extend any of those
     /// candidate partial paths with.
     ///
     /// After this method returns, you can use [`previous_phase_partial_paths`][] to retrieve a
     /// list of the (possibly incomplete) partial paths that were encountered during this phase.
     ///
+    /// The `extend_while` closure is used to control whether the extended paths are further extended
+    /// or not. It is not called on the initial paths.
+    ///
     /// [`previous_phase_partial_paths`]: #method.previous_phase_partial_paths
-    pub fn process_next_phase(
+    pub fn process_next_phase<A, Db, E>(
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        db: &mut Database,
-    ) {
+        db: &mut Db,
+        extend_while: E,
+    ) where
+        A: Appendable,
+        Db: Candidates<H> + ToAppendable<H, A>,
+        E: Fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
+    {
         copious_debugging!("==> Start phase {}", self.phase_number);
         self.queue.extend(
             self.next_iteration
@@ -700,8 +864,16 @@ impl ForwardPartialPathStitcher {
                 "--> Candidate partial path {}",
                 partial_path.display(graph, partials)
             );
-            work_performed +=
-                self.stitch_partial_path(graph, partials, db, &partial_path, cycle_detector);
+            if self.initial_paths > 0 {
+                self.initial_paths -= 1;
+            } else if !extend_while(graph, partials, &partial_path) {
+                copious_debugging!(
+                    "    Do not extend {}",
+                    partial_path.display(graph, partials)
+                );
+                continue;
+            }
+            work_performed += self.extend(graph, partials, db, &partial_path, cycle_detector);
             if work_performed >= self.max_work_per_phase {
                 break;
             }
@@ -719,9 +891,14 @@ impl ForwardPartialPathStitcher {
             self.phase_number += 1;
         }
     }
+}
 
-    /// Returns all of the complete partial paths that are reachable from a set of starting nodes,
-    /// building them up by stitching together partial paths from this database.
+impl ForwardPartialPathStitcher<Edge> {
+    /// Finds a minimal set of partial paths in a file, calling the `visit` closure for each one.
+    ///
+    /// This function ensures that the set of visited partial paths
+    ///  (a) is minimal, no path can be constructed by stitching other paths in the set, and
+    ///  (b) covers all complete paths, from references to definitions, when used for path stitching
     ///
     /// This function will not return until all reachable partial paths have been processed, so
     /// your database must already contain all partial paths that might be needed.  If you have a
@@ -729,28 +906,43 @@ impl ForwardPartialPathStitcher {
     /// lazily loading only the necessary pieces, then you should code up your own loop that calls
     /// [`process_next_phase`][] manually.
     ///
+    /// Caveat: Edges between nodes of different files are not used. Hence the returned set of partial
+    /// paths will not cover paths going through those edges.
+    ///
     /// [`process_next_phase`]: #method.process_next_phase
-    pub fn find_all_complete_partial_paths<I, F>(
+    pub fn find_minimal_partial_path_set_in_file<F>(
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        db: &mut Database,
-        starting_nodes: I,
+        file: Handle<File>,
         cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
     ) -> Result<(), CancellationError>
     where
-        I: IntoIterator<Item = Handle<Node>>,
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
-        let starting_nodes = starting_nodes
-            .into_iter()
-            .filter(|n| graph[*n].is_reference());
-        let mut stitcher = ForwardPartialPathStitcher::from_nodes(graph, partials, starting_nodes);
+        fn as_complete_as_necessary(graph: &StackGraph, path: &PartialPath) -> bool {
+            path.starts_at_endpoint(graph)
+                && (path.ends_at_endpoint(graph) || graph[path.end_node].is_jump_to())
+        }
+
+        let initial_paths = graph
+            .nodes_for_file(file)
+            .chain(std::iter::once(StackGraph::root_node()))
+            .filter(|node| graph[*node].is_endpoint())
+            .map(|node| PartialPath::from_node(graph, partials, node))
+            .collect::<Vec<_>>();
+        let mut stitcher =
+            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
-            stitcher.process_next_phase(graph, partials, db);
+            stitcher.process_next_phase(
+                graph,
+                partials,
+                &mut GraphEdges(Some(file)),
+                |g, _ps, p| !as_complete_as_necessary(g, p),
+            );
             for path in stitcher.previous_phase_partial_paths() {
-                if path.is_complete(graph) {
+                if as_complete_as_necessary(graph, path) {
                     visit(graph, partials, path);
                 }
             }
@@ -759,35 +951,52 @@ impl ForwardPartialPathStitcher {
     }
 }
 
-#[derive(Clone)]
-pub enum OwnedOrDatabasePath {
-    Db(Handle<PartialPath>),
-    Owned(PartialPath),
-}
-
-impl OwnedOrDatabasePath {
-    pub(crate) fn get<'a>(&'a self, db: &'a Database) -> &'a PartialPath {
-        match self {
-            Self::Db(path) => &db[*path],
-            Self::Owned(path) => path,
+impl<H: Clone> ForwardPartialPathStitcher<H> {
+    /// Finds all complete partial paths that are reachable from a set of starting nodes,
+    /// building them up by stitching together partial paths from this database, and calling
+    /// the `visit` closure on each one.
+    ///
+    /// This function will not return until all reachable partial paths have been processed, so
+    /// your database must already contain all partial paths that might be needed.  If you have a
+    /// very large stack graph stored in some other storage system, and want more control over
+    /// lazily loading only the necessary pieces, then you should code up your own loop that calls
+    /// [`process_next_phase`][] manually.
+    ///
+    /// [`process_next_phase`]: #method.process_next_phase
+    pub fn find_all_complete_partial_paths<I, F, A, Db>(
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Db,
+        starting_nodes: I,
+        cancellation_flag: &dyn CancellationFlag,
+        mut visit: F,
+    ) -> Result<(), CancellationError>
+    where
+        I: IntoIterator<Item = Handle<Node>>,
+        A: Appendable,
+        Db: Candidates<H> + ToAppendable<H, A>,
+        F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
+    {
+        let initial_paths = starting_nodes
+            .into_iter()
+            .filter(|n| graph[*n].is_reference())
+            .map(|n| {
+                let mut p = PartialPath::from_node(graph, partials, n);
+                p.eliminate_precondition_stack_variables(partials);
+                p
+            })
+            .collect::<Vec<_>>();
+        let mut stitcher =
+            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
+        while !stitcher.is_complete() {
+            cancellation_flag.check("finding complete partial paths")?;
+            stitcher.process_next_phase(graph, partials, db, |_, _, _| true);
+            for path in stitcher.previous_phase_partial_paths() {
+                if path.is_complete(graph) {
+                    visit(graph, partials, path);
+                }
+            }
         }
-    }
-}
-
-impl From<Handle<PartialPath>> for OwnedOrDatabasePath {
-    fn from(value: Handle<PartialPath>) -> Self {
-        Self::Db(value)
-    }
-}
-
-impl From<&Handle<PartialPath>> for OwnedOrDatabasePath {
-    fn from(value: &Handle<PartialPath>) -> Self {
-        Self::Db(*value)
-    }
-}
-
-impl From<PartialPath> for OwnedOrDatabasePath {
-    fn from(value: PartialPath) -> Self {
-        Self::Owned(value)
+        Ok(())
     }
 }

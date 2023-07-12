@@ -25,6 +25,7 @@ pub(crate) type NiceSymbolStack<'a> = (&'a [NiceScopedSymbol<'a>], Option<Symbol
 pub(crate) type NiceScopedSymbol<'a> = (&'a str, Option<NiceScopeStack<'a>>);
 pub(crate) type NiceScopeStack<'a> = (&'a [u32], Option<ScopeStackVariable>);
 pub(crate) type NicePartialPath<'a> = &'a [Handle<Node>];
+pub(crate) type NiceEdge = (Handle<Node>, Handle<Node>);
 
 pub(crate) fn create_drop_scopes_node(graph: &mut StackGraph, file: Handle<File>) -> Handle<Node> {
     let id = graph.new_node_id(file);
@@ -162,6 +163,12 @@ pub(crate) fn create_partial_path_and_edges(
     }
 
     Ok(path)
+}
+
+pub(crate) fn create_edge(graph: &mut StackGraph, contents: NiceEdge) -> Edge {
+    let edge = edge(contents.0, contents.1, 0);
+    graph.add_edge(edge.source, edge.sink, edge.precedence);
+    edge
 }
 
 pub(crate) fn edge(source: Handle<Node>, sink: Handle<Node>, precedence: i32) -> Edge {

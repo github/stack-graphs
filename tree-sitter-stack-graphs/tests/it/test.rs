@@ -12,6 +12,7 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
@@ -108,16 +109,16 @@ fn check_test(
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
     for fragment in &test.fragments {
-        partials
-            .find_minimal_partial_path_set_in_file(
-                &test.graph,
-                fragment.file,
-                &stack_graphs::NoCancellation,
-                |graph, partials, path| {
-                    db.add_partial_path(graph, partials, path);
-                },
-            )
-            .expect("should nopt be cancelled");
+        ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+            &test.graph,
+            &mut partials,
+            fragment.file,
+            &stack_graphs::NoCancellation,
+            |graph, partials, path| {
+                db.add_partial_path(graph, partials, path.clone());
+            },
+        )
+        .expect("should nopt be cancelled");
     }
 
     let results = test

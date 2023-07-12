@@ -12,7 +12,7 @@ use stack_graphs::graph;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::serde;
-use stack_graphs::stitching::Database;
+use stack_graphs::stitching::{Database, ForwardPartialPathStitcher};
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -68,6 +68,7 @@ fn serde_json_stack_graph() {
                     local_id: 0,
                 },
                 precedence: 0,
+                debug_info: Some(serde::DebugInfo { data: vec![] }),
             }],
         },
     };
@@ -77,6 +78,7 @@ fn serde_json_stack_graph() {
         {
             "edges" : [
                 {
+                    "debug_info" : [],
                     "precedence" : 0,
                     "sink" : {
                         "file" : "index.ts",
@@ -320,7 +322,7 @@ fn can_load_serialized_stack_graph() {
         .find(|handle| matches!(sg[*handle], graph::Node::Scope(..)))
         .unwrap();
     assert!(sg.source_info(handle).is_some());
-    assert!(sg.debug_info(handle).is_some());
+    assert!(sg.node_debug_info(handle).is_some());
 }
 
 #[test]
@@ -376,6 +378,12 @@ fn can_serialize_graph() {
                     }
                 },
                 {
+                    "debug_info" : [
+                        {
+                            "key" : "dsl_position",
+                            "value" : "line 23 column 4"
+                        }
+                    ],
                     "precedence" : 0,
                     "sink" : {
                         "local_id" : 1
@@ -972,11 +980,16 @@ fn can_serialize_partial_paths() {
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
     for file in graph.iter_files() {
-        partials
-            .find_minimal_partial_path_set_in_file(&graph, file, &NoCancellation, |g, ps, p| {
-                db.add_partial_path(g, ps, p);
-            })
-            .expect("Expect path finding to work");
+        ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+            &graph,
+            &mut partials,
+            file,
+            &NoCancellation,
+            |g, ps, p| {
+                db.add_partial_path(g, ps, p.clone());
+            },
+        )
+        .expect("Expect path finding to work");
     }
     let actual = serde_json::to_value(&db.to_serializable(&graph, &mut partials))
         .expect("Cannot serialize paths");

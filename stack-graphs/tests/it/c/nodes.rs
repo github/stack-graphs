@@ -674,6 +674,7 @@ fn can_create_source_info() {
 
     let syntax_type = add_string(graph, "function");
     let containing_line = add_string(graph, "def foo():");
+    let fully_qualified_name = add_string(graph, "bar.foo");
 
     let mut infos = [sg_node_source_info {
         node: handles[1],
@@ -682,6 +683,7 @@ fn can_create_source_info() {
             syntax_type,
             containing_line,
             definiens_span: sg_span::default(),
+            fully_qualified_name,
         },
     }];
     infos[0].source_info.span.start.line = 17;

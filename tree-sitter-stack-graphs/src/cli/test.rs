@@ -19,9 +19,14 @@ use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::Duration;
 use tree_sitter_graph::Variables;
 
+use crate::cli::util::duration_from_seconds_str;
+use crate::cli::util::iter_files_and_directories;
+use crate::cli::util::ConsoleFileLogger;
 use crate::cli::util::ExistingPathBufValueParser;
+use crate::cli::util::FileLogger;
 use crate::cli::util::PathSpec;
 use crate::loader::ContentProvider;
 use crate::loader::FileReader;
@@ -29,12 +34,8 @@ use crate::loader::LanguageConfiguration;
 use crate::loader::Loader;
 use crate::test::Test;
 use crate::test::TestResult;
+use crate::CancelAfterDuration;
 use crate::CancellationFlag;
-use crate::NoCancellation;
-
-use super::util::iter_files_and_directories;
-use super::util::ConsoleFileLogger;
-use super::util::FileLogger;
 
 #[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
@@ -127,6 +128,14 @@ pub struct TestArgs {
     /// Do not load builtins for tests.
     #[clap(long)]
     pub no_builtins: bool,
+
+    /// Maximum runtime per test in seconds.
+    #[clap(
+        long,
+        value_name = "SECONDS",
+        value_parser = duration_from_seconds_str,
+    )]
+    pub max_test_time: Option<Duration>,
 }
 
 /// Flag to control output
@@ -157,6 +166,7 @@ impl TestArgs {
             save_visualization: None,
             output_mode: OutputMode::OnFailure,
             no_builtins: false,
+            max_test_time: None,
         }
     }
 
@@ -197,7 +207,7 @@ impl TestArgs {
         loader: &mut Loader,
         file_status: &mut ConsoleFileLogger,
     ) -> anyhow::Result<TestResult> {
-        let cancellation_flag = &NoCancellation;
+        let cancellation_flag = CancelAfterDuration::from_option(self.max_test_time);
 
         // If the file is skipped (ending in .skip) we construct the non-skipped path to see if we would support it.
         let load_path = if test_path.extension().map_or(false, |e| e == "skip") {
@@ -206,8 +216,11 @@ impl TestArgs {
             test_path.to_path_buf()
         };
         let mut file_reader = MappingFileReader::new(&load_path, test_path);
-        let lc = match loader.load_for_file(&load_path, &mut file_reader, cancellation_flag)? {
-            Some(sgl) => sgl,
+        let lc = match loader
+            .load_for_file(&load_path, &mut file_reader, cancellation_flag.as_ref())?
+            .primary
+        {
+            Some(lc) => lc,
             None => return Ok(TestResult::new()),
         };
 
@@ -236,7 +249,7 @@ impl TestArgs {
             let result = if let Some(fa) = test_fragment
                 .path
                 .file_name()
-                .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
+                .and_then(|file_name| lc.special_files.get(&file_name.to_string_lossy()))
             {
                 let mut all_paths = test.fragments.iter().map(|f| f.path.as_path());
                 fa.build_stack_graph_into(
@@ -246,7 +259,7 @@ impl TestArgs {
                     &test_fragment.source,
                     &mut all_paths,
                     &test_fragment.globals,
-                    cancellation_flag,
+                    cancellation_flag.as_ref(),
                 )
             } else if lc.matches_file(
                 &test_fragment.path,
@@ -259,7 +272,7 @@ impl TestArgs {
                     test_fragment.file,
                     &test_fragment.source,
                     &globals,
-                    cancellation_flag,
+                    cancellation_flag.as_ref(),
                 )
             } else {
                 return Err(anyhow!(
@@ -272,11 +285,14 @@ impl TestArgs {
                 Err(err) => {
                     file_status.failure(
                         "failed to build stack graph",
-                        Some(&err.display_pretty(
-                            test_path,
-                            source,
-                            lc.sgl.tsg_path(),
-                            lc.sgl.tsg_source(),
+                        Some(&format!(
+                            "{}",
+                            err.display_pretty(
+                                &test.path,
+                                source,
+                                lc.sgl.tsg_path(),
+                                lc.sgl.tsg_source(),
+                            )
                         )),
                     );
                     return Err(anyhow!("Failed to build graph for {}", test_path.display()));
@@ -287,16 +303,17 @@ impl TestArgs {
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
         for file in test.graph.iter_files() {
-            partials.find_minimal_partial_path_set_in_file(
+            ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
                 &test.graph,
+                &mut partials,
                 file,
-                &(cancellation_flag as &dyn CancellationFlag),
+                &cancellation_flag.as_ref(),
                 |g, ps, p| {
-                    db.add_partial_path(g, ps, p);
+                    db.add_partial_path(g, ps, p.clone());
                 },
             )?;
         }
-        let result = test.run(&mut partials, &mut db, cancellation_flag)?;
+        let result = test.run(&mut partials, &mut db, cancellation_flag.as_ref())?;
         let success = self.handle_result(&result, file_status)?;
         if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
@@ -308,7 +325,7 @@ impl TestArgs {
                 &mut db,
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
-                cancellation_flag,
+                cancellation_flag.as_ref(),
             )?;
         }
         Ok(result)

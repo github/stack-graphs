@@ -546,3 +546,35 @@ pub fn wait_for_input() -> anyhow::Result<()> {
     std::io::stdin().read_line(&mut input)?;
     Ok(())
 }
+
+/// Wraps a build error with the relevant sources
+pub struct BuildErrorWithSource<'a> {
+    pub inner: crate::BuildError,
+    pub source_path: PathBuf,
+    pub source_str: &'a str,
+    pub tsg_path: PathBuf,
+    pub tsg_str: &'a str,
+}
+
+impl<'a> BuildErrorWithSource<'a> {
+    pub fn display_pretty(&'a self) -> impl std::fmt::Display + 'a {
+        DisplayBuildErrorPretty(self)
+    }
+}
+
+struct DisplayBuildErrorPretty<'a>(&'a BuildErrorWithSource<'a>);
+
+impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.0.inner.display_pretty(
+                &self.0.source_path,
+                self.0.source_str,
+                &self.0.tsg_path,
+                self.0.tsg_str,
+            )
+        )
+    }
+}

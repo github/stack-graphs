@@ -22,16 +22,16 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
 
     // Generate partial paths for everything in the database.
     for file in graph.iter_files() {
-        partials
-            .find_minimal_partial_path_set_in_file(
-                graph,
-                file,
-                &NoCancellation,
-                |graph, partials, path| {
-                    db.add_partial_path(graph, partials, path);
-                },
-            )
-            .expect("should never be cancelled");
+        ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+            graph,
+            &mut partials,
+            file,
+            &NoCancellation,
+            |graph, partials, path| {
+                db.add_partial_path(graph, partials, path.clone());
+            },
+        )
+        .expect("should never be cancelled");
     }
 
     let references = graph
