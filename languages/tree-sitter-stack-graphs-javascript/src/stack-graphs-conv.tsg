@@ -289,6 +289,14 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 
+; ## Inherited
+
+inherit .null
+
+(program)@prog {
+  node @prog.null
+}
+
 ;; ## Programs
 
 ;; ### Attributes Defined on Programs
@@ -1765,7 +1773,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @null.after_scope -> @null.before_scope
 
   ; the value of null is the null primitive
-  edge @null.value -> @null::null
+  edge @null.value -> @null.null
 }
 
 
@@ -2261,7 +2269,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   function: (_)@function
   arguments:(_)@arguments)@call_expr {
 
-  edge @arguments.arg_this -> @call_expr::null
+  edge @arguments.arg_this -> @call_expr.null
 }
 (call_expression
   arguments:(arguments (_)@arg)@arguments) {
