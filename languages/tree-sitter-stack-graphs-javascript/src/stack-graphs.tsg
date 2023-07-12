@@ -252,7 +252,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.element_index_push
     node @node.element_index_push_dot
     node @node.element_pop_dot
-    node @node.exports
     node @node.exports_pop
     node @node.field_pop_dot
     node @node.guard_default
@@ -354,6 +353,7 @@ inherit .return_or_yield
     attr (@prog.before_scope) empty_source_span
     attr (@prog.after_scope) empty_source_span
 
+    node @prog.exports
     attr (@prog.exports_pop) pop_symbol = "GUARD:EXPORTS"
     edge @prog.module_pop -> @prog.exports_pop
     edge @prog.exports_pop -> @prog.exports
