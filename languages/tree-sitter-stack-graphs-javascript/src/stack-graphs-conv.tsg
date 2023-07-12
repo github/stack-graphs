@@ -2027,7 +2027,7 @@ inherit .return_or_yield
 }
 
 (pair key:(string)@key) {
-  attr (@key.pop) pop_symbol = (replace @key "\"" "")
+  attr (@key.pop) pop_symbol = (replace (source-text @key) "\"" "")
 }
 
 (pair
@@ -3143,7 +3143,7 @@ inherit .return_or_yield
 (pair_pattern
   key:(string)@key)@_pair_pattern {
 
-    attr (@key.push) symbol_reference = (replace @key "\"" ""), source_node = @key
+    attr (@key.push) symbol_reference = (replace (source-text @key) "\"" ""), source_node = @key
 }
 
 ; LATER-TODO the left pattern has to be a name, it cant be another pattern
@@ -3387,7 +3387,7 @@ inherit .return_or_yield
   (#eq? @_require "require")
 ) {
 
-  scan @mod_name {
+  scan (source-text @mod_name) {
     "\"([^/\"]+)\.js\"$" {
       attr (@mod_name.push) push_symbol = $1
     }
