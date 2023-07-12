@@ -290,6 +290,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 inherit .exports
 inherit .null
 inherit .number
+inherit .return_or_yield
 inherit .string
 
 (program)@prog {
@@ -962,7 +963,7 @@ inherit .string
   attr (@fun_decl.value_return) "endpoint"
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
-  let @body::return_or_yield = @fun_decl.value_return
+  let @body.return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) push_symbol = "this"
@@ -1032,7 +1033,7 @@ inherit .string
   attr (@fun_decl.value_return) "endpoint"
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
-  let @body::return_or_yield = @fun_decl.value_return
+  let @body.return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) push_symbol = "this"
@@ -1163,7 +1164,7 @@ inherit .string
   attr (@method_def.method_value_return) "endpoint"
   attr (@method_def.method_value_return) pop_symbol = "GUARD:RETURN"
   edge @method_def.method_value_call -> @method_def.method_value_return
-  let @body::return_or_yield = @method_def.method_value_return
+  let @body.return_or_yield = @method_def.method_value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@method_def.method_value_this) push_symbol = "this"
@@ -1598,7 +1599,7 @@ inherit .string
   edge @return_stmt.after_scope -> @returned_expr.after_scope
 
   ; return statements hook up to the call node of the function value
-  edge @return_stmt::return_or_yield -> @returned_expr.value
+  edge @return_stmt.return_or_yield -> @returned_expr.value
 }
 
 
@@ -2037,7 +2038,7 @@ inherit .string
   attr (@fun.value_return) "endpoint"
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
-  let @body::return_or_yield = @fun.value_return
+  let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
@@ -2096,7 +2097,7 @@ inherit .string
   attr (@fun.value_return) "endpoint"
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
-  let @body::return_or_yield = @fun.value_return
+  let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
@@ -2113,7 +2114,7 @@ inherit .string
 ; arrow functions returning exprs need special rules for getting the return value hooked up
 (arrow_function
   body:(expression)@return_expr) {
-  edge @return_expr::return_or_yield -> @return_expr.value
+  edge @return_expr.return_or_yield -> @return_expr.value
 }
 
 (arrow_function
@@ -2186,7 +2187,7 @@ inherit .string
   attr (@fun.value_return) "endpoint"
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
-  let @body::return_or_yield = @fun.value_return
+  let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
@@ -2621,7 +2622,7 @@ inherit .string
   edge @yield_expr.after_scope -> @yielded_expr.after_scope
 
   ; yield expressions hook up to the call node of the function value
-  edge @yield_expr::return_or_yield -> @yielded_expr.value
+  edge @yield_expr.return_or_yield -> @yielded_expr.value
 }
 
 
