@@ -583,7 +583,7 @@ inherit .undefined
 (export_statement
   value:(_)@default_expr)@export_stmt {
 
-  attr (@export_stmt.default_guard) pop_symbol = "GUARD:DEFAULT", "definition"
+  attr (@export_stmt.default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @export_stmt
   edge @default_expr.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @default_expr.after_scope
   edge @export_stmt.exports -> @export_stmt.default_guard
@@ -856,7 +856,7 @@ inherit .undefined
   (variable_declarator
     name:(identifier)@name))@decl {
 
-  attr (@name.pop) node_definition = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @decl.after_scope -> @name.pop
 }
 
@@ -864,7 +864,7 @@ inherit .undefined
   (variable_declarator
     name:(identifier)@name))@decl {
 
-  attr (@name.pop) node_definition = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @decl.after_scope -> @name.pop
 }
 
@@ -954,12 +954,12 @@ inherit .undefined
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> @fun_decl.value_drop
-  attr (@call_sig.this_pop) pop_symbol = "this", "definition"
+  attr (@call_sig.this_pop) symbol_definition = "this", source_node = @call_sig
   attr (@call_sig.this_push) push_symbol = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
-  attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
+  attr (@call_sig.arguments_pop) symbol_definition = "arguments", source_node = @call_sig
   attr (@call_sig.arguments_push) push_symbol = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
@@ -1025,12 +1025,12 @@ inherit .undefined
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> @fun_decl.value_drop
-  attr (@call_sig.this_pop) pop_symbol = "this", "definition"
+  attr (@call_sig.this_pop) symbol_definition = "this", source_name = @call_sig
   attr (@call_sig.this_push) push_symbol = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
-  attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
+  attr (@call_sig.arguments_pop) symbol_definition = "arguments", source_node = @call_sig
   attr (@call_sig.arguments_push) push_symbol = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
@@ -1131,7 +1131,7 @@ inherit .undefined
   (#eq? @name "constructor")
 ) {
   ; augmentation for the constructor
-  attr (@name.constructor_guard) pop_symbol = "GUARD:CONSTRUCTOR", "definition"
+  attr (@name.constructor_guard) symbol_definition = "GUARD:CONSTRUCTOR", source_node = @name
   edge @method_def.after_scope -> @name.constructor_guard
   edge @name.constructor_guard -> @method_def.method_value
 }
@@ -1548,7 +1548,7 @@ inherit .undefined
   parameter:(identifier)@name
   body:(_)@body) {
 
-  attr (@name.pop) node_definition = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @body.before_scope -> @name.pop
 }
 
@@ -1892,7 +1892,7 @@ inherit .undefined
 
   ; This is done differently depending on what the key is. See next rules.
   ; attr (@key.pop) node_definition = @key
-  attr (@key.pop) "definition"
+  attr (@key.pop) node_definition = @key
 
   attr (@object.field_pop_dot) pop_symbol = "."
   edge @key.pop -> @value.value
@@ -2030,12 +2030,12 @@ inherit .undefined
   ; the call sig's before scope comes from the drop node,
   ; then flows into the body, and includes a variable binding for "this"
   edge @call_sig.before_scope -> @fun.value_drop
-  attr (@call_sig.this_pop) pop_symbol = "this", "definition"
+  attr (@call_sig.this_pop) symbol_definition = "this", source_node = @call_sig
   attr (@call_sig.this_push) push_symbol = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
-  attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
+  attr (@call_sig.arguments_pop) symbol_definition = "arguments", source_node = @call_sig
   attr (@call_sig.arguments_push) push_symbol = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun.value_arg_scope
@@ -2249,12 +2249,12 @@ inherit .undefined
   edge @call_expr.return_guard -> @call_expr.call
   edge @call_expr.call -> @function.value
 
-  attr (@arguments.arg_this) pop_symbol = "this", "definition"
+  attr (@arguments.arg_this) symbol_definition = "this", source_node = @arguments
   edge @arguments.arg_scope -> @arguments.arg_this
 
   edge @arguments.arg_scope -> @arguments.arg_scope_no_this
 
-  attr (@arguments.arg_arguments) pop_symbol = "arguments", "definition"
+  attr (@arguments.arg_arguments) symbol_definition = "arguments", source_node = @arguments
   attr (@arguments.arg_arguments_dot) pop_symbol = "."
   edge @arguments.arg_scope -> @arguments.arg_arguments
   edge @arguments.arg_arguments -> @arguments.arg_arguments_dot
@@ -2424,7 +2424,7 @@ inherit .undefined
   ; value coming from the field decls in the class
   edge @new_expr.value -> @constructor.value
 
-  attr (@arguments.arg_this) pop_symbol = "this", "definition"
+  attr (@arguments.arg_this) symbol_definition = "this", source_node = @arguments
   edge @arguments.arg_scope -> @arguments.arg_this
   edge @arguments.arg_this -> @new_expr.empty_object
 }
