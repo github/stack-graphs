@@ -425,7 +425,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; TODO this doesn't support destructuring exports
 
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   attr (@name.push) "push" = @name
   edge @export_stmt::exports -> @name.pop
   edge @name.pop -> @decl.value
@@ -499,7 +499,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (#not-eq? @name "default")
 ) {
 
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   attr (@name.push) "push" = @name, "reference"
   edge @name.pop -> @name.push
   edge @name.push -> @export_specifier.source
@@ -516,7 +516,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ) {
 
-  attr (@alias.pop) "pop" = @alias, "definition"
+  attr (@alias.pop) node_definition = @alias
   attr (@name.push) "push" = @name, "reference"
   edge @alias.pop -> @name.push
   edge @name.push -> @export_specifier.source
@@ -605,7 +605,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       attr (@source.push) "push" = $1
     }
   }
-  attr (@alias.pop) "pop" = @alias, "definition"
+  attr (@alias.pop) node_definition = @alias
   attr (@alias.pop_dot) pop_symbol = "."
   edge @export_statement::exports -> @alias.pop
   edge @alias.pop -> @alias.pop_dot
@@ -643,7 +643,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @namespace_import.after_scope -> @namespace_import.before_scope
 
-  attr (@imported_as.pop) "pop" = @imported_as, "definition"
+  attr (@imported_as.pop) node_definition = @imported_as
   attr (@imported_as.pop_dot) pop_symbol = "."
   edge @imported_as.pop -> @imported_as.pop_dot
   edge @imported_as.pop_dot -> @namespace_import.source
@@ -731,7 +731,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   attr (@name.push) "push" = @name, "reference"
   edge @name.pop -> @name.push
   edge @name.push -> @import_specifier.source
@@ -751,7 +751,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
-  attr (@alias.pop) "pop" = @alias, "definition"
+  attr (@alias.pop) node_definition = @alias
   attr (@name.push) "push" = @name, "reference"
   edge @alias.pop -> @name.push
   edge @name.push -> @import_specifier.source
@@ -797,7 +797,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @import_clause.after_scope -> @import_clause.before_scope
 
-  attr (@default_name.pop) "pop" = @default_name, "definition"
+  attr (@default_name.pop) node_definition = @default_name
   attr (@default_name.push_guard_default) push_symbol = "GUARD:DEFAULT"
   edge @default_name.pop -> @default_name.push_guard_default
   edge @default_name.push_guard_default -> @import_clause.source
@@ -923,7 +923,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @fun_decl.after_scope -> @fun_decl.before_scope
 
   ; with an augmentation for the function
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @fun_decl.after_scope -> @name.pop
   edge @name.pop -> @fun_decl.value
 
@@ -993,7 +993,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @fun_decl.after_scope -> @fun_decl.before_scope
 
   ; with an augmentation for the function
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @fun_decl.after_scope -> @name.pop
   edge @name.pop -> @fun_decl.value
 
@@ -1059,7 +1059,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   attr (@name.pop) "syntax_type" = "class"
 
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @class_decl.after_scope -> @name.pop
   edge @name.pop -> @class_decl.value
 
@@ -1122,7 +1122,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (#not-eq? @name "constructor")
 ) {
   ; augmentation for the method
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   attr (@name.pop_dot) pop_symbol = "."
   edge @method_def.after_scope -> @name.pop_dot
   edge @name.pop_dot -> @name.pop
@@ -1185,7 +1185,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (field_definition
   property:(property_identifier)@property)@field_def {
 
-  attr (@property.pop) "pop" = @property, "definition"
+  attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
   edge @field_def.after_scope -> @property.pop_dot
   edge @property.pop_dot -> @property.pop
@@ -1849,7 +1849,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @keyval.rhsvar_value -> @keyval.rhsvar_before_scope
 
   ; shorthand property identifiers augment the object value with a member binding
-  attr (@keyval.boundvar_pop) "pop" = @keyval, "definition"
+  attr (@keyval.boundvar_pop) node_definition = @keyval
 
   attr (@object.field_pop_dot) pop_symbol = "."
   edge @keyval.boundvar_pop -> @keyval.rhsvar_value
@@ -1871,7 +1871,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; pairs augment the object value with a member binding
 
   ; This is done differently depending on what the key is. See next rules.
-  ; attr (@key.pop) "pop" = @key, "definition"
+  ; attr (@key.pop) node_definition = @key
   attr (@key.pop) "definition"
 
   attr (@object.field_pop_dot) pop_symbol = "."
@@ -1988,7 +1988,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@name.pop) "syntax_type" = "function"
 
   ; if the function has a name, this is bound the callsig's before scope
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @call_sig.before_scope -> @name.pop
   edge @name.pop -> @fun.value
 }
@@ -2116,7 +2116,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @param.after_scope -> @param.before_scope
 
   ; but augmented with a pop, b/c it's not a pattern
-  attr (@param.pop) "pop" = @param, "definition"
+  attr (@param.pop) node_definition = @param
   edge @param.pop -> @param.covalue
   edge @param.after_scope -> @param.pop
 
@@ -2148,7 +2148,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr (@name.pop) "syntax_type" = "function"
 
   ; if the function has a name, this is bound the callsig's before scope
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @call_sig.before_scope -> @name.pop
   edge @name.pop -> @fun.value
 }
@@ -2504,7 +2504,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   right: (_)@right)@assignment_expr {
 
   ; augments the scope by adding a lookup edge, ie. a pop
-  attr (@left.pop) "pop" = @left, "definition"
+  attr (@left.pop) node_definition = @left
   edge @assignment_expr.after_scope -> @left.pop
   edge @left.pop -> @right.value
 
@@ -2524,7 +2524,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @this.drop -> @this.pop
   attr (@this.pop) pop_symbol = "this"
   attr (@this.pop_dot) pop_symbol = "."
-  attr (@property.pop) "pop" = @property, "definition"
+  attr (@property.pop) node_definition = @property
   edge @assignment_expr.after_scope -> @this.drop
   edge @assignment_expr.after_scope -> @this.pop
   edge @this.pop -> @this.pop_dot
@@ -2560,7 +2560,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   right:(_)@right)@augmented_assignment_expr {
 
   ; augment the scope
-  attr (@left.pop) "pop" = @left, "definition"
+  attr (@left.pop) node_definition = @left
   attr (@left.push) "push" = @left, "reference"
   edge @left.push -> @augmented_assignment_expr.before_scope
   edge @left.pop -> @left.push
@@ -2635,7 +2635,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   
   attr (@name.pop) "syntax_type" = "class"
 
-  attr (@name.pop) "pop" = @name, "definition"
+  attr (@name.pop) node_definition = @name
   edge @body.before_scope -> @name.pop
   edge @name.pop -> @class.value
 }
@@ -2890,7 +2890,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (pattern/identifier)@ident_pat {
 
   ; scope flows through, binding via a pop edge that goes to an unknown value
-  attr (@ident_pat.pop) "pop" = @ident_pat, "definition"
+  attr (@ident_pat.pop) node_definition = @ident_pat
   edge @ident_pat.pop -> @ident_pat.covalue
   edge @ident_pat.after_scope -> @ident_pat.before_scope
   edge @ident_pat.after_scope -> @ident_pat.pop
@@ -3011,7 +3011,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   attr (@left_pat.push) "push" = @left_pat, "reference"
   attr (@left_pat.push_dot) push_symbol = "."
-  attr (@left_pat.pop) "pop" = @left_pat, "definition"
+  attr (@left_pat.pop) node_definition = @left_pat
   edge @left_pat.pop -> @left_pat.push
   edge @left_pat.push -> @left_pat.push_dot
   edge @left_pat.push_dot -> @left_pat.covalue
@@ -3103,7 +3103,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (rest_pattern (_)@name)@rest_pat {
   ; scope flows through, binding via a pop edge that goes to an unknown value
 
-  attr (@rest_pat.pop) "pop" = @name, "definition"
+  attr (@rest_pat.pop) node_definition = @name
   edge @rest_pat.after_scope -> @rest_pat.before_scope
   edge @rest_pat.after_scope -> @rest_pat.pop
 }
@@ -3141,7 +3141,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (#eq? @extend "extend")
 ) {
 
-  attr (@object.pop) "pop" = @object, "definition"
+  attr (@object.pop) node_definition = @object
   edge @call_expr.after_scope -> @object.pop
   edge @object.pop -> @new_fields.value
 
@@ -3173,7 +3173,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (#eq? @exports "exports")
 ) {
 
-  attr (@property.pop) "pop" = @property, "definition"
+  attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
   edge @assignment_expr::exports -> @property.pop_dot
   edge @property.pop_dot -> @property.pop
@@ -3324,7 +3324,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ]@right) {
 
   attr (@left.ignore_guard) pop_symbol = "GUARD:GANDALF"
-  attr (@left.definiens_hook) "pop" = @left, "definition"
+  attr (@left.definiens_hook) node_definition = @left
   attr (@left.definiens_hook) "definiens" = @right
   edge ROOT_NODE -> @left.ignore_guard
   edge @left.ignore_guard -> @left.definiens_hook
@@ -3365,7 +3365,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ]@value) {
 
 attr (@name.ignore_guard) pop_symbol = "GUARD:GANDALF"
-attr (@name.definiens_hook) "pop" = @name, "definition"
+attr (@name.definiens_hook) node_definition = @name
 attr (@name.definiens_hook) "definiens" = @value
 edge ROOT_NODE -> @name.ignore_guard
 edge @name.ignore_guard -> @name.definiens_hook
