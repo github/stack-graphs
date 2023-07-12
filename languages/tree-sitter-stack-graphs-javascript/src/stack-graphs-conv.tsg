@@ -301,9 +301,9 @@ inherit .string
 inherit .undefined
 
 (program)@prog {
-  node @node.Regex_prototype
-  node @node.arguments_prototype
-  node @node.empty_object
+  node @prog.Regex_prototype
+  node @prog.arguments_prototype
+  node @prog.empty_object
   node @prog.boolean
   node @prog.null
   node @prog.number
@@ -321,7 +321,7 @@ inherit .undefined
 (program)@prog {
   scan FILE_PATH {
     "([^/]+)\.js$" {
-      attr (@prog.module_pop) symbol_definition = $1, source_node = prog
+      attr (@prog.module_pop) symbol_definition = $1, source_node = @prog
       attr (@prog.module_pop) empty_source_span
     }
   }
@@ -2339,7 +2339,7 @@ inherit .undefined
   edge @member_expr.after_scope -> @object.after_scope
 
   ; value is a member projection on the value of the object ie. a push then push dot
-  attr (@property.push) node_reference @property
+  attr (@property.push) node_reference = @property
   ;attr (@member_expr.value) push_node = @property.pop
   attr (@member_expr.push_dot) push_symbol = "."
   edge @property.push -> @member_expr.push_dot
