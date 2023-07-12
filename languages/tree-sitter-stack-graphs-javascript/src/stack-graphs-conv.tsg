@@ -897,18 +897,27 @@ inherit .builtins_undefined
 
 (variable_declaration
   (variable_declarator
-    name:(identifier)@name))@decl {
+    name:(identifier)@name))@variable_decl
+{
+    node @variable_decl.name_pop
+    
+    attr (@variable_decl.name_pop) node_definition = @name
+    edge @variable_decl.after_scope -> @variable_decl.name_pop
+    attr (@variable_decl.after_scope -> @variable_decl.name_pop) precedence = 1
 
-  attr (@name.pop) node_definition = @name
-  edge @decl.after_scope -> @name.pop
 }
 
 (lexical_declaration
   (variable_declarator
-    name:(identifier)@name))@decl {
+    name:(identifier)@name))@lexical_decl
+{
 
-  attr (@name.pop) node_definition = @name
-  edge @decl.after_scope -> @name.pop
+    node @lexical_decl.name_pop
+
+    attr (@lexical_decl.name_pop) node_definition = @name
+    edge @lexical_decl.after_scope -> @lexical_decl.name_pop
+    attr (@lexical_decl.after_scope -> @lexical_decl.name_pop) precedence = 1
+
 }
 
 (variable_declaration
@@ -927,24 +936,27 @@ inherit .builtins_undefined
 
 (variable_declaration
   (variable_declarator
-    name:(identifier)@name
-    value:(_)@initializer))@decl {
+    name:(identifier)@_name
+    value:(_)@initializer))@variable_decl
+{
 
-  edge @name.pop -> @initializer.value
-  edge @decl.value -> @initializer.value
-  edge @initializer.before_scope -> @decl.before_scope
-  edge @decl.after_scope -> @initializer.after_scope
+  edge @variable_decl.name_pop -> @initializer.value
+  edge @initializer.before_scope -> @variable_decl.before_scope
+  edge @variable_decl.after_scope -> @initializer.after_scope
+
 }
 
 (lexical_declaration
   (variable_declarator
-    name:(identifier)@name
-    value:(_)@initializer))@decl {
+    name:(identifier)@_name
+    value:(_)@initializer))@lexical_decl
+{
 
-  edge @name.pop -> @initializer.value
-  edge @decl.value -> @initializer.value
-  edge @initializer.before_scope -> @decl.before_scope
-  edge @decl.after_scope -> @initializer.after_scope
+    edge @lexical_decl.name_pop -> @initializer.value
+    edge @initializer.before_scope -> @lexical_decl.before_scope
+    edge @lexical_decl.after_scope -> @initializer.after_scope
+    attr (@lexical_decl.after_scope -> @initializer.after_scope) precedence = 0
+
 }
 
 (variable_declaration
@@ -1475,7 +1487,7 @@ inherit .builtins_undefined
   edge @increment.before_scope -> @body.after_scope
 
   ; scopes also from from the body back into the condition
-  edge @condition.before_scope -> @body.after_scope
+    edge @condition.before_scope -> @increment.after_scope
 
   ; scopes also flow from condition out to statement
   edge @for_stmt.after_scope -> @condition.after_scope
@@ -1499,11 +1511,13 @@ inherit .builtins_undefined
 (for_in_statement
   left:(identifier)@left
   right:(_)@right
-  body:(_)@body) {
+  body:(_)@body)@for_in_stmt
+{
 
-  attr (@left.pop) node_definition = @left
-  edge @left.pop -> @right.value
-  edge @body.before_scope -> @left.pop
+    attr (@for_in_stmt.pop) node_definition = @left
+    edge @for_in_stmt.pop -> @right.value
+    edge @body.before_scope -> @for_in_stmt.pop
+
 }
 
 
@@ -1565,11 +1579,11 @@ inherit .builtins_undefined
 
 (try_statement
   body:(_)@body
-  finalizer:(_)@finalizer)@try_stmt {
+  finalizer:(_)@finalizer)@_try_stmt {
 
   ; scopes flow from body to finalizer then back out
   edge @finalizer.before_scope -> @body.after_scope
-  edge @try_stmt.after_scope -> @finalizer.after_scope
+
 }
 
 (try_statement
@@ -1589,10 +1603,12 @@ inherit .builtins_undefined
 
 (catch_clause
   parameter:(identifier)@name
-  body:(_)@body) {
+  body:(_)@body)@catch_clause
+{
 
-  attr (@name.pop) node_definition = @name
-  edge @body.before_scope -> @name.pop
+    attr (@catch_clause.pop) node_definition = @name
+    edge @body.before_scope -> @catch_clause.pop
+
 }
 
 (finally_clause body:(_)@body)@finally_clause {
@@ -1614,9 +1630,9 @@ inherit .builtins_undefined
   edge @body.before_scope -> @object.after_scope
   edge @with_stmt.after_scope -> @body.after_scope
 
-  attr (@object.push_dot) push_symbol = "."
-  edge @object.push_dot -> @object.value
-  edge @body.before_scope -> @object.push_dot
+    attr (@with_stmt.push_dot) push_symbol = "GUARD:MEMBER"
+    edge @with_stmt.push_dot -> @object.value
+    edge @body.before_scope -> @with_stmt.push_dot
 }
 
 
@@ -1628,6 +1644,18 @@ inherit .builtins_undefined
   edge @break_stmt.after_scope -> @break_stmt.before_scope
 }
 
+(break_statement (_)@label)@break_stmt {
+
+    node @break_stmt.label_push
+    node @break_stmt.label_guard
+
+    attr (@break_stmt.label_guard) push_symbol = "GUARD:LABEL"
+    attr (@break_stmt.label_push) node_reference = @label
+
+    edge @break_stmt.label_push -> @break_stmt.label_guard
+    edge @break_stmt.label_guard -> @break_stmt.before_scope
+}
+
 
 
 ;; #### Continue
@@ -1635,6 +1663,18 @@ inherit .builtins_undefined
 (continue_statement)@continue_stmt {
   ; scopes flow through unchanged
   edge @continue_stmt.after_scope -> @continue_stmt.before_scope
+}
+
+(continue_statement (_)@label)@continue_stmt {
+
+    node @continue_stmt.label_push
+    node @continue_stmt.label_guard
+
+    attr (@continue_stmt.label_guard) push_symbol = "GUARD:LABEL"
+    attr (@continue_stmt.label_push) node_reference = @label
+
+    edge @continue_stmt.label_push -> @continue_stmt.label_guard
+    edge @continue_stmt.label_guard -> @continue_stmt.before_scope
 }
 
 
@@ -1680,9 +1720,23 @@ inherit .builtins_undefined
 
 ;; #### Labeled
 
-(labeled_statement (_)@inner)@labeled_stmt {
+(labeled_statement
+    label:(_)@label
+    body:(_)@inner)@labeled_stmt
+{
+
+    node @labeled_stmt.before_scope
+    node @labeled_stmt.after_scope
+    node @labeled_stmt.label_pop
+    node @labeled_stmt.label_guard
+
+    attr (@labeled_stmt.label_guard) pop_symbol = "GUARD:LABEL"
+    attr (@labeled_stmt.label_pop) node_definition = @label
+
   ; scopes flow through the inner statement then back out
   edge @inner.before_scope -> @labeled_stmt.before_scope
+    edge @inner.before_scope -> @labeled_stmt.label_guard
+    edge @labeled_stmt.label_guard -> @labeled_stmt.label_pop
   edge @labeled_stmt.after_scope -> @inner.after_scope
 }
 
