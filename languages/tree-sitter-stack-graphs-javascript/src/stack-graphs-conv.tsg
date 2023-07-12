@@ -972,14 +972,14 @@ inherit .undefined
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun_decl.value_return) "endpoint"
+  attr (@fun_decl.value_return) is_exported
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
   let @body.return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) push_symbol = "this"
-  attr (@fun_decl.value_this_guard) "endpoint"
+  attr (@fun_decl.value_this_guard) is_exported
   attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
   edge @fun_decl.value_this_guard -> @fun_decl.value_this
@@ -1042,14 +1042,14 @@ inherit .undefined
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun_decl.value_return) "endpoint"
+  attr (@fun_decl.value_return) is_exported
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
   let @body.return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) push_symbol = "this"
-  attr (@fun_decl.value_this_guard) "endpoint"
+  attr (@fun_decl.value_this_guard) is_exported
   attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
   edge @fun_decl.value_this_guard -> @fun_decl.value_this
@@ -1173,14 +1173,14 @@ inherit .undefined
   edge @method_def.method_value -> @method_def.method_value_call
 
   ; method values have return nodes which need to be visible for returns
-  attr (@method_def.method_value_return) "endpoint"
+  attr (@method_def.method_value_return) is_exported
   attr (@method_def.method_value_return) pop_symbol = "GUARD:RETURN"
   edge @method_def.method_value_call -> @method_def.method_value_return
   let @body.return_or_yield = @method_def.method_value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@method_def.method_value_this) push_symbol = "this"
-  attr (@method_def.method_value_this_guard) "endpoint"
+  attr (@method_def.method_value_this_guard) is_exported
   attr (@method_def.method_value_this_guard) pop_symbol = "GUARD:THIS"
   edge @method_def.method_value_call -> @method_def.method_value_this_guard
   edge @method_def.method_value_this_guard -> @method_def.method_value_this
@@ -2047,14 +2047,14 @@ inherit .undefined
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun.value_return) "endpoint"
+  attr (@fun.value_return) is_exported
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
-  attr (@fun.value_this_guard) "endpoint"
+  attr (@fun.value_this_guard) is_exported
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
@@ -2106,14 +2106,14 @@ inherit .undefined
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun.value_return) "endpoint"
+  attr (@fun.value_return) is_exported
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
-  attr (@fun.value_this_guard) "endpoint"
+  attr (@fun.value_this_guard) is_exported
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
@@ -2196,14 +2196,14 @@ inherit .undefined
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (@fun.value_return) "endpoint"
+  attr (@fun.value_return) is_exported
   attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body.return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) push_symbol = "this"
-  attr (@fun.value_this_guard) "endpoint"
+  attr (@fun.value_this_guard) is_exported
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
