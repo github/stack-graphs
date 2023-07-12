@@ -7,4 +7,4 @@ const z = 3;
 /**/ y;
 //   ^ defined: 2
 /**/ z;
-//   ^ defined: 1
+//   ^ defined: 3
