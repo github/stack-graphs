@@ -299,7 +299,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (program)@prog {
   scan FILE_PATH {
     "([^/]+)\.js$" {
-      attr (@prog.module_pop) "definition", "pop" = $1
+      attr (@prog.module_pop) symbol_definition = $1, source_node = prog
       attr (@prog.module_pop) "no_span"
     }
   }
