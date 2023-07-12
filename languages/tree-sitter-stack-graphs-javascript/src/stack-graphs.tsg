@@ -1641,7 +1641,7 @@ inherit .return_or_yield
     edge @body.before_scope -> @object.after_scope
     edge @with_stmt.after_scope -> @body.after_scope
 
-    attr (@with_stmt.push_dot) push_symbol = "GUARD:MEMBER"
+    attr (@with_stmt.push_dot) push_symbol = "."
     edge @with_stmt.push_dot -> @object.value
     edge @body.before_scope -> @with_stmt.push_dot
 }
@@ -1928,7 +1928,7 @@ inherit .return_or_yield
 
 (object)@object {
 
-    attr (@object.member_pop) pop_symbol = "GUARD:MEMBER"
+    attr (@object.member_pop) pop_symbol = "."
     edge @object.value -> @object.member_pop
 
 }
@@ -2061,7 +2061,7 @@ inherit .return_or_yield
 
 (array)@array_expr {
 
-    attr (@array_expr.element_pop_dot) pop_symbol = "GUARD:MEMBER"
+    attr (@array_expr.element_pop_dot) pop_symbol = "."
     edge @array_expr.value -> @array_expr.element_pop_dot
 
 }
@@ -2489,7 +2489,7 @@ inherit .return_or_yield
   edge @member_expr.after_scope -> @object.after_scope
 
   ; value is a member projection on the value of the object ie. a push then push dot
-    attr (member_push) push_symbol = "GUARD:MEMBER"
+    attr (member_push) push_symbol = "."
     attr (property_push) node_reference = @property
     edge property_push -> member_push
     edge @member_expr.value -> property_push
@@ -2509,7 +2509,7 @@ inherit .return_or_yield
     edge @subscript_expr.after_scope -> @index.after_scope
 
   ; value is a subscript lookup, ie a push then push dot
-    attr (@subscript_expr.push_dot) push_symbol = "GUARD:MEMBER"
+    attr (@subscript_expr.push_dot) push_symbol = "."
     edge @subscript_expr.push_dot -> @object.value
 
   ; this is done differently depending on what the index is
