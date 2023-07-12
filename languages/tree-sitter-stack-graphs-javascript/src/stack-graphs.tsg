@@ -276,8 +276,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.module_guard
     node @node.module_pop
     node @node.module_scope
-    node @node.name_pop
-    node @node.name_push
     node @node.new_bindings
     node @node.pop
     node @node.pop_dot
@@ -479,14 +477,11 @@ inherit .return_or_yield
     (class_declaration name:(identifier)@name)
     (lexical_declaration (variable_declarator name:(identifier)@name))
     (variable_declaration (variable_declarator name:(identifier)@name))
-  ]@decl)@export_stmt {
+  ]@_decl)@export_stmt {
 
   ; TODO this doesn't support destructuring exports
 
-  attr (@name.pop) node_definition = @name
-  attr (@name.push) push_node = @name
   edge @export_stmt.exports -> @name.pop
-  edge @name.pop -> @decl.value
 }
 
 ; TODO
@@ -912,9 +907,9 @@ inherit .return_or_yield
   (variable_declarator
     name:(identifier)@name))@variable_decl
 {
-    attr (@variable_decl.name_pop) node_definition = @name
-    edge @variable_decl.after_scope -> @variable_decl.name_pop
-    attr (@variable_decl.after_scope -> @variable_decl.name_pop) precedence = 1
+    attr (@name.pop) node_definition = @name
+    edge @variable_decl.after_scope -> @name.pop
+    attr (@variable_decl.after_scope -> @name.pop) precedence = 1
 
 }
 
@@ -923,9 +918,9 @@ inherit .return_or_yield
     name:(identifier)@name))@lexical_decl
 {
 
-    attr (@lexical_decl.name_pop) node_definition = @name
-    edge @lexical_decl.after_scope -> @lexical_decl.name_pop
-    attr (@lexical_decl.after_scope -> @lexical_decl.name_pop) precedence = 1
+    attr (@name.pop) node_definition = @name
+    edge @lexical_decl.after_scope -> @name.pop
+    attr (@lexical_decl.after_scope -> @name.pop) precedence = 1
 
 }
 
@@ -945,11 +940,11 @@ inherit .return_or_yield
 
 (variable_declaration
   (variable_declarator
-    name:(identifier)@_name
+    name:(identifier)@name
     value:(_)@initializer))@variable_decl
 {
 
-  edge @variable_decl.name_pop -> @initializer.value
+  edge @name.pop -> @initializer.value
   edge @initializer.before_scope -> @variable_decl.before_scope
   edge @variable_decl.after_scope -> @initializer.after_scope
 
@@ -957,11 +952,11 @@ inherit .return_or_yield
 
 (lexical_declaration
   (variable_declarator
-    name:(identifier)@_name
+    name:(identifier)@name
     value:(_)@initializer))@lexical_decl
 {
 
-    edge @lexical_decl.name_pop -> @initializer.value
+    edge @name.pop -> @initializer.value
     edge @initializer.before_scope -> @lexical_decl.before_scope
     edge @lexical_decl.after_scope -> @initializer.after_scope
     attr (@lexical_decl.after_scope -> @initializer.after_scope) precedence = 0
