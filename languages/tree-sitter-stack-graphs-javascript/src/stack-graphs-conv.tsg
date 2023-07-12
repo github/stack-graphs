@@ -300,7 +300,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   scan FILE_PATH {
     "([^/]+)\.js$" {
       attr (@prog.module_pop) symbol_definition = $1, source_node = prog
-      attr (@prog.module_pop) "no_span"
+      attr (@prog.module_pop) empty_source_span
     }
   }
 
@@ -311,13 +311,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @prog.module_pop -> @prog.module_scope
   edge @prog.module_scope -> @prog.after_scope
 
-  attr (@prog) "no_span"
-  attr (@prog.module_pop) "no_span"
-  attr (@prog.module_scope) "no_span"
-  attr (@prog.exports) "no_span"
-  attr (@prog.exports_pop) "no_span"
-  attr (@prog.before_scope) "no_span"
-  attr (@prog.after_scope) "no_span"
+  attr (@prog) empty_source_span
+  attr (@prog.module_pop) empty_source_span
+  attr (@prog.module_scope) empty_source_span
+  attr (@prog.exports) empty_source_span
+  attr (@prog.exports_pop) empty_source_span
+  attr (@prog.before_scope) empty_source_span
+  attr (@prog.after_scope) empty_source_span
 
   let @prog::prog = @prog
   let @prog::exports = @prog.exports
