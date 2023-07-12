@@ -1766,7 +1766,7 @@ inherit .undefined
   edge @this.after_scope -> @this.before_scope
 
   ; this is a lookup, ie a push
-  attr (@this.value) push_symbol = "this", "reference"
+  attr (@this.value) symbol_reference = "this", source_node = @this
   edge @this.value -> @this.before_scope
 }
 
@@ -2370,7 +2370,7 @@ inherit .undefined
   object: (_)@object
   index: (string)@index)@subscript_expression {
 
-  attr (@index.push) "reference"
+  attr (@index.push) node_reference = @index
 
   attr (@index.push_dot) push_symbol = "."
   edge @subscript_expression.value -> @index.push
@@ -2383,7 +2383,7 @@ inherit .undefined
   object: (_)@object
   index: (number)@index)@subscript_expression {
 
-  attr (@index.push) "reference"
+  attr (@index.push) node_reference = @index
 
   attr (@index.push_dot) push_symbol = "."
   edge @subscript_expression.value -> @index.push
