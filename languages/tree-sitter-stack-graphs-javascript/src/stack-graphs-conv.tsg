@@ -393,7 +393,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @export_clause.source -> @source.push_exports_guard
 
-  attr (@source.push_exports_guard) "push" = "GUARD:EXPORTS"
+  attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
   scan @source {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) "push" = $1
@@ -534,7 +534,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ) {
 
   attr (@export_specifier.pop_guard_default) pop_symbol = "GUARD:DEFAULT"
-  attr (@export_specifier.push_guard_default) "push" = "GUARD:DEFAULT"
+  attr (@export_specifier.push_guard_default) push_symbol = "GUARD:DEFAULT"
   edge @export_specifier::exports -> @export_specifier.pop_guard_default
   edge @export_specifier.pop_guard_default -> @export_specifier.push_guard_default
   edge @export_specifier.push_guard_default -> @export_specifier.source
@@ -578,7 +578,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
-  attr (@source.push_exports_guard) "push" = "GUARD:EXPORTS"
+  attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
   scan @source {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) "push" = $1
@@ -599,7 +599,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
-  attr (@source.push_exports_guard) "push" = "GUARD:EXPORTS"
+  attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
   scan @source {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) "push" = $1
@@ -669,7 +669,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
       attr (@source.push) "push" = $1
     }
   }
-  attr (@source.push_guard_exports) "push" = "GUARD:EXPORTS"
+  attr (@source.push_guard_exports) push_symbol = "GUARD:EXPORTS"
   edge @source.push_guard_exports -> @source.push
   edge @source.push -> ROOT_NODE
   edge @import_clause.source -> @source.push_guard_exports
@@ -776,7 +776,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;   edge @mod_name.push -> ROOT_NODE
 ;
 ;   attr (@name) "push", "reference"
-;   attr (@name.push_dot) "push" = "."
+;   attr (@name.push_dot) push_symbol = "."
 ;   edge @name.push_dot -> @mod_name.push
 ;   edge @name -> @name.push_dot
 ;
@@ -798,7 +798,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @import_clause.after_scope -> @import_clause.before_scope
 
   attr (@default_name.pop) "pop" = @default_name, "definition"
-  attr (@default_name.push_guard_default) "push" = "GUARD:DEFAULT"
+  attr (@default_name.push_guard_default) push_symbol = "GUARD:DEFAULT"
   edge @default_name.pop -> @default_name.push_guard_default
   edge @default_name.push_guard_default -> @import_clause.source
 
@@ -935,12 +935,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> @fun_decl.value_drop
   attr (@call_sig.this_pop) pop_symbol = "this", "definition"
-  attr (@call_sig.this_push) "push" = "this"
+  attr (@call_sig.this_push) push_symbol = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
   attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
-  attr (@call_sig.arguments_push) "push" = "arguments"
+  attr (@call_sig.arguments_push) push_symbol = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.arguments_pop
@@ -958,7 +958,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   let @body::return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
-  attr (@fun_decl.value_this) "push" = "this"
+  attr (@fun_decl.value_this) push_symbol = "this"
   attr (@fun_decl.value_this_guard) "endpoint"
   attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
@@ -1006,12 +1006,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> @fun_decl.value_drop
   attr (@call_sig.this_pop) pop_symbol = "this", "definition"
-  attr (@call_sig.this_push) "push" = "this"
+  attr (@call_sig.this_push) push_symbol = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
   attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
-  attr (@call_sig.arguments_push) "push" = "arguments"
+  attr (@call_sig.arguments_push) push_symbol = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.arguments_pop
@@ -1028,7 +1028,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   let @body::return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
-  attr (@fun_decl.value_this) "push" = "this"
+  attr (@fun_decl.value_this) push_symbol = "this"
   attr (@fun_decl.value_this_guard) "endpoint"
   attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
@@ -1159,7 +1159,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   let @body::return_or_yield = @method_def.method_value_return
 
   ; method values have this nodes which need to be visible for constructor calls
-  attr (@method_def.method_value_this) "push" = "this"
+  attr (@method_def.method_value_this) push_symbol = "this"
   attr (@method_def.method_value_this_guard) "endpoint"
   attr (@method_def.method_value_this_guard) pop_symbol = "GUARD:THIS"
   edge @method_def.method_value_call -> @method_def.method_value_this_guard
@@ -1551,7 +1551,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @object.after_scope
   edge @with_stmt.after_scope -> @body.after_scope
 
-  attr (@object.push_dot) "push" = "."
+  attr (@object.push_dot) push_symbol = "."
   edge @object.push_dot -> @object.value
   edge @body.before_scope -> @object.push_dot
 }
@@ -1746,7 +1746,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @this.after_scope -> @this.before_scope
 
   ; this is a lookup, ie a push
-  attr (@this.value) "push" = "this", "reference"
+  attr (@this.value) push_symbol = "this", "reference"
   edge @this.value -> @this.before_scope
 }
 
@@ -2011,12 +2011,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; then flows into the body, and includes a variable binding for "this"
   edge @call_sig.before_scope -> @fun.value_drop
   attr (@call_sig.this_pop) pop_symbol = "this", "definition"
-  attr (@call_sig.this_push) "push" = "this"
+  attr (@call_sig.this_push) push_symbol = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
   attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
-  attr (@call_sig.arguments_push) "push" = "arguments"
+  attr (@call_sig.arguments_push) push_symbol = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.arguments_pop
@@ -2033,7 +2033,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   let @body::return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
-  attr (@fun.value_this) "push" = "this"
+  attr (@fun.value_this) push_symbol = "this"
   attr (@fun.value_this_guard) "endpoint"
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
@@ -2092,7 +2092,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   let @body::return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
-  attr (@fun.value_this) "push" = "this"
+  attr (@fun.value_this) push_symbol = "this"
   attr (@fun.value_this_guard) "endpoint"
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
@@ -2121,7 +2121,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @param.after_scope -> @param.pop
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) "push" = "0"
+  attr (@param.arg_index) push_symbol = "0"
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun.value_arg_scope
 }
@@ -2182,7 +2182,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   let @body::return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
-  attr (@fun.value_this) "push" = "this"
+  attr (@fun.value_this) push_symbol = "this"
   attr (@fun.value_this_guard) "endpoint"
   attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
@@ -2223,8 +2223,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   arguments:(_)@arguments)@call_expr {
 
   ; value is a call, ie a push "()" node w/ "push-scope" @arguments
-  attr (@call_expr.return_guard) "push" = "GUARD:RETURN"
-  attr (@call_expr.call) "push" = "()", "push-scope" = @arguments.arg_scope
+  attr (@call_expr.return_guard) push_symbol = "GUARD:RETURN"
+  attr (@call_expr.call) push_symbol = "()", "push-scope" = @arguments.arg_scope
   edge @call_expr.value -> @call_expr.return_guard
   edge @call_expr.return_guard -> @call_expr.call
   edge @call_expr.call -> @function.value
@@ -2321,7 +2321,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; value is a member projection on the value of the object ie. a push then push dot
   attr (@property.push) "push", "reference"
   ;attr (@member_expr.value) "push" = @property.pop
-  attr (@member_expr.push_dot) "push" = "."
+  attr (@member_expr.push_dot) push_symbol = "."
   edge @property.push -> @member_expr.push_dot
   ;edge @member_expr.value -> @member_expr.push_dot
   edge @member_expr.value -> @property.push
@@ -2352,7 +2352,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   attr (@index.push) "reference"
 
-  attr (@index.push_dot) "push" = "."
+  attr (@index.push_dot) push_symbol = "."
   edge @subscript_expression.value -> @index.push
   edge @index.push -> @index.push_dot
   edge @index.push_dot -> @object.value
@@ -2365,7 +2365,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   attr (@index.push) "reference"
 
-  attr (@index.push_dot) "push" = "."
+  attr (@index.push_dot) push_symbol = "."
   edge @subscript_expression.value -> @index.push
   edge @index.push -> @index.push_dot
   edge @index.push_dot -> @object.value
@@ -2384,10 +2384,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @arguments.before_scope -> @constructor.after_scope
   edge @new_expr.after_scope -> @arguments.after_scope
 
-  attr (@new_expr.call) "push" = "()", "push-scope" = @arguments.arg_scope
+  attr (@new_expr.call) push_symbol = "()", "push-scope" = @arguments.arg_scope
 
   ; we guard for constructors for the case where we have a "true" class
-  attr (@constructor.constructor) "push" = "GUARD:CONSTRUCTOR"
+  attr (@constructor.constructor) push_symbol = "GUARD:CONSTRUCTOR"
   edge @new_expr.call -> @constructor.constructor
   edge @constructor.constructor -> @constructor.value
 
@@ -2397,7 +2397,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 
   ; value coming from the constructor call
-  attr (@new_expr.guard_this) "push" = "GUARD:THIS"
+  attr (@new_expr.guard_this) push_symbol = "GUARD:THIS"
   edge @new_expr.value -> @new_expr.guard_this
   edge @new_expr.guard_this -> @new_expr.call
 
@@ -2952,7 +2952,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   value:(_)@value_pat)@pair_pat {
 
   ; covalues flow in dotted
-  attr (@key.push_dot) "push" = "."
+  attr (@key.push_dot) push_symbol = "."
   edge @value_pat.covalue -> @key.push
   edge @key.push -> @key.push_dot
   edge @key.push_dot -> @pair_pat.covalue
@@ -3010,7 +3010,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @left_pat.after_scope -> @left_pat.before_scope
 
   attr (@left_pat.push) "push" = @left_pat, "reference"
-  attr (@left_pat.push_dot) "push" = "."
+  attr (@left_pat.push_dot) push_symbol = "."
   attr (@left_pat.pop) "pop" = @left_pat, "definition"
   edge @left_pat.pop -> @left_pat.push
   edge @left_pat.push -> @left_pat.push_dot
@@ -3061,7 +3061,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ; array pattern elements
 (array_pattern (_)@element_pat)@array_pat {
   attr (@element_pat.element_index_push) "push" = (child-index @element_pat), "reference"
-  attr (@array_pat.element_index_push_dot) "push" = "."
+  attr (@array_pat.element_index_push_dot) push_symbol = "."
   edge @element_pat.covalue -> @element_pat.element_index_push
   edge @element_pat.element_index_push -> @array_pat.element_index_push_dot
   edge @array_pat.element_index_push_dot -> @array_pat.covalue
@@ -3212,7 +3212,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     }
   }
 
-  attr (@mod_name.module_guard) "push" = "GUARD:EXPORTS"
+  attr (@mod_name.module_guard) push_symbol = "GUARD:EXPORTS"
   edge @call_expr.value -> @mod_name.module_guard
   edge @mod_name.module_guard -> @mod_name.push
   edge @mod_name.push -> ROOT_NODE
