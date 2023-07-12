@@ -949,7 +949,7 @@ inherit .undefined
 
   ; function values have drop nodes that handle closures, that points to the
   ; before scope for the function
-  attr (@fun_decl.value_drop) "drop"
+  attr (@fun_decl.value_drop) type = "drop_scopes"
   edge @fun_decl.value_drop -> @fun_decl.before_scope
 
   ; the call sig's before scope comes from the drop node then flows into the body
@@ -1019,7 +1019,7 @@ inherit .undefined
 
   ; function values have drop nodes that handle closures, that points to the
   ; before scope of the declaration
-  attr (@fun_decl.value_drop) "drop"
+  attr (@fun_decl.value_drop) type = "drop_scopes"
   edge @fun_decl.value_drop -> @fun_decl.before_scope
 
 
@@ -1161,7 +1161,7 @@ inherit .undefined
 
   ; method values have drop nodes that handle closures, that points to the
   ; before scope from method def
-  attr (@method_def.method_value_drop) "drop"
+  attr (@method_def.method_value_drop) type = "drop_scopes"
   edge @method_def.method_value_drop -> @method_def.before_scope
 
   ; the call sig's before scope comes from the drop node then flows into the body
@@ -2024,7 +2024,7 @@ inherit .undefined
 
   ; function values have drop nodes that handle closures, that points to the
   ; before scope from the function
-  attr (@fun.value_drop) "drop"
+  attr (@fun.value_drop) type = "drop_scopes"
   edge @fun.value_drop -> @fun.before_scope
 
   ; the call sig's before scope comes from the drop node,
@@ -2094,7 +2094,7 @@ inherit .undefined
 
   ; function values have drop nodes that handle closures, that points to the
   ; before scope from the function
-  attr (@fun.value_drop) "drop"
+  attr (@fun.value_drop) type = "drop_scopes"
   edge @fun.value_drop -> @fun.before_scope
 
   ; the call sig's before scope comes from the drop node then flows into the body
@@ -2184,7 +2184,7 @@ inherit .undefined
 
   ; function values have drop nodes that handle closures, that points to the
   ; before scope from the function
-  attr (@fun.value_drop) "drop"
+  attr (@fun.value_drop) type = "drop_scopes"
   edge @fun.value_drop -> @fun.before_scope
 
   ; the call sig's before scope comes from the drop node then flows into the body
@@ -2540,7 +2540,7 @@ inherit .undefined
   right: (_)@right)@assignment_expr {
 
   ; HACK
-  attr (@this.drop) "drop"
+  attr (@this.drop) type = "drop_scopes"
   edge @this.drop -> @this.pop
   attr (@this.pop) pop_symbol = "this"
   attr (@this.pop_dot) pop_symbol = "."
