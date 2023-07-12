@@ -795,7 +795,7 @@ inherit .undefined
 ;   }
 ;   edge @mod_name.push -> ROOT_NODE
 ;
-;   attr (@name) "push", "reference"
+;   attr (@name) node_reference = @name
 ;   attr (@name.push_dot) push_symbol = "."
 ;   edge @name.push_dot -> @mod_name.push
 ;   edge @name -> @name.push_dot
@@ -994,7 +994,7 @@ inherit .undefined
     (formal_parameters (_)@param))@fun_decl {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) "push" = (child-index @param)
+  attr (@param.arg_index) push_symbol = (child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun_decl.value_arg_scope
 }
@@ -1064,7 +1064,7 @@ inherit .undefined
     (formal_parameters (_)@param))@fun_decl {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) "push" = (child-index @param)
+  attr (@param.arg_index) push_symbol = (child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun_decl.value_arg_scope
 }
@@ -1195,7 +1195,7 @@ inherit .undefined
     (formal_parameters (_)@param))@method_def {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) "push" = (child-index @param)
+  attr (@param.arg_index) push_symbol = (child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @method_def.method_value_arg_scope
 }
@@ -1735,7 +1735,7 @@ inherit .undefined
   edge @variable.after_scope -> @variable.before_scope
 
   ; value is a lookup, ie a push
-  attr (@variable.value) "push", "reference"
+  attr (@variable.value) node_reference = @variable
   edge @variable.value -> @variable.before_scope
 }
 
@@ -2069,7 +2069,7 @@ inherit .undefined
     (formal_parameters (_)@param))@fun {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) "push" = (child-index @param)
+  attr (@param.arg_index) push_symbol = (child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun.value_arg_scope
 }
@@ -2151,7 +2151,7 @@ inherit .undefined
     (formal_parameters (_)@param))@fun {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) "push" = (child-index @param)
+  attr (@param.arg_index) push_symbol = (child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun.value_arg_scope
 }
@@ -2218,7 +2218,7 @@ inherit .undefined
     (formal_parameters (_)@param))@fun {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) "push" = (child-index @param)
+  attr (@param.arg_index) push_symbol = (child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun.value_arg_scope
 }
@@ -2339,7 +2339,7 @@ inherit .undefined
   edge @member_expr.after_scope -> @object.after_scope
 
   ; value is a member projection on the value of the object ie. a push then push dot
-  attr (@property.push) "push", "reference"
+  attr (@property.push) node_reference @property
   ;attr (@member_expr.value) push_node = @property.pop
   attr (@member_expr.push_dot) push_symbol = "."
   edge @property.push -> @member_expr.push_dot
@@ -2376,7 +2376,7 @@ inherit .undefined
   edge @subscript_expression.value -> @index.push
   edge @index.push -> @index.push_dot
   edge @index.push_dot -> @object.value
-  attr (@index.push) "push" = (replace @index "\"" "")
+  attr (@index.push) push_symbol = (replace @index "\"" "")
 }
 
 (subscript_expression
@@ -2992,7 +2992,7 @@ inherit .undefined
 (pair_pattern
   key:(string)@key)@pair_pattern {
 
-    attr (@key.push) "push" = (replace @key "\"" ""), "reference"
+    attr (@key.push) symbol_reference = (replace @key "\"" ""), source_node = @key
 }
 
 ; LATER-TODO the left pattern has to be a name, it cant be another pattern
@@ -3080,7 +3080,7 @@ inherit .undefined
 
 ; array pattern elements
 (array_pattern (_)@element_pat)@array_pat {
-  attr (@element_pat.element_index_push) "push" = (child-index @element_pat), "reference"
+  attr (@element_pat.element_index_push) push_symbol = (child-index @element_pat)
   attr (@array_pat.element_index_push_dot) push_symbol = "."
   edge @element_pat.covalue -> @element_pat.element_index_push
   edge @element_pat.element_index_push -> @array_pat.element_index_push_dot
