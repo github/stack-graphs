@@ -191,6 +191,13 @@
 ;; - `GUARD:EXPORTS` - used for the names exported by the module
 ;; - `GUARD:DEFAULT` - used for the default export value
 
+;; ## Global Variables
+
+global FILE_PATH
+global ROOT_NODE
+global JUMP_TO_SCOPE_NODE
+
+
 ;; ## Attribute Shorthands
 
 attribute node_definition = node        => type = "pop_symbol", node_symbol = node, is_definition
@@ -290,17 +297,17 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ### Program Queries
 
 (program)@prog {
-  scan filepath {
+  scan FILE_PATH {
     "([^/]+)\.js$" {
       attr @prog.module_pop "definition", "pop" = $1
       attr @prog.module_pop "no_span"
     }
   }
 
-  edge @prog.before_scope -> root
+  edge @prog.before_scope -> ROOT_NODE
 
   attr @prog.module_scope "pop" = "GUARD:MODULE"
-  edge root -> @prog.module_pop
+  edge ROOT_NODE -> @prog.module_pop
   edge @prog.module_pop -> @prog.module_scope
   edge @prog.module_scope -> @prog.after_scope
 
@@ -393,7 +400,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     }
   }
   edge @source.push_exports_guard -> @source.push
-  edge @source.push -> root
+  edge @source.push -> ROOT_NODE
 
   edge @export_clause.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @export_clause.after_scope
@@ -580,7 +587,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @export_statement::exports -> @source.push_exports_guard
   edge @source.push_exports_guard -> @source.push
-  edge @source.push -> root
+  edge @source.push -> ROOT_NODE
 
 }
 
@@ -604,7 +611,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @alias.pop -> @alias.pop_dot
   edge @alias.pop_dot -> @source.push_exports_guard
   edge @source.push_exports_guard -> @source.push
-  edge @source.push -> root
+  edge @source.push -> ROOT_NODE
 
 }
 
@@ -664,7 +671,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   }
   attr @source.push_guard_exports "push" = "GUARD:EXPORTS"
   edge @source.push_guard_exports -> @source.push
-  edge @source.push -> root
+  edge @source.push -> ROOT_NODE
   edge @import_clause.source -> @source.push_guard_exports
 
 }
@@ -766,7 +773,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;       attr @mod_name.push "push" = $1, "reference"
 ;     }
 ;   }
-;   edge @mod_name.push -> root
+;   edge @mod_name.push -> ROOT_NODE
 ;
 ;   attr @name "push", "reference"
 ;   attr @name.push_dot "push" = "."
@@ -3208,7 +3215,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr @mod_name.module_guard "push" = "GUARD:EXPORTS"
   edge @call_expr.value -> @mod_name.module_guard
   edge @mod_name.module_guard -> @mod_name.push
-  edge @mod_name.push -> root
+  edge @mod_name.push -> ROOT_NODE
 
 }
 
@@ -3319,7 +3326,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   attr @left.ignore_guard "pop" = "GUARD:GANDALF"
   attr @left.definiens_hook "pop" = @left, "definition"
   attr @left.definiens_hook "definiens" = @right
-  edge root -> @left.ignore_guard
+  edge ROOT_NODE -> @left.ignore_guard
   edge @left.ignore_guard -> @left.definiens_hook
 }
 
@@ -3360,7 +3367,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 attr @name.ignore_guard "pop" = "GUARD:GANDALF"
 attr @name.definiens_hook "pop" = @name, "definition"
 attr @name.definiens_hook "definiens" = @value
-edge root -> @name.ignore_guard
+edge ROOT_NODE -> @name.ignore_guard
 edge @name.ignore_guard -> @name.definiens_hook
 
 }
