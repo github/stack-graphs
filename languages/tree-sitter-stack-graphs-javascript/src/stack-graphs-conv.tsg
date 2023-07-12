@@ -446,7 +446,7 @@ inherit .undefined
   ; TODO this doesn't support destructuring exports
 
   attr (@name.pop) node_definition = @name
-  attr (@name.push) "push" = @name
+  attr (@name.push) push_node = @name
   edge @export_stmt.exports -> @name.pop
   edge @name.pop -> @decl.value
 }
@@ -570,7 +570,7 @@ inherit .undefined
 
 ) {
 
-  attr (@name.push) "push" = @name
+  attr (@name.push) push_node = @name
   attr (@export_specifier.guard_default) pop_symbol = "GUARD:DEFAULT"
   edge @name.push -> @export_specifier.source
   edge @export_specifier.guard_default -> @name.push
@@ -2340,7 +2340,7 @@ inherit .undefined
 
   ; value is a member projection on the value of the object ie. a push then push dot
   attr (@property.push) "push", "reference"
-  ;attr (@member_expr.value) "push" = @property.pop
+  ;attr (@member_expr.value) push_node = @property.pop
   attr (@member_expr.push_dot) push_symbol = "."
   edge @property.push -> @member_expr.push_dot
   ;edge @member_expr.value -> @member_expr.push_dot
@@ -2389,7 +2389,7 @@ inherit .undefined
   edge @subscript_expression.value -> @index.push
   edge @index.push -> @index.push_dot
   edge @index.push_dot -> @object.value
-  attr (@index.push) "push" = @index
+  attr (@index.push) push_node = @index
 }
 
 
