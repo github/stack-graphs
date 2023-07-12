@@ -937,7 +937,7 @@ inherit .undefined
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
-  attr (@name.pop) "syntax_type" = "function"
+  attr (@name.pop) syntax_type = "function"
 
   ; scope flows across the decl
   edge @fun_decl.after_scope -> @fun_decl.before_scope
@@ -1007,7 +1007,7 @@ inherit .undefined
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
-  attr (@name.pop) "syntax_type" = "function"
+  attr (@name.pop) syntax_type = "function"
 
   ; scope flows across the decl
   edge @fun_decl.after_scope -> @fun_decl.before_scope
@@ -1077,7 +1077,7 @@ inherit .undefined
   name:(_)@name
   body:(_)@body)@class_decl {
 
-  attr (@name.pop) "syntax_type" = "class"
+  attr (@name.pop) syntax_type = "class"
 
   attr (@name.pop) node_definition = @name
   edge @class_decl.after_scope -> @name.pop
@@ -1154,7 +1154,7 @@ inherit .undefined
   parameters:(_)@call_sig
   body:(_)@body)@method_def {
 
-  attr (@name.pop) "syntax_type" = "method"
+  attr (@name.pop) syntax_type = "method"
 
   ; scope flows across the decl
   edge @method_def.after_scope -> @method_def.before_scope
@@ -2005,7 +2005,7 @@ inherit .undefined
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
-  attr (@name.pop) "syntax_type" = "function"
+  attr (@name.pop) syntax_type = "function"
 
   ; if the function has a name, this is bound the callsig's before scope
   attr (@name.pop) node_definition = @name
@@ -2165,7 +2165,7 @@ inherit .undefined
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
-  attr (@name.pop) "syntax_type" = "function"
+  attr (@name.pop) syntax_type = "function"
 
   ; if the function has a name, this is bound the callsig's before scope
   attr (@name.pop) node_definition = @name
@@ -2653,7 +2653,7 @@ inherit .undefined
   name:(_)@name
   body:(_)@body)@class {
   
-  attr (@name.pop) "syntax_type" = "class"
+  attr (@name.pop) syntax_type = "class"
 
   attr (@name.pop) node_definition = @name
   edge @body.before_scope -> @name.pop
