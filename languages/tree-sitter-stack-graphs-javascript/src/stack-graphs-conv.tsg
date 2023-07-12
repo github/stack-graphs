@@ -500,7 +500,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ) {
 
   attr (@name.pop) node_definition = @name
-  attr (@name.push) "push" = @name, "reference"
+  attr (@name.push) node_reference = @name
   edge @name.pop -> @name.push
   edge @name.push -> @export_specifier.source
 
@@ -517,7 +517,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ) {
 
   attr (@alias.pop) node_definition = @alias
-  attr (@name.push) "push" = @name, "reference"
+  attr (@name.push) node_reference = @name
   edge @alias.pop -> @name.push
   edge @name.push -> @export_specifier.source
 
@@ -732,7 +732,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
   attr (@name.pop) node_definition = @name
-  attr (@name.push) "push" = @name, "reference"
+  attr (@name.push) node_reference = @name
   edge @name.pop -> @name.push
   edge @name.push -> @import_specifier.source
   edge @import_specifier.after_scope -> @name.pop
@@ -752,7 +752,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
   attr (@alias.pop) node_definition = @alias
-  attr (@name.push) "push" = @name, "reference"
+  attr (@name.push) node_reference = @name
   edge @alias.pop -> @name.push
   edge @name.push -> @import_specifier.source
   edge @import_specifier.after_scope -> @alias.pop
@@ -1845,7 +1845,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @keyval.after_scope -> @keyval.before_scope
 
   ; shorthand property identifiers have secret variable exprs
-  attr (@keyval.rhsvar_value) "push" = @keyval, "reference"
+  attr (@keyval.rhsvar_value) node_reference = @keyval
   edge @keyval.rhsvar_value -> @keyval.rhsvar_before_scope
 
   ; shorthand property identifiers augment the object value with a member binding
@@ -2342,7 +2342,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; value is a subscript lookup, ie a push then push dot
 
   ; this is done differently depending on what the index is
-  ; attr (@index.push) "push" = @index, "reference"
+  ; attr (@index.push) node_reference = @index
 
 }
 
@@ -2561,7 +2561,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; augment the scope
   attr (@left.pop) node_definition = @left
-  attr (@left.push) "push" = @left, "reference"
+  attr (@left.push) node_reference = @left
   edge @left.push -> @augmented_assignment_expr.before_scope
   edge @left.pop -> @left.push
   edge @left.pop -> @right.value
@@ -2966,7 +2966,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (pair_pattern
   key:(property_identifier)@key)@pair_pattern {
 
-    attr (@key.push) "push" = @key, "reference"
+    attr (@key.push) node_reference = @key
 }
 
 (pair_pattern
@@ -3009,7 +3009,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @left_pat.after_scope -> @left_pat.before_scope
 
-  attr (@left_pat.push) "push" = @left_pat, "reference"
+  attr (@left_pat.push) node_reference = @left_pat
   attr (@left_pat.push_dot) push_symbol = "."
   attr (@left_pat.pop) node_definition = @left_pat
   edge @left_pat.pop -> @left_pat.push
