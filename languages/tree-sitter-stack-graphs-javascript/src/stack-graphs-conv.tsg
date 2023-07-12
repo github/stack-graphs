@@ -3258,7 +3258,7 @@ inherit .undefined
   name:(_)@name
   body:(_)@body)@class_decl {
 
-  attr (@name.pop) "definiens" = @class_decl
+  attr (@name.pop) definiens_node = @class_decl
 
 }
 
@@ -3267,7 +3267,7 @@ inherit .undefined
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
-  attr (@name.pop) "definiens" = @fun_decl
+  attr (@name.pop) definiens_node = @fun_decl
 
 }
 
@@ -3276,7 +3276,7 @@ inherit .undefined
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
-  attr (@name.pop) "definiens" = @fun_decl
+  attr (@name.pop) definiens_node = @fun_decl
 
 }
 
@@ -3285,7 +3285,7 @@ inherit .undefined
   parameters:(_)@call_sig
   body:(_)@body)@method_def {
 
-  attr (@name.pop) "definiens" = @method_def
+  attr (@name.pop) definiens_node = @method_def
 
 }
 
@@ -3293,7 +3293,7 @@ inherit .undefined
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
-  attr (@name.pop) "definiens" = @fun
+  attr (@name.pop) definiens_node = @fun
 
 }
 
@@ -3301,7 +3301,7 @@ inherit .undefined
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
-  attr (@name.pop) "definiens" = @fun
+  attr (@name.pop) definiens_node = @fun
 
 }
 
@@ -3309,7 +3309,7 @@ inherit .undefined
   name:(_)@name
   body:(_)@body)@class {
   
-  attr (@name.pop) "definiens" = @class
+  attr (@name.pop) definiens_node = @class
 
 }
 
@@ -3331,7 +3331,7 @@ inherit .undefined
     (arrow_function)
   ]@right) {
 
-  attr (@left.pop) "definiens" = @right
+  attr (@left.pop) definiens_node = @right
 
 }
 
@@ -3345,7 +3345,7 @@ inherit .undefined
 
   attr (@left.ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (@left.definiens_hook) node_definition = @left
-  attr (@left.definiens_hook) "definiens" = @right
+  attr (@left.definiens_hook) definiens_node = @right
   edge ROOT_NODE -> @left.ignore_guard
   edge @left.ignore_guard -> @left.definiens_hook
 }
@@ -3359,7 +3359,7 @@ inherit .undefined
       (arrow_function)
     ]@initializer)) {
 
-  attr (@name.pop) "definiens" = @initializer
+  attr (@name.pop) definiens_node = @initializer
 
 }
 
@@ -3372,7 +3372,7 @@ inherit .undefined
       (arrow_function)
     ]@initializer)) {
 
-  attr (@name.pop) "definiens" = @initializer
+  attr (@name.pop) definiens_node = @initializer
 
 }
 
@@ -3386,7 +3386,7 @@ inherit .undefined
 
 attr (@name.ignore_guard) pop_symbol = "GUARD:GANDALF"
 attr (@name.definiens_hook) node_definition = @name
-attr (@name.definiens_hook) "definiens" = @value
+attr (@name.definiens_hook) definiens_node = @value
 edge ROOT_NODE -> @name.ignore_guard
 edge @name.ignore_guard -> @name.definiens_hook
 
