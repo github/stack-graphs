@@ -309,12 +309,12 @@ inherit .builtins_Regex_prototype
 inherit .builtins_arguments_prototype
 inherit .builtins_boolean
 inherit .builtins_empty_object
-inherit .exports
 inherit .builtins_null
 inherit .builtins_number
-inherit .return_or_yield
 inherit .builtins_string
 inherit .builtins_undefined
+inherit .exports
+inherit .return_or_yield
 
 ;; ██████  ██████   ██████   ██████  ██████   █████  ███    ███ ███████ 
 ;; ██   ██ ██   ██ ██    ██ ██       ██   ██ ██   ██ ████  ████ ██      
@@ -333,7 +333,6 @@ inherit .builtins_undefined
     scan FILE_PATH {
         "([^/]+)\.js$" {
             attr (@prog.module_pop) symbol_definition = $1, source_node = @prog
-            attr (@prog.module_pop) empty_source_span
         }
     }
 
@@ -344,7 +343,6 @@ inherit .builtins_undefined
     edge @prog.module_pop -> @prog.module_scope
     edge @prog.module_scope -> @prog.after_scope
 
-    attr (@prog) empty_source_span
     attr (@prog.module_pop) empty_source_span
     attr (@prog.module_scope) empty_source_span
     attr (@prog.exports) empty_source_span
@@ -365,6 +363,9 @@ inherit .builtins_undefined
     node @prog.builtins_Regex_prototype
     node @prog.builtins_arguments_prototype
     node @prog.builtins_empty_object
+
+    ;; fallbacks
+    node @prog.return_or_yield
 }
 
 ; programs, first statement
