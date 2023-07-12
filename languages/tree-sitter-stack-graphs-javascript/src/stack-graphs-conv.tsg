@@ -1054,7 +1054,7 @@ inherit .return_or_yield
     (formal_parameters (_)@param))@fun_decl {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) push_symbol = (child-index @param)
+  attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun_decl.value_arg_scope
 }
@@ -1124,7 +1124,7 @@ inherit .return_or_yield
     (formal_parameters (_)@param))@fun_decl {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) push_symbol = (child-index @param)
+  attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun_decl.value_arg_scope
 }
@@ -1255,7 +1255,7 @@ inherit .return_or_yield
     (formal_parameters (_)@param))@method_def {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) push_symbol = (child-index @param)
+  attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @method_def.method_value_arg_scope
 }
@@ -2227,7 +2227,7 @@ inherit .return_or_yield
     (formal_parameters (_)@param))@fun {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) push_symbol = (child-index @param)
+  attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun.value_arg_scope
 }
@@ -2309,7 +2309,7 @@ inherit .return_or_yield
     (formal_parameters (_)@param))@fun {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) push_symbol = (child-index @param)
+  attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun.value_arg_scope
 }
@@ -2376,7 +2376,7 @@ inherit .return_or_yield
     (formal_parameters (_)@param))@fun {
 
   ; parameters jump to the pushed argument scope
-  attr (@param.arg_index) push_symbol = (child-index @param)
+  attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
   edge @param.arg_index -> @fun.value_arg_scope
 }
@@ -2445,7 +2445,7 @@ inherit .return_or_yield
 (call_expression
   arguments:(arguments (_)@arg)@arguments) {
 
-  attr (@arg.arg_index) pop_symbol = (child-index @arg)
+  attr (@arg.arg_index) pop_symbol = (named-child-index @arg)
   edge @arguments.arg_scope_no_this -> @arg.arg_index
   edge @arg.arg_index -> @arg.value
 }
@@ -2588,7 +2588,7 @@ inherit .return_or_yield
 (new_expression
   arguments:(arguments (_)@arg)@arguments) {
 
-  attr (@arg.arg_index) pop_symbol = (child-index @arg)
+  attr (@arg.arg_index) pop_symbol = (named-child-index @arg)
   edge @arguments.arg_scope -> @arg.arg_index
   edge @arg.arg_index -> @arg.value
 }
@@ -3243,7 +3243,7 @@ inherit .return_or_yield
 
 ; array pattern elements
 (array_pattern (_)@element_pat)@array_pat {
-  attr (@element_pat.element_index_push) push_symbol = (child-index @element_pat)
+  attr (@element_pat.element_index_push) push_symbol = (named-child-index @element_pat)
   attr (@array_pat.element_index_push_dot) push_symbol = "."
   edge @element_pat.covalue -> @element_pat.element_index_push
   edge @element_pat.element_index_push -> @array_pat.element_index_push_dot
