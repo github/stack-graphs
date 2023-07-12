@@ -2103,7 +2103,7 @@ inherit .return_or_yield
 
     node element_index_pop
 
-    attr (element_index_pop) symbol_definition = (named-child-index @element)
+    attr (element_index_pop) pop_symbol = (named-child-index @element)
     edge @array_expr.element_pop_dot -> element_index_pop
     edge element_index_pop -> @element.value
 
