@@ -236,7 +236,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.arg_arguments_dot
     node @node.arg_index
     node @node.arg_scope
-    attr (@node.arg_scope) is_exported
     node @node.arg_scope_no_this
     node @node.arg_this
     node @node.arguments_pop
@@ -261,6 +260,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.ignore_guard
     node @node.index_pop
     node @node.index_push
+    node @node.key_pop
+    node @node.key_push
     node @node.label_guard
     node @node.label_pop
     node @node.label_push
@@ -301,6 +302,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.value_return
     node @node.value_this
     node @node.value_this_guard
+
+    attr (@node.arg_scope) is_exported
 }
 
 
@@ -1990,9 +1993,6 @@ inherit .return_or_yield
 
 (computed_property_name (_)@expr)@computed_property_name {
 
-    node @computed_property_name.before_scope
-    node @computed_property_name.after_scope
-
     edge @expr.before_scope -> @computed_property_name.before_scope
     edge @computed_property_name.after_scope -> @expr.after_scope
 
@@ -2004,7 +2004,6 @@ inherit .return_or_yield
     value: (_)@value)@pair)@object {
 
     ; pairs augment the object value with a member binding
-    node @pair.key_pop
 
     ; This is done differently depending on what the key is. See next rules.
     ; attr @key.pop "pop" = @key, "definition"
