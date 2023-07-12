@@ -291,6 +291,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; ## Inherited
 
+inherit .exports
 inherit .null
 inherit .string
 
@@ -329,7 +330,6 @@ inherit .string
   attr (@prog.before_scope) empty_source_span
   attr (@prog.after_scope) empty_source_span
 
-  let @prog::exports = @prog.exports
   attr (@prog.exports_pop) pop_symbol = "GUARD:EXPORTS"
   edge @prog.module_pop -> @prog.exports_pop
   edge @prog.exports_pop -> @prog.exports
@@ -436,7 +436,7 @@ inherit .string
 
   attr (@name.pop) node_definition = @name
   attr (@name.push) "push" = @name
-  edge @export_stmt::exports -> @name.pop
+  edge @export_stmt.exports -> @name.pop
   edge @name.pop -> @decl.value
 }
 
@@ -458,7 +458,7 @@ inherit .string
         ]@pattern))
   ])@export_stmt {
 
-  edge @export_stmt::exports -> @pattern.new_bindings
+  edge @export_stmt.exports -> @pattern.new_bindings
 
 }
 
@@ -513,7 +513,7 @@ inherit .string
   edge @name.pop -> @name.push
   edge @name.push -> @export_specifier.source
 
-  edge @export_specifier::exports -> @name.pop
+  edge @export_specifier.exports -> @name.pop
 }
 
 (
@@ -530,7 +530,7 @@ inherit .string
   edge @alias.pop -> @name.push
   edge @name.push -> @export_specifier.source
 
-  edge @export_specifier::exports -> @alias.pop
+  edge @export_specifier.exports -> @alias.pop
 }
 
 (
@@ -544,7 +544,7 @@ inherit .string
 
   attr (@export_specifier.pop_guard_default) pop_symbol = "GUARD:DEFAULT"
   attr (@export_specifier.push_guard_default) push_symbol = "GUARD:DEFAULT"
-  edge @export_specifier::exports -> @export_specifier.pop_guard_default
+  edge @export_specifier.exports -> @export_specifier.pop_guard_default
   edge @export_specifier.pop_guard_default -> @export_specifier.push_guard_default
   edge @export_specifier.push_guard_default -> @export_specifier.source
 
@@ -563,7 +563,7 @@ inherit .string
   attr (@export_specifier.guard_default) pop_symbol = "GUARD:DEFAULT"
   edge @name.push -> @export_specifier.source
   edge @export_specifier.guard_default -> @name.push
-  edge @export_specifier::exports -> @export_specifier.guard_default
+  edge @export_specifier.exports -> @export_specifier.guard_default
 }
 
 ; simple default exports
@@ -575,7 +575,7 @@ inherit .string
   attr (@export_stmt.default_guard) pop_symbol = "GUARD:DEFAULT", "definition"
   edge @default_expr.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @default_expr.after_scope
-  edge @export_stmt::exports -> @export_stmt.default_guard
+  edge @export_stmt.exports -> @export_stmt.default_guard
   edge @export_stmt.default_guard -> @default_expr.value
 }
 
@@ -594,7 +594,7 @@ inherit .string
     }
   }
 
-  edge @export_statement::exports -> @source.push_exports_guard
+  edge @export_statement.exports -> @source.push_exports_guard
   edge @source.push_exports_guard -> @source.push
   edge @source.push -> ROOT_NODE
 
@@ -616,7 +616,7 @@ inherit .string
   }
   attr (@alias.pop) node_definition = @alias
   attr (@alias.pop_dot) pop_symbol = "."
-  edge @export_statement::exports -> @alias.pop
+  edge @export_statement.exports -> @alias.pop
   edge @alias.pop -> @alias.pop_dot
   edge @alias.pop_dot -> @source.push_exports_guard
   edge @source.push_exports_guard -> @source.push
@@ -3184,7 +3184,7 @@ inherit .string
 
   attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
-  edge @assignment_expr::exports -> @property.pop_dot
+  edge @assignment_expr.exports -> @property.pop_dot
   edge @property.pop_dot -> @property.pop
   edge @property.pop -> @right.value
 }
@@ -3199,7 +3199,7 @@ inherit .string
   (#eq? @exports "exports")
 ) {
 
-  edge @assignment_expr::exports -> @right.value
+  edge @assignment_expr.exports -> @right.value
 }
 
 ;; ## CommonJS-style Imports
