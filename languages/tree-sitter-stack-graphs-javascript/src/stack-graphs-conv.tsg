@@ -77,7 +77,7 @@
 
 ;; ``````stgdoc
 ;; (number)@num {
-;;   attr (@num.value) "pop" = "NUM_VAL"
+;;   attr (@num.value) pop_symbol = "NUM_VAL"
 ;; }
 ;; ``````
 
@@ -106,7 +106,7 @@
 
 ;; ``````stgdoc
 ;; (number)@num {
-;;   attr (@num.value) "pop" = "NUM_VAL"
+;;   attr (@num.value) pop_symbol = "NUM_VAL"
 ;;   edge @num.value -> @num::number_prototype
 ;; }
 ;; ``````
@@ -154,7 +154,7 @@
 ;;
 ;;   edge @prog.number_prototype -> @prog.number_prototype_toString_method_value
 ;;   edge @prog.number_prototype_toString_method_value -> @prog.number_prototype_toString_method_value_return
-;;   attr (@prog.number_prototype_toString_method_value_return) "pop" = "GUARD:RETURN"
+;;   attr (@prog.number_prototype_toString_method_value_return) pop_symbol = "GUARD:RETURN"
 ;;   edge @prog.number_prototype_toString_method_value_return -> @prog.string_prototype
 ;;
 ;;   ...
@@ -306,7 +306,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   edge @prog.before_scope -> ROOT_NODE
 
-  attr (@prog.module_scope) "pop" = "GUARD:MODULE"
+  attr (@prog.module_scope) pop_symbol = "GUARD:MODULE"
   edge ROOT_NODE -> @prog.module_pop
   edge @prog.module_pop -> @prog.module_scope
   edge @prog.module_scope -> @prog.after_scope
@@ -321,7 +321,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   let @prog::prog = @prog
   let @prog::exports = @prog.exports
-  attr (@prog.exports_pop) "pop" = "GUARD:EXPORTS"
+  attr (@prog.exports_pop) pop_symbol = "GUARD:EXPORTS"
   edge @prog.module_pop -> @prog.exports_pop
   edge @prog.exports_pop -> @prog.exports
 }
@@ -533,7 +533,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ) {
 
-  attr (@export_specifier.pop_guard_default) "pop" = "GUARD:DEFAULT"
+  attr (@export_specifier.pop_guard_default) pop_symbol = "GUARD:DEFAULT"
   attr (@export_specifier.push_guard_default) "push" = "GUARD:DEFAULT"
   edge @export_specifier::exports -> @export_specifier.pop_guard_default
   edge @export_specifier.pop_guard_default -> @export_specifier.push_guard_default
@@ -551,7 +551,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ) {
 
   attr (@name.push) "push" = @name
-  attr (@export_specifier.guard_default) "pop" = "GUARD:DEFAULT"
+  attr (@export_specifier.guard_default) pop_symbol = "GUARD:DEFAULT"
   edge @name.push -> @export_specifier.source
   edge @export_specifier.guard_default -> @name.push
   edge @export_specifier::exports -> @export_specifier.guard_default
@@ -563,7 +563,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (export_statement
   value:(_)@default_expr)@export_stmt {
 
-  attr (@export_stmt.default_guard) "pop" = "GUARD:DEFAULT", "definition"
+  attr (@export_stmt.default_guard) pop_symbol = "GUARD:DEFAULT", "definition"
   edge @default_expr.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @default_expr.after_scope
   edge @export_stmt::exports -> @export_stmt.default_guard
@@ -606,7 +606,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     }
   }
   attr (@alias.pop) "pop" = @alias, "definition"
-  attr (@alias.pop_dot) "pop" = "."
+  attr (@alias.pop_dot) pop_symbol = "."
   edge @export_statement::exports -> @alias.pop
   edge @alias.pop -> @alias.pop_dot
   edge @alias.pop_dot -> @source.push_exports_guard
@@ -644,7 +644,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @namespace_import.after_scope -> @namespace_import.before_scope
 
   attr (@imported_as.pop) "pop" = @imported_as, "definition"
-  attr (@imported_as.pop_dot) "pop" = "."
+  attr (@imported_as.pop_dot) pop_symbol = "."
   edge @imported_as.pop -> @imported_as.pop_dot
   edge @imported_as.pop_dot -> @namespace_import.source
 
@@ -934,12 +934,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> @fun_decl.value_drop
-  attr (@call_sig.this_pop) "pop" = "this", "definition"
+  attr (@call_sig.this_pop) pop_symbol = "this", "definition"
   attr (@call_sig.this_push) "push" = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
-  attr (@call_sig.arguments_pop) "pop" = "arguments", "definition"
+  attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
   attr (@call_sig.arguments_push) "push" = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
@@ -948,19 +948,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 
   ; function values have call nodes
-  attr (@fun_decl.value_call) "pop" = "()", "pop-scope"
+  attr (@fun_decl.value_call) pop_symbol = "()", "pop-scope"
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
   attr (@fun_decl.value_return) "endpoint"
-  attr (@fun_decl.value_return) "pop" = "GUARD:RETURN"
+  attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
   let @body::return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) "push" = "this"
   attr (@fun_decl.value_this_guard) "endpoint"
-  attr (@fun_decl.value_this_guard) "pop" = "GUARD:THIS"
+  attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
   edge @fun_decl.value_this_guard -> @fun_decl.value_this
   edge @fun_decl.value_this -> @body.after_scope
@@ -1005,12 +1005,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> @fun_decl.value_drop
-  attr (@call_sig.this_pop) "pop" = "this", "definition"
+  attr (@call_sig.this_pop) pop_symbol = "this", "definition"
   attr (@call_sig.this_push) "push" = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun_decl.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
-  attr (@call_sig.arguments_pop) "pop" = "arguments", "definition"
+  attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
   attr (@call_sig.arguments_push) "push" = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun_decl.value_arg_scope
@@ -1018,19 +1018,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun_decl.value_call) "pop" = "()", "pop-scope"
+  attr (@fun_decl.value_call) pop_symbol = "()", "pop-scope"
   edge @fun_decl.value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
   attr (@fun_decl.value_return) "endpoint"
-  attr (@fun_decl.value_return) "pop" = "GUARD:RETURN"
+  attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun_decl.value_call -> @fun_decl.value_return
   let @body::return_or_yield = @fun_decl.value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@fun_decl.value_this) "push" = "this"
   attr (@fun_decl.value_this_guard) "endpoint"
-  attr (@fun_decl.value_this_guard) "pop" = "GUARD:THIS"
+  attr (@fun_decl.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun_decl.value_call -> @fun_decl.value_this_guard
   edge @fun_decl.value_this_guard -> @fun_decl.value_this
   edge @fun_decl.value_this -> @body.after_scope
@@ -1111,7 +1111,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (#eq? @name "constructor")
 ) {
   ; augmentation for the constructor
-  attr (@name.constructor_guard) "pop" = "GUARD:CONSTRUCTOR", "definition"
+  attr (@name.constructor_guard) pop_symbol = "GUARD:CONSTRUCTOR", "definition"
   edge @method_def.after_scope -> @name.constructor_guard
   edge @name.constructor_guard -> @method_def.method_value
 }
@@ -1123,7 +1123,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ) {
   ; augmentation for the method
   attr (@name.pop) "pop" = @name, "definition"
-  attr (@name.pop_dot) "pop" = "."
+  attr (@name.pop_dot) pop_symbol = "."
   edge @method_def.after_scope -> @name.pop_dot
   edge @name.pop_dot -> @name.pop
   edge @name.pop -> @method_def.method_value
@@ -1149,19 +1149,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @call_sig.after_scope
 
   ; method values have call nodes
-  attr (@method_def.method_value_call) "pop" = "()", "pop-scope"
+  attr (@method_def.method_value_call) pop_symbol = "()", "pop-scope"
   edge @method_def.method_value -> @method_def.method_value_call
 
   ; method values have return nodes which need to be visible for returns
   attr (@method_def.method_value_return) "endpoint"
-  attr (@method_def.method_value_return) "pop" = "GUARD:RETURN"
+  attr (@method_def.method_value_return) pop_symbol = "GUARD:RETURN"
   edge @method_def.method_value_call -> @method_def.method_value_return
   let @body::return_or_yield = @method_def.method_value_return
 
   ; method values have this nodes which need to be visible for constructor calls
   attr (@method_def.method_value_this) "push" = "this"
   attr (@method_def.method_value_this_guard) "endpoint"
-  attr (@method_def.method_value_this_guard) "pop" = "GUARD:THIS"
+  attr (@method_def.method_value_this_guard) pop_symbol = "GUARD:THIS"
   edge @method_def.method_value_call -> @method_def.method_value_this_guard
   edge @method_def.method_value_this_guard -> @method_def.method_value_this
   edge @method_def.method_value_this -> @body.after_scope
@@ -1186,7 +1186,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   property:(property_identifier)@property)@field_def {
 
   attr (@property.pop) "pop" = @property, "definition"
-  attr (@property.pop_dot) "pop" = "."
+  attr (@property.pop_dot) pop_symbol = "."
   edge @field_def.after_scope -> @property.pop_dot
   edge @property.pop_dot -> @property.pop
 }
@@ -1851,7 +1851,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; shorthand property identifiers augment the object value with a member binding
   attr (@keyval.boundvar_pop) "pop" = @keyval, "definition"
 
-  attr (@object.field_pop_dot) "pop" = "."
+  attr (@object.field_pop_dot) pop_symbol = "."
   edge @keyval.boundvar_pop -> @keyval.rhsvar_value
   edge @object.field_pop_dot -> @keyval.boundvar_pop
   edge @object.value -> @object.field_pop_dot
@@ -1874,7 +1874,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; attr (@key.pop) "pop" = @key, "definition"
   attr (@key.pop) "definition"
 
-  attr (@object.field_pop_dot) "pop" = "."
+  attr (@object.field_pop_dot) pop_symbol = "."
   edge @key.pop -> @value.value
   edge @object.field_pop_dot -> @key.pop
   edge @object.value -> @object.field_pop_dot
@@ -1930,7 +1930,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 ; elements at indices
 (array (_)@element)@array_expr {
-  attr (@array_expr.element_pop_dot) "pop" = "."
+  attr (@array_expr.element_pop_dot) pop_symbol = "."
   attr (@element.index_pop) "pop" = (child-index @element), "definition"
   edge @array_expr.element_pop_dot -> @element.index_pop
   edge @array_expr.value -> @array_expr.element_pop_dot
@@ -2010,12 +2010,12 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; the call sig's before scope comes from the drop node,
   ; then flows into the body, and includes a variable binding for "this"
   edge @call_sig.before_scope -> @fun.value_drop
-  attr (@call_sig.this_pop) "pop" = "this", "definition"
+  attr (@call_sig.this_pop) pop_symbol = "this", "definition"
   attr (@call_sig.this_push) "push" = "this"
   edge @call_sig.this_pop -> @call_sig.this_push
   edge @call_sig.this_push -> @fun.value_arg_scope
   edge @call_sig.before_scope -> @call_sig.this_pop
-  attr (@call_sig.arguments_pop) "pop" = "arguments", "definition"
+  attr (@call_sig.arguments_pop) pop_symbol = "arguments", "definition"
   attr (@call_sig.arguments_push) "push" = "arguments"
   edge @call_sig.arguments_pop -> @call_sig.arguments_push
   edge @call_sig.arguments_push -> @fun.value_arg_scope
@@ -2023,19 +2023,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun.value_call) "pop" = "()", "pop-scope"
+  attr (@fun.value_call) pop_symbol = "()", "pop-scope"
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
   attr (@fun.value_return) "endpoint"
-  attr (@fun.value_return) "pop" = "GUARD:RETURN"
+  attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body::return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) "push" = "this"
   attr (@fun.value_this_guard) "endpoint"
-  attr (@fun.value_this_guard) "pop" = "GUARD:THIS"
+  attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
   edge @fun.value_this -> @body.after_scope
@@ -2082,19 +2082,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun.value_call) "pop" = "()", "pop-scope"
+  attr (@fun.value_call) pop_symbol = "()", "pop-scope"
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
   attr (@fun.value_return) "endpoint"
-  attr (@fun.value_return) "pop" = "GUARD:RETURN"
+  attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body::return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) "push" = "this"
   attr (@fun.value_this_guard) "endpoint"
-  attr (@fun.value_this_guard) "pop" = "GUARD:THIS"
+  attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
   edge @fun.value_this -> @body.after_scope
@@ -2172,19 +2172,19 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
-  attr (@fun.value_call) "pop" = "()", "pop-scope"
+  attr (@fun.value_call) pop_symbol = "()", "pop-scope"
   edge @fun.value -> @fun.value_call
 
   ; function values have return nodes which need to be visible for returns
   attr (@fun.value_return) "endpoint"
-  attr (@fun.value_return) "pop" = "GUARD:RETURN"
+  attr (@fun.value_return) pop_symbol = "GUARD:RETURN"
   edge @fun.value_call -> @fun.value_return
   let @body::return_or_yield = @fun.value_return
 
   ; function values have this nodes which need to be visible for method calls
   attr (@fun.value_this) "push" = "this"
   attr (@fun.value_this_guard) "endpoint"
-  attr (@fun.value_this_guard) "pop" = "GUARD:THIS"
+  attr (@fun.value_this_guard) pop_symbol = "GUARD:THIS"
   edge @fun.value_call -> @fun.value_this_guard
   edge @fun.value_this_guard -> @fun.value_this
   edge @fun.value_this -> @body.after_scope
@@ -2229,13 +2229,13 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @call_expr.return_guard -> @call_expr.call
   edge @call_expr.call -> @function.value
 
-  attr (@arguments.arg_this) "pop" = "this", "definition"
+  attr (@arguments.arg_this) pop_symbol = "this", "definition"
   edge @arguments.arg_scope -> @arguments.arg_this
 
   edge @arguments.arg_scope -> @arguments.arg_scope_no_this
 
-  attr (@arguments.arg_arguments) "pop" = "arguments", "definition"
-  attr (@arguments.arg_arguments_dot) "pop" = "."
+  attr (@arguments.arg_arguments) pop_symbol = "arguments", "definition"
+  attr (@arguments.arg_arguments_dot) pop_symbol = "."
   edge @arguments.arg_scope -> @arguments.arg_arguments
   edge @arguments.arg_arguments -> @arguments.arg_arguments_dot
   edge @arguments.arg_arguments_dot -> @arguments.arg_scope_no_this
@@ -2404,7 +2404,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; value coming from the field decls in the class
   edge @new_expr.value -> @constructor.value
 
-  attr (@arguments.arg_this) "pop" = "this", "definition"
+  attr (@arguments.arg_this) pop_symbol = "this", "definition"
   edge @arguments.arg_scope -> @arguments.arg_this
   edge @arguments.arg_this -> @new_expr::empty_object
 }
@@ -2522,8 +2522,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; HACK
   attr (@this.drop) "drop"
   edge @this.drop -> @this.pop
-  attr (@this.pop) "pop" = "this"
-  attr (@this.pop_dot) "pop" = "."
+  attr (@this.pop) pop_symbol = "this"
+  attr (@this.pop_dot) pop_symbol = "."
   attr (@property.pop) "pop" = @property, "definition"
   edge @assignment_expr.after_scope -> @this.drop
   edge @assignment_expr.after_scope -> @this.pop
@@ -3174,7 +3174,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ) {
 
   attr (@property.pop) "pop" = @property, "definition"
-  attr (@property.pop_dot) "pop" = "."
+  attr (@property.pop_dot) pop_symbol = "."
   edge @assignment_expr::exports -> @property.pop_dot
   edge @property.pop_dot -> @property.pop
   edge @property.pop -> @right.value
@@ -3323,7 +3323,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (arrow_function)
   ]@right) {
 
-  attr (@left.ignore_guard) "pop" = "GUARD:GANDALF"
+  attr (@left.ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (@left.definiens_hook) "pop" = @left, "definition"
   attr (@left.definiens_hook) "definiens" = @right
   edge ROOT_NODE -> @left.ignore_guard
@@ -3364,7 +3364,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     (arrow_function)
   ]@value) {
 
-attr (@name.ignore_guard) "pop" = "GUARD:GANDALF"
+attr (@name.ignore_guard) pop_symbol = "GUARD:GANDALF"
 attr (@name.definiens_hook) "pop" = @name, "definition"
 attr (@name.definiens_hook) "definiens" = @value
 edge ROOT_NODE -> @name.ignore_guard
