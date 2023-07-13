@@ -231,7 +231,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ## Nodes
 
 (_)@node {
-    node @node.after_scope
+    ; node @node.after_scope !!!! TODO REMOVE
     node @node.arg_arguments
     node @node.arg_arguments_dot
     node @node.arg_index
@@ -337,6 +337,10 @@ inherit .return_or_yield
 ;; ### Attributes Defined on Programs
 ;; TODO
 
+(program)@prog {
+  node @prog.after_scope
+}
+
 ;; ### Program Queries
 
 (program)@prog {
@@ -408,10 +412,12 @@ inherit .return_or_yield
 }
 
 (hash_bang_line)@hashbang {
+  node @hashbang.after_scope
   edge @hashbang.after_scope -> @hashbang.before_scope
 }
 
 (comment)@comment {
+  node @comment.after_scope
   edge @comment.after_scope -> @comment.before_scope
 }
 
@@ -434,6 +440,35 @@ inherit .return_or_yield
 
 ;; ### Attributes Defined on Statements
 ;; TODO
+
+[
+  (export_statement)
+  (import_statement)
+  (debugger_statement)
+  (expression_statement)
+  (function_declaration)
+  (generator_function_declaration)
+  (class_declaration)
+  (lexical_declaration)
+  (variable_declaration)
+  (statement_block)
+  (if_statement)
+  (switch_statement)
+  (for_statement)
+  (for_in_statement)
+  (while_statement)
+  (do_statement)
+  (try_statement)
+  (with_statement)
+  (break_statement)
+  (continue_statement)
+  (return_statement)
+  (throw_statement)
+  (empty_statement)
+  (labeled_statement)
+]@stmt {
+  node @stmt.after_scope
+}
 
 ;; ### Statement Queries
 
@@ -524,6 +559,10 @@ inherit .return_or_yield
 
 }
 
+(export_clause)@export_clause {
+  node @export_clause.after_scope
+}
+
 ; LATER-TODO tree sitter doesn't yet support empty switch bodies
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (export_clause)@export_clause {
@@ -559,6 +598,7 @@ inherit .return_or_yield
 }
 
 (export_specifier)@export_specifier {
+  node @export_specifier.after_scope
   edge @export_specifier.after_scope -> @export_specifier.before_scope
 }
 
@@ -707,6 +747,10 @@ inherit .return_or_yield
   edge @import_stmt.after_scope -> @import_stmt.before_scope
 }
 
+(import_clause)@import_clause {
+  node @import_clause.after_scope
+}
+
 ; import * as name from "module-name";
 (import_clause
   (namespace_import)@namespace_import)@import_clause {
@@ -718,6 +762,7 @@ inherit .return_or_yield
 
 (namespace_import (identifier)@imported_as)@namespace_import {
 
+  node @namespace_import.after_scope
   edge @namespace_import.after_scope -> @namespace_import.before_scope
 
   attr (@imported_as.pop) node_definition = @imported_as
@@ -762,6 +807,10 @@ inherit .return_or_yield
 
 }
 
+(named_imports)@named_imports {
+  node @named_imports.after_scope
+}
+
 ; LATER-TODO tree sitter doesn't yet support empty named imports
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (named_imports)@named_imports {
@@ -794,6 +843,10 @@ inherit .return_or_yield
   .)@named_imports {
 
   edge @named_imports.after_scope -> @last_import.after_scope
+}
+
+(import_specifier)@import_specifier {
+  node @import_specifier.after_scope
 }
 
 (
@@ -925,6 +978,7 @@ inherit .return_or_yield
   (variable_declarator
     name:(identifier)@name))@variable_decl
 {
+
     attr (@name.pop) node_definition = @name
     edge @variable_decl.after_scope -> @name.pop
     attr (@variable_decl.after_scope -> @name.pop) precedence = 1
@@ -1150,6 +1204,8 @@ inherit .return_or_yield
   name:(_)@name
   body:(_)@body)@class_decl {
 
+  node @class_decl.class_value
+
   attr (@name.pop) syntax_type = "class"
 
   attr (@name.pop) node_definition = @name
@@ -1172,6 +1228,7 @@ inherit .return_or_yield
 ; LATER-TODO tree sitter doesn't yet support empty switch bodies
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (class_body)@class_body {
+  node @class_body.after_scope
   edge @class_body.after_scope -> @class_body.before_scope
 }
 
@@ -1197,6 +1254,11 @@ inherit .return_or_yield
   edge @class_body.after_scope -> @last_decl.after_scope
 }
 
+(method_definition)@method_def {
+
+  node @method_def.after_scope
+  
+}
 
 (
   (method_definition
@@ -1276,6 +1338,7 @@ inherit .return_or_yield
 (field_definition
   property:(property_identifier)@property)@field_def {
 
+  node @field_def.after_scope
   attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
   edge @field_def.after_scope -> @property.pop_dot
@@ -1357,6 +1420,7 @@ inherit .return_or_yield
 }
 
 (else_clause (_)@inner)@else_clause {
+    node @else_clause.after_scope
     ; scopes flow in and right back out
     edge @inner.before_scope -> @else_clause.before_scope
     edge @else_clause.after_scope -> @inner.after_scope
@@ -1380,6 +1444,7 @@ inherit .return_or_yield
 ; LATER-TODO tree sitter doesn't yet support empty switch bodies
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (switch_body)@switch_body {
+  node @switch_body.after_scope
   edge @switch_body.after_scope -> @switch_body.before_scope
 }
 
@@ -1409,6 +1474,10 @@ inherit .return_or_yield
 {
     ; scope flows out to the switch body
     edge @switch_body.after_scope -> @last_choice.after_scope
+}
+
+(switch_case)@switch_case {
+  node @switch_case.after_scope
 }
 
 ; LATER-TODO tree sitter doesnt yet support switch case's with no statements
@@ -1447,6 +1516,10 @@ inherit .return_or_yield
 
   ; scopes flow out from the last statement to the case
   edge @switch_case.after_scope -> @last_stmt.after_scope
+}
+
+(switch_default)@switch_default {
+  node @switch_default.after_scope
 }
 
 ; LATER-TODO tree sitter doesnt yet support empty defaults
@@ -1619,6 +1692,7 @@ inherit .return_or_yield
 }
 
 (catch_clause body:(_)@body)@catch_clause {
+    node @catch_clause.after_scope
     ; scopes flow in then back out
     edge @body.before_scope -> @catch_clause.before_scope
     edge @catch_clause.after_scope -> @body.after_scope
@@ -1635,6 +1709,7 @@ inherit .return_or_yield
 }
 
 (finally_clause body:(_)@body)@finally_clause {
+    node @finally_clause.after_scope
     ; scopes flow in thenback out
     edge @body.before_scope -> @finally_clause.before_scope
     edge @finally_clause.after_scope -> @body.after_scope
@@ -1772,6 +1847,46 @@ inherit .return_or_yield
 
 ;; ### Attributes Defined on Expressions
 ;; TODO
+
+[
+  (primary_expression/subscript_expression)
+  (primary_expression/member_expression)
+  (parenthesized_expression)
+  (undefined)
+  (primary_expression/identifier)
+  (this)
+  (super)
+  (number)
+  (string)
+  (template_string)
+  (regex)
+  (true)
+  (false)
+  (null)
+  (sequence_expression)
+  (import)
+  (object)
+  (array)
+  (function)
+  (arrow_function)
+  (generator_function)
+  (class)
+  (meta_property)
+  (call_expression)
+  (assignment_expression)
+  (augmented_assignment_expression)
+  (await_expression)
+  (unary_expression)
+  (binary_expression)
+  (ternary_expression)
+  (update_expression)
+  (new_expression)
+  (yield_expression)
+]@expr {
+  
+  node @expr.after_scope
+
+}
 
 ;; ### Expression Queries
 
@@ -1987,6 +2102,12 @@ inherit .return_or_yield
 }
 
 ; shorthand property identifier
+(shorthand_property_identifier)@shorthand_property_identifier {
+  
+  node @shorthand_property_identifier.after_scope
+
+}
+
 (object (shorthand_property_identifier)@keyval)@object {
 
   node rhsvar_before_scope
@@ -2013,6 +2134,7 @@ inherit .return_or_yield
 
 (computed_property_name (_)@expr)@computed_property_name {
 
+    node @computed_property_name.after_scope
     edge @expr.before_scope -> @computed_property_name.before_scope
     edge @computed_property_name.after_scope -> @expr.after_scope
 
@@ -2031,6 +2153,10 @@ inherit .return_or_yield
     edge @pair.key_pop -> @value.value
     edge @object.member_pop -> @pair.key_pop
 
+}
+
+(pair)@pair {
+  node @pair.after_scope
 }
 
 (pair
@@ -2138,6 +2264,7 @@ inherit .return_or_yield
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 
 (formal_parameters)@formal_params {
+  node @formal_params.after_scope
   edge @formal_params.after_scope -> @formal_params.before_scope
 }
 
@@ -2299,6 +2426,8 @@ inherit .return_or_yield
 
 (arrow_function
   parameter:(_)@param)@fun {
+
+  node @param.after_scope
 
   ; scope flows from the param right back out
   edge @param.after_scope -> @param.before_scope
@@ -2465,6 +2594,7 @@ inherit .return_or_yield
 ; LATER-TODO currently unsupported by tree sitter queries
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (arguments)@arguments {
+  node @arguments.after_scope
   edge @arguments.after_scope -> @arguments.before_scope
 }
 
@@ -3079,6 +3209,24 @@ inherit .return_or_yield
 
 ;; ### Attributes Defined on Patterns
 ;; TODO
+[
+  (pattern/member_expression)@pattern
+  (pattern/subscript_expression)@pattern
+  (assignment_expression left:(_)@pattern)
+  (assignment_pattern)@pattern
+  (object_pattern)@pattern
+  (array_pattern)@pattern
+  (rest_pattern)@pattern
+  (pair_pattern)@pattern
+  (pattern/identifier)@pattern
+  (pattern/property_identifier)@pattern
+  (object_assignment_pattern)@pattern
+  (shorthand_property_identifier_pattern)@pattern
+] {
+
+  node @pattern.after_scope
+
+}
 
 ;; ### Pattern Queries
 
