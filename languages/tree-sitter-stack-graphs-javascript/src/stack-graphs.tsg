@@ -240,7 +240,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.arg_this
     node @node.arguments_pop
     node @node.arguments_push
-    node @node.before_scope
+    ; node @node.before_scope !!!! TODO REMOVE
     node @node.boundvar_pop
     node @node.call
     node @node.constructor
@@ -339,6 +339,7 @@ inherit .return_or_yield
 
 (program)@prog {
   node @prog.after_scope
+  node @prog.before_scope
 }
 
 ;; ### Program Queries
@@ -413,11 +414,13 @@ inherit .return_or_yield
 
 (hash_bang_line)@hashbang {
   node @hashbang.after_scope
+  node @hashbang.before_scope
   edge @hashbang.after_scope -> @hashbang.before_scope
 }
 
 (comment)@comment {
   node @comment.after_scope
+  node @comment.before_scope
   edge @comment.after_scope -> @comment.before_scope
 }
 
@@ -468,6 +471,7 @@ inherit .return_or_yield
   (labeled_statement)
 ]@stmt {
   node @stmt.after_scope
+  node @stmt.before_scope
 }
 
 ;; ### Statement Queries
@@ -561,6 +565,7 @@ inherit .return_or_yield
 
 (export_clause)@export_clause {
   node @export_clause.after_scope
+  node @export_clause.before_scope
 }
 
 ; LATER-TODO tree sitter doesn't yet support empty switch bodies
@@ -599,6 +604,7 @@ inherit .return_or_yield
 
 (export_specifier)@export_specifier {
   node @export_specifier.after_scope
+  node @export_specifier.before_scope
   edge @export_specifier.after_scope -> @export_specifier.before_scope
 }
 
@@ -749,6 +755,7 @@ inherit .return_or_yield
 
 (import_clause)@import_clause {
   node @import_clause.after_scope
+  node @import_clause.before_scope
 }
 
 ; import * as name from "module-name";
@@ -763,6 +770,7 @@ inherit .return_or_yield
 (namespace_import (identifier)@imported_as)@namespace_import {
 
   node @namespace_import.after_scope
+  node @namespace_import.before_scope
   edge @namespace_import.after_scope -> @namespace_import.before_scope
 
   attr (@imported_as.pop) node_definition = @imported_as
@@ -809,6 +817,7 @@ inherit .return_or_yield
 
 (named_imports)@named_imports {
   node @named_imports.after_scope
+  node @named_imports.before_scope
 }
 
 ; LATER-TODO tree sitter doesn't yet support empty named imports
@@ -847,6 +856,7 @@ inherit .return_or_yield
 
 (import_specifier)@import_specifier {
   node @import_specifier.after_scope
+  node @import_specifier.before_scope
 }
 
 (
@@ -1229,6 +1239,7 @@ inherit .return_or_yield
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (class_body)@class_body {
   node @class_body.after_scope
+  node @class_body.before_scope
   edge @class_body.after_scope -> @class_body.before_scope
 }
 
@@ -1257,6 +1268,7 @@ inherit .return_or_yield
 (method_definition)@method_def {
 
   node @method_def.after_scope
+  node @method_def.before_scope
   
 }
 
@@ -1339,6 +1351,7 @@ inherit .return_or_yield
   property:(property_identifier)@property)@field_def {
 
   node @field_def.after_scope
+  node @field_def.before_scope
   attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
   edge @field_def.after_scope -> @property.pop_dot
@@ -1421,6 +1434,7 @@ inherit .return_or_yield
 
 (else_clause (_)@inner)@else_clause {
     node @else_clause.after_scope
+    node @else_clause.before_scope
     ; scopes flow in and right back out
     edge @inner.before_scope -> @else_clause.before_scope
     edge @else_clause.after_scope -> @inner.after_scope
@@ -1445,6 +1459,7 @@ inherit .return_or_yield
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (switch_body)@switch_body {
   node @switch_body.after_scope
+  node @switch_body.before_scope
   edge @switch_body.after_scope -> @switch_body.before_scope
 }
 
@@ -1478,6 +1493,7 @@ inherit .return_or_yield
 
 (switch_case)@switch_case {
   node @switch_case.after_scope
+  node @switch_case.before_scope
 }
 
 ; LATER-TODO tree sitter doesnt yet support switch case's with no statements
@@ -1520,6 +1536,7 @@ inherit .return_or_yield
 
 (switch_default)@switch_default {
   node @switch_default.after_scope
+  node @switch_default.before_scope
 }
 
 ; LATER-TODO tree sitter doesnt yet support empty defaults
@@ -1693,6 +1710,7 @@ inherit .return_or_yield
 
 (catch_clause body:(_)@body)@catch_clause {
     node @catch_clause.after_scope
+    node @catch_clause.before_scope
     ; scopes flow in then back out
     edge @body.before_scope -> @catch_clause.before_scope
     edge @catch_clause.after_scope -> @body.after_scope
@@ -1710,6 +1728,7 @@ inherit .return_or_yield
 
 (finally_clause body:(_)@body)@finally_clause {
     node @finally_clause.after_scope
+    node @finally_clause.before_scope
     ; scopes flow in thenback out
     edge @body.before_scope -> @finally_clause.before_scope
     edge @finally_clause.after_scope -> @body.after_scope
@@ -1885,6 +1904,7 @@ inherit .return_or_yield
 ]@expr {
   
   node @expr.after_scope
+  node @expr.before_scope
 
 }
 
@@ -2105,6 +2125,7 @@ inherit .return_or_yield
 (shorthand_property_identifier)@shorthand_property_identifier {
   
   node @shorthand_property_identifier.after_scope
+  node @shorthand_property_identifier.before_scope
 
 }
 
@@ -2135,6 +2156,7 @@ inherit .return_or_yield
 (computed_property_name (_)@expr)@computed_property_name {
 
     node @computed_property_name.after_scope
+    node @computed_property_name.before_scope
     edge @expr.before_scope -> @computed_property_name.before_scope
     edge @computed_property_name.after_scope -> @expr.after_scope
 
@@ -2157,6 +2179,7 @@ inherit .return_or_yield
 
 (pair)@pair {
   node @pair.after_scope
+  node @pair.before_scope
 }
 
 (pair
@@ -2265,6 +2288,7 @@ inherit .return_or_yield
 
 (formal_parameters)@formal_params {
   node @formal_params.after_scope
+  node @formal_params.before_scope
   edge @formal_params.after_scope -> @formal_params.before_scope
 }
 
@@ -2428,6 +2452,7 @@ inherit .return_or_yield
   parameter:(_)@param)@fun {
 
   node @param.after_scope
+  node @param.before_scope
 
   ; scope flows from the param right back out
   edge @param.after_scope -> @param.before_scope
@@ -2595,6 +2620,7 @@ inherit .return_or_yield
 ; THIS IS A HUGE HACK AND MUST BE FIXED
 (arguments)@arguments {
   node @arguments.after_scope
+  node @arguments.before_scope
   edge @arguments.after_scope -> @arguments.before_scope
 }
 
@@ -3225,6 +3251,7 @@ inherit .return_or_yield
 ] {
 
   node @pattern.after_scope
+  node @pattern.before_scope
 
 }
 
