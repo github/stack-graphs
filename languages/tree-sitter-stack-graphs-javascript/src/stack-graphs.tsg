@@ -275,8 +275,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.module_scope
     node @node.new_bindings
     node @node.pop_guard_default
-    node @node.push
-    node @node.push_dot
     node @node.push_exports_guard
     node @node.push_guard_default
     node @node.push_guard_exports
@@ -499,6 +497,8 @@ inherit .return_or_yield
   (export_clause)@export_clause
   source:(_)@source)@export_stmt {
 
+  node @source.push
+
   edge @export_clause.source -> @source.push_exports_guard
 
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
@@ -612,6 +612,8 @@ inherit .return_or_yield
 ) {
 
   node @name.pop
+  node @name.push
+
   attr (@name.pop) node_definition = @name
   attr (@name.push) node_reference = @name
   edge @name.pop -> @name.push
@@ -630,6 +632,8 @@ inherit .return_or_yield
 ) {
 
   node @alias.pop
+  node @name.push
+
   attr (@alias.pop) node_definition = @alias
   attr (@name.push) node_reference = @name
   edge @alias.pop -> @name.push
@@ -664,6 +668,8 @@ inherit .return_or_yield
 
 ) {
 
+  node @name.push
+
   attr (@name.push) push_node = @name
   attr (@export_specifier.guard_default) pop_symbol = "GUARD:DEFAULT"
   edge @name.push -> @export_specifier.source
@@ -690,6 +696,8 @@ inherit .return_or_yield
   .
   source:(_)@source)@export_statement {
 
+  node @source.push
+
   edge @export_statement.after_scope -> @export_statement.before_scope
 
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
@@ -713,6 +721,7 @@ inherit .return_or_yield
 
   node @alias.pop
   node @alias.pop_dot
+  node @source.push
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
@@ -793,6 +802,8 @@ inherit .return_or_yield
   (import_clause)@import_clause
   source:(_)@source)@import_stmt {
 
+  node @source.push
+
   edge @import_clause.before_scope -> @import_stmt.before_scope
   edge @import_stmt.after_scope -> @import_clause.after_scope
 
@@ -872,6 +883,7 @@ inherit .return_or_yield
 ) {
 
   node @name.pop
+  node @name.push
 
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
@@ -894,6 +906,7 @@ inherit .return_or_yield
 ) {
 
   node @alias.pop
+  node @name.push
 
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
@@ -1765,6 +1778,8 @@ inherit .return_or_yield
   object:(_)@object
   body:(_)@body)@with_stmt
 {
+
+  node @with_stmt.push_dot
 
     ; scopes flow from the statement into the object then into the body then back out
     edge @object.before_scope -> @with_stmt.before_scope
@@ -2709,6 +2724,8 @@ inherit .return_or_yield
   object: (_)@object
   index: (_)@index)@subscript_expr {
 
+  node @subscript_expr.push_dot
+
   ; scopes flow left to right
     edge @object.before_scope -> @subscript_expr.before_scope
   edge @index.before_scope -> @object.after_scope
@@ -2939,6 +2956,7 @@ inherit .return_or_yield
   right:(_)@right)@augmented_assignment_expr {
 
   node @augmented_assignment_expr.pop
+  node @augmented_assignment_expr.push
 
   ; augment the scope
     attr (@augmented_assignment_expr.pop) node_definition = @left
@@ -3367,6 +3385,9 @@ inherit .return_or_yield
   key:(_)@key
   value:(_)@value_pat)@pair_pat {
 
+  node @key.push
+  node @key.push_dot
+
   ; covalues flow in dotted
   attr (@key.push_dot) push_symbol = "."
   edge @value_pat.covalue -> @key.push
@@ -3424,6 +3445,8 @@ inherit .return_or_yield
   right:(_)@_right_expr)@object_assignment_pat {
 
   node @left_pat.pop
+  node @left_pat.push
+  node @left_pat.push_dot
 
   edge @left_pat.after_scope -> @left_pat.before_scope
 
@@ -3649,6 +3672,8 @@ inherit .return_or_yield
       attr (@mod_name.push) push_symbol = $1
     }
   }
+
+  node @mod_name.push
 
   attr (@mod_name.module_guard) push_symbol = "GUARD:EXPORTS"
   edge @call_expr.value -> @mod_name.module_guard
