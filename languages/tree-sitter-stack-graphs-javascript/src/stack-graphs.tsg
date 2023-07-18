@@ -274,7 +274,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.module_pop
     node @node.module_scope
     node @node.new_bindings
-    node @node.pop
     node @node.pop_dot
     node @node.pop_guard_default
     node @node.push
@@ -613,6 +612,7 @@ inherit .return_or_yield
   (#not-eq? @name "default")
 ) {
 
+  node @name.pop
   attr (@name.pop) node_definition = @name
   attr (@name.push) node_reference = @name
   edge @name.pop -> @name.push
@@ -630,6 +630,7 @@ inherit .return_or_yield
 
 ) {
 
+  node @alias.pop
   attr (@alias.pop) node_definition = @alias
   attr (@name.push) node_reference = @name
   edge @alias.pop -> @name.push
@@ -711,6 +712,8 @@ inherit .return_or_yield
   (namespace_export (_)@alias)
   source:(_)@source)@export_statement {
 
+  node @alias.pop
+
   edge @export_statement.after_scope -> @export_statement.before_scope
 
   attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
@@ -766,6 +769,7 @@ inherit .return_or_yield
 
 (namespace_import (identifier)@imported_as)@namespace_import {
 
+  node @imported_as.pop
   node @namespace_import.after_scope
   node @namespace_import.before_scope
   edge @namespace_import.after_scope -> @namespace_import.before_scope
@@ -866,6 +870,8 @@ inherit .return_or_yield
 
 ) {
 
+  node @name.pop
+
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
   attr (@name.pop) node_definition = @name
@@ -885,6 +891,8 @@ inherit .return_or_yield
   (#not-eq? @name "default")
 
 ) {
+
+  node @alias.pop
 
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 
@@ -931,6 +939,8 @@ inherit .return_or_yield
 ; import defaultExport from "module-name";
 (import_clause
   (identifier)@default_name)@import_clause {
+
+  node @default_name.pop
 
   edge @import_clause.after_scope -> @import_clause.before_scope
 
@@ -986,6 +996,7 @@ inherit .return_or_yield
     name:(identifier)@name))@variable_decl
 {
 
+    node @name.pop
     attr (@name.pop) node_definition = @name
     edge @variable_decl.after_scope -> @name.pop
     attr (@variable_decl.after_scope -> @name.pop) precedence = 1
@@ -997,6 +1008,7 @@ inherit .return_or_yield
     name:(identifier)@name))@lexical_decl
 {
 
+    node @name.pop
     attr (@name.pop) node_definition = @name
     edge @lexical_decl.after_scope -> @name.pop
     attr (@lexical_decl.after_scope -> @name.pop) precedence = 1
@@ -1075,6 +1087,7 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
+  node @name.pop
   node @fun_decl.function_value
   attr (@name.pop) syntax_type = "function"
 
@@ -1144,6 +1157,7 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
+  node @name.pop
   node @fun_decl.function_value
   attr (@name.pop) syntax_type = "function"
 
@@ -1213,6 +1227,7 @@ inherit .return_or_yield
   name:(_)@name
   body:(_)@body)@class_decl {
 
+  node @name.pop
   node @class_decl.class_value
 
   attr (@name.pop) syntax_type = "class"
@@ -1264,8 +1279,9 @@ inherit .return_or_yield
   edge @class_body.after_scope -> @last_decl.after_scope
 }
 
-(method_definition)@method_def {
+(method_definition name:(_)@name)@method_def {
 
+  node @name.pop
   node @method_def.after_scope
   node @method_def.before_scope
   
@@ -1287,6 +1303,7 @@ inherit .return_or_yield
     name:(_)@name)@method_def
   (#not-eq? @name "constructor")
 ) {
+
   ; augmentation for the method
   attr (@name.pop) node_definition = @name
   attr (@name.pop_dot) pop_symbol = "."
@@ -1351,6 +1368,8 @@ inherit .return_or_yield
 
   node @field_def.after_scope
   node @field_def.before_scope
+  node @property.pop
+  
   attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
   edge @field_def.after_scope -> @property.pop_dot
@@ -1620,6 +1639,7 @@ inherit .return_or_yield
   body:(_)@body)@for_in_stmt
 {
 
+    node @for_in_stmt.pop
     attr (@for_in_stmt.pop) node_definition = @left
     edge @for_in_stmt.pop -> @right.value
     edge @body.before_scope -> @for_in_stmt.pop
@@ -1720,6 +1740,7 @@ inherit .return_or_yield
   body:(_)@body)@catch_clause
 {
 
+    node @catch_clause.pop
     attr (@catch_clause.pop) node_definition = @name
     edge @body.before_scope -> @catch_clause.pop
 
@@ -2196,6 +2217,8 @@ inherit .return_or_yield
 }
 
 (pair key:(string)@key) {
+
+  node @key.pop
   attr (@key.pop) pop_symbol = (replace (source-text @key) "\"" "")
 }
 
@@ -2328,6 +2351,7 @@ inherit .return_or_yield
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
+  node @name.pop
   attr (@name.pop) syntax_type = "function"
 
   ; if the function has a name, this is bound the callsig's before scope
@@ -2454,6 +2478,7 @@ inherit .return_or_yield
   node @param.after_scope
   node @param.before_scope
   node @param.covalue
+  node @param.pop
 
   ; scope flows from the param right back out
   edge @param.after_scope -> @param.before_scope
@@ -2488,6 +2513,7 @@ inherit .return_or_yield
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
+  node @name.pop
   attr (@name.pop) syntax_type = "function"
 
   ; if the function has a name, this is bound the callsig's before scope
@@ -2776,16 +2802,19 @@ inherit .return_or_yield
 ;; #### Update Expressions
 
 (update_expression argument: (_)@argument)@update_expr {
+
+  node @update_expr.pop
   ; scope propagates through the operand then is updated by the expr
   edge @argument.before_scope -> @update_expr.before_scope
   edge @update_expr.after_scope -> @argument.after_scope
   ; LATER-TODO this isn't quite right because the update argument can't be an arbitrary expr
   ; eg f(x)++ doesn't make any sense, you have to have something more like
   ; (update_expression argument: (lvar)@argument)
-    attr (@update_expr.pop) node_definition = @argument
+  attr (@update_expr.pop) node_definition = @argument
   edge @update_expr.value -> @argument.value
-    edge @update_expr.after_scope -> @update_expr.pop
-    edge @update_expr.pop -> @argument.value
+  edge @update_expr.after_scope -> @update_expr.pop
+  edge @update_expr.pop -> @argument.value
+
 }
 
 
@@ -2844,6 +2873,8 @@ inherit .return_or_yield
   left: (identifier)@left
   right: (_)@right)@assignment_expr {
 
+    node @assignment_expr.pop
+
     ; augments the scope by adding a lookup edge, ie. a pop
     attr (@assignment_expr.pop) node_definition = @left
     edge @assignment_expr.after_scope -> @assignment_expr.pop
@@ -2859,6 +2890,9 @@ inherit .return_or_yield
     object:(this)@this
     property:(_)@property)
   right: (_)@right)@assignment_expr {
+
+  node @property.pop
+  node @this.pop
 
   ; HACK
   attr (@this.drop) type = "drop_scopes"
@@ -2899,6 +2933,8 @@ inherit .return_or_yield
 (augmented_assignment_expression
   left:(identifier)@left
   right:(_)@right)@augmented_assignment_expr {
+
+  node @augmented_assignment_expr.pop
 
   ; augment the scope
     attr (@augmented_assignment_expr.pop) node_definition = @left
@@ -2975,6 +3011,7 @@ inherit .return_or_yield
   name:(_)@name
   body:(_)@body)@class {
   
+  node @name.pop
   attr (@name.pop) syntax_type = "class"
 
   attr (@name.pop) node_definition = @name
@@ -3262,6 +3299,8 @@ inherit .return_or_yield
 ; scope propagation through identifier patterns
 (pattern/identifier)@ident_pat {
 
+  node @ident_pat.pop
+
   ; scope flows through, binding via a pop edge that goes to an unknown value
   attr (@ident_pat.pop) node_definition = @ident_pat
   edge @ident_pat.pop -> @ident_pat.covalue
@@ -3379,6 +3418,8 @@ inherit .return_or_yield
 (object_assignment_pattern
   left:(shorthand_property_identifier_pattern)@left_pat
   right:(_)@_right_expr)@object_assignment_pat {
+
+  node @left_pat.pop
 
   edge @left_pat.after_scope -> @left_pat.before_scope
 
@@ -3531,6 +3572,7 @@ inherit .return_or_yield
   (#eq? @_extend "extend")
 ) {
 
+  node @object.pop
   attr (@object.pop) node_definition = @object
   edge @call_expr.after_scope -> @object.pop
   edge @object.pop -> @new_fields.value
@@ -3563,6 +3605,7 @@ inherit .return_or_yield
   (#eq? @_exports "exports")
 ) {
 
+  node @property.pop
   attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
   edge @assignment_expr.exports -> @property.pop_dot
@@ -3708,14 +3751,14 @@ inherit .return_or_yield
 ;; kinds of definitions.
 
 (assignment_expression
-  left: (identifier)@left
+  left: (identifier)@_left
   right: [
     (function)
     (generator_function)
     (arrow_function)
-  ]@right) {
+  ]@right)@assignment_expr {
 
-  attr (@left.pop) definiens_node = @right
+  attr (@assignment_expr.pop) definiens_node = @right
 
 }
 
