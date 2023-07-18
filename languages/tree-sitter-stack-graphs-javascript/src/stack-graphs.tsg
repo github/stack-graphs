@@ -231,12 +231,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ## Nodes
 
 (_)@node {
-    node @node.arg_arguments
-    node @node.arg_arguments_dot
-    node @node.arg_index
-    node @node.arg_scope
-    node @node.arg_scope_no_this
-    node @node.arg_this
     node @node.arguments_pop
     node @node.arguments_push
     node @node.boundvar_pop
@@ -291,8 +285,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.value_return
     node @node.value_this
     node @node.value_this_guard
-
-    attr (@node.arg_scope) is_exported
 }
 
 
@@ -1157,6 +1149,8 @@ inherit .return_or_yield
   parameters:
     (formal_parameters (_)@param))@fun_decl {
 
+  node @param.arg_index
+
   ; parameters jump to the pushed argument scope
   attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
@@ -1226,6 +1220,8 @@ inherit .return_or_yield
 (generator_function_declaration
   parameters:
     (formal_parameters (_)@param))@fun_decl {
+
+  node @param.arg_index
 
   ; parameters jump to the pushed argument scope
   attr (@param.arg_index) push_symbol = (named-child-index @param)
@@ -1369,6 +1365,8 @@ inherit .return_or_yield
 (method_definition
   parameters:
     (formal_parameters (_)@param))@method_def {
+
+  node @param.arg_index
 
   ; parameters jump to the pushed argument scope
   attr (@param.arg_index) push_symbol = (named-child-index @param)
@@ -2431,6 +2429,8 @@ inherit .return_or_yield
   parameters:
     (formal_parameters (_)@param))@fun {
 
+  node @param.arg_index
+
   ; parameters jump to the pushed argument scope
   attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
@@ -2494,6 +2494,7 @@ inherit .return_or_yield
   parameter:(_)@param)@fun {
 
   node @param.after_scope
+  node @param.arg_index
   node @param.before_scope
   node @param.covalue
   node @param.pop
@@ -2515,6 +2516,8 @@ inherit .return_or_yield
 (arrow_function
   parameters:
     (formal_parameters (_)@param))@fun {
+
+  node @param.arg_index
 
   ; parameters jump to the pushed argument scope
   attr (@param.arg_index) push_symbol = (named-child-index @param)
@@ -2582,6 +2585,8 @@ inherit .return_or_yield
   parameters:
     (formal_parameters (_)@param))@fun {
 
+  node @param.arg_index
+
   ; parameters jump to the pushed argument scope
   attr (@param.arg_index) push_symbol = (named-child-index @param)
   edge @param.covalue -> @param.arg_index
@@ -2606,6 +2611,13 @@ inherit .return_or_yield
 (call_expression
   function:(_)@function
   arguments:(_)@arguments)@call_expr {
+
+  node @arguments.arg_arguments
+  node @arguments.arg_arguments_dot
+  node @arguments.arg_scope
+  attr (@arguments.arg_scope) is_exported
+  node @arguments.arg_scope_no_this
+  node @arguments.arg_this
 
   ; value is a call, ie a push "()" node w/ "push-scope" @arguments
   attr (@call_expr.return_guard) push_symbol = "GUARD:RETURN"
@@ -2652,6 +2664,7 @@ inherit .return_or_yield
 (call_expression
   arguments:(arguments (_)@arg)@arguments) {
 
+  node @arg.arg_index
   attr (@arg.arg_index) pop_symbol = (named-child-index @arg)
   edge @arguments.arg_scope_no_this -> @arg.arg_index
   edge @arg.arg_index -> @arg.value
@@ -2767,6 +2780,10 @@ inherit .return_or_yield
   constructor:(_)@constructor
   arguments:(_)@arguments)@new_expr {
 
+  node @arguments.arg_scope
+  attr (@arguments.arg_scope) is_exported
+  node @arguments.arg_this
+
   edge @constructor.before_scope -> @new_expr.before_scope
   edge @arguments.before_scope -> @constructor.after_scope
   edge @new_expr.after_scope -> @arguments.after_scope
@@ -2798,6 +2815,8 @@ inherit .return_or_yield
 
 (new_expression
   arguments:(arguments (_)@arg)@arguments) {
+
+  node @arg.arg_index
 
   attr (@arg.arg_index) pop_symbol = (named-child-index @arg)
   edge @arguments.arg_scope -> @arg.arg_index
