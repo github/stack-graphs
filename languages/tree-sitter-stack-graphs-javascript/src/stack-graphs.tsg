@@ -274,7 +274,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.module_pop
     node @node.module_scope
     node @node.new_bindings
-    node @node.pop_dot
+    ;; node @node.pop_dot
     node @node.pop_guard_default
     node @node.push
     node @node.push_dot
@@ -713,6 +713,7 @@ inherit .return_or_yield
   source:(_)@source)@export_statement {
 
   node @alias.pop
+  node @alias.pop_dot
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
@@ -770,6 +771,7 @@ inherit .return_or_yield
 (namespace_import (identifier)@imported_as)@namespace_import {
 
   node @imported_as.pop
+  node @imported_as.pop_dot
   node @namespace_import.after_scope
   node @namespace_import.before_scope
   edge @namespace_import.after_scope -> @namespace_import.before_scope
@@ -1304,6 +1306,7 @@ inherit .return_or_yield
   (#not-eq? @name "constructor")
 ) {
 
+  node @name.pop_dot
   ; augmentation for the method
   attr (@name.pop) node_definition = @name
   attr (@name.pop_dot) pop_symbol = "."
@@ -1369,6 +1372,7 @@ inherit .return_or_yield
   node @field_def.after_scope
   node @field_def.before_scope
   node @property.pop
+  node @property.pop_dot
   
   attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
@@ -2893,6 +2897,7 @@ inherit .return_or_yield
 
   node @property.pop
   node @this.pop
+  node @this.pop_dot
 
   ; HACK
   attr (@this.drop) type = "drop_scopes"
@@ -3606,6 +3611,7 @@ inherit .return_or_yield
 ) {
 
   node @property.pop
+  node @property.pop_dot
   attr (@property.pop) node_definition = @property
   attr (@property.pop_dot) pop_symbol = "."
   edge @assignment_expr.exports -> @property.pop_dot
