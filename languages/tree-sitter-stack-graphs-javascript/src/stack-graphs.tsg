@@ -245,7 +245,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.call
     node @node.constructor
     node @node.constructor_guard
-    node @node.covalue
+    ; node @node.covalue !!!! TODO REMOVE
     node @node.default_guard
     node @node.definiens_hook
     node @node.drop
@@ -2457,6 +2457,7 @@ inherit .return_or_yield
 
   node @param.after_scope
   node @param.before_scope
+  node @param.covalue
 
   ; scope flows from the param right back out
   edge @param.after_scope -> @param.before_scope
@@ -3254,6 +3255,7 @@ inherit .return_or_yield
 
   node @pattern.after_scope
   node @pattern.before_scope
+  node @pattern.covalue
 
 }
 
