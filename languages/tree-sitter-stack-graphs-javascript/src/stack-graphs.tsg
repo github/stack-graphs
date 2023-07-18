@@ -292,7 +292,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.string_prototype
     node @node.this_pop
     node @node.this_push
-    node @node.value
+    ; node @node.value
     node @node.value_arg_scope
     node @node.value_call
     node @node.value_drop
@@ -421,6 +421,7 @@ inherit .return_or_yield
 (comment)@comment {
   node @comment.after_scope
   node @comment.before_scope
+  node @comment.value
   edge @comment.after_scope -> @comment.before_scope
 }
 
@@ -1078,6 +1079,7 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
+  node @fun_decl.function_value
   attr (@name.pop) syntax_type = "function"
 
   ; scope flows across the decl
@@ -1086,7 +1088,7 @@ inherit .return_or_yield
   ; with an augmentation for the function
   attr (@name.pop) node_definition = @name
   edge @fun_decl.after_scope -> @name.pop
-  edge @name.pop -> @fun_decl.value
+  edge @name.pop -> @fun_decl.function_value
 
   ; function values have drop nodes that handle closures, that points to the
   ; before scope for the function
@@ -1110,7 +1112,7 @@ inherit .return_or_yield
 
   ; function values have call nodes
   attr (@fun_decl.value_call) pop_scoped_symbol = "()"
-  edge @fun_decl.value -> @fun_decl.value_call
+  edge @fun_decl.function_value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
@@ -1146,6 +1148,7 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
+  node @fun_decl.function_value
   attr (@name.pop) syntax_type = "function"
 
   ; scope flows across the decl
@@ -1154,7 +1157,7 @@ inherit .return_or_yield
   ; with an augmentation for the function
   attr (@name.pop) node_definition = @name
   edge @fun_decl.after_scope -> @name.pop
-  edge @name.pop -> @fun_decl.value
+  edge @name.pop -> @fun_decl.function_value
 
   ; function values have drop nodes that handle closures, that points to the
   ; before scope of the declaration
@@ -1178,7 +1181,7 @@ inherit .return_or_yield
 
   ; function values have call nodes
   attr (@fun_decl.value_call) pop_scoped_symbol = "()"
-  edge @fun_decl.value -> @fun_decl.value_call
+  edge @fun_decl.function_value -> @fun_decl.value_call
 
   ; function values have return nodes which need to be visible for returns
   attr (@fun_decl.value_return) pop_symbol = "GUARD:RETURN"
@@ -1220,10 +1223,10 @@ inherit .return_or_yield
 
   attr (@name.pop) node_definition = @name
   edge @class_decl.after_scope -> @name.pop
-  edge @name.pop -> @class_decl.value
+  edge @name.pop -> @class_decl.class_value
 
   edge @body.before_scope -> @class_decl.before_scope
-  edge @class_decl.value -> @body.after_scope
+  edge @class_decl.class_value -> @body.after_scope
   edge @class_decl.after_scope -> @class_decl.before_scope
 }
 
@@ -1231,7 +1234,7 @@ inherit .return_or_yield
   (class_heritage (_)@name))@class_decl {
 
   edge @name.before_scope -> @class_decl.before_scope
-  edge @class_decl.value -> @name.value
+  edge @class_decl.class_value -> @name.value
 }
 
 
@@ -1905,6 +1908,7 @@ inherit .return_or_yield
   
   node @expr.after_scope
   node @expr.before_scope
+  node @expr.value
 
 }
 
