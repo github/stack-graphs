@@ -1868,8 +1868,8 @@ inherit .return_or_yield
 ;; TODO
 
 [
-  (primary_expression/subscript_expression)
-  (primary_expression/member_expression)
+  (subscript_expression)
+  (member_expression)
   (parenthesized_expression)
   (undefined)
   (primary_expression/identifier)
@@ -3236,9 +3236,7 @@ inherit .return_or_yield
 ;; ### Attributes Defined on Patterns
 ;; TODO
 [
-  (pattern/member_expression)@pattern
-  (pattern/subscript_expression)@pattern
-  (assignment_expression left:(_)@pattern)
+  (assignment_expression left:(identifier)@pattern)
   (assignment_pattern)@pattern
   (object_pattern)@pattern
   (array_pattern)@pattern
