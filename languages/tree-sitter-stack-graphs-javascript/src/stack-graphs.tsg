@@ -249,7 +249,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.module_guard
     node @node.module_pop
     node @node.module_scope
-    node @node.new_bindings
     node @node.pop_guard_default
     node @node.push_exports_guard
     node @node.push_guard_default
@@ -3345,6 +3344,7 @@ inherit .return_or_yield
   node @pattern.after_scope
   node @pattern.before_scope
   node @pattern.covalue
+  node @pattern.new_bindings
 
 }
 
