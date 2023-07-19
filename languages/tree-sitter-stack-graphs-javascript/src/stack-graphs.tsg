@@ -231,8 +231,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; ## Nodes
 
 (_)@node {
-    node @node.arguments_pop
-    node @node.arguments_push
     node @node.boundvar_pop
     node @node.call
     node @node.constructor
@@ -1093,8 +1091,11 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
+  node @call_sig.arguments_pop
+  node @call_sig.arguments_push
   node @name.pop
   node @fun_decl.function_value
+
   attr (@name.pop) syntax_type = "function"
 
   ; scope flows across the decl
@@ -1165,8 +1166,11 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun_decl {
 
+  node @call_sig.arguments_pop
+  node @call_sig.arguments_push
   node @name.pop
   node @fun_decl.function_value
+
   attr (@name.pop) syntax_type = "function"
 
   ; scope flows across the decl
@@ -2381,6 +2385,9 @@ inherit .return_or_yield
 (function
   parameters:(_)@call_sig
   body:(_)@body)@fun {
+
+  node @call_sig.arguments_pop
+  node @call_sig.arguments_push
 
   ; scope flows across the decl
   edge @fun.after_scope -> @fun.before_scope
