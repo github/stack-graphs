@@ -264,8 +264,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.rhsvar_value
     node @node.source
     node @node.string_prototype
-    node @node.this_pop
-    node @node.this_push
     node @node.value_arg_scope
     node @node.value_call
     node @node.value_drop
@@ -1082,6 +1080,8 @@ inherit .return_or_yield
 
   node @call_sig.arguments_pop
   node @call_sig.arguments_push
+  node @call_sig.this_pop
+  node @call_sig.this_push
   node @name.pop
   node @fun_decl.function_value
 
@@ -1157,6 +1157,8 @@ inherit .return_or_yield
 
   node @call_sig.arguments_pop
   node @call_sig.arguments_push
+  node @call_sig.this_pop
+  node @call_sig.this_push
   node @name.pop
   node @fun_decl.function_value
 
@@ -2382,6 +2384,8 @@ inherit .return_or_yield
 
   node @call_sig.arguments_pop
   node @call_sig.arguments_push
+  node @call_sig.this_pop
+  node @call_sig.this_push
 
   ; scope flows across the decl
   edge @fun.after_scope -> @fun.before_scope
