@@ -253,7 +253,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.push_exports_guard
     node @node.push_guard_default
     node @node.push_guard_exports
-    node @node.return_guard
     node @node.rhsvar_before_scope
     node @node.rhsvar_value
     node @node.source
@@ -2628,6 +2627,7 @@ inherit .return_or_yield
   node @arguments.arg_scope_no_this
   node @arguments.arg_this
   node @call_expr.call
+  node @call_expr.return_guard
 
   ; value is a call, ie a push "()" node w/ "push-scope" @arguments
   attr (@call_expr.return_guard) push_symbol = "GUARD:RETURN"
