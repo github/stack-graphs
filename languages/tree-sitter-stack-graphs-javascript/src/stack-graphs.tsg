@@ -239,9 +239,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.guard_default
     node @node.guard_this
     node @node.ignore_guard
-    node @node.label_guard
-    node @node.label_pop
-    node @node.label_push
     node @node.method_value
     node @node.method_value_arg_scope
     node @node.method_value_call
@@ -1796,6 +1793,9 @@ inherit .return_or_yield
 
 (break_statement (_)@label)@break_stmt {
 
+    node @break_stmt.label_guard
+    node @break_stmt.label_push
+
     attr (@break_stmt.label_guard) push_symbol = "GUARD:LABEL"
     attr (@break_stmt.label_push) node_reference = @label
 
@@ -1813,6 +1813,9 @@ inherit .return_or_yield
 }
 
 (continue_statement (_)@label)@continue_stmt {
+
+    node @continue_stmt.label_guard
+    node @continue_stmt.label_push
 
     attr (@continue_stmt.label_guard) push_symbol = "GUARD:LABEL"
     attr (@continue_stmt.label_push) node_reference = @label
@@ -1868,6 +1871,9 @@ inherit .return_or_yield
     label:(_)@label
     body:(_)@inner)@labeled_stmt
 {
+
+    node @labeled_stmt.label_guard
+    node @labeled_stmt.label_pop
 
     attr (@labeled_stmt.label_guard) pop_symbol = "GUARD:LABEL"
     attr (@labeled_stmt.label_pop) node_definition = @label
