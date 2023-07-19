@@ -233,8 +233,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (_)@node {
     node @node.boundvar_pop
     node @node.call
-    node @node.constructor
-    node @node.constructor_guard
     node @node.default_guard
     node @node.definiens_hook
     node @node.drop
@@ -1306,6 +1304,9 @@ inherit .return_or_yield
     name:(_)@name)@method_def
   (#eq? @name "constructor")
 ) {
+  
+  node @name.constructor_guard
+
   ; augmentation for the constructor
   attr (@name.constructor_guard) symbol_definition = "GUARD:CONSTRUCTOR", source_node = @name
   edge @method_def.after_scope -> @name.constructor_guard
@@ -2790,6 +2791,7 @@ inherit .return_or_yield
   node @arguments.arg_scope
   attr (@arguments.arg_scope) is_exported
   node @arguments.arg_this
+  node @constructor.constructor
 
   edge @constructor.before_scope -> @new_expr.before_scope
   edge @arguments.before_scope -> @constructor.after_scope
