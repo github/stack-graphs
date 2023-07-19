@@ -234,9 +234,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.boundvar_pop
     node @node.default_guard
     node @node.definiens_hook
-    node @node.element_index_push
-    node @node.element_index_push_dot
-    node @node.element_pop_dot
     node @node.exports_pop
     node @node.field_pop_dot
     node @node.guard_default
@@ -2272,6 +2269,7 @@ inherit .return_or_yield
 
 (array)@array_expr {
 
+    node @array_expr.element_pop_dot
     attr (@array_expr.element_pop_dot) pop_symbol = "."
     edge @array_expr.value -> @array_expr.element_pop_dot
 
@@ -3530,12 +3528,16 @@ inherit .return_or_yield
 
 ; array pattern
 (array_pattern)@array_pat {
+  node @array_pat.element_index_push_dot
   edge @array_pat.element_index_push_dot -> @array_pat.covalue
   attr (@array_pat.element_index_push_dot) push_symbol = "."
 }
 
 ; array pattern elements
 (array_pattern (_)@element_pat)@array_pat {
+
+  node @element_pat.element_index_push
+
   attr (@element_pat.element_index_push) push_symbol = (named-child-index @element_pat)
   edge @element_pat.covalue -> @element_pat.element_index_push
   edge @element_pat.element_index_push -> @array_pat.element_index_push_dot
