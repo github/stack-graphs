@@ -232,7 +232,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 (_)@node {
     node @node.boundvar_pop
-    node @node.call
     node @node.default_guard
     node @node.definiens_hook
     node @node.drop
@@ -2626,6 +2625,7 @@ inherit .return_or_yield
   attr (@arguments.arg_scope) is_exported
   node @arguments.arg_scope_no_this
   node @arguments.arg_this
+  node @call_expr.call
 
   ; value is a call, ie a push "()" node w/ "push-scope" @arguments
   attr (@call_expr.return_guard) push_symbol = "GUARD:RETURN"
@@ -2792,6 +2792,7 @@ inherit .return_or_yield
   attr (@arguments.arg_scope) is_exported
   node @arguments.arg_this
   node @constructor.constructor
+  node @new_expr.call
 
   edge @constructor.before_scope -> @new_expr.before_scope
   edge @arguments.before_scope -> @constructor.after_scope
