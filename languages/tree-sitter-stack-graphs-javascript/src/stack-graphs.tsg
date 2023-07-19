@@ -256,7 +256,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.rhsvar_before_scope
     node @node.rhsvar_value
     node @node.source
-    node @node.string_prototype
     node @node.value_arg_scope
     node @node.value_call
     node @node.value_drop
