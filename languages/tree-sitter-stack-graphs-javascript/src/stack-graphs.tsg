@@ -239,8 +239,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
     node @node.guard_default
     node @node.guard_this
     node @node.ignore_guard
-    node @node.index_pop
-    node @node.index_push
     node @node.key_pop
     node @node.key_push
     node @node.label_guard
@@ -2742,6 +2740,7 @@ inherit .return_or_yield
   object: (_)@object
   index: (_)@index)@subscript_expr {
 
+  node @subscript_expr.index_push
   node @subscript_expr.push_dot
 
   ; scopes flow left to right
