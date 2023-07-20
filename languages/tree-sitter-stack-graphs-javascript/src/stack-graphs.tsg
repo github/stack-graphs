@@ -219,20 +219,20 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; (labelled with the variable name itself). The current names used for guard
 ;; nodes are
 
-;; - `GUARD:RETURN` - used for the AST nodes for values returned by a function
-;;   in the function body
-;; - `GUARD:THIS` - used for the implicit `this` argument of a function inside
-;;   its body
 ;; - `GUARD:CONSTRUCTOR` - used for the constructor method inside a `Class`
-;; - `GUARD:MODULE` - used for the final scope of the module
-;; - `GUARD:EXPORTS` - used for the names exported by the module
 ;; - `GUARD:DEFAULT` - used for the default export value
+;; - `GUARD:EXPORTS` - used for the names exported by the module
 ;; - `GUARD:GANDALF` - used for situations where parts of a graph must be accessible
 ;;   in order to avoid pruning, but which never the less should not be actually reached
 ;;   during any normal traversals. By only ever popping, and never pushing, we can get
 ;;   a connected subgraph that is never the less never traversed.
 ;; - `GUARD:LABEL` - used for the names of labels
 ;; - `GUARD:MEMBER` - used for the members/fields/properties of objects
+;; - `GUARD:MODULE` - used for the final scope of the module
+;; - `GUARD:RETURN` - used for the AST nodes for values returned by a function
+;;   in the function body
+;; - `GUARD:THIS` - used for the implicit `this` argument of a function inside
+;;   its body
 
 ; ## Inherited
 
