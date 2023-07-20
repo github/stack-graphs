@@ -1,4 +1,4 @@
-function* () {
+function* f() {
     let x = 1;
 
     // Flow in
