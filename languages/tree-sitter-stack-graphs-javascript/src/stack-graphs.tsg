@@ -315,8 +315,6 @@ inherit .return_or_yield
     node @prog.builtins_arguments_prototype
     node @prog.builtins_empty_object
 
-    ;; fallbacks
-    node @prog.return_or_yield
 }
 
 ; programs, first statement
@@ -1070,6 +1068,7 @@ inherit .return_or_yield
   node @call_sig.this_push
   node @name.pop
   node @fun_decl.function_value
+  node @fun_decl.return_or_yield
   node @fun_decl.value_arg_scope
   node @fun_decl.value_call
   node @fun_decl.value_drop
@@ -1153,6 +1152,7 @@ inherit .return_or_yield
   node @call_sig.this_push
   node @name.pop
   node @fun_decl.function_value
+  node @fun_decl.return_or_yield
   node @fun_decl.value_arg_scope
   node @fun_decl.value_call
   node @fun_decl.value_drop
@@ -2402,6 +2402,7 @@ inherit .return_or_yield
   node @call_sig.arguments_push
   node @call_sig.this_pop
   node @call_sig.this_push
+  node @fun.return_or_yield
   node @fun.value_arg_scope
   node @fun.value_call
   node @fun.value_drop
@@ -2479,6 +2480,7 @@ inherit .return_or_yield
       body:(_)@body)@fun
 ] {
 
+  node @fun.return_or_yield
   node @fun.value_arg_scope
   node @fun.value_call
   node @fun.value_drop
@@ -2583,6 +2585,7 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun {
 
+  node @fun.return_or_yield
   node @fun.value_arg_scope
   node @fun.value_call
   node @fun.value_drop

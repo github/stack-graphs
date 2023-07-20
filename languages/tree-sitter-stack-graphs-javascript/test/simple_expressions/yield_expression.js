@@ -1,18 +1,20 @@
-let x = 1;
+function* () {
+    let x = 1;
 
-// Flow in
+    // Flow in
 
-yield x;
-//    ^ defined: 1
+    yield x;
+    //    ^ defined: 2
 
-// Flow out
+    // Flow out
 
-yield y = 1;
+    yield y = 1;
 
-/**/ y;
-//   ^ defined: 10
+    /**/ y;
+    //   ^ defined: 11
 
-// Flow around
+    // Flow around
 
-/**/ x;
-//   ^ defined: 1
+    /**/ x;
+    //   ^ defined: 2
+}
