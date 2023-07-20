@@ -228,41 +228,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; - `GUARD:EXPORTS` - used for the names exported by the module
 ;; - `GUARD:DEFAULT` - used for the default export value
 
-;; ## Nodes
-
-(_)@node {
-    node @node.boundvar_pop
-    node @node.default_guard
-    node @node.definiens_hook
-    node @node.exports_pop
-    node @node.field_pop_dot
-    node @node.guard_default
-    node @node.guard_this
-    node @node.ignore_guard
-    node @node.method_value
-    node @node.method_value_arg_scope
-    node @node.method_value_call
-    node @node.method_value_drop
-    node @node.method_value_return
-    node @node.method_value_this
-    node @node.method_value_this_guard
-    node @node.module_guard
-    node @node.module_pop
-    node @node.module_scope
-    node @node.pop_guard_default
-    node @node.push_exports_guard
-    node @node.push_guard_default
-    node @node.push_guard_exports
-    node @node.source
-    node @node.value_arg_scope
-    node @node.value_call
-    node @node.value_drop
-    node @node.value_return
-    node @node.value_this
-    node @node.value_this_guard
-}
-
-
 ; ## Inherited
 
 inherit .builtins_Regex_prototype
@@ -304,6 +269,11 @@ inherit .return_or_yield
 ;; ### Program Queries
 
 (program)@prog {
+
+    node @prog.module_pop
+    node @prog.module_scope
+    node @prog.exports_pop
+
     scan FILE_PATH {
         "([^/]+)\.js$" {
             attr (@prog.module_pop) symbol_definition = $1, source_node = @prog
@@ -465,16 +435,17 @@ inherit .return_or_yield
   source:(_)@source)@export_stmt {
 
   node @source.push
+  node @source.push_guard_exports
 
-  edge @export_clause.source -> @source.push_exports_guard
+  edge @export_clause.source -> @source.push_guard_exports
 
-  attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
+  attr (@source.push_guard_exports) push_symbol = "GUARD:EXPORTS"
   scan (source-text @source) {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) push_symbol = $1
     }
   }
-  edge @source.push_exports_guard -> @source.push
+  edge @source.push_guard_exports -> @source.push
   edge @source.push -> ROOT_NODE
 
   edge @export_clause.before_scope -> @export_stmt.before_scope
@@ -528,6 +499,7 @@ inherit .return_or_yield
 (export_clause)@export_clause {
   node @export_clause.after_scope
   node @export_clause.before_scope
+  node @export_clause.source
 }
 
 ; LATER-TODO tree sitter doesn't yet support empty switch bodies
@@ -565,9 +537,13 @@ inherit .return_or_yield
 }
 
 (export_specifier)@export_specifier {
+
   node @export_specifier.after_scope
   node @export_specifier.before_scope
+  node @export_specifier.source
+
   edge @export_specifier.after_scope -> @export_specifier.before_scope
+
 }
 
 (
@@ -618,6 +594,8 @@ inherit .return_or_yield
 
 ) {
 
+  node @export_specifier.pop_guard_default
+
   attr (@export_specifier.pop_guard_default) pop_symbol = "GUARD:DEFAULT"
   attr (@export_specifier.push_guard_default) push_symbol = "GUARD:DEFAULT"
   edge @export_specifier.exports -> @export_specifier.pop_guard_default
@@ -635,6 +613,7 @@ inherit .return_or_yield
 
 ) {
 
+  node @export_specifier.guard_default
   node @name.push
 
   attr (@name.push) push_node = @name
@@ -650,6 +629,8 @@ inherit .return_or_yield
 (export_statement
   value:(_)@default_expr)@export_stmt {
 
+  node @export_stmt.default_guard
+
   attr (@export_stmt.default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @export_stmt
   edge @default_expr.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @default_expr.after_scope
@@ -664,18 +645,19 @@ inherit .return_or_yield
   source:(_)@source)@export_statement {
 
   node @source.push
+  node @source.push_guard_exports
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
-  attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
+  attr (@source.push_guard_exports) push_symbol = "GUARD:EXPORTS"
   scan (source-text @source) {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) push_symbol = $1
     }
   }
 
-  edge @export_statement.exports -> @source.push_exports_guard
-  edge @source.push_exports_guard -> @source.push
+  edge @export_statement.exports -> @source.push_guard_exports
+  edge @source.push_guard_exports -> @source.push
   edge @source.push -> ROOT_NODE
 
 }
@@ -689,10 +671,11 @@ inherit .return_or_yield
   node @alias.pop
   node @alias.pop_dot
   node @source.push
+  node @source.push_guard_exports
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
-  attr (@source.push_exports_guard) push_symbol = "GUARD:EXPORTS"
+  attr (@source.push_guard_exports) push_symbol = "GUARD:EXPORTS"
   scan (source-text @source) {
     "\"([^/\"]+)\.js\"$" {
       attr (@source.push) push_symbol = $1
@@ -702,8 +685,8 @@ inherit .return_or_yield
   attr (@alias.pop_dot) pop_symbol = "."
   edge @export_statement.exports -> @alias.pop
   edge @alias.pop -> @alias.pop_dot
-  edge @alias.pop_dot -> @source.push_exports_guard
-  edge @source.push_exports_guard -> @source.push
+  edge @alias.pop_dot -> @source.push_guard_exports
+  edge @source.push_guard_exports -> @source.push
   edge @source.push -> ROOT_NODE
 
 }
@@ -732,6 +715,7 @@ inherit .return_or_yield
 (import_clause)@import_clause {
   node @import_clause.after_scope
   node @import_clause.before_scope
+  node @import_clause.source
 }
 
 ; import * as name from "module-name";
@@ -749,6 +733,8 @@ inherit .return_or_yield
   node @imported_as.pop_dot
   node @namespace_import.after_scope
   node @namespace_import.before_scope
+  node @namespace_import.source
+
   edge @namespace_import.after_scope -> @namespace_import.before_scope
 
   attr (@imported_as.pop) node_definition = @imported_as
@@ -770,6 +756,7 @@ inherit .return_or_yield
   source:(_)@source)@import_stmt {
 
   node @source.push
+  node @source.push_guard_exports
 
   edge @import_clause.before_scope -> @import_stmt.before_scope
   edge @import_stmt.after_scope -> @import_clause.after_scope
@@ -798,6 +785,7 @@ inherit .return_or_yield
 (named_imports)@named_imports {
   node @named_imports.after_scope
   node @named_imports.before_scope
+  node @named_imports.source
 }
 
 ; LATER-TODO tree sitter doesn't yet support empty named imports
@@ -837,6 +825,7 @@ inherit .return_or_yield
 (import_specifier)@import_specifier {
   node @import_specifier.after_scope
   node @import_specifier.before_scope
+  node @import_specifier.source
 }
 
 (
@@ -922,6 +911,7 @@ inherit .return_or_yield
   (identifier)@default_name)@import_clause {
 
   node @default_name.pop
+  node @default_name.push_guard_default
 
   edge @import_clause.after_scope -> @import_clause.before_scope
 
@@ -1074,6 +1064,12 @@ inherit .return_or_yield
   node @call_sig.this_push
   node @name.pop
   node @fun_decl.function_value
+  node @fun_decl.value_arg_scope
+  node @fun_decl.value_call
+  node @fun_decl.value_drop
+  node @fun_decl.value_return
+  node @fun_decl.value_this
+  node @fun_decl.value_this_guard
 
   attr (@name.pop) syntax_type = "function"
 
@@ -1151,6 +1147,12 @@ inherit .return_or_yield
   node @call_sig.this_push
   node @name.pop
   node @fun_decl.function_value
+  node @fun_decl.value_arg_scope
+  node @fun_decl.value_call
+  node @fun_decl.value_drop
+  node @fun_decl.value_return
+  node @fun_decl.value_this
+  node @fun_decl.value_this_guard
 
   attr (@name.pop) syntax_type = "function"
 
@@ -1279,6 +1281,7 @@ inherit .return_or_yield
   node @name.pop
   node @method_def.after_scope
   node @method_def.before_scope
+  node @method_def.method_value
   
 }
 
@@ -1315,6 +1318,13 @@ inherit .return_or_yield
   name:(_)@name
   parameters:(_)@call_sig
   body:(_)@body)@method_def {
+
+  node @method_def.method_value_arg_scope
+  node @method_def.method_value_call
+  node @method_def.method_value_drop
+  node @method_def.method_value_return
+  node @method_def.method_value_this
+  node @method_def.method_value_this_guard
 
   attr (@name.pop) syntax_type = "method"
 
@@ -2386,6 +2396,12 @@ inherit .return_or_yield
   node @call_sig.arguments_push
   node @call_sig.this_pop
   node @call_sig.this_push
+  node @fun.value_arg_scope
+  node @fun.value_call
+  node @fun.value_drop
+  node @fun.value_return
+  node @fun.value_this
+  node @fun.value_this_guard
 
   ; scope flows across the decl
   edge @fun.after_scope -> @fun.before_scope
@@ -2456,6 +2472,13 @@ inherit .return_or_yield
     parameter:(_)@call_sig
       body:(_)@body)@fun
 ] {
+
+  node @fun.value_arg_scope
+  node @fun.value_call
+  node @fun.value_drop
+  node @fun.value_return
+  node @fun.value_this
+  node @fun.value_this_guard
 
   ; scope flows across the decl
   edge @fun.after_scope -> @fun.before_scope
@@ -2553,6 +2576,13 @@ inherit .return_or_yield
 (generator_function
   parameters:(_)@call_sig
   body:(_)@body)@fun {
+
+  node @fun.value_arg_scope
+  node @fun.value_call
+  node @fun.value_drop
+  node @fun.value_return
+  node @fun.value_this
+  node @fun.value_this_guard
 
   ; scope flows across the decl
   edge @fun.after_scope -> @fun.before_scope
@@ -2793,6 +2823,7 @@ inherit .return_or_yield
   node @arguments.arg_this
   node @constructor.constructor
   node @new_expr.call
+  node @new_expr.guard_this
 
   edge @constructor.before_scope -> @new_expr.before_scope
   edge @arguments.before_scope -> @constructor.after_scope
@@ -3708,6 +3739,7 @@ inherit .return_or_yield
     }
   }
 
+  node @mod_name.module_guard
   node @mod_name.push
 
   attr (@mod_name.module_guard) push_symbol = "GUARD:EXPORTS"
@@ -3835,6 +3867,9 @@ inherit .return_or_yield
     (arrow_function)
   ]@right) {
 
+  node @left.definiens_hook
+  node @left.ignore_guard
+
   attr (@left.ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (@left.definiens_hook) node_definition = @left
   attr (@left.definiens_hook) definiens_node = @right
@@ -3876,10 +3911,13 @@ inherit .return_or_yield
     (arrow_function)
   ]@value) {
 
-attr (@name.ignore_guard) pop_symbol = "GUARD:GANDALF"
-attr (@name.definiens_hook) node_definition = @name
-attr (@name.definiens_hook) definiens_node = @value
-edge ROOT_NODE -> @name.ignore_guard
-edge @name.ignore_guard -> @name.definiens_hook
+  node @name.definiens_hook
+  node @name.ignore_guard
+
+  attr (@name.ignore_guard) pop_symbol = "GUARD:GANDALF"
+  attr (@name.definiens_hook) node_definition = @name
+  attr (@name.definiens_hook) definiens_node = @value
+  edge ROOT_NODE -> @name.ignore_guard
+  edge @name.ignore_guard -> @name.definiens_hook
 
 }
