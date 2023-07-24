@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use controlled_option::ControlledOption;
 use lsp_positions::Offset;
 use lsp_positions::Position;
 use lsp_positions::Span;
@@ -77,6 +78,7 @@ pub fn new() -> StackGraph {
         syntax_type: str_var.into(),
         containing_line: str_line0.into(),
         definiens_span: Span::default(),
+        fully_qualified_name: ControlledOption::default(),
     };
     *graph.source_info_mut(ref_x) = SourceInfo {
         span: Span {
@@ -104,6 +106,7 @@ pub fn new() -> StackGraph {
         syntax_type: str_var.into(),
         containing_line: str_line1.into(),
         definiens_span: Span::default(),
+        fully_qualified_name: ControlledOption::default(),
     };
 
     let str_dsl_var = graph.add_string("dsl_var");
@@ -112,18 +115,22 @@ pub fn new() -> StackGraph {
     let str_lexical_scope = graph.add_string("lexical_scope");
     let str_pos_one = graph.add_string("line 31 column 20");
     let str_pos_two = graph.add_string("line 8 column 11");
+    let str_pos_three = graph.add_string("line 23 column 4");
     graph
-        .debug_info_mut(scope_x)
+        .node_debug_info_mut(scope_x)
         .add(str_dsl_var, str_arg_scope);
     graph
-        .debug_info_mut(scope_x)
+        .node_debug_info_mut(scope_x)
         .add(str_dsl_position, str_pos_one);
     graph
-        .debug_info_mut(scope)
+        .node_debug_info_mut(scope)
         .add(str_dsl_var, str_lexical_scope);
     graph
-        .debug_info_mut(scope)
+        .node_debug_info_mut(scope)
         .add(str_dsl_position, str_pos_two);
+    graph
+        .edge_debug_info_mut(scope, root)
+        .add(str_dsl_position, str_pos_three);
 
     graph
 }

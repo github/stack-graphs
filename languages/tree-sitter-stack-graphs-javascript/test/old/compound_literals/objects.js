@@ -11,5 +11,5 @@ let z = obj_z;
 //      ^ defined: 1, 9
 
 let obj2 = { x, y };
-//           ^ defined: 1, 2, 3, 13
-//              ^ defined: 1, 5, 6, 13
+//           ^ defined: 1, 2, 3
+//              ^ defined: 1, 5, 6

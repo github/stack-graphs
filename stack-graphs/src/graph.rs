@@ -1292,7 +1292,7 @@ pub struct Edge {
     pub precedence: i32,
 }
 
-struct OutgoingEdge {
+pub(crate) struct OutgoingEdge {
     sink: Handle<Node>,
     precedence: i32,
 }
@@ -1337,7 +1337,7 @@ pub struct SourceInfo {
     /// The location in its containing file of the source code that this node represents.
     pub span: lsp_positions::Span,
     /// The kind of syntax entity this node represents (e.g. `function`, `class`, `method`, etc.).
-    pub syntax_type: Option<Handle<InternedString>>,
+    pub syntax_type: ControlledOption<Handle<InternedString>>,
     /// The full content of the line containing this node in its source file.
     pub containing_line: ControlledOption<Handle<InternedString>>,
     /// The location in its containing file of the source code that this node's definiens represents.
@@ -1345,6 +1345,9 @@ pub struct SourceInfo {
     /// If you need one of these to make the type checker happy, but you don't have one, just use
     /// lsp_positions::Span::default(), as this will correspond to the all-0s spans which mean "no definiens".
     pub definiens_span: lsp_positions::Span,
+    /// The fully qualified name is a representation of the symbol that captures its name and its
+    /// embedded context (e.g. `foo.bar` for the symbol `bar` defined in the module `foo`).
+    pub fully_qualified_name: ControlledOption<Handle<InternedString>>,
 }
 
 impl StackGraph {
@@ -1387,13 +1390,40 @@ pub struct DebugEntry {
 
 impl StackGraph {
     /// Returns debug information about the stack graph node.
-    pub fn debug_info(&self, node: Handle<Node>) -> Option<&DebugInfo> {
-        self.debug_info.get(node)
+    pub fn node_debug_info(&self, node: Handle<Node>) -> Option<&DebugInfo> {
+        self.node_debug_info.get(node)
     }
 
     /// Returns a mutable reference to the debug info about the stack graph node.
-    pub fn debug_info_mut(&mut self, node: Handle<Node>) -> &mut DebugInfo {
-        &mut self.debug_info[node]
+    pub fn node_debug_info_mut(&mut self, node: Handle<Node>) -> &mut DebugInfo {
+        &mut self.node_debug_info[node]
+    }
+
+    /// Returns debug information about the stack graph edge.
+    pub fn edge_debug_info(&self, source: Handle<Node>, sink: Handle<Node>) -> Option<&DebugInfo> {
+        self.edge_debug_info.get(source).and_then(|es| {
+            match es.binary_search_by_key(&sink, |e| e.0) {
+                Ok(idx) => Some(&es[idx].1),
+                Err(_) => None,
+            }
+        })
+    }
+
+    /// Returns a mutable reference to the debug info about the stack graph edge.
+    pub fn edge_debug_info_mut(
+        &mut self,
+        source: Handle<Node>,
+        sink: Handle<Node>,
+    ) -> &mut DebugInfo {
+        let es = &mut self.edge_debug_info[source];
+        let idx = match es.binary_search_by_key(&sink, |e| e.0) {
+            Ok(idx) => idx,
+            Err(idx) => {
+                es.insert(idx, (sink, DebugInfo::default()));
+                idx
+            }
+        };
+        &mut es[idx].1
     }
 }
 
@@ -1413,7 +1443,8 @@ pub struct StackGraph {
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
-    pub(crate) debug_info: SupplementalArena<Node, DebugInfo>,
+    pub(crate) node_debug_info: SupplementalArena<Node, DebugInfo>,
+    pub(crate) edge_debug_info: SupplementalArena<Node, SmallVec<[(Handle<Node>, DebugInfo); 8]>>,
 }
 
 impl StackGraph {
@@ -1537,17 +1568,20 @@ impl StackGraph {
                         span: source_info.span.clone(),
                         syntax_type: source_info
                             .syntax_type
-                            .map(|st| self.add_string(&other[st])),
+                            .into_option()
+                            .map(|st| self.add_string(&other[st]))
+                            .into(),
                         containing_line: source_info
                             .containing_line
                             .into_option()
                             .map(|cl| self.add_string(&other[cl]))
                             .into(),
                         definiens_span: source_info.definiens_span.clone(),
+                        fully_qualified_name: ControlledOption::default(),
                     };
                 }
-                if let Some(debug_info) = other.debug_info(other_node) {
-                    *self.debug_info_mut(node) = DebugInfo {
+                if let Some(debug_info) = other.node_debug_info(other_node) {
+                    *self.node_debug_info_mut(node) = DebugInfo {
                         entries: debug_info
                             .entries
                             .iter()
@@ -1591,7 +1625,8 @@ impl Default for StackGraph {
             source_info: SupplementalArena::new(),
             node_id_handles: NodeIDHandles::new(),
             outgoing_edges: SupplementalArena::new(),
-            debug_info: SupplementalArena::new(),
+            node_debug_info: SupplementalArena::new(),
+            edge_debug_info: SupplementalArena::new(),
         }
     }
 }

@@ -24,8 +24,11 @@
 //!     .run()
 //! }
 //! ```
+//!
+//! By default tests time out after 60 seconds. Set `Tester::max_test_time` to change the timeout.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::cli::test::TestArgs;
 use crate::loader::{LanguageConfiguration, Loader};
@@ -35,6 +38,7 @@ use crate::loader::{LanguageConfiguration, Loader};
 pub struct Tester {
     configurations: Vec<LanguageConfiguration>,
     test_paths: Vec<PathBuf>,
+    pub max_test_time: Option<Duration>,
 }
 
 impl Tester {
@@ -42,6 +46,7 @@ impl Tester {
         Self {
             configurations,
             test_paths,
+            max_test_time: Some(Duration::from_secs(60)),
         }
     }
 
@@ -63,6 +68,8 @@ impl Tester {
         }
         let loader = Loader::from_language_configurations(self.configurations, None)
             .expect("Expected loader");
-        TestArgs::new(test_paths).run(loader)
+        let mut args = TestArgs::new(test_paths);
+        args.max_test_time = self.max_test_time;
+        args.run(loader)
     }
 }

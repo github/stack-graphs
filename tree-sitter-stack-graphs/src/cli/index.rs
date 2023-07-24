@@ -7,8 +7,11 @@
 
 use clap::Args;
 use clap::ValueHint;
+use stack_graphs::arena::Handle;
+use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
@@ -18,6 +21,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tree_sitter_graph::Variables;
 
+use crate::loader::FileLanguageConfigurations;
 use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::BuildError;
@@ -29,6 +33,7 @@ use super::util::duration_from_seconds_str;
 use super::util::iter_files_and_directories;
 use super::util::sha1;
 use super::util::wait_for_input;
+use super::util::BuildErrorWithSource;
 use super::util::ConsoleLogger;
 use super::util::ExistingPathBufValueParser;
 use super::util::FileLogger;
@@ -219,23 +224,24 @@ impl<'a> Indexer<'a> {
         }
 
         let mut file_reader = FileReader::new();
-        let lc = match self
+        let lcs = match self
             .loader
             .load_for_file(source_path, &mut file_reader, &NoCancellation)
         {
-            Ok(Some(sgl)) => sgl,
-            Ok(None) => {
+            Ok(lcs) if !lcs.has_some() => {
                 if missing_is_error {
                     file_status.failure("not supported", None);
                 }
                 return Ok(());
             }
+            Ok(lcs) => lcs,
             Err(crate::loader::LoadError::Cancelled(_)) => {
                 file_status.warning("language loading timed out", None);
                 return Ok(());
             }
             Err(e) => return Err(IndexError::LoadError(e)),
         };
+
         let source = file_reader.get(source_path)?;
         let tag = sha1(source);
 
@@ -264,74 +270,50 @@ impl<'a> Indexer<'a> {
         let mut graph = StackGraph::new();
         let file = graph
             .add_file(&source_path.to_string_lossy())
-            .expect("file not present in emtpy graph");
+            .expect("file not present in empty graph");
 
-        let relative_source_path = source_path.strip_prefix(source_root).unwrap();
-        let result = if let Some(fa) = source_path
-            .file_name()
-            .and_then(|f| lc.special_files.get(&f.to_string_lossy()))
-        {
-            fa.build_stack_graph_into(
-                &mut graph,
-                file,
-                &relative_source_path,
-                &source,
-                &mut std::iter::empty(),
-                &HashMap::new(),
-                &cancellation_flag,
-            )
-        } else {
-            let globals = Variables::new();
-            lc.sgl
-                .build_stack_graph_into(&mut graph, file, &source, &globals, &cancellation_flag)
-        };
-        match result {
-            Err(BuildError::Cancelled(_)) => {
-                file_status.warning("parsing timed out", None);
-                self.db
-                    .store_error_for_file(source_path, &tag, "parsing timed out")?;
-                return Ok(());
-            }
-            Err(err @ BuildError::ParseErrors(_)) => {
-                file_status.failure(
-                    "parsing failed",
-                    Some(&err.display_pretty(
+        let result = Self::build_stack_graph(
+            &mut graph,
+            file,
+            source_root,
+            source_path,
+            &source,
+            lcs,
+            &cancellation_flag,
+        );
+        if let Err(err) = result {
+            match err.inner {
+                BuildError::Cancelled(_) => {
+                    file_status.warning("parsing timed out", None);
+                    self.db
+                        .store_error_for_file(source_path, &tag, "parsing timed out")?;
+                    return Ok(());
+                }
+                BuildError::ParseErrors { .. } => {
+                    file_status.failure("parsing failed", Some(&err.display_pretty()));
+                    self.db.store_error_for_file(
                         source_path,
-                        source,
-                        lc.sgl.tsg_path(),
-                        lc.sgl.tsg_source(),
-                    )),
-                );
-                self.db.store_error_for_file(
-                    source_path,
-                    &tag,
-                    &format!("parsing failed: {}", err),
-                )?;
-                return Ok(());
+                        &tag,
+                        &format!("parsing failed: {}", err.inner),
+                    )?;
+                    return Ok(());
+                }
+                _ => {
+                    file_status.failure("failed to build stack graph", Some(&err.display_pretty()));
+                    return Err(IndexError::StackGraph);
+                }
             }
-            Err(err) => {
-                file_status.failure(
-                    "failed to build stack graph",
-                    Some(&err.display_pretty(
-                        source_path,
-                        source,
-                        lc.sgl.tsg_path(),
-                        lc.sgl.tsg_source(),
-                    )),
-                );
-                return Err(IndexError::StackGraph);
-            }
-            Ok(_) => true,
         };
 
         let mut partials = PartialPaths::new();
         let mut paths = Vec::new();
-        match partials.find_minimal_partial_path_set_in_file(
+        match ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &(&cancellation_flag as &dyn CancellationFlag),
             |_g, _ps, p| {
-                paths.push(p);
+                paths.push(p.clone());
             },
         ) {
             Ok(_) => {}
@@ -351,6 +333,49 @@ impl<'a> Indexer<'a> {
 
         file_status.success("success", None);
 
+        Ok(())
+    }
+
+    fn build_stack_graph<'b>(
+        graph: &mut StackGraph,
+        file: Handle<File>,
+        source_root: &Path,
+        source_path: &Path,
+        source: &'b str,
+        lcs: FileLanguageConfigurations<'b>,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> std::result::Result<(), BuildErrorWithSource<'b>> {
+        let relative_source_path = source_path.strip_prefix(source_root).unwrap();
+        if let Some(lc) = lcs.primary {
+            let globals = Variables::new();
+            lc.sgl
+                .build_stack_graph_into(graph, file, source, &globals, cancellation_flag)
+                .map_err(|inner| BuildErrorWithSource {
+                    inner,
+                    source_path: source_path.to_path_buf(),
+                    source_str: source,
+                    tsg_path: lc.sgl.tsg_path().to_path_buf(),
+                    tsg_str: &lc.sgl.tsg_source(),
+                })?;
+        }
+        for (_, fa) in lcs.secondary {
+            fa.build_stack_graph_into(
+                graph,
+                file,
+                &relative_source_path,
+                &source,
+                &mut std::iter::empty(),
+                &HashMap::new(),
+                cancellation_flag,
+            )
+            .map_err(|inner| BuildErrorWithSource {
+                inner,
+                source_path: source_path.to_path_buf(),
+                source_str: &source,
+                tsg_path: PathBuf::new(),
+                tsg_str: "",
+            })?;
+        }
         Ok(())
     }
 

@@ -16,6 +16,7 @@ use stack_graphs::partial::PartialPaths;
 use stack_graphs::partial::PartialScopedSymbol;
 use stack_graphs::partial::PartialSymbolStack;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::SymbolStackKey;
 use stack_graphs::NoCancellation;
 
@@ -30,16 +31,16 @@ fn check_root_partial_paths(
     let file = graph.get_file(file).expect("Missing file");
     let mut partials = PartialPaths::new();
     let mut db = Database::new();
-    partials
-        .find_minimal_partial_path_set_in_file(
-            graph,
-            file,
-            &NoCancellation,
-            |graph, partials, path| {
-                db.add_partial_path(graph, partials, path);
-            },
-        )
-        .expect("should never be cancelled");
+    ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+        graph,
+        &mut partials,
+        file,
+        &NoCancellation,
+        |graph, partials, path| {
+            db.add_partial_path(graph, partials, path.clone());
+        },
+    )
+    .expect("should never be cancelled");
 
     let mut symbol_stack = PartialSymbolStack::empty();
     for symbol in precondition.iter().rev() {

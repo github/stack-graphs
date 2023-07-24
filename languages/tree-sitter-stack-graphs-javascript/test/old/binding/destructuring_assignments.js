@@ -13,7 +13,7 @@ let [w,
      q] = [1,2];
 
    w;
-// ^ defined: 12, 13
+// ^ defined: 12
 
    q;
-// ^ defined: 13, 13
+// ^ defined: 13

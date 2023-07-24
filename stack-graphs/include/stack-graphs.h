@@ -259,6 +259,9 @@ struct sg_source_info {
     // If you need one of these to make the type checker happy, but you don't have one, just use
     // sg_span::default(), as this will correspond to the all-0s spans which mean "no definiens".
     struct sg_span definiens_span;
+    // The fully qualified name is a representation of the symbol that captures its name and its
+    // embedded context (e.g. `foo.bar` for the symbol `bar` defined in the module `foo`).
+    sg_string_handle fully_qualified_name;
 };
 
 // An array of all of the source information in a stack graph.  Source information is associated
@@ -798,7 +801,7 @@ void sg_partial_path_database_mark_local_nodes(struct sg_partial_path_database *
 struct sg_node_handle_set sg_partial_path_database_local_nodes(const struct sg_partial_path_database *db);
 
 // Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
-// nodes.
+// nodes. The path stitcher will be set up to find complete paths only.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_nodes(const struct sg_stack_graph *graph,
                                                                                      struct sg_partial_path_arena *partials,
                                                                                      size_t count,

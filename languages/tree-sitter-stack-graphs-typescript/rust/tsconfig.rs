@@ -44,7 +44,9 @@ impl FileAnalyzer for TsConfigAnalyzer {
         // project scope
         let proj_scope = if let Some(proj_name) = proj_name {
             let proj_scope_id = graph.new_node_id(file);
-            let proj_scope = graph.add_scope_node(proj_scope_id, false).unwrap();
+            let proj_scope = graph
+                .add_scope_node(proj_scope_id, false)
+                .expect("no previous node for new id");
             add_debug_name(graph, proj_scope, "tsconfig.proj_scope");
 
             // project definition
@@ -113,9 +115,12 @@ impl FileAnalyzer for TsConfigAnalyzer {
 
         // path mappings
         for (from_idx, (from, tos)) in tsc.paths().iter().enumerate() {
-            let is_prefix = from.file_name().map_or(true, |n| n == "*");
+            let is_prefix = from.file_name().map_or(false, |n| n == "*");
             let from = if is_prefix {
-                from.parent().unwrap()
+                match from.parent() {
+                    Some(from) => from,
+                    None => continue,
+                }
             } else {
                 &from
             };
@@ -128,7 +133,17 @@ impl FileAnalyzer for TsConfigAnalyzer {
                 &format!("tsconfig.paths[{}].from_def", from_idx),
             );
             for (to_idx, to) in tos.iter().enumerate() {
-                let to = if is_prefix { to.parent().unwrap() } else { &to };
+                if is_prefix && !to.file_name().map_or(false, |n| n == "*") {
+                    continue;
+                }
+                let to = if is_prefix {
+                    match to.parent() {
+                        Some(to) => to,
+                        None => continue,
+                    }
+                } else {
+                    &to
+                };
                 let to_ref = add_module_pushes(
                     graph,
                     file,
@@ -274,7 +289,11 @@ impl TsConfig {
 
         // compute patterns---invalid patterns are silently ignored
         es.into_iter()
-            .filter_map(|e| Pattern::new(p.with_extension(e).to_str().unwrap()).ok())
+            .filter_map(|e| {
+                p.with_extension(e)
+                    .to_str()
+                    .and_then(|p| Pattern::new(p).ok())
+            })
             .collect()
     }
 

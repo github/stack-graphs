@@ -28,11 +28,11 @@ cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
 [dependencies]
 anyhow = { version = "1.0", optional = true }
 clap = { version = "4", optional = true }
-stack-graphs = { version = "0.10", path = "../../stack-graphs" }
+stack-graphs = { version = "0.11", path = "../../stack-graphs" }
 tree-sitter = "=0.20.9"
-tree-sitter-stack-graphs = { version = "0.6", path = "../../tree-sitter-stack-graphs" }
+tree-sitter-stack-graphs = { version = "0.7", path = "../../tree-sitter-stack-graphs" }
 tree-sitter-javascript = { git = "https://github.com/tree-sitter/tree-sitter-javascript", rev = "5720b249490b3c17245ba772f6be4a43edb4e3b7" }
 
 [dev-dependencies]
 anyhow = "1.0"
-tree-sitter-stack-graphs = { version = "0.6", path = "../../tree-sitter-stack-graphs", features = ["cli"] }
+tree-sitter-stack-graphs = { version = "0.7", path = "../../tree-sitter-stack-graphs", features = ["cli"] }

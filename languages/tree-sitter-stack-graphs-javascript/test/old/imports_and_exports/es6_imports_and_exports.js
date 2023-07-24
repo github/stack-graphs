@@ -72,7 +72,7 @@ import * as mod from "a_basic.js";
 //     ^ defined: 24, 24
 
    mod.j;
-//     ^ defined: 25, 26
+//     ^ defined: 25
 
    mod.k;
 //     ^ defined: 26, 26

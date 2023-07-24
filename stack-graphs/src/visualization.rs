@@ -17,8 +17,8 @@ use crate::serde::Filter;
 use crate::stitching::Database;
 
 static CSS: &'static str = include_str!("visualization/visualization.css");
-static D3: &'static str = include_str!("visualization/d3.v7.min.js");
-static D3_DAG: &'static str = include_str!("visualization/d3-dag.v0.10.0.min.js");
+static D3: &'static str = include_str!("visualization/d3.min.js");
+static D3_DAG: &'static str = include_str!("visualization/d3-dag.min.js");
 static JS: &'static str = include_str!("visualization/visualization.js");
 
 static PKG: &'static str = env!("CARGO_PKG_NAME");
@@ -36,7 +36,7 @@ impl StackGraph {
         filter: &dyn Filter,
     ) -> Result<String, Error> {
         let filter = VisualizationFilter(filter);
-        let graph = serde_json::to_string(&self.to_serializable())?;
+        let graph = serde_json::to_string(&self.to_serializable_filter(&filter))?;
         let paths = serde_json::to_string(&db.to_serializable_filter(self, partials, &filter))?;
         let html = format!(
             r#"
