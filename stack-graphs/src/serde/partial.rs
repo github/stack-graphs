@@ -14,6 +14,10 @@ use super::Error;
 use super::NodeID;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct PartialPath {
     pub(crate) start_node: NodeID,
     pub(crate) end_node: NodeID,
@@ -83,6 +87,10 @@ impl PartialPath {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct PartialScopeStack {
     pub(crate) scopes: Vec<NodeID>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,6 +136,10 @@ impl PartialScopeStack {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[serde(transparent)]
 pub struct ScopeStackVariable(u32);
 
@@ -143,6 +155,10 @@ impl ScopeStackVariable {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct PartialSymbolStack {
     pub(crate) symbols: Vec<PartialScopedSymbol>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -190,6 +206,10 @@ impl PartialSymbolStack {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[serde(transparent)]
 pub struct SymbolStackVariable(u32);
 
@@ -205,6 +225,10 @@ impl SymbolStackVariable {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct PartialScopedSymbol {
     symbol: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -243,6 +267,10 @@ impl PartialScopedSymbol {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[serde(transparent)]
 pub struct PartialPathEdgeList {
     pub(crate) edges: Vec<PartialPathEdge>,
@@ -279,6 +307,10 @@ impl PartialPathEdgeList {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct PartialPathEdge {
     pub(crate) source: NodeID,
     precedence: i32,
