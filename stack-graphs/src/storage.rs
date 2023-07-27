@@ -30,7 +30,7 @@ use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
-const VERSION: usize = 3;
+const VERSION: usize = 4;
 
 const SCHEMA: &str = r#"
         CREATE TABLE metadata (
@@ -75,9 +75,7 @@ pub enum StorageError {
     #[error(transparent)]
     Serde(#[from] serde::Error),
     #[error(transparent)]
-    RmpSerdeDecode(#[from] rmp_serde::decode::Error),
-    #[error(transparent)]
-    RmpSerdeEncode(#[from] rmp_serde::encode::Error),
+    PostcardError(#[from] postcard::Error),
 }
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -283,7 +281,7 @@ impl SQLiteWriter {
             &file.to_string_lossy(),
             tag,
             error,
-            &rmp_serde::to_vec(&graph)?,
+            &postcard::to_stdvec(&graph)?,
         ))?;
         Ok(())
     }
@@ -323,7 +321,7 @@ impl SQLiteWriter {
         let mut stmt =
             conn.prepare_cached("INSERT INTO graphs (file, tag, value) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        stmt.execute((file_str, tag, &rmp_serde::to_vec(&graph)?))?;
+        stmt.execute((file_str, tag, &postcard::to_stdvec(&graph)?))?;
         Ok(())
     }
 
@@ -364,7 +362,7 @@ impl SQLiteWriter {
                 );
                 let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                root_stmt.execute((file_str, symbol_stack, &rmp_serde::to_vec(&path)?))?;
+                root_stmt.execute((file_str, symbol_stack, &postcard::to_stdvec(&path)?))?;
                 root_path_count += 1;
             } else if start_node.is_in_file(file) {
                 copious_debugging!(
@@ -375,7 +373,7 @@ impl SQLiteWriter {
                 node_stmt.execute((
                     file_str,
                     path.start_node.local_id,
-                    &rmp_serde::to_vec(&path)?,
+                    &postcard::to_stdvec(&path)?,
                 ))?;
                 node_path_count += 1;
             } else {
@@ -447,6 +445,28 @@ impl SQLiteReader {
         })
     }
 
+    /// Clear all data that has been loaded into this reader instance.
+    /// After this call, all existing handles from this reader are invalid.
+    pub fn clear(&mut self) {
+        self.loaded_graphs.clear();
+        self.graph = StackGraph::new();
+
+        self.loaded_node_paths.clear();
+        self.loaded_root_paths.clear();
+        self.partials.clear();
+        self.db.clear();
+    }
+
+    /// Clear path data that has been loaded into this reader instance.
+    /// After this call, all node handles remain valid, but all path data
+    /// is invalid.
+    pub fn clear_paths(&mut self) {
+        self.loaded_node_paths.clear();
+        self.loaded_root_paths.clear();
+        self.partials.clear();
+        self.db.clear();
+    }
+
     /// Get the file's status in the database. If a tag is provided, it must match or the file
     /// is reported missing.
     pub fn status_for_file<T: AsRef<str>>(
@@ -485,7 +505,7 @@ impl SQLiteReader {
     }
 
     /// Ensure the graph for the given file is loaded.
-    pub fn load_graph_for_file(&mut self, file: &str) -> Result<()> {
+    pub fn load_graph_for_file(&mut self, file: &str) -> Result<Handle<File>> {
         Self::load_graph_for_file_inner(file, &mut self.graph, &mut self.loaded_graphs, &self.conn)
     }
 
@@ -494,21 +514,21 @@ impl SQLiteReader {
         graph: &mut StackGraph,
         loaded_graphs: &mut HashSet<String>,
         conn: &Connection,
-    ) -> Result<()> {
+    ) -> Result<Handle<File>> {
         copious_debugging!("--> Load graph for {}", file);
         if !loaded_graphs.insert(file.to_string()) {
             copious_debugging!(" * Already loaded");
-            return Ok(());
+            return Ok(graph.get_file(file).expect("loaded file to exist"));
         }
         copious_debugging!(" * Load from database");
-        let mut stmt = conn.prepare_cached("SELECT json FROM graphs WHERE file = ?")?;
+        let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
-        let file_graph = rmp_serde::from_slice::<serde::StackGraph>(&value)?;
+        let file_graph = postcard::from_bytes::<serde::StackGraph>(&value)?;
         file_graph.load_into(graph)?;
-        Ok(())
+        Ok(graph.get_file(file).expect("loaded file to exist"))
     }
 
-    pub fn load_graph_for_file_or_directory(
+    pub fn load_graphs_for_file_or_directory(
         &mut self,
         file_or_directory: &Path,
         cancellation_flag: &dyn CancellationFlag,
@@ -559,7 +579,7 @@ impl SQLiteReader {
                 &mut self.loaded_graphs,
                 &self.conn,
             )?;
-            let path = rmp_serde::from_slice::<serde::PartialPath>(&value)?;
+            let path = postcard::from_bytes::<serde::PartialPath>(&value)?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
             copious_debugging!(
                 "   > Loaded {}",
@@ -613,7 +633,7 @@ impl SQLiteReader {
                     &mut self.loaded_graphs,
                     &self.conn,
                 )?;
-                let path = rmp_serde::from_slice::<serde::PartialPath>(&value)?;
+                let path = postcard::from_bytes::<serde::PartialPath>(&value)?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
                 copious_debugging!(
                     "   > Loaded {}",
