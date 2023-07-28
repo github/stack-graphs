@@ -14,9 +14,7 @@ env:
   HEAD_DIR: head
   HEAD_DB: head.sqlite
   HEAD_ARTIFACT: head-perf-results
-  TEST_REPO: microsoft/TypeScript
-  TEST_REF: v4.9.5
-  TEST_DIR: test
+  TEST_NAME: TypeScript-v4.9.5
   TEST_SRC: src/compiler
   MASSIF_OUT: perf.out
   MASSIF_REPORT: perf.txt
@@ -60,7 +58,7 @@ jobs:
         uses: actions/cache/restore@v3
         with:
           path: done
-          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
           lookup-only: 'true'
 
   ##
@@ -100,7 +98,7 @@ jobs:
           path: |
             ${{ env.MASSIF_OUT }}
             ${{ env.MASSIF_REPORT }}
-          key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
       #
       # Checkout code
       #
@@ -111,6 +109,7 @@ jobs:
           repository: ${{ env.BASE_REPO }}
           ref: ${{ env.BASE_SHA }}
           path: ${{ env.BASE_DIR }}
+          lfs: true
       #
       # Build code
       #
@@ -125,11 +124,8 @@ jobs:
       #
       - name: Checkout test code
         if: steps.cache-base-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.TEST_REPO }}
-          ref: ${{ env.TEST_REF }}
-          path: ${{ env.TEST_DIR }}
+        run: |
+          unzip benchmarks/${{ env.TEST_NAME }}.zip
       - name: Profile base memory
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
@@ -137,7 +133,7 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.BASE_DIR }}/target/release/${{ env.TSSG_TS }} \
-              index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+              index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       #
       # Upload results
@@ -187,7 +183,7 @@ jobs:
           path: |
             ${{ env.MASSIF_OUT }}
             ${{ env.MASSIF_REPORT }}
-          key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
       #
       # Checkout code
       #
@@ -198,6 +194,7 @@ jobs:
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
           path: ${{ env.HEAD_DIR }}
+          lfs: true
       #
       # Build code
       #
@@ -212,11 +209,8 @@ jobs:
       #
       - name: Checkout test code
         if: steps.cache-head-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.TEST_REPO }}
-          ref: ${{ env.TEST_REF }}
-          path: ${{ env.TEST_DIR }}
+        run: |
+          unzip benchmarks/${{ env.TEST_NAME }}.zip
       - name: Profile head memory
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
@@ -224,7 +218,7 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_DIR }}/target/release/${{ env.TSSG_TS }} \
-              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       #
       # Upload results
@@ -285,7 +279,7 @@ jobs:
           ${{ env.SRC_DIR }}/script/ci-perf-summary-md \
             ${{ env.BASE_ARTIFACT }}/${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_ARTIFACT }}/${{ env.MASSIF_OUT }} \
-            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on [${{ env.TEST_REPO }}@${{ env.TEST_REF }}](${{ github.server_url }}/${{ env.TEST_REPO }}/tree/${{ env.TEST_REF }}). For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts. _Note that performance is tested on the last commits with changes in `stack-graphs`, not on every commit._' \
+            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on ${{ env.TEST_NAME }} benchmark. For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts. _Note that performance is tested on the last commits with changes in `stack-graphs`, not on every commit._' \
           | ${{ env.SRC_DIR }}/script/ci-comment-json > ${{ env.COMMENT_JSON }}
       - name: Add summary comment to PR
         run: |
@@ -302,4 +296,4 @@ jobs:
         uses: actions/cache/save@v3
         with:
           path: done
-          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
