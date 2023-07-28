@@ -68,7 +68,7 @@ jobs:
         uses: actions/cache/restore@v3
         with:
           path: done
-          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
           lookup-only: 'true'
 
   ##
@@ -81,9 +81,6 @@ jobs:
     env:
       BASE_SHA: ${{ needs.changes.outputs.base-sha }}
     steps:
-      #
-      # Install tools
-      #
       - name: Install Rust environment
         uses: hecrj/setup-rust-action@v1
         with:
@@ -98,9 +95,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
-      #
-      # Cache results
-      #
       - name: "Cache base result"
         id: cache-base-result
         uses: actions/cache@v3
@@ -108,10 +102,7 @@ jobs:
           path: |
             ${{ env.MASSIF_OUT }}
             ${{ env.MASSIF_REPORT }}
-          key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
-      #
-      # Checkout code
-      #
+          key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_NAME }}
       - name: "Checkout base code"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -120,25 +111,19 @@ jobs:
           ref: ${{ env.BASE_SHA }}
           path: ${{ env.BASE_DIR }}
           lfs: true
-      #
-      # Build code
-      #
       - name: "Build base CLI"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: cargo build --package ${{ env.TSSG_TS }} --features cli --release
         working-directory: ${{ env.BASE_DIR }}
         env:
           CARGO_PROFILE_RELEASE_DEBUG: true
-      #
-      # Test performance
-      #
       - name: Checkout benchmark code
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
           repository: ${{ env.TEST_REPO }}
           ref: ${{ env.TEST_REF }}
-          path: ${{ env.TEST_NAME }}
+          path: ${{ env.BASE_DIR }}/data/${{ env.TEST_NAME }}
       - name: Profile base memory
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
@@ -146,11 +131,9 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.BASE_DIR }}/target/release/${{ env.TSSG_TS }} \
-              index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
+              index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- \
+                ${{ env.BASE_DIR }}/data/${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
-      #
-      # Upload results
-      #
       - name: Upload results
         uses: actions/upload-artifact@v3
         with:
@@ -169,9 +152,6 @@ jobs:
     env:
       HEAD_SHA: ${{ needs.changes.outputs.head-sha }}
     steps:
-      #
-      # Install tools
-      #
       - name: Install Rust environment
         uses: hecrj/setup-rust-action@v1
         with:
@@ -186,9 +166,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
-      #
-      # Cache results
-      #
       - name: "Cache head result"
         id: cache-head-result
         uses: actions/cache@v3
@@ -196,10 +173,7 @@ jobs:
           path: |
             ${{ env.MASSIF_OUT }}
             ${{ env.MASSIF_REPORT }}
-          key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
-      #
-      # Checkout code
-      #
+          key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
       - name: "Checkout head code"
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -208,22 +182,17 @@ jobs:
           ref: ${{ env.HEAD_SHA }}
           path: ${{ env.HEAD_DIR }}
           lfs: true
-      #
-      # Build code
-      #
       - name: "Build head CLI"
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: cargo build --package ${{ env.TSSG_TS }} --features cli --release
         working-directory: ${{ env.HEAD_DIR }}
         env:
           CARGO_PROFILE_RELEASE_DEBUG: true
-      #
-      # Test performance
-      #
       - name: Checkout benchmark code
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
-          unzip ${{ env.HEAD_DIR }}/data/${{ env.TEST_NAME }}.zip
+          unzip ${{ env.TEST_NAME }}.zip
+        working-directory: ${{ env.HEAD_DIR }}/data
       - name: Profile head memory
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
@@ -231,11 +200,9 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_DIR }}/target/release/${{ env.TSSG_TS }} \
-              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_NAME }}
+              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- \
+                ${{ env.HEAD_DIR }}/data/${{ env.TEST_NAME }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
-      #
-      # Upload results
-      #
       - name: Upload results
         uses: actions/upload-artifact@v3
         with:
@@ -309,4 +276,4 @@ jobs:
         uses: actions/cache/save@v3
         with:
           path: done
-          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
