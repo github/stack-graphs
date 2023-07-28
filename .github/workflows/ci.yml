@@ -8,10 +8,9 @@ on:
 
 jobs:
   test-rust:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubunut-latest
     strategy:
       matrix:
-        os: [ubuntu-latest]
         rust: [stable]
 
     steps:
@@ -112,3 +111,57 @@ jobs:
         run: cargo build -p ${{ matrix.language }}
       - name: Test
         run: cargo test -p ${{ matrix.language }}
+
+  test-cli:
+    needs: [test-rust]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable]
+    env:
+      TEST_NAME: typeorm-0.3.17
+
+    steps:
+      - name: Install Rust environment
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: ${{ matrix.rust }}
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.OS }}-cargo-
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          lfs: true
+      - name: Build
+        run: cargo build --release -p tree-sitter-stack-graphs-typescript --features cli
+      - name: Checkout benchmark code
+        run: unzip benchmarks/${{ env.TEST_NAME }}.zip
+      - name: Index
+        run: |
+          target/release/tree-sitter-stack-graphs-typescript index -D ${{ env.TEST_NAME }}.sqlite --hide-error-details \
+            ${{ env.TEST_NAME }}/package.json \
+            ${{ env.TEST_NAME }}/tsconfig.json \
+            ${{ env.TEST_NAME }}/src/data-source/ \
+            ${{ env.TEST_NAME }}/src/entity-manager/
+      - name: Index (forced)
+        run: |
+          target/release/tree-sitter-stack-graphs-typescript index -D ${{ env.TEST_NAME }}.sqlite --hide-error-details \
+            ${{ env.TEST_NAME }}/package.json \
+            ${{ env.TEST_NAME }}/tsconfig.json \
+            ${{ env.TEST_NAME }}/src/data-source/ \
+            ${{ env.TEST_NAME }}/src/entity-manager/
+      - name: Query
+        run: |
+          target/release/tree-sitter-stack-graphs-typescript query -D ${{ env.TEST_NAME }}.sqlite definition \
+            src/data-source/DataSource.ts:6:10 \
+            src/data-source/DataSource.ts:84:23
+      - name: Query
+        run: |
+          target/release/tree-sitter-stack-graphs-typescript status -D ${{ env.TEST_NAME }}.sqlite --all
