@@ -3,6 +3,12 @@ on:
   pull_request:
     paths:
       - 'stack-graphs/**'
+
+# In the event that there is a new push to the ref, cancel any running jobs because there are now obsolete, and wasting resources.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
