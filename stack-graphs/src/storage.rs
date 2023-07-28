@@ -65,6 +65,10 @@ const PRAGMAS: &str = r#"
         PRAGMA secure_delete = false;
     "#;
 
+lazy_static! {
+    pub const BINCODE_CONFIG: bincode::Config = bincode::config::standard();
+}
+
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("cancelled at {0}")]
@@ -282,7 +286,7 @@ impl SQLiteWriter {
         let mut stmt = conn
             .prepare_cached("INSERT INTO graphs (file, tag, error, value) VALUES (?, ?, ?, ?)")?;
         let graph = crate::serde::StackGraph::default();
-        let serialized = bincode::encode_to_vec(&graph, config::standard())?;
+        let serialized = bincode::encode_to_vec(&graph, BINCODE_CONFIG)?;
         stmt.execute((&file.to_string_lossy(), tag, error, serialized))?;
         Ok(())
     }
@@ -322,7 +326,7 @@ impl SQLiteWriter {
         let mut stmt =
             conn.prepare_cached("INSERT INTO graphs (file, tag, value) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        let serialized = bincode::encode_to_vec(&graph, config::standard())?;
+        let serialized = bincode::encode_to_vec(&graph, BINCODE_CONFIG)?;
         stmt.execute((file_str, tag, &serialized))?;
         Ok(())
     }
@@ -364,7 +368,7 @@ impl SQLiteWriter {
                 );
                 let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                let serialized = bincode::encode_to_vec(&path, config::standard())?;
+                let serialized = bincode::encode_to_vec(&path, BINCODE_CONFIG)?;
                 root_stmt.execute((file_str, symbol_stack, serialized))?;
                 root_path_count += 1;
             } else if start_node.is_in_file(file) {
@@ -373,7 +377,7 @@ impl SQLiteWriter {
                     path.start_node.display(graph),
                 );
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                let serialized = bincode::encode_to_vec(&path, config::standard())?;
+                let serialized = bincode::encode_to_vec(&path, BINCODE_CONFIG)?;
                 node_stmt.execute((file_str, path.start_node.local_id, serialized))?;
                 node_path_count += 1;
             } else {
@@ -524,7 +528,7 @@ impl SQLiteReader {
         let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
         let (file_graph, _): (serde::StackGraph, usize) =
-            bincode::decode_from_slice(&value, config::standard())?;
+            bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
         file_graph.load_into(graph)?;
         Ok(graph.get_file(file).expect("loaded file to exist"))
     }
@@ -581,7 +585,7 @@ impl SQLiteReader {
                 &self.conn,
             )?;
             let (path, _): (serde::PartialPath, usize) =
-                bincode::decode_from_slice(&value, config::standard())?;
+                bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
             copious_debugging!(
                 "   > Loaded {}",
@@ -636,7 +640,7 @@ impl SQLiteReader {
                     &self.conn,
                 )?;
                 let (path, _): (serde::PartialPath, usize) =
-                    bincode::decode_from_slice(&value, config::standard())?;
+                    bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
                 copious_debugging!(
                     "   > Loaded {}",
