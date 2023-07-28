@@ -21,9 +21,6 @@ env:
   HEAD_DB: head.sqlite
   HEAD_ARTIFACT: head-perf-results
   TEST_NAME: typescript_benchmark
-  TEST_REPO: microsoft/TypeScript
-  TEST_REF: v4.9.5
-  TEST_SRC: src/compiler/utilities.ts
   MASSIF_OUT: perf.out
   MASSIF_REPORT: perf.txt
   TSSG_TS: tree-sitter-stack-graphs-typescript
@@ -119,11 +116,9 @@ jobs:
           CARGO_PROFILE_RELEASE_DEBUG: true
       - name: Checkout benchmark code
         if: steps.cache-base-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.TEST_REPO }}
-          ref: ${{ env.TEST_REF }}
-          path: ${{ env.BASE_DIR }}/data/${{ env.TEST_NAME }}
+        run: |
+          unzip ${{ env.TEST_NAME }}.zip
+        working-directory: ${{ env.BASE_DIR }}/data
       - name: Profile base memory
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
@@ -132,7 +127,7 @@ jobs:
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.BASE_DIR }}/target/release/${{ env.TSSG_TS }} \
               index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- \
-                ${{ env.BASE_DIR }}/data/${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
+                ${{ env.BASE_DIR }}/data/${{ env.TEST_NAME }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       - name: Upload results
         uses: actions/upload-artifact@v3
