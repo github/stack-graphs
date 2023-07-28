@@ -20,10 +20,10 @@ env:
   HEAD_DIR: head
   HEAD_DB: head.sqlite
   HEAD_ARTIFACT: head-perf-results
-  TEST_NAME: TypeScript-4.9.5
+  TEST_NAME: typescript_benchmark
   TEST_REPO: microsoft/TypeScript
   TEST_REF: v4.9.5
-  TEST_SRC: src/compiler
+  TEST_SRC: src/compiler/utilities.ts
   MASSIF_OUT: perf.out
   MASSIF_REPORT: perf.txt
   TSSG_TS: tree-sitter-stack-graphs-typescript
@@ -223,7 +223,7 @@ jobs:
       - name: Checkout benchmark code
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
-          unzip ${{ env.HEAD_DIR }}/benchmarks/${{ env.TEST_NAME }}.zip
+          unzip ${{ env.HEAD_DIR }}/data/${{ env.TEST_NAME }}.zip
       - name: Profile head memory
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
@@ -231,7 +231,7 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_DIR }}/target/release/${{ env.TSSG_TS }} \
-              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_NAME }}/${{ env.TEST_SRC }}
+              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_NAME }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       #
       # Upload results
