@@ -3,6 +3,12 @@ on:
   pull_request:
     paths:
       - 'stack-graphs/**'
+
+# In the event that there is a new push to the ref, cancel any running jobs because there are now obsolete, and wasting resources.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   BASE_REPO: ${{ github.event.pull_request.base.repo.owner.login }}/${{ github.event.pull_request.base.repo.name }}
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -14,10 +20,7 @@ env:
   HEAD_DIR: head
   HEAD_DB: head.sqlite
   HEAD_ARTIFACT: head-perf-results
-  TEST_REPO: microsoft/TypeScript
-  TEST_REF: v4.9.5
-  TEST_DIR: test
-  TEST_SRC: src/compiler
+  TEST_NAME: typescript_benchmark
   MASSIF_OUT: perf.out
   MASSIF_REPORT: perf.txt
   TSSG_TS: tree-sitter-stack-graphs-typescript
@@ -40,6 +43,7 @@ jobs:
           ref: ${{ env.BASE_SHA }}
           path: ${{ env.BASE_DIR }}
           fetch-depth: 0
+          lfs: false
       - name: Find last relevant base commit
         run: |
           printf 'BASE_SHA=%s\n' "$(git rev-list -1 ${{ env.BASE_SHA }} -- stack-graphs)" >> $GITHUB_ENV
@@ -51,6 +55,7 @@ jobs:
           ref: ${{ env.HEAD_SHA }}
           path: ${{ env.HEAD_DIR }}
           fetch-depth: 0
+          lfs: false
       - name: "Find last relevant head commit"
         run: |
           printf 'HEAD_SHA=%s\n' "$(git rev-list -1 ${{ env.HEAD_SHA }} -- stack-graphs)" >> $GITHUB_ENV
@@ -60,7 +65,7 @@ jobs:
         uses: actions/cache/restore@v3
         with:
           path: done
-          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
           lookup-only: 'true'
 
   ##
@@ -73,9 +78,6 @@ jobs:
     env:
       BASE_SHA: ${{ needs.changes.outputs.base-sha }}
     steps:
-      #
-      # Install tools
-      #
       - name: Install Rust environment
         uses: hecrj/setup-rust-action@v1
         with:
@@ -90,9 +92,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
-      #
-      # Cache results
-      #
       - name: "Cache base result"
         id: cache-base-result
         uses: actions/cache@v3
@@ -100,10 +99,7 @@ jobs:
           path: |
             ${{ env.MASSIF_OUT }}
             ${{ env.MASSIF_REPORT }}
-          key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
-      #
-      # Checkout code
-      #
+          key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_NAME }}
       - name: "Checkout base code"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -111,25 +107,18 @@ jobs:
           repository: ${{ env.BASE_REPO }}
           ref: ${{ env.BASE_SHA }}
           path: ${{ env.BASE_DIR }}
-      #
-      # Build code
-      #
+          lfs: true
       - name: "Build base CLI"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: cargo build --package ${{ env.TSSG_TS }} --features cli --release
         working-directory: ${{ env.BASE_DIR }}
         env:
           CARGO_PROFILE_RELEASE_DEBUG: true
-      #
-      # Test performance
-      #
-      - name: Checkout test code
+      - name: Checkout benchmark code
         if: steps.cache-base-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.TEST_REPO }}
-          ref: ${{ env.TEST_REF }}
-          path: ${{ env.TEST_DIR }}
+        run: |
+          unzip ${{ env.TEST_NAME }}.zip
+        working-directory: ${{ env.BASE_DIR }}/data
       - name: Profile base memory
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
@@ -137,11 +126,9 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.BASE_DIR }}/target/release/${{ env.TSSG_TS }} \
-              index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+              index -D ${{ env.BASE_DB }} --max-file-time=30 --hide-error-details -- \
+                ${{ env.BASE_DIR }}/data/${{ env.TEST_NAME }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
-      #
-      # Upload results
-      #
       - name: Upload results
         uses: actions/upload-artifact@v3
         with:
@@ -160,9 +147,6 @@ jobs:
     env:
       HEAD_SHA: ${{ needs.changes.outputs.head-sha }}
     steps:
-      #
-      # Install tools
-      #
       - name: Install Rust environment
         uses: hecrj/setup-rust-action@v1
         with:
@@ -177,9 +161,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
-      #
-      # Cache results
-      #
       - name: "Cache head result"
         id: cache-head-result
         uses: actions/cache@v3
@@ -187,10 +168,7 @@ jobs:
           path: |
             ${{ env.MASSIF_OUT }}
             ${{ env.MASSIF_REPORT }}
-          key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
-      #
-      # Checkout code
-      #
+          key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
       - name: "Checkout head code"
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
@@ -198,25 +176,18 @@ jobs:
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
           path: ${{ env.HEAD_DIR }}
-      #
-      # Build code
-      #
+          lfs: true
       - name: "Build head CLI"
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: cargo build --package ${{ env.TSSG_TS }} --features cli --release
         working-directory: ${{ env.HEAD_DIR }}
         env:
           CARGO_PROFILE_RELEASE_DEBUG: true
-      #
-      # Test performance
-      #
-      - name: Checkout test code
+      - name: Checkout benchmark code
         if: steps.cache-head-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.TEST_REPO }}
-          ref: ${{ env.TEST_REF }}
-          path: ${{ env.TEST_DIR }}
+        run: |
+          unzip ${{ env.TEST_NAME }}.zip
+        working-directory: ${{ env.HEAD_DIR }}/data
       - name: Profile head memory
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
@@ -224,11 +195,9 @@ jobs:
             --tool=massif \
             --massif-out-file=${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_DIR }}/target/release/${{ env.TSSG_TS }} \
-              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- ${{ env.TEST_DIR }}/${{ env.TEST_SRC }}
+              index -D ${{ env.HEAD_DB }} --max-file-time=30 --hide-error-details -- \
+                ${{ env.HEAD_DIR }}/data/${{ env.TEST_NAME }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
-      #
-      # Upload results
-      #
       - name: Upload results
         uses: actions/upload-artifact@v3
         with:
@@ -285,7 +254,7 @@ jobs:
           ${{ env.SRC_DIR }}/script/ci-perf-summary-md \
             ${{ env.BASE_ARTIFACT }}/${{ env.MASSIF_OUT }} \
             ${{ env.HEAD_ARTIFACT }}/${{ env.MASSIF_OUT }} \
-            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on [${{ env.TEST_REPO }}@${{ env.TEST_REF }}](${{ github.server_url }}/${{ env.TEST_REPO }}/tree/${{ env.TEST_REF }}). For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts. _Note that performance is tested on the last commits with changes in `stack-graphs`, not on every commit._' \
+            'Comparing base ${{ env.BASE_REPO }}@${{ env.BASE_SHA }} with head ${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }} on ${{ env.TEST_NAME }} benchmark. For details see [workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) artifacts. _Note that performance is tested on the last commits with changes in `stack-graphs`, not on every commit._' \
           | ${{ env.SRC_DIR }}/script/ci-comment-json > ${{ env.COMMENT_JSON }}
       - name: Add summary comment to PR
         run: |
@@ -302,4 +271,4 @@ jobs:
         uses: actions/cache/save@v3
         with:
           path: done
-          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_REPO }}@${{ env.TEST_REF }}/${{ env.TEST_SRC }}
+          key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
