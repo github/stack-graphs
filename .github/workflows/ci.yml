@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   test-rust:
-    runs-on: ubunut-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         rust: [stable]
