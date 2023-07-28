@@ -89,7 +89,7 @@ jobs:
       languages: ${{ steps.language-list.outputs.languages }}
 
   test-languages:
-    needs: [list-languages, test-rust]
+    needs: [list-languages]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -118,7 +118,6 @@ jobs:
         run: cargo test -p ${{ matrix.language }}
 
   test-cli:
-    needs: [test-rust]
     runs-on: ubuntu-latest
     strategy:
       matrix:
