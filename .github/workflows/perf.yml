@@ -20,7 +20,9 @@ env:
   HEAD_DIR: head
   HEAD_DB: head.sqlite
   HEAD_ARTIFACT: head-perf-results
-  TEST_NAME: TypeScript-v4.9.5
+  TEST_NAME: TypeScript-4.9.5
+  TEST_REPO: microsoft/TypeScript
+  TEST_REF: v4.9.5
   TEST_SRC: src/compiler
   MASSIF_OUT: perf.out
   MASSIF_REPORT: perf.txt
@@ -44,6 +46,7 @@ jobs:
           ref: ${{ env.BASE_SHA }}
           path: ${{ env.BASE_DIR }}
           fetch-depth: 0
+          lfs: false
       - name: Find last relevant base commit
         run: |
           printf 'BASE_SHA=%s\n' "$(git rev-list -1 ${{ env.BASE_SHA }} -- stack-graphs)" >> $GITHUB_ENV
@@ -55,6 +58,7 @@ jobs:
           ref: ${{ env.HEAD_SHA }}
           path: ${{ env.HEAD_DIR }}
           fetch-depth: 0
+          lfs: false
       - name: "Find last relevant head commit"
         run: |
           printf 'HEAD_SHA=%s\n' "$(git rev-list -1 ${{ env.HEAD_SHA }} -- stack-graphs)" >> $GITHUB_ENV
@@ -130,8 +134,11 @@ jobs:
       #
       - name: Checkout benchmark code
         if: steps.cache-base-result.outputs.cache-hit != 'true'
-        run: |
-          unzip ${{ env.BASE_DIR }}/benchmarks/${{ env.TEST_NAME }}.zip
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.TEST_REPO }}
+          ref: ${{ env.TEST_REF }}
+          path: ${{ env.TEST_NAME }}
       - name: Profile base memory
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
