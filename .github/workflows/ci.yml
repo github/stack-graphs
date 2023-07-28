@@ -120,6 +120,7 @@ jobs:
         rust: [stable]
     env:
       TEST_NAME: typeorm-0.3.17
+      TSSG_TS: tree-sitter-stack-graphs-typescript
 
     steps:
       - name: Install Rust environment
@@ -140,28 +141,28 @@ jobs:
         with:
           lfs: true
       - name: Build
-        run: cargo build --release -p tree-sitter-stack-graphs-typescript --features cli
+        run: cargo build --release -p ${{ env.TSSG_TS }} --features cli
       - name: Checkout benchmark code
         run: unzip benchmarks/${{ env.TEST_NAME }}.zip
       - name: Index
         run: |
-          target/release/tree-sitter-stack-graphs-typescript index -D ${{ env.TEST_NAME }}.sqlite --hide-error-details \
+          target/release/${{ env.TSSG_TS }} index -D ${{ env.TEST_NAME }}.sqlite --hide-error-details \
             ${{ env.TEST_NAME }}/package.json \
             ${{ env.TEST_NAME }}/tsconfig.json \
             ${{ env.TEST_NAME }}/src/data-source/ \
             ${{ env.TEST_NAME }}/src/entity-manager/
       - name: Index (forced)
         run: |
-          target/release/tree-sitter-stack-graphs-typescript index -D ${{ env.TEST_NAME }}.sqlite --hide-error-details \
+          target/release/${{ env.TSSG_TS }} index -D ${{ env.TEST_NAME }}.sqlite --hide-error-details \
             ${{ env.TEST_NAME }}/package.json \
             ${{ env.TEST_NAME }}/tsconfig.json \
             ${{ env.TEST_NAME }}/src/data-source/ \
             ${{ env.TEST_NAME }}/src/entity-manager/
       - name: Query
         run: |
-          target/release/tree-sitter-stack-graphs-typescript query -D ${{ env.TEST_NAME }}.sqlite definition \
-            src/data-source/DataSource.ts:6:10 \
-            src/data-source/DataSource.ts:84:23
+          target/release/${{ env.TSSG_TS }} query -D ${{ env.TEST_NAME }}.sqlite definition \
+            ${{ env.TEST_NAME }}/src/data-source/DataSource.ts:6:10 \
+            ${{ env.TEST_NAME }}/src/data-source/DataSource.ts:84:23
       - name: Query
         run: |
-          target/release/tree-sitter-stack-graphs-typescript status -D ${{ env.TEST_NAME }}.sqlite --all
+          target/release/${{ env.TSSG_TS }} status -D ${{ env.TEST_NAME }}.sqlite --all
