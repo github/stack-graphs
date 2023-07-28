@@ -15,8 +15,8 @@ edition = "2018"
 [features]
 copious-debugging = []
 serde = ["dep:serde", "lsp-positions/serde"]
-rkyv = ["dep:rkyv", "lsp-positions/rkyv"]
-storage = ["rkyv", "rusqlite", "serde"]
+bincode = ["dep:bincode", "lsp-positions/bincode"]
+storage = ["bincode", "rusqlite", "serde"]
 visualization = ["serde", "serde_json"]
 
 [lib]
@@ -32,7 +32,7 @@ fxhash = "0.2"
 itertools = "0.10"
 libc = "0.2"
 lsp-positions = { version = "0.3", path = "../lsp-positions" }
-rkyv = { version = "0.7.42", optional = true }
+bincode = { version = "2.0.0-rc.3", optional = true }
 rusqlite = { version = "0.28", optional = true, features = ["bundled", "functions"] }
 serde = { version = "1.0", optional = true, features = ["derive"] }
 serde_json = { version = "1.0", optional = true }

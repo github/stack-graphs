@@ -5,7 +5,9 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use rkyv::Deserialize;
+use bincode::config;
+use bincode::error::DecodeError;
+use bincode::error::EncodeError;
 use rusqlite::functions::FunctionFlags;
 use rusqlite::types::ValueRef;
 use rusqlite::Connection;
@@ -75,10 +77,10 @@ pub enum StorageError {
     Rusqlite(#[from] rusqlite::Error),
     #[error(transparent)]
     Serde(#[from] serde::Error),
-    #[error("rkyv serialization error")]
-    RkyvSerialize(Box<dyn std::error::Error + Send + Sync>),
-    #[error("rkyv deserialization error")]
-    RkyvDeserialize(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    SerializeFail(#[from] EncodeError),
+    #[error(transparent)]
+    DeserializeFail(#[from] DecodeError),
 }
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -280,10 +282,8 @@ impl SQLiteWriter {
         let mut stmt = conn
             .prepare_cached("INSERT INTO graphs (file, tag, error, value) VALUES (?, ?, ?, ?)")?;
         let graph = crate::serde::StackGraph::default();
-        let serialized = rkyv::to_bytes::<_, 256>(&graph)
-            .map_err(|e| StorageError::RkyvSerialize(Box::new(e)))?;
-        // TODO: determine if this doesn't do a copy
-        stmt.execute((&file.to_string_lossy(), tag, error, &serialized.as_slice()))?;
+        let serialized = bincode::encode_to_vec(&graph, config::standard())?;
+        stmt.execute((&file.to_string_lossy(), tag, error, serialized))?;
         Ok(())
     }
 
@@ -322,10 +322,8 @@ impl SQLiteWriter {
         let mut stmt =
             conn.prepare_cached("INSERT INTO graphs (file, tag, value) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        let serialized = rkyv::to_bytes::<_, 256>(&graph)
-            .map_err(|e| StorageError::RkyvSerialize(Box::new(e)))?;
-        // TODO: determine if this doesn't do a copy
-        stmt.execute((file_str, tag, &serialized.as_slice()))?;
+        let serialized = bincode::encode_to_vec(&graph, config::standard())?;
+        stmt.execute((file_str, tag, &serialized))?;
         Ok(())
     }
 
@@ -366,10 +364,8 @@ impl SQLiteWriter {
                 );
                 let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                let serialized = rkyv::to_bytes::<_, 256>(&path)
-                    .map_err(|e| StorageError::RkyvSerialize(Box::new(e)))?;
-                // TODO: determine if this doesn't do a copy
-                root_stmt.execute((file_str, symbol_stack, &serialized.as_slice()))?;
+                let serialized = bincode::encode_to_vec(&path, config::standard())?;
+                root_stmt.execute((file_str, symbol_stack, serialized))?;
                 root_path_count += 1;
             } else if start_node.is_in_file(file) {
                 copious_debugging!(
@@ -377,10 +373,8 @@ impl SQLiteWriter {
                     path.start_node.display(graph),
                 );
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                let serialized = rkyv::to_bytes::<_, 256>(&path)
-                    .map_err(|e| StorageError::RkyvSerialize(Box::new(e)))?;
-                // TODO: determine if this doesn't do a copy
-                node_stmt.execute((file_str, path.start_node.local_id, serialized.as_slice()))?;
+                let serialized = bincode::encode_to_vec(&path, config::standard())?;
+                node_stmt.execute((file_str, path.start_node.local_id, serialized))?;
                 node_path_count += 1;
             } else {
                 panic!(
@@ -529,9 +523,8 @@ impl SQLiteReader {
         copious_debugging!(" * Load from database");
         let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
-        // database only contains serialized rkyv values, so this should be safe
-        let file_graph: serde::StackGraph = unsafe { rkyv::from_bytes_unchecked(&value) }
-            .map_err(|e| StorageError::RkyvDeserialize(Box::new(e)))?;
+        let (file_graph, _): (serde::StackGraph, usize) =
+            bincode::decode_from_slice(&value, config::standard())?;
         file_graph.load_into(graph)?;
         Ok(graph.get_file(file).expect("loaded file to exist"))
     }
@@ -587,8 +580,8 @@ impl SQLiteReader {
                 &mut self.loaded_graphs,
                 &self.conn,
             )?;
-            let path: serde::PartialPath = unsafe { rkyv::from_bytes_unchecked(&value) }
-                .map_err(|e| StorageError::RkyvDeserialize(Box::new(e)))?;
+            let (path, _): (serde::PartialPath, usize) =
+                bincode::decode_from_slice(&value, config::standard())?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
             copious_debugging!(
                 "   > Loaded {}",
@@ -642,9 +635,8 @@ impl SQLiteReader {
                     &mut self.loaded_graphs,
                     &self.conn,
                 )?;
-                // database only contains serialized rkyv values, so this should be safe
-                let path: serde::PartialPath = unsafe { rkyv::from_bytes_unchecked(&value) }
-                    .map_err(|e| StorageError::RkyvDeserialize(Box::new(e)))?;
+                let (path, _): (serde::PartialPath, usize) =
+                    bincode::decode_from_slice(&value, config::standard())?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
                 copious_debugging!(
                     "   > Loaded {}",

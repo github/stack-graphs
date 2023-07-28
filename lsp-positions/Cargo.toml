@@ -18,11 +18,11 @@ test = false
 
 [features]
 default = ["tree-sitter"]
-rkyv = ["dep:rkyv"]
+bincode = ["dep:bincode"]
 
 [dependencies]
 memchr = "2.4"
 tree-sitter = { version=">= 0.19", optional=true }
 unicode-segmentation = { version="1.8" }
 serde = { version="1", optional=true, features=["derive"] }
-rkyv = { version="0.7.42", optional=true }
+bincode = { version="2.0.0-rc.3", optional=true }

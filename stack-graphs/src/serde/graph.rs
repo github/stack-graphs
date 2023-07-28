@@ -17,8 +17,8 @@ use super::NoFilter;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct StackGraph {
     pub files: Files,
@@ -208,8 +208,8 @@ impl StackGraph {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 #[serde(transparent)]
 pub struct Files {
@@ -218,8 +218,8 @@ pub struct Files {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 #[serde(transparent)]
 pub struct Nodes {
@@ -229,8 +229,8 @@ pub struct Nodes {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub enum Node {
     DropScopes {
@@ -340,8 +340,8 @@ impl Node {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct SourceInfo {
     pub span: lsp_positions::Span,
@@ -352,8 +352,8 @@ pub struct SourceInfo {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct DebugInfo {
     pub data: Vec<DebugEntry>,
@@ -361,8 +361,8 @@ pub struct DebugInfo {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct DebugEntry {
     pub key: String,
@@ -371,8 +371,8 @@ pub struct DebugEntry {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct NodeID {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -433,8 +433,8 @@ impl std::fmt::Display for NodeID {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct Edges {
     pub data: Vec<Edge>,
@@ -442,8 +442,8 @@ pub struct Edges {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct Edge {
     pub source: NodeID,

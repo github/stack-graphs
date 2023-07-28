@@ -46,8 +46,8 @@ fn utf16_len(string: &str) -> usize {
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct Position {
     /// The 0-indexed line number containing the character
@@ -113,8 +113,8 @@ impl PartialOrd<tree_sitter::Point> for Position {
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct Span {
     pub start: Position,
@@ -153,8 +153,8 @@ impl PartialOrd for Span {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct Offset {
     /// The number of UTF-8-encoded bytes appearing before this character in the string

@@ -15,8 +15,8 @@ use super::NodeID;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct PartialPath {
     pub(crate) start_node: NodeID,
@@ -88,8 +88,8 @@ impl PartialPath {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct PartialScopeStack {
     pub(crate) scopes: Vec<NodeID>,
@@ -137,8 +137,8 @@ impl PartialScopeStack {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 #[serde(transparent)]
 pub struct ScopeStackVariable(u32);
@@ -156,8 +156,8 @@ impl ScopeStackVariable {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct PartialSymbolStack {
     pub(crate) symbols: Vec<PartialScopedSymbol>,
@@ -207,8 +207,8 @@ impl PartialSymbolStack {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 #[serde(transparent)]
 pub struct SymbolStackVariable(u32);
@@ -226,8 +226,8 @@ impl SymbolStackVariable {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct PartialScopedSymbol {
     symbol: String,
@@ -268,8 +268,8 @@ impl PartialScopedSymbol {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 #[serde(transparent)]
 pub struct PartialPathEdgeList {
@@ -308,8 +308,8 @@ impl PartialPathEdgeList {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+    feature = "bincode",
+    derive(bincode::Encode, bincode::Decode)
 )]
 pub struct PartialPathEdge {
     pub(crate) source: NodeID,
