@@ -128,10 +128,10 @@ jobs:
       #
       # Test performance
       #
-      - name: Checkout test code
+      - name: Checkout benchmark code
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
-          unzip benchmarks/${{ env.TEST_NAME }}.zip
+          unzip ${{ env.BASE_DIR }}/benchmarks/${{ env.TEST_NAME }}.zip
       - name: Profile base memory
         if: steps.cache-base-result.outputs.cache-hit != 'true'
         run: |
@@ -213,10 +213,10 @@ jobs:
       #
       # Test performance
       #
-      - name: Checkout test code
+      - name: Checkout benchmark code
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
-          unzip benchmarks/${{ env.TEST_NAME }}.zip
+          unzip ${{ env.HEAD_DIR }}/benchmarks/${{ env.TEST_NAME }}.zip
       - name: Profile head memory
         if: steps.cache-head-result.outputs.cache-hit != 'true'
         run: |
