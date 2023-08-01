@@ -5,15 +5,13 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use serde::Deserialize;
-use serde::Serialize;
-
 use crate::partial::PartialPaths;
 
 use super::Error;
 use super::NodeID;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct PartialPath {
     pub(crate) start_node: NodeID,
@@ -83,11 +81,15 @@ impl PartialPath {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    serde_with::skip_serializing_none, // must come before derive
+    derive(serde::Deserialize, serde::Serialize),
+)]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct PartialScopeStack {
     pub(crate) scopes: Vec<NodeID>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     variable: Option<ScopeStackVariable>,
 }
 
@@ -129,9 +131,13 @@ impl PartialScopeStack {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
+)]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
-#[serde(transparent)]
 pub struct ScopeStackVariable(u32);
 
 impl ScopeStackVariable {
@@ -145,11 +151,15 @@ impl ScopeStackVariable {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    serde_with::skip_serializing_none, // must come before derive
+    derive(serde::Deserialize, serde::Serialize),
+)]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct PartialSymbolStack {
     pub(crate) symbols: Vec<PartialScopedSymbol>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     variable: Option<SymbolStackVariable>,
 }
 
@@ -193,9 +203,13 @@ impl PartialSymbolStack {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
+)]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
-#[serde(transparent)]
 pub struct SymbolStackVariable(u32);
 
 impl SymbolStackVariable {
@@ -209,11 +223,15 @@ impl SymbolStackVariable {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    serde_with::skip_serializing_none, // must come before derive
+    derive(serde::Deserialize, serde::Serialize),
+)]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct PartialScopedSymbol {
     symbol: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) scopes: Option<PartialScopeStack>,
 }
 
@@ -248,9 +266,13 @@ impl PartialScopedSymbol {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
+)]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
-#[serde(transparent)]
 pub struct PartialPathEdgeList {
     pub(crate) edges: Vec<PartialPathEdge>,
 }
@@ -285,7 +307,8 @@ impl PartialPathEdgeList {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct PartialPathEdge {
     pub(crate) source: NodeID,
