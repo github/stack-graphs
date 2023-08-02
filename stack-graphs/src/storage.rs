@@ -5,6 +5,8 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use bincode::error::DecodeError;
+use bincode::error::EncodeError;
 use rusqlite::functions::FunctionFlags;
 use rusqlite::types::ValueRef;
 use rusqlite::Connection;
@@ -30,7 +32,7 @@ use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
-const VERSION: usize = 4;
+const VERSION: usize = 5;
 
 const SCHEMA: &str = r#"
         CREATE TABLE metadata (
@@ -62,6 +64,8 @@ const PRAGMAS: &str = r#"
         PRAGMA secure_delete = false;
     "#;
 
+pub static BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
+
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("cancelled at {0}")]
@@ -75,7 +79,9 @@ pub enum StorageError {
     #[error(transparent)]
     Serde(#[from] serde::Error),
     #[error(transparent)]
-    PostcardError(#[from] postcard::Error),
+    SerializeFail(#[from] EncodeError),
+    #[error(transparent)]
+    DeserializeFail(#[from] DecodeError),
 }
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -277,12 +283,8 @@ impl SQLiteWriter {
         let mut stmt = conn
             .prepare_cached("INSERT INTO graphs (file, tag, error, value) VALUES (?, ?, ?, ?)")?;
         let graph = crate::serde::StackGraph::default();
-        stmt.execute((
-            &file.to_string_lossy(),
-            tag,
-            error,
-            &postcard::to_stdvec(&graph)?,
-        ))?;
+        let serialized = bincode::encode_to_vec(&graph, BINCODE_CONFIG)?;
+        stmt.execute((&file.to_string_lossy(), tag, error, serialized))?;
         Ok(())
     }
 
@@ -321,7 +323,8 @@ impl SQLiteWriter {
         let mut stmt =
             conn.prepare_cached("INSERT INTO graphs (file, tag, value) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
-        stmt.execute((file_str, tag, &postcard::to_stdvec(&graph)?))?;
+        let serialized = bincode::encode_to_vec(&graph, BINCODE_CONFIG)?;
+        stmt.execute((file_str, tag, &serialized))?;
         Ok(())
     }
 
@@ -362,7 +365,8 @@ impl SQLiteWriter {
                 );
                 let symbol_stack = path.symbol_stack_precondition.storage_key(graph, partials);
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                root_stmt.execute((file_str, symbol_stack, &postcard::to_stdvec(&path)?))?;
+                let serialized = bincode::encode_to_vec(&path, BINCODE_CONFIG)?;
+                root_stmt.execute((file_str, symbol_stack, serialized))?;
                 root_path_count += 1;
             } else if start_node.is_in_file(file) {
                 copious_debugging!(
@@ -370,11 +374,8 @@ impl SQLiteWriter {
                     path.start_node.display(graph),
                 );
                 let path = serde::PartialPath::from_partial_path(graph, partials, path);
-                node_stmt.execute((
-                    file_str,
-                    path.start_node.local_id,
-                    &postcard::to_stdvec(&path)?,
-                ))?;
+                let serialized = bincode::encode_to_vec(&path, BINCODE_CONFIG)?;
+                node_stmt.execute((file_str, path.start_node.local_id, serialized))?;
                 node_path_count += 1;
             } else {
                 panic!(
@@ -523,7 +524,8 @@ impl SQLiteReader {
         copious_debugging!(" * Load from database");
         let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
-        let file_graph = postcard::from_bytes::<serde::StackGraph>(&value)?;
+        let (file_graph, _): (serde::StackGraph, usize) =
+            bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
         file_graph.load_into(graph)?;
         Ok(graph.get_file(file).expect("loaded file to exist"))
     }
@@ -579,7 +581,8 @@ impl SQLiteReader {
                 &mut self.loaded_graphs,
                 &self.conn,
             )?;
-            let path = postcard::from_bytes::<serde::PartialPath>(&value)?;
+            let (path, _): (serde::PartialPath, usize) =
+                bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
             let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
             copious_debugging!(
                 "   > Loaded {}",
@@ -633,7 +636,8 @@ impl SQLiteReader {
                     &mut self.loaded_graphs,
                     &self.conn,
                 )?;
-                let path = postcard::from_bytes::<serde::PartialPath>(&value)?;
+                let (path, _): (serde::PartialPath, usize) =
+                    bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
                 let path = path.to_partial_path(&mut self.graph, &mut self.partials)?;
                 copious_debugging!(
                     "   > Loaded {}",
