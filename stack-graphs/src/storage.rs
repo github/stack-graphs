@@ -5,7 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use bincode::config;
 use bincode::error::DecodeError;
 use bincode::error::EncodeError;
 use rusqlite::functions::FunctionFlags;
@@ -65,9 +64,7 @@ const PRAGMAS: &str = r#"
         PRAGMA secure_delete = false;
     "#;
 
-lazy_static! {
-    pub const BINCODE_CONFIG: bincode::Config = bincode::config::standard();
-}
+pub static BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
 
 #[derive(Debug, Error)]
 pub enum StorageError {

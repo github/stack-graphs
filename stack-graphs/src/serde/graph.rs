@@ -5,8 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use serde::Deserialize;
-use serde::Serialize;
 use thiserror::Error;
 
 use crate::arena::Handle;
@@ -15,11 +13,9 @@ use super::Filter;
 use super::ImplicationFilter;
 use super::NoFilter;
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
-)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct StackGraph {
     pub files: Files,
     pub nodes: Nodes,
@@ -206,46 +202,46 @@ impl StackGraph {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
 )]
-#[serde(transparent)]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct Files {
     pub data: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
 )]
-#[serde(transparent)]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct Nodes {
     pub data: Vec<Node>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    serde_with::skip_serializing_none, // must come before derive
+    derive(serde::Deserialize, serde::Serialize),
+    serde(tag = "type", rename_all = "snake_case"),
 )]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub enum Node {
     DropScopes {
         id: NodeID,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
     JumpToScope {
         id: NodeID,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -253,9 +249,7 @@ pub enum Node {
         id: NodeID,
         symbol: String,
         is_definition: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -263,9 +257,7 @@ pub enum Node {
         id: NodeID,
         symbol: String,
         is_definition: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -274,9 +266,7 @@ pub enum Node {
         symbol: String,
         scope: NodeID,
         is_reference: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
@@ -284,26 +274,20 @@ pub enum Node {
         id: NodeID,
         symbol: String,
         is_reference: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
     Root {
         id: NodeID,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 
     Scope {
         id: NodeID,
         is_exported: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
         source_info: Option<SourceInfo>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         debug_info: Option<DebugInfo>,
     },
 }
@@ -338,44 +322,45 @@ impl Node {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    serde_with::skip_serializing_none, // must come before derive
+    derive(serde::Deserialize, serde::Serialize),
 )]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct SourceInfo {
     pub span: lsp_positions::Span,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub syntax_type: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
 )]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct DebugInfo {
     pub data: Vec<DebugEntry>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
-)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct DebugEntry {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    serde_with::skip_serializing_none, // must come before derive
+    derive(serde::Deserialize, serde::Serialize),
 )]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct NodeID {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
     pub local_id: u32,
 }
@@ -430,26 +415,28 @@ impl std::fmt::Display for NodeID {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
 )]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct Edges {
     pub data: Vec<Edge>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(
-    feature = "bincode",
-    derive(bincode::Encode, bincode::Decode)
+    feature = "serde",
+    serde_with::skip_serializing_none, // must come before derive
+    derive(serde::Deserialize, serde::Serialize),
 )]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct Edge {
     pub source: NodeID,
     pub sink: NodeID,
     pub precedence: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub debug_info: Option<DebugInfo>,
 }
 

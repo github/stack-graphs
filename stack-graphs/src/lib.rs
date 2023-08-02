@@ -68,7 +68,6 @@ mod debugging;
 pub mod graph;
 pub mod partial;
 pub mod paths;
-#[cfg(feature = "serde")]
 pub mod serde;
 pub mod stitching;
 #[cfg(feature = "storage")]
