@@ -2586,6 +2586,10 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@fun {
 
+  node call_sig_arguments_pop
+  node call_sig_arguments_push
+  node call_sig_this_pop
+  node call_sig_this_push
   node @fun.return_or_yield
   node @fun.value_arg_scope
   node fun_value_call
@@ -2602,8 +2606,19 @@ inherit .return_or_yield
   attr (fun_value_drop) type = "drop_scopes"
   edge fun_value_drop -> @fun.before_scope
 
-  ; the call sig's before scope comes from the drop node then flows into the body
+  ; the call sig's before scope comes from the drop node,
+  ; then flows into the body, and includes a variable binding for "this"
   edge @call_sig.before_scope -> fun_value_drop
+  attr (call_sig_this_pop) symbol_definition = "this", source_node = @call_sig
+  attr (call_sig_this_push) push_symbol = "this"
+  edge call_sig_this_pop -> call_sig_this_push
+  edge call_sig_this_push -> @fun.value_arg_scope
+  edge @call_sig.before_scope -> call_sig_this_pop
+  attr (call_sig_arguments_pop) symbol_definition = "arguments", source_node = @call_sig
+  attr (call_sig_arguments_push) push_symbol = "arguments"
+  edge call_sig_arguments_pop -> call_sig_arguments_push
+  edge call_sig_arguments_push -> @fun.value_arg_scope
+  edge @call_sig.before_scope -> call_sig_arguments_pop
   edge @body.before_scope -> @call_sig.after_scope
 
   ; function values have call nodes
