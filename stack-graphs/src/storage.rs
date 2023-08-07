@@ -58,6 +58,12 @@ const SCHEMA: &str = r#"
         ) STRICT;
     "#;
 
+const INDEXES: &str = r#"
+        CREATE INDEX IF NOT EXISTS graph_file_value ON graph(file, value);
+        CREATE INDEX IF NOT EXISTS file_paths_file_local_id_value ON file_paths(file, local_id, value);
+        CREATE INDEX IF NOT EXISTS root_paths_symbol_stack_file_value ON root_paths(symbol_stack, file, value);
+    "#;
+
 const PRAGMAS: &str = r#"
         PRAGMA journal_mode = WAL;
         PRAGMA foreign_keys = false;
@@ -147,6 +153,7 @@ impl SQLiteWriter {
     pub fn open_in_memory() -> Result<Self> {
         let mut conn = Connection::open_in_memory()?;
         Self::init(&mut conn)?;
+        Self::init_indexes(&mut conn)?;
         Ok(Self { conn })
     }
 
@@ -161,6 +168,7 @@ impl SQLiteWriter {
         } else {
             check_version(&conn)?;
         }
+        Self::init_indexes(&mut conn)?;
         Ok(Self { conn })
     }
 
@@ -169,6 +177,13 @@ impl SQLiteWriter {
         let tx = conn.transaction()?;
         tx.execute_batch(SCHEMA)?;
         tx.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn init_indexes(conn: &mut Connection) -> Result<()> {
+        let tx = conn.transaction()?;
+        tx.execute_batch(INDEXES)?;
         tx.commit()?;
         Ok(())
     }
