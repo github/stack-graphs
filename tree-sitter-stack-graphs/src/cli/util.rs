@@ -297,13 +297,13 @@ pub struct SourceSpan {
 }
 
 impl SourceSpan {
-    pub fn first_line(&self) -> usize {
+    pub(crate) fn first_line(&self) -> usize {
         self.span.start.line
     }
 
     /// Returns a range for the first line of this span. If multiple lines are spanned, it
     /// will use usize::MAX for the range's end.
-    pub fn first_line_column_range(&self) -> Range<usize> {
+    pub(crate) fn first_line_column_range(&self) -> Range<usize> {
         let start = self.span.start.column.grapheme_offset;
         let end = if self.span.start.line == self.span.end.line {
             self.span.end.column.grapheme_offset
@@ -314,13 +314,13 @@ impl SourceSpan {
     }
 }
 
-pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
+pub(crate) fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     let seconds = s.parse::<u64>()?;
     Ok(Duration::new(seconds, 0))
 }
 
 #[cfg(feature = "lsp")]
-pub fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
+pub(crate) fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     let milliseconds = s.parse::<u64>()?;
     let seconds = milliseconds / 1000;
     let nano_seconds = (milliseconds % 1000) as u32 * 1_000_000;
@@ -533,13 +533,13 @@ impl FileLogger for ConsoleFileLogger<'_> {
     }
 }
 
-pub fn sha1(value: &str) -> String {
+pub(crate) fn sha1(value: &str) -> String {
     let mut hasher = Sha1::new();
     hasher.update(value);
     base64::prelude::BASE64_STANDARD_NO_PAD.encode(hasher.finalize())
 }
 
-pub fn wait_for_input() -> anyhow::Result<()> {
+pub(crate) fn wait_for_input() -> anyhow::Result<()> {
     print!("<press ENTER to continue>");
     std::io::stdout().flush()?;
     let mut input = String::new();
@@ -548,7 +548,7 @@ pub fn wait_for_input() -> anyhow::Result<()> {
 }
 
 /// Wraps a build error with the relevant sources
-pub struct BuildErrorWithSource<'a> {
+pub(crate) struct BuildErrorWithSource<'a> {
     pub inner: crate::BuildError,
     pub source_path: PathBuf,
     pub source_str: &'a str,
