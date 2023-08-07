@@ -14,9 +14,6 @@ let x = 1;
         /**/ z;
         //   ^ defined:
         // z should not be defined here
-
-        this.z;
-        //   !!!! TODO defined: 7
     }
 });
 

@@ -1,0 +1,9 @@
+let Foo = class {
+    bar() {
+
+    }
+};
+
+Foo.bar;
+//  ^ defined:
+// bar should not be visible here

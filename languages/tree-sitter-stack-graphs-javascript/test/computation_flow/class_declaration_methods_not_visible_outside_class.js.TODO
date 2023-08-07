@@ -1,0 +1,9 @@
+class Foo {
+    bar() {
+
+    }
+}
+
+Foo.bar;
+//  ^ defined:
+// bar should not be visible here
