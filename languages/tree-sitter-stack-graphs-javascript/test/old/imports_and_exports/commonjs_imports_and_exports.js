@@ -5,7 +5,7 @@ module.exports = {
   bar: 2
 };
 
-/*--- path b.js ---*/
+/*--- path: b.js ---*/
 
 const mod1 = require("a.js");
 
