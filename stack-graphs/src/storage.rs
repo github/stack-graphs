@@ -59,9 +59,9 @@ const SCHEMA: &str = r#"
     "#;
 
 const INDEXES: &str = r#"
-        CREATE INDEX IF NOT EXISTS graph_file_value ON graph(file, value);
-        CREATE INDEX IF NOT EXISTS file_paths_file_local_id_value ON file_paths(file, local_id, value);
-        CREATE INDEX IF NOT EXISTS root_paths_symbol_stack_file_value ON root_paths(symbol_stack, file, value);
+        CREATE INDEX IF NOT EXISTS idx_graphs_file ON graphs(file);
+        CREATE INDEX IF NOT EXISTS idx_file_paths_local_id ON file_paths(file, local_id);
+        CREATE INDEX IF NOT EXISTS idx_root_paths_symbol_stack ON root_paths(symbol_stack);
     "#;
 
 const PRAGMAS: &str = r#"
