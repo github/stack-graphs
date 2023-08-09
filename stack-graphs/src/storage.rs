@@ -58,6 +58,12 @@ const SCHEMA: &str = r#"
         ) STRICT;
     "#;
 
+const INDEXES: &str = r#"
+        CREATE INDEX IF NOT EXISTS idx_graphs_file ON graphs(file);
+        CREATE INDEX IF NOT EXISTS idx_file_paths_local_id ON file_paths(file, local_id);
+        CREATE INDEX IF NOT EXISTS idx_root_paths_symbol_stack ON root_paths(symbol_stack);
+    "#;
+
 const PRAGMAS: &str = r#"
         PRAGMA journal_mode = WAL;
         PRAGMA foreign_keys = false;
@@ -147,6 +153,7 @@ impl SQLiteWriter {
     pub fn open_in_memory() -> Result<Self> {
         let mut conn = Connection::open_in_memory()?;
         Self::init(&mut conn)?;
+        init_indexes(&mut conn)?;
         Ok(Self { conn })
     }
 
@@ -161,6 +168,7 @@ impl SQLiteWriter {
         } else {
             check_version(&conn)?;
         }
+        init_indexes(&mut conn)?;
         Ok(Self { conn })
     }
 
@@ -432,9 +440,10 @@ impl SQLiteReader {
                 path.as_ref().to_string_lossy().to_string(),
             ));
         }
-        let conn = Connection::open(path)?;
+        let mut conn = Connection::open(path)?;
         set_pragmas_and_functions(&conn)?;
         check_version(&conn)?;
+        init_indexes(&mut conn)?;
         Ok(Self {
             conn,
             loaded_graphs: HashSet::new(),
@@ -778,6 +787,13 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
             Ok(result)
         },
     )?;
+    Ok(())
+}
+
+fn init_indexes(conn: &mut Connection) -> Result<()> {
+    let tx = conn.transaction()?;
+    tx.execute_batch(INDEXES)?;
+    tx.commit()?;
     Ok(())
 }
 
