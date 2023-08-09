@@ -153,7 +153,7 @@ impl SQLiteWriter {
     pub fn open_in_memory() -> Result<Self> {
         let mut conn = Connection::open_in_memory()?;
         Self::init(&mut conn)?;
-        Self::init_indexes(&mut conn)?;
+        init_indexes(&mut conn)?;
         Ok(Self { conn })
     }
 
@@ -168,7 +168,7 @@ impl SQLiteWriter {
         } else {
             check_version(&conn)?;
         }
-        Self::init_indexes(&mut conn)?;
+        init_indexes(&mut conn)?;
         Ok(Self { conn })
     }
 
@@ -177,13 +177,6 @@ impl SQLiteWriter {
         let tx = conn.transaction()?;
         tx.execute_batch(SCHEMA)?;
         tx.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
-        tx.commit()?;
-        Ok(())
-    }
-
-    fn init_indexes(conn: &mut Connection) -> Result<()> {
-        let tx = conn.transaction()?;
-        tx.execute_batch(INDEXES)?;
         tx.commit()?;
         Ok(())
     }
@@ -447,9 +440,10 @@ impl SQLiteReader {
                 path.as_ref().to_string_lossy().to_string(),
             ));
         }
-        let conn = Connection::open(path)?;
+        let mut conn = Connection::open(path)?;
         set_pragmas_and_functions(&conn)?;
         check_version(&conn)?;
+        init_indexes(&mut conn)?;
         Ok(Self {
             conn,
             loaded_graphs: HashSet::new(),
@@ -793,6 +787,13 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
             Ok(result)
         },
     )?;
+    Ok(())
+}
+
+fn init_indexes(conn: &mut Connection) -> Result<()> {
+    let tx = conn.transaction()?;
+    tx.execute_batch(INDEXES)?;
+    tx.commit()?;
     Ok(())
 }
 
