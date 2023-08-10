@@ -2960,15 +2960,13 @@ inherit .return_or_yield
 
 ; scopes on RHS, values
 (assignment_expression
-  left: (_)@left
+  left: (_)@_left
   right: (_)@right)@assignment_expr {
 
   ; scopes flow into the RHS then back out to the whole expr,
   ; augmented (in subsequent rules) by the LHS
   edge @right.before_scope -> @assignment_expr.before_scope
-  edge @left.before_scope -> @right.after_scope
-  edge @assignment_expr.after_scope -> @left.after_scope
-
+  
   ; value of the whole thing is value of the RHS
   edge @assignment_expr.value -> @right.value
 }
@@ -2984,9 +2982,8 @@ inherit .return_or_yield
     attr (@assignment_expr.pop) node_definition = @left
     edge @assignment_expr.after_scope -> @assignment_expr.pop
     edge @assignment_expr.pop -> @right.value
+    edge @assignment_expr.after_scope -> @right.after_scope
 
-    ; ensure the scope flows through the identifier
-    edge @left.after_scope -> @left.before_scope
 }
 
 ; assignment to direct fields on `this`
@@ -3016,7 +3013,11 @@ inherit .return_or_yield
 
 ; augmentation of scope via _destructuring_patterns
 (assignment_expression
-  left: [(object_pattern) (array_pattern)]@left
+  left: [
+    (object_pattern)
+    (array_pattern)
+    (assignment_pattern)
+  ]@left
   right: (_)@right)@assignment_expr {
 
   ; scope flows from LHS into pattern then back to assignment
@@ -3526,26 +3527,22 @@ inherit .return_or_yield
 
 }
 
-; if the object assignment pattern happens to have an identifier on the LHS it also binds
-(object_assignment_pattern
-  left:(shorthand_property_identifier_pattern)@left_pat
-  right:(_)@_right_expr)@object_assignment_pat {
+(shorthand_property_identifier_pattern)@shorthand_prop_pat {
+  node pat_pop
+  node pat_push
+  node pat_push_dot
 
-  node left_pat_pop
-  node left_pat_push
-  node left_pat_push_dot
+  edge @shorthand_prop_pat.after_scope -> @shorthand_prop_pat.before_scope
 
-  edge @left_pat.after_scope -> @left_pat.before_scope
+  attr (pat_push) node_reference = @shorthand_prop_pat
+  attr (pat_push_dot) push_symbol = "GUARD:MEMBER"
+  attr (pat_pop) node_definition = @shorthand_prop_pat
+  edge pat_pop -> pat_push
+  edge pat_push -> pat_push_dot
+  edge pat_push_dot -> @shorthand_prop_pat.covalue
+  edge @shorthand_prop_pat.after_scope -> pat_pop
 
-  attr (left_pat_push) node_reference = @left_pat
-  attr (left_pat_push_dot) push_symbol = "GUARD:MEMBER"
-  attr (left_pat_pop) node_definition = @left_pat
-  edge left_pat_pop -> left_pat_push
-  edge left_pat_push -> left_pat_push_dot
-  edge left_pat_push_dot -> @left_pat.covalue
-  edge @object_assignment_pat.after_scope -> left_pat_pop
-
-  edge @object_assignment_pat.new_bindings -> left_pat_pop
+  edge @shorthand_prop_pat.new_bindings -> pat_pop
 }
 
 
