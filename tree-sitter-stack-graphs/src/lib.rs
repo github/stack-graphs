@@ -628,6 +628,10 @@ impl<'a> Builder<'a> {
             .debug_attributes(
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
                 [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
+                [DEBUG_ATTR_PREFIX, "tsg_match_node"]
+                    .concat()
+                    .as_str()
+                    .into(),
             );
 
         // The execute_into() method requires that the reference to the tree matches the lifetime

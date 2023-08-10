@@ -5,9 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use serde::Deserialize;
-use serde::Serialize;
-
 use crate::graph::StackGraph;
 use crate::partial::PartialPaths;
 
@@ -17,8 +14,12 @@ use super::ImplicationFilter;
 use super::NoFilter;
 use super::PartialPath;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
-#[serde(transparent)]
+#[derive(PartialEq, Eq, Debug, Clone)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent)
+)]
 pub struct Database {
     paths: Vec<PartialPath>,
 }

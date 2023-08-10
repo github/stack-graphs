@@ -249,6 +249,18 @@ impl Database {
         }
     }
 
+    /// Clear the database.  After this, all previous handles into the database are
+    /// invalid.
+    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
+    pub(crate) fn clear(&mut self) {
+        self.partial_paths.clear();
+        self.local_nodes.clear();
+        self.symbol_stack_keys.clear();
+        self.symbol_stack_key_cache.clear();
+        self.paths_by_start_node.clear();
+        self.root_paths_by_precondition.clear();
+    }
+
     /// Adds a partial path to this database.  We do not deduplicate partial paths in any way; it's
     /// your responsibility to only add each partial path once.
     pub fn add_partial_path(

@@ -705,7 +705,7 @@ class StackGraph {
 
         if (edge.hasOwnProperty("debug_info") && edge.debug_info.length > 0) {
             tooltip.add_header("debug info");
-            for (let { key, value } of edge.debug_info) {
+            for (let { key, value } of edge.debug_info.sort((l, r) => l.key > r.key)) {
                 tooltip.add_row(key, value);
             }
         }
@@ -736,7 +736,7 @@ class StackGraph {
 
         if (node.hasOwnProperty("debug_info") && node.debug_info.length > 0) {
             tooltip.add_header("debug info");
-            for (let { key, value } of node.debug_info) {
+            for (let { key, value } of node.debug_info.sort((l, r) => l.key > r.key)) {
                 tooltip.add_row(key, value);
             }
         }

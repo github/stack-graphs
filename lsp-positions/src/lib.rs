@@ -45,6 +45,7 @@ fn utf16_len(string: &str) -> usize {
 #[repr(C)]
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct Position {
     /// The 0-indexed line number containing the character
     pub line: usize,
@@ -108,6 +109,7 @@ impl PartialOrd<tree_sitter::Point> for Position {
 #[repr(C)]
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct Span {
     pub start: Position,
     pub end: Position,
@@ -144,6 +146,7 @@ impl PartialOrd for Span {
 /// All offsets are 0-indexed.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct Offset {
     /// The number of UTF-8-encoded bytes appearing before this character in the string
     pub utf8_offset: usize,

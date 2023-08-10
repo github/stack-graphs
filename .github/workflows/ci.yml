@@ -6,12 +6,16 @@ on:
   schedule:
     - cron: "0 0 1,15 * *"
 
+# In the event that there is a new push to the ref, cancel any running jobs because there are now obsolete, and wasting resources.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-rust:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest]
         rust: [stable]
 
     steps:
@@ -85,7 +89,7 @@ jobs:
       languages: ${{ steps.language-list.outputs.languages }}
 
   test-languages:
-    needs: [list-languages, test-rust]
+    needs: [list-languages]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -112,3 +116,61 @@ jobs:
         run: cargo build -p ${{ matrix.language }}
       - name: Test
         run: cargo test -p ${{ matrix.language }}
+
+  test-cli:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable]
+    env:
+      TEST_NAME: typescript_minimal_project
+      TSSG_TS: tree-sitter-stack-graphs-typescript
+
+    steps:
+      - name: Install Rust environment
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: ${{ matrix.rust }}
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.OS }}-cargo-
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          lfs: true
+      - name: Build
+        run: cargo build --release -p ${{ env.TSSG_TS }} --features cli
+      - name: Checkout test code
+        run: unzip ${{ env.TEST_NAME }}.zip
+        working-directory: data
+      - name: Index
+        run: |
+          target/release/${{ env.TSSG_TS }} index \
+            -D data/${{ env.TEST_NAME }}.sqlite \
+            --verbose \
+            --hide-error-details \
+            data/${{ env.TEST_NAME }}
+      - name: Status
+        run: |
+          target/release/${{ env.TSSG_TS }} status \
+            -D data/${{ env.TEST_NAME }}.sqlite \
+            --all
+      - name: Query
+        run: |
+          target/release/${{ env.TSSG_TS }} query \
+            -D data/${{ env.TEST_NAME }}.sqlite \
+            definition \
+              data/${{ env.TEST_NAME }}/index.ts:3:10
+      - name: Index (forced)
+        run: |
+          target/release/${{ env.TSSG_TS }} index \
+            -D data/${{ env.TEST_NAME }}.sqlite \
+            --verbose \
+            --hide-error-details \
+            data/${{ env.TEST_NAME }}

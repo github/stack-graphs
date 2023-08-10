@@ -45,7 +45,7 @@ impl VisualizeArgs {
         let mut db = SQLiteReader::open(&db_path)?;
         for source_path in &self.source_paths {
             let source_path = source_path.canonicalize()?;
-            db.load_graph_for_file_or_directory(&source_path, cancellation_flag)?;
+            db.load_graphs_for_file_or_directory(&source_path, cancellation_flag)?;
         }
         let (graph, _, _) = db.get();
         let starting_nodes = graph
