@@ -28,7 +28,7 @@ bincode = { version = "2.0.0-rc.3", optional = true }
 bitvec = "1.0"
 controlled-option = "0.4"
 either = "1.6"
-enumset = "1.0"
+enumset = "1.1"
 fxhash = "0.2"
 itertools = "0.10"
 libc = "0.2"
