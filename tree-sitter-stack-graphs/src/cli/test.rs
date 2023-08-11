@@ -338,8 +338,8 @@ impl TestArgs {
             )?;
         }
         let result = test.run(&mut partials, &mut db, cancellation_flag.as_ref())?;
-        let success = self.handle_result(&result, file_status)?;
-        if self.output_mode.test(!success) {
+        let success = result.failure_count() == 0;
+        let outputs = if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
             self.save_output(
                 test_root,
@@ -350,8 +350,30 @@ impl TestArgs {
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
                 cancellation_flag.as_ref(),
-            )?;
+            )?
+        } else {
+            Vec::default()
+        };
+
+        if success {
+            let details = outputs.join("\n");
+            file_status.success("success", Some(&details));
+        } else {
+            let details = result
+                .failures_iter()
+                .map(|f| f.to_string())
+                .chain(outputs)
+                .join("\n");
+            file_status.failure(
+                &format!(
+                    "{}/{} assertions failed",
+                    result.failure_count(),
+                    result.count(),
+                ),
+                Some(&details),
+            );
         }
+
         Ok(result)
     }
 
@@ -366,27 +388,6 @@ impl TestArgs {
         Ok(())
     }
 
-    fn handle_result(
-        &self,
-        result: &TestResult,
-        file_status: &mut CLIFileReporter,
-    ) -> anyhow::Result<bool> {
-        let success = result.failure_count() == 0;
-        if success {
-            file_status.success("success", None);
-        } else {
-            file_status.failure(
-                &format!(
-                    "{}/{} assertions failed",
-                    result.failure_count(),
-                    result.count(),
-                ),
-                Some(&result.failures_iter().join("\n")),
-            );
-        }
-        Ok(success)
-    }
-
     fn save_output(
         &self,
         test_root: &Path,
@@ -397,7 +398,8 @@ impl TestArgs {
         filter: &dyn Filter,
         success: bool,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<String>> {
+        let mut outputs = Vec::with_capacity(3);
         let save_graph = self
             .save_graph
             .as_ref()
@@ -414,7 +416,11 @@ impl TestArgs {
         if let Some(path) = save_graph {
             self.save_graph(&path, &graph, filter)?;
             if !success || !self.quiet {
-                println!("{}: graph at {}", test_path.display(), path.display());
+                outputs.push(format!(
+                    "{}: graph at {}",
+                    test_path.display(),
+                    path.display()
+                ));
             }
         }
 
@@ -427,21 +433,25 @@ impl TestArgs {
         if let Some(path) = save_paths {
             self.save_paths(&path, graph, partials, &mut db, filter)?;
             if !success || !self.quiet {
-                println!("{}: paths at {}", test_path.display(), path.display());
+                outputs.push(format!(
+                    "{}: paths at {}",
+                    test_path.display(),
+                    path.display()
+                ));
             }
         }
 
         if let Some(path) = save_visualization {
             self.save_visualization(&path, graph, partials, &mut db, filter, &test_path)?;
             if !success || !self.quiet {
-                println!(
+                outputs.push(format!(
                     "{}: visualization at {}",
                     test_path.display(),
                     path.display()
-                );
+                ));
             }
         }
-        Ok(())
+        Ok(outputs)
     }
 
     fn save_graph(
