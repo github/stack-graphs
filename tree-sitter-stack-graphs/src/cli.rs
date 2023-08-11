@@ -69,7 +69,7 @@ pub mod parse;
 pub mod query;
 pub mod status;
 pub mod test;
-mod util;
+pub mod util;
 pub mod visualize;
 
 pub mod path_loading {
