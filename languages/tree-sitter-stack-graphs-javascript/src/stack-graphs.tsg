@@ -1326,6 +1326,8 @@ inherit .return_or_yield
   parameters:(_)@call_sig
   body:(_)@body)@method_def {
 
+  node call_sig_arguments_pop
+  node call_sig_arguments_push
   node @method_def.method_value_arg_scope
   node method_def_method_value_call
   node method_def_method_value_drop
@@ -1345,6 +1347,11 @@ inherit .return_or_yield
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> method_def_method_value_drop
+  attr (call_sig_arguments_pop) symbol_definition = "arguments", source_node = @call_sig
+  attr (call_sig_arguments_push) push_symbol = "arguments"
+  edge call_sig_arguments_pop -> call_sig_arguments_push
+  edge call_sig_arguments_push -> @method_def.method_value_arg_scope
+  edge @call_sig.before_scope -> call_sig_arguments_pop
   edge @body.before_scope -> @call_sig.after_scope
 
   ; method values have call nodes
