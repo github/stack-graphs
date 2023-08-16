@@ -1811,10 +1811,14 @@ inherit .constructor
     edge @object.before_scope -> @with_stmt.before_scope
     edge @body.before_scope -> @object.after_scope
     edge @with_stmt.after_scope -> @body.after_scope
+    edge @with_stmt.after_scope -> @with_stmt.before_scope
+    attr (@with_stmt.after_scope -> @with_stmt.before_scope) precedence = 1
+
 
     attr (with_stmt_push_dot) push_symbol = "GUARD:MEMBER"
     edge with_stmt_push_dot -> @object.value
     edge @body.before_scope -> with_stmt_push_dot
+    attr (@body.before_scope -> with_stmt_push_dot) precedence = 1
 }
 
 
