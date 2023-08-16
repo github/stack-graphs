@@ -246,6 +246,8 @@ inherit .builtins_string
 inherit .builtins_undefined
 inherit .exports
 inherit .return_or_yield
+inherit .class_value
+inherit .constructor
 
 
 
@@ -1233,23 +1235,36 @@ inherit .return_or_yield
 
   node @name.pop
   node @class_decl.class_value
+  node guard_prototype
+  node @class_decl.prototype
+  node @class_decl.constructor
 
   attr (@name.pop) syntax_type = "class"
 
   attr (@name.pop) node_definition = @name
+  attr (guard_prototype) pop_symbol = "GUARD:PROTOTYPE"
   edge @class_decl.after_scope -> @name.pop
   edge @name.pop -> @class_decl.class_value
+  edge @class_decl.class_value -> guard_prototype
+  edge guard_prototype -> @class_decl.prototype
 
   edge @body.before_scope -> @class_decl.before_scope
-  edge @class_decl.class_value -> @body.after_scope
+  edge @class_decl.prototype -> @body.after_scope
   edge @class_decl.after_scope -> @class_decl.before_scope
 }
 
 (class_declaration
   (class_heritage (_)@name))@class_decl {
 
+  node guard_prototype
+  node guard_constructor
+  attr (guard_prototype) push_symbol = "GUARD:PROTOTYPE"
+  attr (guard_constructor) push_symbol = "GUARD:CONSTRUCTOR"
   edge @name.before_scope -> @class_decl.before_scope
-  edge @class_decl.class_value -> @name.value
+  edge @class_decl.prototype -> guard_prototype
+  edge guard_prototype -> @name.value
+  edge @class_decl.constructor -> guard_constructor
+  edge guard_constructor -> @name.value
 }
 
 
@@ -1302,8 +1317,9 @@ inherit .return_or_yield
 
   ; augmentation for the constructor
   attr (name_constructor_guard) symbol_definition = "GUARD:CONSTRUCTOR", source_node = @name
-  edge @method_def.after_scope -> name_constructor_guard
-  edge name_constructor_guard -> @method_def.method_value
+  edge @method_def.class_value -> name_constructor_guard
+  edge name_constructor_guard -> @method_def.constructor
+  edge @method_def.constructor -> @method_def.method_value
 }
 
 (
@@ -2881,6 +2897,12 @@ inherit .return_or_yield
   ; value coming from the field decls in the class
   edge @new_expr.value -> @constructor.value
 
+  ; value also coming from the prototype
+  node guard_prototype
+  attr (guard_prototype) push_symbol = "GUARD:PROTOTYPE"
+  edge @new_expr.value -> guard_prototype
+  edge guard_prototype -> @constructor.value
+
   attr (@arguments.arg_this) symbol_definition = "this", source_node = @arguments
   edge @arguments.arg_scope -> @arguments.arg_this
   edge @arguments.arg_this -> @new_expr.builtins_empty_object
@@ -3118,8 +3140,18 @@ inherit .return_or_yield
 (class
   body:(_)@body)@class {
 
+  node @class.class_value
+  node guard_prototype
+  node @class.prototype
+  node @class.constructor
+  attr (guard_prototype) pop_symbol = "GUARD:PROTOTYPE"
+
   edge @body.before_scope -> @class.before_scope
-  edge @class.value -> @body.after_scope
+  edge @class.value -> @class.class_value
+  edge @class.class_value -> guard_prototype
+  edge guard_prototype -> @class.prototype
+  edge @class.class_value -> @class.constructor
+  edge @class.prototype -> @body.after_scope
   edge @class.after_scope -> @class.before_scope
 }
 
@@ -3138,8 +3170,16 @@ inherit .return_or_yield
 (class
   (class_heritage (_)@name))@class {
 
+  node guard_prototype
+  node guard_constructor
+  attr (guard_prototype) push_symbol = "GUARD:PROTOTYPE"
+  attr (guard_constructor) push_symbol = "GUARD:CONSTRUCTOR"
   edge @name.before_scope -> @class.before_scope
-  edge @class.value -> @name.value
+  edge @class.prototype -> guard_prototype
+  edge guard_prototype -> @name.value
+  edge @class.constructor -> guard_constructor
+  edge guard_constructor -> @name.value
+  edge @class.after_scope -> @name.after_scope
 }
 
 
