@@ -16,16 +16,15 @@ use std::path::PathBuf;
 use thiserror::Error;
 use tree_sitter_graph::parse_error::Excerpt;
 
+use crate::cli::util::reporter::ConsoleReporter;
+use crate::cli::util::reporter::Reporter;
+use crate::cli::util::sha1;
+use crate::cli::util::wait_for_input;
+use crate::cli::util::SourcePosition;
+use crate::cli::util::SourceSpan;
 use crate::loader::FileReader;
 use crate::CancellationFlag;
 use crate::NoCancellation;
-
-use super::util::reporter::ConsoleReporter;
-use super::util::reporter::Reporter;
-use super::util::sha1;
-use super::util::wait_for_input;
-use super::util::SourcePosition;
-use super::util::SourceSpan;
 
 #[derive(Args)]
 pub struct QueryArgs {

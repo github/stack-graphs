@@ -28,19 +28,18 @@ use tower_lsp::LanguageServer;
 use tower_lsp::LspService;
 use tower_lsp::Server;
 
+use crate::cli::index::Indexer;
+use crate::cli::query::Querier;
+use crate::cli::query::QueryError;
+use crate::cli::util::duration_from_milliseconds_str;
+use crate::cli::util::duration_from_seconds_str;
+use crate::cli::util::reporter::Reporter;
+use crate::cli::util::SourcePosition;
+use crate::cli::util::SourceSpan;
 use crate::loader::Loader;
 use crate::AtomicCancellationFlag;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
-
-use super::index::Indexer;
-use super::query::Querier;
-use super::query::QueryError;
-use super::util::duration_from_milliseconds_str;
-use super::util::duration_from_seconds_str;
-use super::util::reporter::Reporter;
-use super::util::SourcePosition;
-use super::util::SourceSpan;
 
 #[derive(Args, Clone)]
 pub struct LspArgs {

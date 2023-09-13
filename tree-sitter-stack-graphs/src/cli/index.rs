@@ -21,6 +21,16 @@ use std::time::Duration;
 use thiserror::Error;
 use tree_sitter_graph::Variables;
 
+use crate::cli::util::duration_from_seconds_str;
+use crate::cli::util::iter_files_and_directories;
+use crate::cli::util::reporter::ConsoleReporter;
+use crate::cli::util::reporter::Level;
+use crate::cli::util::reporter::Reporter;
+use crate::cli::util::sha1;
+use crate::cli::util::wait_for_input;
+use crate::cli::util::BuildErrorWithSource;
+use crate::cli::util::CLIFileReporter;
+use crate::cli::util::ExistingPathBufValueParser;
 use crate::loader::FileLanguageConfigurations;
 use crate::loader::FileReader;
 use crate::loader::Loader;
@@ -28,17 +38,6 @@ use crate::BuildError;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
 use crate::NoCancellation;
-
-use super::util::duration_from_seconds_str;
-use super::util::iter_files_and_directories;
-use super::util::reporter::ConsoleReporter;
-use super::util::reporter::Level;
-use super::util::reporter::Reporter;
-use super::util::sha1;
-use super::util::wait_for_input;
-use super::util::BuildErrorWithSource;
-use super::util::CLIFileReporter;
-use super::util::ExistingPathBufValueParser;
 
 #[derive(Args)]
 pub struct IndexArgs {

@@ -14,8 +14,8 @@ use stack_graphs::storage::SQLiteReader;
 use std::path::Path;
 use std::path::PathBuf;
 
-use super::util::reporter::ConsoleReporter;
-use super::util::reporter::Reporter;
+use crate::cli::util::reporter::ConsoleReporter;
+use crate::cli::util::reporter::Reporter;
 
 #[derive(Args)]
 #[clap(group(

@@ -24,6 +24,9 @@ use tree_sitter_graph::Variables;
 
 use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::iter_files_and_directories;
+use crate::cli::util::reporter::ConsoleReporter;
+use crate::cli::util::reporter::Level;
+use crate::cli::util::CLIFileReporter;
 use crate::cli::util::ExistingPathBufValueParser;
 use crate::cli::util::PathSpec;
 use crate::loader::ContentProvider;
@@ -34,10 +37,6 @@ use crate::test::Test;
 use crate::test::TestResult;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
-
-use super::util::reporter::ConsoleReporter;
-use super::util::reporter::Level;
-use super::util::CLIFileReporter;
 
 #[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:

@@ -14,7 +14,7 @@ use std::path::Path;
 ///
 /// For each file, either
 ///  - [`skipped`] is called once, or
-///  - [`started`] and one of [`succeeded`], [`failed`], or [`canceled`] are called.
+///  - [`started`] and then one of [`succeeded`], [`failed`], or [`canceled`] are called.
 ///
 /// Guidance for severity of these statuses:
 ///  - Failed files should be reported as errors.

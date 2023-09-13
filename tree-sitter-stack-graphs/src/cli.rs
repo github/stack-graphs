@@ -78,6 +78,7 @@ pub mod path_loading {
     use clap::Subcommand;
 
     use crate::cli::clean::CleanArgs;
+    use crate::cli::database::DatabaseArgs;
     use crate::cli::index::IndexArgs;
     use crate::cli::init::InitArgs;
     use crate::cli::load::PathLoaderArgs;
@@ -89,8 +90,6 @@ pub mod path_loading {
     use crate::cli::status::StatusArgs;
     use crate::cli::test::TestArgs;
     use crate::cli::visualize::VisualizeArgs;
-
-    use super::database::DatabaseArgs;
 
     #[derive(Subcommand)]
     pub enum Subcommands {
@@ -297,6 +296,7 @@ pub mod provided_languages {
     use clap::Subcommand;
 
     use crate::cli::clean::CleanArgs;
+    use crate::cli::database::DatabaseArgs;
     use crate::cli::index::IndexArgs;
     use crate::cli::init::InitArgs;
     use crate::cli::load::LanguageConfigurationsLoaderArgs;
@@ -309,8 +309,6 @@ pub mod provided_languages {
     use crate::cli::test::TestArgs;
     use crate::cli::visualize::VisualizeArgs;
     use crate::loader::LanguageConfiguration;
-
-    use super::database::DatabaseArgs;
 
     #[derive(Subcommand)]
     pub enum Subcommands {
