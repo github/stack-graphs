@@ -171,7 +171,7 @@ fn finding_simple_identity_cycle_is_detected() {
     {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
-        let db = &GraphEdges(None);
+        let db = &GraphEdges;
 
         for edge in &[
             edge(r, foo_ref, 0),
@@ -261,7 +261,7 @@ fn finding_composite_identity_cycle_is_detected() {
     {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
-        let db = &GraphEdges(None);
+        let db = &GraphEdges;
         for edge in &[
             edge(r, s, 0),
             edge(r, s, 0),

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The `Appendable` trait has been simplified. Its `Ctx` type parameter is gone, in favor of a separate trait `ToAppendable` that is used to find appendables for a handle. The type itself moved from the `cycles` to the `stitching` module.
-- The `ForwardPartialPathStitcher` has been generalized so that it can be used to build paths from a database or from graph edges. It now takes a type parameter indicating the type of candidates it uses. Instead of a `Database` instance, it expects a value that implements the `Candidates` and `ToAppendable` traits. The `ForwardPartialPathStitcher::process_next_phase` expects an additional `extend_until` closure that controls whether the extended paths are considered for further extension or not (using `|_,_,_| true` retains old behavior).
+- The `ForwardPartialPathStitcher` has been generalized so that it can be used to build paths from a database, graph edges, or a SQL reader. It now takes a type parameter indicating the type of candidates it uses. Instead `StackGraph`, `PartialPaths` and `Database` instances, it expects a value that implements the `ForwardCandidates` trait. The `ForwardPartialPathStitcher::process_next_phase` expects an additional `extend_until` closure that controls whether the extended paths are considered for further extension or not (using `|_,_,_| true` retains old behavior).
 - The SQLite database implementation is using a new schema which stores binary instead of JSON values, resulting in faster write times and smaller databases.
 - Renamed method `SQLiteReader::load_graph_for_file_or_directory` to `SQLiteReader::load_graphs_for_file_or_directory`.
 
@@ -30,7 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `ForwardPartialPathStitcher::from_nodes` function has been removed. Callers are responsible for creating the right initial paths, which can be done using `PartialPath::from_node`.
 - The `PartialPaths::find_minimal_partial_path_set_in_file` method has been removed in favor of `ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file`.
-- The `PartialPaths::find_all_complete_paths` method has been removed in favor of `ForwardPartialPathStitcher::find_all_complete_partial_paths` using `GraphEdges(None)` for the `db` argument.
+- The `PartialPaths::find_all_complete_paths` method has been removed in favor of `ForwardPartialPathStitcher::find_all_complete_partial_paths` using a `GraphEdgeCandidates` instance for the `candidates` argument.
+- The `Database::find_all_complete_paths` method has been removed in favor of `ForwardPartialPathStitcher::find_all_complete_partial_paths` using a `DatabaseCandidates` instance for the `candidates` argument.
+- The `SQLiteReader::find_all_complete_partial_paths` method has been removed in favor of `ForwardPartialPathStitcher::find_all_complete_partial_paths` using a `SQLiteReader` instance for the `candidates` argument.
 - The `OwnedOrDatabasePath` has been removed because it was obsolete with the changes to `Appendable`.
 
 ## v0.11.0 -- 2023-06-08

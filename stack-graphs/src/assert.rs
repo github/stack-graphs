@@ -18,6 +18,7 @@ use crate::graph::Symbol;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::stitching::Database;
+use crate::stitching::DatabaseCandidates;
 use crate::stitching::ForwardPartialPathStitcher;
 use crate::CancellationError;
 use crate::CancellationFlag;
@@ -179,9 +180,7 @@ impl Assertion {
         for reference in &references {
             let mut reference_paths = Vec::new();
             ForwardPartialPathStitcher::find_all_complete_partial_paths(
-                graph,
-                partials,
-                db,
+                &mut DatabaseCandidates::new(graph, partials, db),
                 vec![*reference],
                 cancellation_flag,
                 |_, _, p| {

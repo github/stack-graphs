@@ -28,7 +28,7 @@ use crate::partial::PartialSymbolStack;
 use crate::serde;
 use crate::serde::FileFilter;
 use crate::stitching::Database;
-use crate::stitching::ForwardPartialPathStitcher;
+use crate::stitching::ForwardCandidates;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -684,51 +684,6 @@ impl SQLiteReader {
     pub fn get(&mut self) -> (&StackGraph, &mut PartialPaths, &mut Database) {
         (&self.graph, &mut self.partials, &mut self.db)
     }
-
-    /// Find all paths using the given path stitcher.  Data is lazily loaded if necessary.
-    pub fn find_all_complete_partial_paths<I, F>(
-        &mut self,
-        starting_nodes: I,
-        cancellation_flag: &dyn CancellationFlag,
-        mut visit: F,
-    ) -> Result<()>
-    where
-        I: IntoIterator<Item = Handle<Node>>,
-        F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
-    {
-        let initial_paths = starting_nodes
-            .into_iter()
-            .map(|n| {
-                let mut p = PartialPath::from_node(&self.graph, &mut self.partials, n);
-                p.eliminate_precondition_stack_variables(&mut self.partials);
-                p
-            })
-            .collect::<Vec<_>>();
-        let mut stitcher = ForwardPartialPathStitcher::from_partial_paths(
-            &self.graph,
-            &mut self.partials,
-            initial_paths,
-        );
-        stitcher.set_max_work_per_phase(128);
-        while !stitcher.is_complete() {
-            cancellation_flag.check("find_all_complete_partial_paths")?;
-            for path in stitcher.previous_phase_partial_paths() {
-                self.load_partial_path_extensions(path, cancellation_flag)?;
-            }
-            stitcher.process_next_phase(
-                &self.graph,
-                &mut self.partials,
-                &mut self.db,
-                |_, _, _| true,
-            );
-            for path in stitcher.previous_phase_partial_paths() {
-                if path.is_complete(&self.graph) {
-                    visit(&self.graph, &mut self.partials, path);
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 impl PartialSymbolStack {
@@ -761,6 +716,28 @@ impl PartialSymbolStack {
             key_prefixes.push(key);
         }
         key_prefixes
+    }
+}
+
+impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, StorageError> for SQLiteReader {
+    fn load_forward_candidates(
+        &mut self,
+        path: &PartialPath,
+        cancellation_flag: &dyn CancellationFlag,
+    ) -> std::result::Result<(), StorageError> {
+        self.load_partial_path_extensions(path, cancellation_flag)
+    }
+
+    fn get_forward_candidates<R>(&mut self, path: &PartialPath, result: &mut R)
+    where
+        R: std::iter::Extend<Handle<PartialPath>>,
+    {
+        self.db
+            .find_candidate_partial_paths(&self.graph, &mut self.partials, path, result);
+    }
+
+    fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
+        (&self.graph, &mut self.partials, &self.db)
     }
 }
 

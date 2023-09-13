@@ -29,8 +29,9 @@ use crate::partial::PartialScopeStack;
 use crate::partial::PartialScopedSymbol;
 use crate::partial::PartialSymbolStack;
 use crate::stitching::Database;
+use crate::stitching::DatabaseCandidates;
 use crate::stitching::ForwardPartialPathStitcher;
-use crate::stitching::GraphEdges;
+use crate::stitching::GraphEdgeCandidates;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -1218,9 +1219,7 @@ pub extern "C" fn sg_partial_path_arena_find_all_complete_paths(
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
-        graph,
-        partials,
-        &mut GraphEdges(None),
+        &mut GraphEdgeCandidates::new(graph, partials, None),
         starting_nodes.iter().copied().map(sg_node_handle::into),
         &AtomicUsizeCancellationFlag(cancellation_flag),
         |graph, _partials, path| {
@@ -1535,9 +1534,10 @@ pub extern "C" fn sg_forward_partial_path_stitcher_process_next_phase(
     let partials = unsafe { &mut (*partials).inner };
     let db = unsafe { &mut (*db).inner };
     let stitcher = unsafe { &mut *(stitcher as *mut InternalForwardPartialPathStitcher) };
-    stitcher
-        .stitcher
-        .process_next_phase(graph, partials, db, |_, _, _| true);
+    stitcher.stitcher.process_next_phase(
+        &mut DatabaseCandidates::new(graph, partials, db),
+        |_, _, _| true,
+    );
     stitcher.update_previous_phase_partial_paths(partials);
 }
 
