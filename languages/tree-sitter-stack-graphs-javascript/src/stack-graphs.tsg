@@ -5,9 +5,11 @@
 ;; Global Variables
 ;; ^^^^^^^^^^^^^^^^
 
-global FILE_PATH
 global ROOT_NODE
 global JUMP_TO_SCOPE_NODE
+
+global FILE_PATH
+global PROJECT_NAME = ""
 
 
 ;; Attribute Shorthands
@@ -232,7 +234,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; - `GUARD:RETURN` - used for the AST nodes for values returned by a function
 ;;   in the function body
 ;; - `GUARD:THIS` - used for the implicit `this` argument of a function inside
-;;   its body
+;; - `GUARD:PKG_INTERNAL` - used for the package internal structure that should not
+;;   be accessible directly from the root
 
 ; ## Inherited
 
@@ -244,10 +247,12 @@ inherit .builtins_null
 inherit .builtins_number
 inherit .builtins_string
 inherit .builtins_undefined
-inherit .exports
-inherit .return_or_yield
 inherit .class_value
 inherit .constructor
+inherit .exports
+inherit .pkg_pop
+inherit .pkg_push
+inherit .return_or_yield
 
 
 
@@ -281,20 +286,49 @@ inherit .constructor
     node prog_module_pop
     node prog_module_scope
     node prog_exports_pop
+    node prog_pkg_pop_guard
+    node prog_pkg_push_guard
+    node prog_legacy_qname_guard
     node @prog.exports
+    node @prog.pkg_pop
+    node @prog.pkg_push
 
-    scan FILE_PATH {
-        "([^/]+)\.js$" {
-            attr (prog_module_pop) symbol_definition = $1, source_node = @prog
-        }
+    attr (prog_pkg_pop_guard) pop_symbol = "GUARD:PKG_INTERNAL"
+    attr (@prog.pkg_pop) pop_symbol = PROJECT_NAME
+    edge ROOT_NODE -> prog_pkg_pop_guard
+    edge prog_pkg_pop_guard -> @prog.pkg_pop
+
+    attr (@prog.pkg_push) push_symbol = PROJECT_NAME
+    attr (prog_pkg_push_guard) push_symbol = "GUARD:PKG_INTERNAL"
+    edge @prog.pkg_push -> prog_pkg_push_guard
+    edge prog_pkg_push_guard -> ROOT_NODE
+
+    node prog_module_pop_start
+    var module_pop_end = prog_module_pop_start
+    let module_name = (replace FILE_PATH "\.js$" "")
+    scan module_name {
+      "([^/]+)/" {
+        attr (module_pop_end) pop_symbol = $1
+        node module_pop_end_next
+        edge module_pop_end -> module_pop_end_next
+        set module_pop_end = module_pop_end_next
+      }
+      "([^/]+)$" {
+        attr (module_pop_end) symbol_definition = $1, source_node = @prog
+        attr (module_pop_end) empty_source_span
+      }
     }
 
-    edge @prog.before_scope -> ROOT_NODE
+    edge @prog.before_scope -> @prog.pkg_push
 
     attr (prog_module_scope) pop_symbol = "GUARD:MODULE"
-    edge ROOT_NODE -> prog_module_pop
+    edge @prog.pkg_pop -> prog_module_pop_start
     edge prog_module_pop -> prog_module_scope
     edge prog_module_scope -> @prog.after_scope
+
+    attr (prog_legacy_qname_guard) push_symbol = "GUARD:LEGACY_QNAME"
+    edge @prog.before_scope -> prog_legacy_qname_guard
+    edge prog_legacy_qname_guard -> ROOT_NODE
 
     attr (prog_module_pop) empty_source_span
     attr (prog_module_scope) empty_source_span
@@ -306,6 +340,10 @@ inherit .constructor
     attr (prog_exports_pop) pop_symbol = "GUARD:EXPORTS"
     edge prog_module_pop -> prog_exports_pop
     edge prog_exports_pop -> @prog.exports
+
+    ; allow direct access from the package to the modules exports
+    ; this is used from package.json
+    edge @prog.pkg_pop -> prog_exports_pop
 
     ;; builtin types
     node @prog.builtins_number
@@ -895,7 +933,7 @@ inherit .constructor
 ;       attr (@mod_name.push) symbol_reference = $1, source_node = @mod_name
 ;     }
 ;   }
-;   edge @mod_name.push -> ROOT_NODE
+;   edge @mod_name.push -> @import_stmt.pkg_push
 ;
 ;   attr (@name) node_reference = @name
 ;   attr (name_push_dot) push_symbol = "GUARD:MEMBER"
@@ -3746,6 +3784,26 @@ inherit .constructor
 
 }
 
+;; ## ES6-style Imports
+
+;; ES6 modules can also be imported using an import function. In general,
+;; these look like `require(expr)`, but in practice the expression is a string
+;; constant, which is the only case we handle.
+
+(
+  (call_expression
+    function:(_)@_import
+    arguments:(arguments (string)@source))@call_expr
+  (#eq? @_import "import")
+) {
+
+  node call_expr_pop_dot
+
+  attr (call_expr_pop_dot) pop_symbol = "GUARD:MEMBER"
+  edge @call_expr.value -> call_expr_pop_dot
+  edge call_expr_pop_dot -> @source.exports
+}
+
 ;; ### CommonJS-style Exports
 
 ;; CommonJS introduced an export style for pre-ES6 JavaScript that permitted
@@ -3803,25 +3861,10 @@ inherit .constructor
 (
   (call_expression
     function:(_)@_require
-    arguments:(arguments (string)@mod_name))@call_expr
+    arguments:(arguments (string)@source))@call_expr
   (#eq? @_require "require")
 ) {
-
-  node mod_name_module_guard
-  node mod_name_push
-
-  scan (source-text @mod_name) {
-    "\"([^/\"]+)\.js\"$" {
-      attr (mod_name_push) push_symbol = $1
-    }
-  }
-
-
-  attr (mod_name_module_guard) push_symbol = "GUARD:EXPORTS"
-  edge @call_expr.value -> mod_name_module_guard
-  edge mod_name_module_guard -> mod_name_push
-  edge mod_name_push -> ROOT_NODE
-
+  edge @call_expr.value -> @source.exports
 }
 
 
