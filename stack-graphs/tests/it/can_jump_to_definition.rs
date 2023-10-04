@@ -10,7 +10,8 @@ use std::collections::BTreeSet;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
-use stack_graphs::stitching::{ForwardPartialPathStitcher, GraphEdges};
+use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::GraphEdgeCandidates;
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -22,9 +23,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
         .iter_nodes()
         .filter(|handle| graph[*handle].is_reference());
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
-        graph,
-        &mut paths,
-        &mut GraphEdges(None),
+        &mut GraphEdgeCandidates::new(graph, &mut paths, None),
         references,
         &NoCancellation,
         |graph, paths, path| {

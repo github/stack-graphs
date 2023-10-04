@@ -13,12 +13,11 @@ use std::path::PathBuf;
 use tree_sitter::Parser;
 use tree_sitter_graph::parse_error::ParseError;
 
+use crate::cli::util::ExistingPathBufValueParser;
 use crate::loader::FileReader;
 use crate::loader::Loader;
 use crate::util::DisplayParseErrorsPretty;
 use crate::BuildError;
-
-use super::util::ExistingPathBufValueParser;
 
 #[derive(Args)]
 pub struct ParseArgs {

@@ -11,6 +11,7 @@ use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::NoCancellation;
 
@@ -39,9 +40,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
         .filter(|handle| graph[*handle].is_reference());
     let mut complete_partial_paths = Vec::new();
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
-        graph,
-        &mut partials,
-        &mut db,
+        &mut DatabaseCandidates::new(graph, &mut partials, &mut db),
         references,
         &NoCancellation,
         |_, _, p| {
