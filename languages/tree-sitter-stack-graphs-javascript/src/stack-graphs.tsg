@@ -4034,15 +4034,15 @@ inherit .return_or_yield
     (function)
     (generator_function)
     (arrow_function)
-  ]@right) {
+  ]@assignment_expr) {
 
   node left_definiens_hook
   node left_ignore_guard
 
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
-  attr (left_definiens_hook) definiens_node = @right
-  edge ROOT_NODE -> left_ignore_guard
+  attr (left_definiens_hook) definiens_node = @assignment_expr
+  edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 }
 
@@ -4078,7 +4078,7 @@ inherit .return_or_yield
     (function)
     (generator_function)
     (arrow_function)
-  ]@value) {
+  ]@value)@pair_expr {
 
   node name_definiens_hook
   node name_ignore_guard
@@ -4086,7 +4086,7 @@ inherit .return_or_yield
   attr (name_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (name_definiens_hook) node_definition = @name
   attr (name_definiens_hook) definiens_node = @value
-  edge ROOT_NODE -> name_ignore_guard
+  edge @pair_expr.pkg_pop -> name_ignore_guard
   edge name_ignore_guard -> name_definiens_hook
 
 }
