@@ -66,22 +66,22 @@ import * as mod from "./a_basic.js";
 //     ^ defined: 20, 21
 
    mod.h;
-//     ^ defined: 24, 24
+//     ^ defined: 24
 
    mod.i;
-//     ^ defined: 24, 24
+//     ^ defined: 24
 
    mod.j;
-//     ^ defined: 25, 26
+//     ^ defined: 25
 
    mod.k;
-//     ^ defined: 26, 26
+//     ^ defined: 26
 
    mod.l;
-//     ^ defined: 27, 27
+//     ^ defined: 27
 
    mod.m;
-//     ^ defined: 28, 28
+//     ^ defined: 28
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -209,17 +209,17 @@ export let x = 42;
 /*--- path: dirs/test_0.js ---*/
 
 import { x } from "./foo"
-//       ^ defined: 211, 203
+//       ^ defined: 203
 
 /*--- path: dirs/test_1.js ---*/
 
 import { x } from "./bar/baz"
-//       ^ defined: 216, 207
+//       ^ defined: 207
 
 /*--- path: dirs/bar/test_2.js ---*/
 
 import { x } from "../foo"
-//       ^ defined: 221, 203
+//       ^ defined: 203
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -250,14 +250,14 @@ export let x = 42;
 /*--- path: dir_imports/test_0.js ---*/
 
 import { x } from "./foo/"
-//       ^ defined: 252, 248
+//       ^ defined: 248
 
 /*--- path: dir_imports/foo/test_1.js ---*/
 
 import { x } from "./"
-//       ^ defined: 257, 248
+//       ^ defined: 248
 
 /*--- path: dir_imports/bar/test_2.js ---*/
 
 import { x } from "../foo/"
-//       ^ defined: 262, 248
+//       ^ defined: 248
