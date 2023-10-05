@@ -5,9 +5,11 @@
 ;; Global Variables
 ;; ^^^^^^^^^^^^^^^^
 
-global FILE_PATH
 global ROOT_NODE
 global JUMP_TO_SCOPE_NODE
+
+global FILE_PATH
+global PROJECT_NAME = ""
 
 
 ;; Attribute Shorthands
@@ -232,7 +234,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; - `GUARD:RETURN` - used for the AST nodes for values returned by a function
 ;;   in the function body
 ;; - `GUARD:THIS` - used for the implicit `this` argument of a function inside
-;;   its body
+;; - `GUARD:PKG_INTERNAL` - used for the package internal structure that should not
+;;   be accessible directly from the root
 
 ; ## Inherited
 
@@ -244,10 +247,12 @@ inherit .builtins_null
 inherit .builtins_number
 inherit .builtins_string
 inherit .builtins_undefined
-inherit .exports
-inherit .return_or_yield
 inherit .class_value
 inherit .constructor
+inherit .exports
+inherit .pkg_pop
+inherit .pkg_push
+inherit .return_or_yield
 
 
 
@@ -281,20 +286,49 @@ inherit .constructor
     node prog_module_pop
     node prog_module_scope
     node prog_exports_pop
+    node prog_pkg_pop_guard
+    node prog_pkg_push_guard
+    node prog_legacy_qname_guard
     node @prog.exports
+    node @prog.pkg_pop
+    node @prog.pkg_push
 
-    scan FILE_PATH {
-        "([^/]+)\.js$" {
-            attr (prog_module_pop) symbol_definition = $1, source_node = @prog
-        }
+    attr (prog_pkg_pop_guard) pop_symbol = "GUARD:PKG_INTERNAL"
+    attr (@prog.pkg_pop) pop_symbol = PROJECT_NAME
+    edge ROOT_NODE -> prog_pkg_pop_guard
+    edge prog_pkg_pop_guard -> @prog.pkg_pop
+
+    attr (@prog.pkg_push) push_symbol = PROJECT_NAME
+    attr (prog_pkg_push_guard) push_symbol = "GUARD:PKG_INTERNAL"
+    edge @prog.pkg_push -> prog_pkg_push_guard
+    edge prog_pkg_push_guard -> ROOT_NODE
+
+    node prog_module_pop_start
+    var module_pop_end = prog_module_pop_start
+    let module_name = (replace FILE_PATH "\.js$" "")
+    scan module_name {
+      "([^/]+)/" {
+        attr (module_pop_end) pop_symbol = $1
+        node module_pop_end_next
+        edge module_pop_end -> module_pop_end_next
+        set module_pop_end = module_pop_end_next
+      }
+      "([^/]+)$" {
+        attr (module_pop_end) symbol_definition = $1, source_node = @prog
+        attr (module_pop_end) empty_source_span
+      }
     }
 
-    edge @prog.before_scope -> ROOT_NODE
+    edge @prog.before_scope -> @prog.pkg_push
 
     attr (prog_module_scope) pop_symbol = "GUARD:MODULE"
-    edge ROOT_NODE -> prog_module_pop
-    edge prog_module_pop -> prog_module_scope
+    edge @prog.pkg_pop -> prog_module_pop_start
+    edge module_pop_end -> prog_module_scope
     edge prog_module_scope -> @prog.after_scope
+
+    attr (prog_legacy_qname_guard) push_symbol = "GUARD:LEGACY_QNAME"
+    edge @prog.before_scope -> prog_legacy_qname_guard
+    edge prog_legacy_qname_guard -> ROOT_NODE
 
     attr (prog_module_pop) empty_source_span
     attr (prog_module_scope) empty_source_span
@@ -304,8 +338,12 @@ inherit .constructor
     attr (@prog.after_scope) empty_source_span
 
     attr (prog_exports_pop) pop_symbol = "GUARD:EXPORTS"
-    edge prog_module_pop -> prog_exports_pop
+    edge module_pop_end -> prog_exports_pop
     edge prog_exports_pop -> @prog.exports
+
+    ; allow direct access from the package to the modules exports
+    ; this is used from package.json
+    edge @prog.pkg_pop -> prog_exports_pop
 
     ;; builtin types
     node @prog.builtins_number
@@ -440,24 +478,10 @@ inherit .constructor
   (export_clause)@export_clause
   source:(_)@source)@export_stmt {
 
-  node source_push
-  node source_push_guard_exports
-
-  edge @export_clause.source -> source_push_guard_exports
-
-  attr (source_push_guard_exports) push_symbol = "GUARD:EXPORTS"
-  scan (source-text @source) {
-    "\"([^/\"]+)\.js\"$" {
-      attr (source_push) push_symbol = $1
-    }
-  }
-  edge source_push_guard_exports -> source_push
-  edge source_push -> ROOT_NODE
+  edge @export_clause.source -> @source.exports
 
   edge @export_clause.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @export_clause.after_scope
-
-
 }
 
 (export_statement
@@ -593,18 +617,18 @@ inherit .constructor
 
 (
   (export_specifier
-    name:(_)@_name
+    name:(_)@name
     !alias)@export_specifier
 
-  (#eq? @_name "default")
+  (#eq? @name "default")
 
 ) {
 
   node export_specifier_pop_guard_default
   node export_specifier_push_guard_default
 
-  attr (export_specifier_pop_guard_default) pop_symbol = "GUARD:DEFAULT"
-  attr (export_specifier_push_guard_default) push_symbol = "GUARD:DEFAULT"
+  attr (export_specifier_pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @name
+  attr (export_specifier_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
   edge @export_specifier.exports -> export_specifier_pop_guard_default
   edge export_specifier_pop_guard_default -> export_specifier_push_guard_default
   edge export_specifier_push_guard_default -> @export_specifier.source
@@ -614,9 +638,9 @@ inherit .constructor
 (
   (export_specifier
     name:(_)@name
-    alias:(_)@_alias)@export_specifier
+    alias:(_)@alias)@export_specifier
 
-  (#eq? @_alias "default")
+  (#eq? @alias "default")
 
 ) {
 
@@ -624,10 +648,11 @@ inherit .constructor
   node name_push
 
   attr (name_push) push_node = @name
-  attr (export_specifier_guard_default) pop_symbol = "GUARD:DEFAULT"
+  attr (export_specifier_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @alias
   edge name_push -> @export_specifier.source
   edge export_specifier_guard_default -> name_push
   edge @export_specifier.exports -> export_specifier_guard_default
+
 }
 
 ; simple default exports
@@ -643,6 +668,7 @@ inherit .constructor
   edge @export_stmt.after_scope -> @default_expr.after_scope
   edge @export_stmt.exports -> export_stmt_default_guard
   edge export_stmt_default_guard -> @default_expr.value
+
 }
 
 ; aggregated exports
@@ -651,21 +677,9 @@ inherit .constructor
   .
   source:(_)@source)@export_statement {
 
-  node source_push
-  node source_push_guard_exports
-
   edge @export_statement.after_scope -> @export_statement.before_scope
 
-  attr (source_push_guard_exports) push_symbol = "GUARD:EXPORTS"
-  scan (source-text @source) {
-    "\"([^/\"]+)\.js\"$" {
-      attr (source_push) push_symbol = $1
-    }
-  }
-
-  edge @export_statement.exports -> source_push_guard_exports
-  edge source_push_guard_exports -> source_push
-  edge source_push -> ROOT_NODE
+  edge @export_statement.exports -> @source.exports
 
 }
 
@@ -682,19 +696,11 @@ inherit .constructor
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
-  attr (source_push_guard_exports) push_symbol = "GUARD:EXPORTS"
-  scan (source-text @source) {
-    "\"([^/\"]+)\.js\"$" {
-      attr (source_push) push_symbol = $1
-    }
-  }
   attr (alias_pop) node_definition = @alias
   attr (alias_pop_dot) pop_symbol = "GUARD:MEMBER"
   edge @export_statement.exports -> alias_pop
   edge alias_pop -> alias_pop_dot
-  edge alias_pop_dot -> source_push_guard_exports
-  edge source_push_guard_exports -> source_push
-  edge source_push -> ROOT_NODE
+  edge alias_pop_dot -> @source.exports
 
 }
 
@@ -708,8 +714,102 @@ inherit .constructor
 
 ;; #### Import
 
-; https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
+;; We distinguish two kinds of imports, based on the shape of the path:
+;;
+;;  - Relative imports, whose path starts with `.` or `..`. These are resolved relative
+;;    to the current module, in the same package.
+;;  - Non-relative or bare imports, which do not start with `.`, `..`, or `/`. These are
+;;    resolved as package names. Note that the package definitions are introduced in the
+;;    Go code based on `package.json`, not in this query file.
+;;
+;; Import paths may include optional `.js` extensions, but behave the same regardless of
+;; whether the extension is present.
+;;
+;; ## Limitations
+;;
+;;  - Absolute imports, whose paths start with `/`, are not supported.
+;;  - Non-relative imports can resolve into a package (i.e., start with package name
+;;    components and then module name components inside that package). However, because
+;;    we don't detect source roots for JavaScript, this might not always work. For example,
+;;    a module `mod.js` inside a `src/` directory of package `foo` would be accessible as
+;;    `foo/src/mod`, while `foo/mod` is probably intended.
+;;
+;; ## References
+;;
+;;  - ES6: https://nodejs.org/api/esm.html, https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
+;;  - CommonJS: https://nodejs.org/api/modules.html
 
+[
+  (import_statement source:(_)@source)
+  (export_statement source:(_)@source)
+  ( (call_expression function:(_)@_require arguments:(arguments (string)@source)) (#eq? @_require "require") )
+  ( (call_expression function:(_)@_import arguments:(arguments (string)@source)) (#eq? @_import "import") )
+] {
+
+  node source_push_guard_exports
+  node source_push_guard_pkg
+  node @source.exports
+
+  attr (source_push_guard_exports) push_symbol = "GUARD:EXPORTS"
+
+  scan (source-text @source) {
+    "^[\"']((\.|\.\.)/.*)[\"']$" {
+      ; relative import
+      let name = (replace (path-normalize (path-join (path-dir FILE_PATH) $1)) "\.js$" "")
+
+      node source_push_end
+      var push_start = source_push_end
+      scan name {
+        "([^/]+)/" {
+          attr (push_start) push_symbol = $1
+          node push_start_prev
+          edge push_start_prev -> push_start
+          set push_start = push_start_prev
+        }
+        "([^/]+)$" {
+          attr (push_start) push_symbol = $1
+        }
+      }
+      scan $1 {
+        "/$" {
+          node push_start_prev
+          edge push_start_prev -> push_start
+          set push_start = push_start_prev
+          attr (push_start) push_symbol = "index"
+        }
+      }
+      attr (push_start) is_reference, source_node = @source
+
+      edge @source.exports -> source_push_guard_exports
+      edge source_push_guard_exports -> push_start
+      edge source_push_end -> @source.pkg_push
+    }
+    "^[\"']([^\./].*)[\"']$" {
+      ; package import
+      let name = (replace $1 "\.js$" "")
+
+      node source_push_end
+      var push_start = source_push_end
+      scan name {
+        "([^/]+)/" {
+          attr (push_start) push_symbol = $1
+          node push_start_prev
+          edge push_start_prev -> push_start
+          set push_start = push_start_prev
+        }
+        "([^/]+)$" {
+          attr (push_start) symbol_reference = $1, source_node = @source
+        }
+      }
+
+      edge @source.exports -> source_push_guard_exports
+      edge source_push_guard_exports -> push_start
+      edge source_push_end -> source_push_guard_pkg
+      attr (source_push_guard_pkg) push_symbol = "GUARD:PKG"
+      edge source_push_guard_pkg -> @source.pkg_push
+    }
+  }
+}
 
 ; import "foo.js";
 ; only used for side effects not imports.
@@ -762,21 +862,10 @@ inherit .constructor
   (import_clause)@import_clause
   source:(_)@source)@import_stmt {
 
-  node source_push
-  node source_push_guard_exports
-
   edge @import_clause.before_scope -> @import_stmt.before_scope
   edge @import_stmt.after_scope -> @import_clause.after_scope
 
-  scan (source-text @source) {
-    "\"([^/\"]+)\.js\"$" {
-      attr (source_push) push_symbol = $1
-    }
-  }
-  attr (source_push_guard_exports) push_symbol = "GUARD:EXPORTS"
-  edge source_push_guard_exports -> source_push
-  edge source_push -> ROOT_NODE
-  edge @import_clause.source -> source_push_guard_exports
+  edge @import_clause.source -> @source.exports
 
 }
 
@@ -895,7 +984,7 @@ inherit .constructor
 ;       attr (@mod_name.push) symbol_reference = $1, source_node = @mod_name
 ;     }
 ;   }
-;   edge @mod_name.push -> ROOT_NODE
+;   edge @mod_name.push -> @import_stmt.pkg_push
 ;
 ;   attr (@name) node_reference = @name
 ;   attr (name_push_dot) push_symbol = "GUARD:MEMBER"
@@ -923,7 +1012,7 @@ inherit .constructor
   edge @import_clause.after_scope -> @import_clause.before_scope
 
   attr (default_name_pop) node_definition = @default_name
-  attr (default_name_push_guard_default) push_symbol = "GUARD:DEFAULT"
+  attr (default_name_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @default_name
   edge default_name_pop -> default_name_push_guard_default
   edge default_name_push_guard_default -> @import_clause.source
 
@@ -3746,6 +3835,26 @@ inherit .constructor
 
 }
 
+;; ## ES6-style Imports
+
+;; ES6 modules can also be imported using an import function. In general,
+;; these look like `require(expr)`, but in practice the expression is a string
+;; constant, which is the only case we handle.
+
+(
+  (call_expression
+    function:(_)@_import
+    arguments:(arguments (string)@source))@call_expr
+  (#eq? @_import "import")
+) {
+
+  node call_expr_pop_dot
+
+  attr (call_expr_pop_dot) pop_symbol = "GUARD:MEMBER"
+  edge @call_expr.value -> call_expr_pop_dot
+  edge call_expr_pop_dot -> @source.exports
+}
+
 ;; ### CommonJS-style Exports
 
 ;; CommonJS introduced an export style for pre-ES6 JavaScript that permitted
@@ -3803,25 +3912,10 @@ inherit .constructor
 (
   (call_expression
     function:(_)@_require
-    arguments:(arguments (string)@mod_name))@call_expr
+    arguments:(arguments (string)@source))@call_expr
   (#eq? @_require "require")
 ) {
-
-  node mod_name_module_guard
-  node mod_name_push
-
-  scan (source-text @mod_name) {
-    "\"([^/\"]+)\.js\"$" {
-      attr (mod_name_push) push_symbol = $1
-    }
-  }
-
-
-  attr (mod_name_module_guard) push_symbol = "GUARD:EXPORTS"
-  edge @call_expr.value -> mod_name_module_guard
-  edge mod_name_module_guard -> mod_name_push
-  edge mod_name_push -> ROOT_NODE
-
+  edge @call_expr.value -> @source.exports
 }
 
 
@@ -3940,7 +4034,7 @@ inherit .constructor
     (function)
     (generator_function)
     (arrow_function)
-  ]@right) {
+  ]@right)@assignment_expr {
 
   node left_definiens_hook
   node left_ignore_guard
@@ -3948,7 +4042,7 @@ inherit .constructor
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
   attr (left_definiens_hook) definiens_node = @right
-  edge ROOT_NODE -> left_ignore_guard
+  edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 }
 
@@ -3984,7 +4078,7 @@ inherit .constructor
     (function)
     (generator_function)
     (arrow_function)
-  ]@value) {
+  ]@value)@pair_expr {
 
   node name_definiens_hook
   node name_ignore_guard
@@ -3992,7 +4086,7 @@ inherit .constructor
   attr (name_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (name_definiens_hook) node_definition = @name
   attr (name_definiens_hook) definiens_node = @value
-  edge ROOT_NODE -> name_ignore_guard
+  edge @pair_expr.pkg_pop -> name_ignore_guard
   edge name_ignore_guard -> name_definiens_hook
 
 }

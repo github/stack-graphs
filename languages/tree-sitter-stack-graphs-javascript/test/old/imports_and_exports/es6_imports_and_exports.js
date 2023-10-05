@@ -29,7 +29,7 @@ export const { m = 1 } = { "m": 2 };
 
 /*--- path: b_basic_0.js ---*/
 
-import { a, b as b2 } from "a_basic.js";
+import { a, b as b2 } from "./a_basic.js";
 
    a;
 // ^ defined: 10, 32
@@ -39,7 +39,7 @@ import { a, b as b2 } from "a_basic.js";
 
 /*--- path: b_basic_1.js ---*/
 
-import * as mod from "a_basic.js";
+import * as mod from "./a_basic.js";
 
    mod;
 // ^ defined: 42
@@ -66,22 +66,22 @@ import * as mod from "a_basic.js";
 //     ^ defined: 20, 21
 
    mod.h;
-//     ^ defined: 24, 24
+//     ^ defined: 24
 
    mod.i;
-//     ^ defined: 24, 24
+//     ^ defined: 24
 
    mod.j;
 //     ^ defined: 25
 
    mod.k;
-//     ^ defined: 26, 26
+//     ^ defined: 26
 
    mod.l;
-//     ^ defined: 27, 27
+//     ^ defined: 27
 
    mod.m;
-//     ^ defined: 28, 28
+//     ^ defined: 28
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,10 +119,10 @@ export { o as default };
 
 /*--- path: b_default.js ---*/
 
-import p from "a_default_0.js"
-import q from "a_default_1.js"
-import r from "a_default_2.js"
-import s from "a_default_3.js"
+import p from "./a_default_0.js"
+import q from "./a_default_1.js"
+import r from "./a_default_2.js"
+import s from "./a_default_3.js"
 
    p;
 // ^ defined: 95, 96, 122
@@ -145,27 +145,27 @@ import s from "a_default_3.js"
 
 /*--- path: b_aggregating_0.js ---*/
 
-export * from "a_basic.js";
+export * from "./a_basic.js";
 
 
 /*--- path: b_aggregating_1.js ---*/
 
-export * as t from "a_basic.js";
+export * as t from "./a_basic.js";
 
 
 /*--- path: b_aggregating_2.js ---*/
 
-export { c, D as D1 } from "a_basic.js";
+export { c, D as D1 } from "./a_basic.js";
 
 
 /*--- path: b_aggregating_3.js ---*/
 
-export { e as default } from "a_basic.js";
+export { e as default } from "./a_basic.js";
 
 
 /*--- path: c_aggregating.js ---*/
 
-import { a } from "b_aggregating_0.js";
+import { a } from "./b_aggregating_0.js";
 
    a;
 // ^ defined: 10, 168
@@ -173,13 +173,13 @@ import { a } from "b_aggregating_0.js";
    b;
 // ^ defined:
 
-import { t } from "b_aggregating_1.js";
+import { t } from "./b_aggregating_1.js";
 
    t.a;
 // ^ defined: 153, 176
 //   ^ defined: 10
 
-import { c, D1 } from "b_aggregating_2.js";
+import { c, D1 } from "./b_aggregating_2.js";
 
    c;
 // ^ defined: 12, 158, 182
@@ -187,7 +187,77 @@ import { c, D1 } from "b_aggregating_2.js";
    D1;
 // ^ defined: 13, 158, 182
 
-import e2 from "b_aggregating_3.js";
+import e2 from "./b_aggregating_3.js";
 
    e2;
-// ^ defined: 16, 17, 190
+// ^ defined: 16, 17, 163, 190
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Imports from super and subdirectories
+//
+////////////////////////////////////////////////////////////////////////////////
+
+/*--- path: dirs/foo.js ---*/
+
+export let x = 42;
+
+/*--- path: dirs/bar/baz.js ---*/
+
+export let x = 42;
+
+/*--- path: dirs/test_0.js ---*/
+
+import { x } from "./foo"
+//       ^ defined: 203
+
+/*--- path: dirs/test_1.js ---*/
+
+import { x } from "./bar/baz"
+//       ^ defined: 207
+
+/*--- path: dirs/bar/test_2.js ---*/
+
+import { x } from "../foo"
+//       ^ defined: 203
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Import using `import()` function
+//
+////////////////////////////////////////////////////////////////////////////////
+
+/*--- path: b_function_1.js ---*/
+
+const mod = await import("./a_basic.js");
+
+   mod;
+// ^ defined: 232
+
+   mod.a;
+//     ^ defined: 10
+
+////////////////////////////////////////////////////////////////////////////////
+//
+//  Import directory with `index.js`
+//
+////////////////////////////////////////////////////////////////////////////////
+
+/*--- path: dir_imports/foo/index.js ---*/
+
+export let x = 42;
+
+/*--- path: dir_imports/test_0.js ---*/
+
+import { x } from "./foo/"
+//       ^ defined: 248
+
+/*--- path: dir_imports/foo/test_1.js ---*/
+
+import { x } from "./"
+//       ^ defined: 248
+
+/*--- path: dir_imports/bar/test_2.js ---*/
+
+import { x } from "../foo/"
+//       ^ defined: 248
