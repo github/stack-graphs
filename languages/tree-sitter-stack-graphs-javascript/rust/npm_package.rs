@@ -47,17 +47,39 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         //
         //     [root] -> [pop "GUARD:PKG_INTERNAL"] -> [pop pkg_internal_name]
         //
-        let pkg_internal_guard_pop = add_pop(graph, file, root, PKG_INTERNAL_GUARD, "pkg_internal_guard_pop");
-        let pkg_internal_name_pop =
-            add_pop(graph, file, pkg_internal_guard_pop, pkg_internal_name, "pkg_internal_name_pop");
+        let pkg_internal_guard_pop = add_pop(
+            graph,
+            file,
+            root,
+            PKG_INTERNAL_GUARD,
+            "pkg_internal_guard_pop",
+        );
+        let pkg_internal_name_pop = add_pop(
+            graph,
+            file,
+            pkg_internal_guard_pop,
+            pkg_internal_name,
+            "pkg_internal_name_pop",
+        );
 
         // reach package internals via root
         //
         //     [push pkg_internal_name] -> [push "GUARD:PKG_INTERNAL"] -> [root]
         //
-        let pkg_internal_guard_push = add_push(graph, file, root, PKG_INTERNAL_GUARD, "pkg_internal_guard_push");
-        let pkg_internal_name_push =
-            add_push(graph, file, pkg_internal_guard_push, pkg_internal_name, "pkg_internal_name_push");
+        let pkg_internal_guard_push = add_push(
+            graph,
+            file,
+            root,
+            PKG_INTERNAL_GUARD,
+            "pkg_internal_guard_push",
+        );
+        let pkg_internal_name_push = add_push(
+            graph,
+            file,
+            pkg_internal_guard_push,
+            pkg_internal_name,
+            "pkg_internal_name_push",
+        );
 
         // reach exports via package name
         //
@@ -69,22 +91,35 @@ impl FileAnalyzer for NpmPackageAnalyzer {
             //     [root] -> [pop "GUARD:PKG"] -> [pop pkg_name]* -> [push pkg_internal_name]
             //
             let pkg_guard_pop = add_pop(graph, file, root, PKG_GUARD, "pkg_guard_pop");
-            let pkg_name_pop =
-                add_module_pops(graph, file, Path::new(&npm_pkg.name), pkg_guard_pop, "pkg_name_pop");
+            let pkg_name_pop = add_module_pops(
+                graph,
+                file,
+                Path::new(&npm_pkg.name),
+                pkg_guard_pop,
+                "pkg_name_pop",
+            );
             add_edge(graph, pkg_name_pop, pkg_internal_name_push, 0);
 
             // reach main exports directly via package name (with precedence)
             //
             //     [pop pkg_name] -1-> [pop "GUARD:EXPORTS"] -> [push "GUARD:EXPORTS"] -> [push main]* -> [push pkg_internal_name]
             //
-            let exports_guard_pop = add_pop(graph, file, pkg_name_pop, EXPORTS_GUARD, "exports_guard_pop");
+            let exports_guard_pop = add_pop(
+                graph,
+                file,
+                pkg_name_pop,
+                EXPORTS_GUARD,
+                "exports_guard_pop",
+            );
             replace_edge(graph, pkg_name_pop, exports_guard_pop, 1);
             let main = NormalizedRelativePath::from_str(&npm_pkg.main)
                 .map(|p| p.into_path_buf())
                 .unwrap_or(PathBuf::from("index"))
                 .with_extension("");
-            let main_push = add_module_pushes(graph, file, &main, pkg_internal_name_push, "main_push");
-            let exports_guard_push = add_push(graph, file, main_push, EXPORTS_GUARD, "exports_guard_push");
+            let main_push =
+                add_module_pushes(graph, file, &main, pkg_internal_name_push, "main_push");
+            let exports_guard_push =
+                add_push(graph, file, main_push, EXPORTS_GUARD, "exports_guard_push");
             add_edge(graph, exports_guard_pop, exports_guard_push, 0);
         }
 
@@ -92,15 +127,32 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         //
         //     [pop pkg_internal_name] -> [pop "GUARD:PKG"] -> [pop dep_name]* -> [push dep_name]* -> [push "GUARD:PKG"] -> [root]
         //
-        let dep_guard_pop = add_pop(graph, file, pkg_internal_name_pop, PKG_GUARD, "dep_guard_pop");
+        let dep_guard_pop = add_pop(
+            graph,
+            file,
+            pkg_internal_name_pop,
+            PKG_GUARD,
+            "dep_guard_pop",
+        );
         let dep_guard_push = add_push(graph, file, root, PKG_GUARD, "dep_guard_push");
         for (i, (dep_name, _)) in npm_pkg.dependencies.iter().enumerate() {
             if dep_name.is_empty() {
                 continue;
             }
-            let dep_name_pop = add_module_pops(graph, file, Path::new(dep_name), dep_guard_pop, &format!("dep_name_pop[{}]", i));
-            let dep_name_push =
-                add_module_pushes(graph, file, Path::new(dep_name), dep_guard_push, &format!("dep_name_push[{}", i));
+            let dep_name_pop = add_module_pops(
+                graph,
+                file,
+                Path::new(dep_name),
+                dep_guard_pop,
+                &format!("dep_name_pop[{}]", i),
+            );
+            let dep_name_push = add_module_pushes(
+                graph,
+                file,
+                Path::new(dep_name),
+                dep_guard_push,
+                &format!("dep_name_push[{}", i),
+            );
             add_edge(graph, dep_name_pop, dep_name_push, 0);
         }
 
