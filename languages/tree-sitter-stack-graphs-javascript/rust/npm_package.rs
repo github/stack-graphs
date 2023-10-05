@@ -77,16 +77,18 @@ impl FileAnalyzer for NpmPackageAnalyzer {
             //
             //     [pop pkg_name] -1-> [pop "GUARD:EXPORTS"] -> [push "GUARD:EXPORTS"] -> [push main]* -> [push pkg_internal_name]
             //
-            let exports_guard_pop = add_pop(graph, file, pkg_name_pop, EXPORTS_GUARD, "");
-            replace_edge(graph, pkg_name_pop, exports_guard_pop, 1);
-            let main = NormalizedRelativePath::from_str(&npm_pkg.main)
-                .map(|p| p.into_path_buf())
-                .unwrap_or(PathBuf::from("index"))
-                .with_extension("")
-                .with_extension("");
-            let main_push = add_module_pushes(graph, file, &main, pkg_internal_name_push, "");
-            let exports_guard_push = add_push(graph, file, main_push, EXPORTS_GUARD, "");
-            add_edge(graph, exports_guard_pop, exports_guard_push, 0);
+            if !npm_pkg.main.is_empty() {
+                let exports_guard_pop = add_pop(graph, file, pkg_name_pop, EXPORTS_GUARD, "");
+                replace_edge(graph, pkg_name_pop, exports_guard_pop, 1);
+                let main = NormalizedRelativePath::from_str(&npm_pkg.main)
+                    .map(|p| p.into_path_buf())
+                    .unwrap_or(PathBuf::from("index"))
+                    .with_extension("")
+                    .with_extension("");
+                let main_push = add_module_pushes(graph, file, &main, pkg_internal_name_push, "");
+                let exports_guard_push = add_push(graph, file, main_push, EXPORTS_GUARD, "");
+                add_edge(graph, exports_guard_pop, exports_guard_push, 0);
+            }
         }
 
         // reach dependencies via package internal name
@@ -112,7 +114,9 @@ impl FileAnalyzer for NpmPackageAnalyzer {
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NpmPackage {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub main: String,
     #[serde(default)]
     pub dependencies: HashMap<String, serde_json::Value>,
