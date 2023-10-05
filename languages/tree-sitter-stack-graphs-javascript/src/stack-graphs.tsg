@@ -617,18 +617,18 @@ inherit .return_or_yield
 
 (
   (export_specifier
-    name:(_)@_name
+    name:(_)@name
     !alias)@export_specifier
 
-  (#eq? @_name "default")
+  (#eq? @name "default")
 
 ) {
 
   node export_specifier_pop_guard_default
   node export_specifier_push_guard_default
 
-  attr (export_specifier_pop_guard_default) pop_symbol = "GUARD:DEFAULT"
-  attr (export_specifier_push_guard_default) push_symbol = "GUARD:DEFAULT"
+  attr (export_specifier_pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @name
+  attr (export_specifier_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
   edge @export_specifier.exports -> export_specifier_pop_guard_default
   edge export_specifier_pop_guard_default -> export_specifier_push_guard_default
   edge export_specifier_push_guard_default -> @export_specifier.source
@@ -638,9 +638,9 @@ inherit .return_or_yield
 (
   (export_specifier
     name:(_)@name
-    alias:(_)@_alias)@export_specifier
+    alias:(_)@alias)@export_specifier
 
-  (#eq? @_alias "default")
+  (#eq? @alias "default")
 
 ) {
 
@@ -648,7 +648,7 @@ inherit .return_or_yield
   node name_push
 
   attr (name_push) push_node = @name
-  attr (export_specifier_guard_default) pop_symbol = "GUARD:DEFAULT"
+  attr (export_specifier_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @alias
   edge name_push -> @export_specifier.source
   edge export_specifier_guard_default -> name_push
   edge @export_specifier.exports -> export_specifier_guard_default
@@ -1012,7 +1012,7 @@ inherit .return_or_yield
   edge @import_clause.after_scope -> @import_clause.before_scope
 
   attr (default_name_pop) node_definition = @default_name
-  attr (default_name_push_guard_default) push_symbol = "GUARD:DEFAULT"
+  attr (default_name_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @default_name
   edge default_name_pop -> default_name_push_guard_default
   edge default_name_push_guard_default -> @import_clause.source
 
