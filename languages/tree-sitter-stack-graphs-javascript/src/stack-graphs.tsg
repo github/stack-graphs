@@ -4034,14 +4034,14 @@ inherit .return_or_yield
     (function)
     (generator_function)
     (arrow_function)
-  ]@assignment_expr) {
+  ]@right)@assignment_expr {
 
   node left_definiens_hook
   node left_ignore_guard
 
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
-  attr (left_definiens_hook) definiens_node = @assignment_expr
+  attr (left_definiens_hook) definiens_node = @right
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 }
