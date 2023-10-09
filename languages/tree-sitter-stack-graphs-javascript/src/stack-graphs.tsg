@@ -747,10 +747,13 @@ inherit .return_or_yield
 ] {
 
   node source_push_guard_exports
+  node source_push_guard_default
   node source_push_guard_pkg
   node @source.exports
 
   attr (source_push_guard_exports) push_symbol = "GUARD:EXPORTS"
+  attr (source_push_guard_default) push_symbol = "GUARD:DEFAULT"
+  edge source_push_guard_default -> source_push_guard_exports
 
   scan (source-text @source) {
     "^[\"']((\.|\.\.)/.*)[\"']$" {
@@ -781,6 +784,7 @@ inherit .return_or_yield
       attr (push_start) is_reference, source_node = @source
 
       edge @source.exports -> source_push_guard_exports
+      edge @source.exports -> source_push_guard_default
       edge source_push_guard_exports -> push_start
       edge source_push_end -> @source.pkg_push
     }
@@ -803,6 +807,7 @@ inherit .return_or_yield
       }
 
       edge @source.exports -> source_push_guard_exports
+      edge @source.exports -> source_push_guard_default
       edge source_push_guard_exports -> push_start
       edge source_push_end -> source_push_guard_pkg
       attr (source_push_guard_pkg) push_symbol = "GUARD:PKG"
@@ -3886,10 +3891,7 @@ inherit .return_or_yield
   node property_pop_dot
   attr (property_pop) node_definition = @property
   attr (property_pop_dot) pop_symbol = "GUARD:MEMBER"
-  node assignment_expr_guard_default
-  attr (assignment_expr_guard_default) pop_symbol = "GUARD:DEFAULT"
-  edge assignment_expr_guard_default -> property_pop_dot
-  edge @assignment_expr.exports -> assignment_expr_guard_default
+  edge @assignment_expr.exports -> property_pop_dot
   edge property_pop_dot -> property_pop
   edge property_pop -> @right.value
 }
@@ -3898,14 +3900,14 @@ inherit .return_or_yield
   (assignment_expression
     left: (member_expression
       object:(_)@_module
-      property:(_)@_exports)
+      property:(_)@exports)
     right: (_)@right)@assignment_expr
   (#eq? @_module "module")
-  (#eq? @_exports "exports")
+  (#eq? @exports "exports")
 ) {
 
   node assignment_expr_guard_default
-  attr (assignment_expr_guard_default) pop_symbol = "GUARD:DEFAULT"
+  attr (assignment_expr_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @exports
   edge assignment_expr_guard_default -> @right.value
   edge @assignment_expr.exports -> assignment_expr_guard_default
 }
@@ -3923,10 +3925,7 @@ inherit .return_or_yield
   (#eq? @_require "require")
 ) {
 
-  node require_guard_default
-  attr (require_guard_default) push_symbol = "GUARD:DEFAULT"
-  edge require_guard_default -> @source.exports
-  edge @call_expr.value -> require_guard_default
+  edge @call_expr.value -> @source.exports
 }
 
 
