@@ -187,6 +187,8 @@
 //! }
 //! ```
 //!
+//! Definiens are optional and setting them to `#null` explicitly is allowed.
+//!
 //! ### Connecting stack graph nodes with edges
 //!
 //! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
@@ -1165,6 +1167,7 @@ impl<'a> Builder<'a> {
     ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
         let definiens_node = match node.attributes.get(DEFINIENS_NODE) {
+            Some(Value::Null) => return Ok(()),
             Some(definiens_node) => &self.graph[definiens_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };

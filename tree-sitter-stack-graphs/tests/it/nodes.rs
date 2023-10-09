@@ -314,6 +314,26 @@ fn can_set_definiens() {
 }
 
 #[test]
+fn can_set_null_definiens() {
+    let tsg = r#"
+      (function_definition name:(_)@name) {
+         node result
+         attr (result) type = "pop_symbol", symbol = (source-text @name), source_node = @name, is_definition
+         attr (result) definiens_node = #null
+      }
+    "#;
+    let python = r#"
+      def foo():
+        pass
+    "#;
+
+    let (graph, file) = build_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.nodes_for_file(file).next().unwrap();
+    let source_info = graph.source_info(node_handle).unwrap();
+    assert_eq!(lsp_positions::Span::default(), source_info.definiens_span)
+}
+
+#[test]
 fn can_set_syntax_type() {
     let tsg = r#"
       (function_definition) {
