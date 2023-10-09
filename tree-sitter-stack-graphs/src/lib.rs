@@ -391,9 +391,9 @@ static TYPE_ATTR: &'static str = "type";
 
 // Expected attributes per node type
 static POP_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
-    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]));
+    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR, DEFINIENS_NODE]));
 static POP_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
-    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]));
+    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR, DEFINIENS_NODE]));
 static PUSH_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
     Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, SCOPE_ATTR, IS_REFERENCE_ATTR]));
 static PUSH_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
@@ -1019,10 +1019,14 @@ impl<'a> Builder<'a> {
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         self.verify_attributes(node, POP_SCOPED_SYMBOL_TYPE, &POP_SCOPED_SYMBOL_ATTRS);
-        Ok(self
+        let node_handle = self
             .stack_graph
             .add_pop_scoped_symbol_node(id, symbol, is_definition)
-            .unwrap())
+            .unwrap();
+        if is_definition {
+            self.load_definiens_info(node_ref, node_handle)?;
+        }
+        Ok(node_handle)
     }
 
     fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
@@ -1035,10 +1039,14 @@ impl<'a> Builder<'a> {
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         self.verify_attributes(node, POP_SYMBOL_TYPE, &POP_SYMBOL_ATTRS);
-        Ok(self
+        let node_handle = self
             .stack_graph
             .add_pop_symbol_node(id, symbol, is_definition)
-            .unwrap())
+            .unwrap();
+        if is_definition {
+            self.load_definiens_info(node_ref, node_handle)?;
+        }
+        Ok(node_handle)
     }
 
     fn load_push_scoped_symbol(
@@ -1127,18 +1135,28 @@ impl<'a> Builder<'a> {
             source_info.span = span;
             source_info.containing_line = ControlledOption::some(containing_line);
         };
-        if let Some(definiens_node) = node.attributes.get(DEFINIENS_NODE) {
-            let definiens_node = &self.graph[definiens_node.as_syntax_node_ref()?];
-            let span = self.span_calculator.for_node(definiens_node);
-            let source_info = self.stack_graph.source_info_mut(node_handle);
-            source_info.definiens_span = span;
-        }
         if let Some(syntax_type) = node.attributes.get(SYNTAX_TYPE) {
             let syntax_type = syntax_type.as_str()?;
             let interned_string = self.stack_graph.add_string(syntax_type);
             let source_info = self.stack_graph.source_info_mut(node_handle);
             source_info.syntax_type = interned_string.into();
         }
+        Ok(())
+    }
+
+    fn load_definiens_info(
+        &mut self,
+        node_ref: GraphNodeRef,
+        node_handle: Handle<Node>,
+    ) -> Result<(), BuildError> {
+        let node = &self.graph[node_ref];
+        let definiens_node = match node.attributes.get(DEFINIENS_NODE) {
+            Some(definiens_node) => &self.graph[definiens_node.as_syntax_node_ref()?],
+            None => return Ok(()),
+        };
+        let span = self.span_calculator.for_node(definiens_node);
+        let source_info = self.stack_graph.source_info_mut(node_handle);
+        source_info.definiens_span = span;
         Ok(())
     }
 

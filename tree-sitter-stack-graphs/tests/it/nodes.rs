@@ -288,8 +288,9 @@ fn can_calculate_spans() {
 #[test]
 fn can_set_definiens() {
     let tsg = r#"
-      (function_definition body:(_)@body) {
+      (function_definition name:(_)@name body:(_)@body) {
          node result
+         attr (result) type = "pop_symbol", symbol = (source-text @name), source_node = @name, is_definition
          attr (result) definiens_node = @body
       }
     "#;
