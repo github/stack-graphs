@@ -4022,6 +4022,7 @@ inherit .return_or_yield
     (function)
     (generator_function)
     (arrow_function)
+    (class)
   ]@right)@assignment_expr {
 
   attr (@assignment_expr.pop) definiens_node = @right
@@ -4035,6 +4036,7 @@ inherit .return_or_yield
     (function)
     (generator_function)
     (arrow_function)
+    (class)
   ]@right)@assignment_expr {
 
   node left_definiens_hook
@@ -4055,6 +4057,7 @@ inherit .return_or_yield
       (function)
       (generator_function)
       (arrow_function)
+      (class)
     ]@initializer)) {
 
   attr (@name.pop) definiens_node = @initializer
@@ -4069,6 +4072,7 @@ inherit .return_or_yield
       (function)
       (generator_function)
       (arrow_function)
+      (class)
     ]@initializer)) {
 
   attr (@name.pop) definiens_node = @initializer
@@ -4082,6 +4086,7 @@ inherit .return_or_yield
     (function)
     (generator_function)
     (arrow_function)
+    (class)
   ]@value)@pair_expr {
 
   node name_definiens_hook
