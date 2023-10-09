@@ -160,6 +160,19 @@
 //! }
 //! ```
 //!
+//! ### Annotating nodes with syntax type information
+//!
+//! You can annotate any stack graph node with information about its syntax type. To do this, add a `syntax_type`
+//! attribute, whose value is a string indicating the syntax type.
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   node def
+//!   ; ...
+//!   attr (def) syntax_type = "function"
+//! }
+//! ```
+//!
 //! ### Connecting stack graph nodes with edges
 //!
 //! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
