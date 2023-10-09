@@ -373,6 +373,7 @@ static IS_REFERENCE_ATTR: &'static str = "is_reference";
 static SCOPE_ATTR: &'static str = "scope";
 static SOURCE_NODE_ATTR: &'static str = "source_node";
 static SYMBOL_ATTR: &'static str = "symbol";
+static SYNTAX_TYPE: &'static str = "syntax_type";
 static TYPE_ATTR: &'static str = "type";
 
 // Expected attributes per node type
@@ -1118,6 +1119,12 @@ impl<'a> Builder<'a> {
             let span = self.span_calculator.for_node(definiens_node);
             let source_info = self.stack_graph.source_info_mut(node_handle);
             source_info.definiens_span = span;
+        }
+        if let Some(syntax_type) = node.attributes.get(SYNTAX_TYPE) {
+            let syntax_type = syntax_type.as_str()?;
+            let interned_string = self.stack_graph.add_string(syntax_type);
+            let source_info = self.stack_graph.source_info_mut(node_handle);
+            source_info.syntax_type = interned_string.into();
         }
         Ok(())
     }

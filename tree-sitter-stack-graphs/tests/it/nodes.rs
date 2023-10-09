@@ -311,3 +311,28 @@ fn can_set_definiens() {
     );
     assert_eq!("2:8-2:12", actual_span)
 }
+
+#[test]
+fn can_set_syntax_type() {
+    let tsg = r#"
+      (function_definition) {
+         node result
+         attr (result) syntax_type = "function"
+      }
+    "#;
+    let python = r#"
+      def foo():
+        pass
+    "#;
+
+    let (graph, file) = build_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.nodes_for_file(file).next().unwrap();
+    let source_info = graph.source_info(node_handle).unwrap();
+
+    let syntax_type = source_info
+        .syntax_type
+        .into_option()
+        .map(|s| &graph[s])
+        .unwrap_or("MISSING");
+    assert_eq!("function", syntax_type)
+}
