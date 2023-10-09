@@ -284,3 +284,30 @@ fn can_calculate_spans() {
     let trimmed_line = &python[source_info.span.start.trimmed_line.clone()];
     assert_eq!(trimmed_line, "a");
 }
+
+#[test]
+fn can_set_definiens() {
+    let tsg = r#"
+      (function_definition body:(_)@body) {
+         node result
+         attr (result) definiens_node = @body
+      }
+    "#;
+    let python = r#"
+      def foo():
+        pass
+    "#;
+
+    let (graph, file) = build_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.nodes_for_file(file).next().unwrap();
+    let source_info = graph.source_info(node_handle).unwrap();
+
+    let actual_span = format!(
+        "{}:{}-{}:{}",
+        source_info.definiens_span.start.line,
+        source_info.definiens_span.start.column.utf8_offset,
+        source_info.definiens_span.end.line,
+        source_info.definiens_span.end.column.utf8_offset,
+    );
+    assert_eq!("2:8-2:12", actual_span)
+}
