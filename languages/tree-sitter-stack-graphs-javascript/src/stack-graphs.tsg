@@ -3838,7 +3838,7 @@ inherit .return_or_yield
 ;; ## ES6-style Imports
 
 ;; ES6 modules can also be imported using an import function. In general,
-;; these look like `require(expr)`, but in practice the expression is a string
+;; these look like `import(expr)`, but in practice the expression is a string
 ;; constant, which is the only case we handle.
 
 (
@@ -3881,11 +3881,15 @@ inherit .return_or_yield
   (#eq? @_exports "exports")
 ) {
 
+
   node property_pop
   node property_pop_dot
   attr (property_pop) node_definition = @property
   attr (property_pop_dot) pop_symbol = "GUARD:MEMBER"
-  edge @assignment_expr.exports -> property_pop_dot
+  node assignment_expr_guard_default
+  attr (assignment_expr_guard_default) pop_symbol = "GUARD:DEFAULT"
+  edge assignment_expr_guard_default -> property_pop_dot
+  edge @assignment_expr.exports -> assignment_expr_guard_default
   edge property_pop_dot -> property_pop
   edge property_pop -> @right.value
 }
@@ -3893,14 +3897,17 @@ inherit .return_or_yield
 (
   (assignment_expression
     left: (member_expression
-      object:(identifier)@_module
+      object:(_)@_module
       property:(_)@_exports)
     right: (_)@right)@assignment_expr
   (#eq? @_module "module")
   (#eq? @_exports "exports")
 ) {
 
-  edge @assignment_expr.exports -> @right.value
+  node assignment_expr_guard_default
+  attr (assignment_expr_guard_default) pop_symbol = "GUARD:DEFAULT"
+  edge assignment_expr_guard_default -> @right.value
+  edge @assignment_expr.exports -> assignment_expr_guard_default
 }
 
 ;; ## CommonJS-style Imports
@@ -3915,7 +3922,11 @@ inherit .return_or_yield
     arguments:(arguments (string)@source))@call_expr
   (#eq? @_require "require")
 ) {
-  edge @call_expr.value -> @source.exports
+
+  node require_guard_default
+  attr (require_guard_default) push_symbol = "GUARD:DEFAULT"
+  edge require_guard_default -> @source.exports
+  edge @call_expr.value -> require_guard_default
 }
 
 
