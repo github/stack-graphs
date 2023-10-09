@@ -173,6 +173,20 @@
 //! }
 //! ```
 //!
+//! ### Annotating definitions with definiens information
+//!
+//! You cannot annotate definitions with a definiens, which is the thing the definition covers. For example, for
+//! a function definition, the definiens would be the function body. To do this, add a `definiens_node` attribute,
+//! whose value is a syntax node that spans the definiens.
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id body: (_) @body) @func {
+//!   node def
+//!   ; ...
+//!   attr (def) definiens_node = @body
+//! }
+//! ```
+//!
 //! ### Connecting stack graph nodes with edges
 //!
 //! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
