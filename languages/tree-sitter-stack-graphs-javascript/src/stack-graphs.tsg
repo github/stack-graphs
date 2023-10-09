@@ -4030,14 +4030,20 @@ inherit .return_or_yield
 
 }
 
-(assignment_expression
-  left: (member_expression property:(_)@left)
-  right:  [
-    (function)
-    (generator_function)
-    (arrow_function)
-    (class)
-  ]@right)@assignment_expr {
+(
+  (assignment_expression
+    left: (member_expression
+      object:(identifier)@_object
+      property:(_)@left
+    )
+    right:  [
+      (function)
+      (generator_function)
+      (arrow_function)
+    ]@right)@assignment_expr
+  (#not-eq @_object "module")
+  (#not-eq @left "exports")
+) {
 
   node left_definiens_hook
   node left_ignore_guard
