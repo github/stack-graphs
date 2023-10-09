@@ -576,82 +576,77 @@ inherit .return_or_yield
 
 }
 
+; export { default } from ...
+; export { default as ... } from ...
 (
   (export_specifier
     name:(_)@name
-    !alias)@export_specifier
+  )@export_specifier
 
   (#not-eq? @name "default")
 ) {
 
-  node name_pop
   node name_push
-
-  attr (name_pop) node_definition = @name
   attr (name_push) node_reference = @name
-  edge name_pop -> name_push
+  edge @export_specifier.pop -> name_push
   edge name_push -> @export_specifier.source
 
-  edge @export_specifier.exports -> name_pop
 }
 
+; export { foo } from ...
+; export { foo as ... } from ...
 (
   (export_specifier
     name:(_)@name
-    alias:(_)@alias)@export_specifier
-
-  (#not-eq? @alias "default")
-
-) {
-
-  node alias_pop
-  node name_push
-
-  attr (alias_pop) node_definition = @alias
-  attr (name_push) node_reference = @name
-  edge alias_pop -> name_push
-  edge name_push -> @export_specifier.source
-
-  edge @export_specifier.exports -> alias_pop
-}
-
-(
-  (export_specifier
-    name:(_)@name
-    !alias)@export_specifier
+  )@export_specifier
 
   (#eq? @name "default")
-
 ) {
 
-  node export_specifier_pop_guard_default
   node export_specifier_push_guard_default
-
-  attr (export_specifier_pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @name
   attr (export_specifier_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
-  edge @export_specifier.exports -> export_specifier_pop_guard_default
-  edge export_specifier_pop_guard_default -> export_specifier_push_guard_default
+  edge @export_specifier.pop -> export_specifier_push_guard_default
   edge export_specifier_push_guard_default -> @export_specifier.source
 
 }
 
-(
-  (export_specifier
-    name:(_)@name
-    alias:(_)@alias)@export_specifier
+; export { foo } from ...
+; export { ... as foo } from ...
+( [
+    (export_specifier
+      name:(_)@alias
+      !alias)@export_specifier
+    (export_specifier
+      name:(_)
+      alias:(_)@alias)@export_specifier
+  ]
 
-  (#eq? @alias "default")
-
+  (#not-eq? @alias "default")
 ) {
 
-  node export_specifier_guard_default
-  node name_push
+  node @export_specifier.pop
+  attr (@export_specifier.pop) node_definition = @alias
+  edge @export_specifier.exports -> @export_specifier.pop
 
-  attr (name_push) push_node = @name
-  attr (export_specifier_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @alias
-  edge name_push -> @export_specifier.source
-  edge export_specifier_guard_default -> name_push
-  edge @export_specifier.exports -> export_specifier_guard_default
+}
+
+; export { default } from ...
+; export { ... as default } from ...
+( [
+    (export_specifier
+      name:(_)@alias
+      !alias)@export_specifier
+    (export_specifier
+      name:(_)
+      alias:(_)@alias)@export_specifier
+  ]
+
+  (#eq? @alias "default")
+) {
+
+  node @export_specifier.pop
+  attr (@export_specifier.pop) symbol_definition = "GUARD:DEFAULT", source_node = @alias
+  edge @export_specifier.exports -> @export_specifier.pop
 
 }
 
@@ -747,13 +742,10 @@ inherit .return_or_yield
 ] {
 
   node source_push_guard_exports
-  node source_push_guard_default
   node source_push_guard_pkg
   node @source.exports
 
   attr (source_push_guard_exports) push_symbol = "GUARD:EXPORTS"
-  attr (source_push_guard_default) push_symbol = "GUARD:DEFAULT"
-  edge source_push_guard_default -> source_push_guard_exports
 
   scan (source-text @source) {
     "^[\"']((\.|\.\.)/.*)[\"']$" {
@@ -784,7 +776,6 @@ inherit .return_or_yield
       attr (push_start) is_reference, source_node = @source
 
       edge @source.exports -> source_push_guard_exports
-      edge @source.exports -> source_push_guard_default
       edge source_push_guard_exports -> push_start
       edge source_push_end -> @source.pkg_push
     }
@@ -807,7 +798,6 @@ inherit .return_or_yield
       }
 
       edge @source.exports -> source_push_guard_exports
-      edge @source.exports -> source_push_guard_default
       edge source_push_guard_exports -> push_start
       edge source_push_end -> source_push_guard_pkg
       attr (source_push_guard_pkg) push_symbol = "GUARD:PKG"
@@ -3109,6 +3099,8 @@ inherit .return_or_yield
     attr (@assignment_expr.pop) node_definition = @left
     edge @assignment_expr.after_scope -> @assignment_expr.pop
     edge @assignment_expr.pop -> @right.value
+
+    ; ensure the scope flows through the identifier
     edge @assignment_expr.after_scope -> @right.after_scope
 
 }
@@ -3840,26 +3832,6 @@ inherit .return_or_yield
 
 }
 
-;; ## ES6-style Imports
-
-;; ES6 modules can also be imported using an import function. In general,
-;; these look like `import(expr)`, but in practice the expression is a string
-;; constant, which is the only case we handle.
-
-(
-  (call_expression
-    function:(_)@_import
-    arguments:(arguments (string)@source))@call_expr
-  (#eq? @_import "import")
-) {
-
-  node call_expr_pop_dot
-
-  attr (call_expr_pop_dot) pop_symbol = "GUARD:MEMBER"
-  edge @call_expr.value -> call_expr_pop_dot
-  edge call_expr_pop_dot -> @source.exports
-}
-
 ;; ### CommonJS-style Exports
 
 ;; CommonJS introduced an export style for pre-ES6 JavaScript that permitted
@@ -3880,20 +3852,24 @@ inherit .return_or_yield
 (
   (assignment_expression
     left: (member_expression
-      object:(identifier)@_exports
+      object:(identifier)@exports
       property:(_)@property)
     right: (_)@right)@assignment_expr
-  (#eq? @_exports "exports")
+  (#eq? @exports "exports")
 ) {
-
 
   node property_pop
   node property_pop_dot
+  node assignment_expr_guard_default
+
   attr (property_pop) node_definition = @property
   attr (property_pop_dot) pop_symbol = "GUARD:MEMBER"
-  edge @assignment_expr.exports -> property_pop_dot
-  edge property_pop_dot -> property_pop
   edge property_pop -> @right.value
+  edge property_pop_dot -> property_pop
+  attr (assignment_expr_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @exports
+  edge assignment_expr_guard_default -> property_pop_dot
+  edge @assignment_expr.exports -> assignment_expr_guard_default
+
 }
 
 (
@@ -3907,25 +3883,51 @@ inherit .return_or_yield
 ) {
 
   node assignment_expr_guard_default
+
   attr (assignment_expr_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @exports
   edge assignment_expr_guard_default -> @right.value
   edge @assignment_expr.exports -> assignment_expr_guard_default
+  edge @assignment_expr.exports -> @right.value
+
+}
+
+;; ## ES6-style Imports
+
+;; ES6 modules can also be imported using an import function. In general,
+;; these look like `import(expr)`, but in practice the expression is a string
+;; constant, which is the only case we handle.
+
+(
+  (call_expression
+    function:(_)@_import
+    arguments:(arguments (string)@source))@call_expr
+  (#eq? @_import "import")
+) {
+
+  node call_expr_pop_dot
+
+  attr (call_expr_pop_dot) pop_symbol = "GUARD:MEMBER"
+  edge @call_expr.value -> call_expr_pop_dot
+  edge call_expr_pop_dot -> @source.exports
 }
 
 ;; ## CommonJS-style Imports
 
 ;; Similar to exports, CommonJS also defines a way to do imports. In general,
 ;; these look like `require(expr)`, but in practice the expression is a string
-;; constant, which is the only case we hand.
+;; constant, which is the only case we handle.
 
 (
   (call_expression
-    function:(_)@_require
+    function:(_)@require
     arguments:(arguments (string)@source))@call_expr
-  (#eq? @_require "require")
+  (#eq? @require "require")
 ) {
 
-  edge @call_expr.value -> @source.exports
+  node default_guard_push
+  attr (default_guard_push) symbol_reference = "GUARD:DEFAULT", source_node = @require
+  edge @call_expr.value -> default_guard_push
+  edge default_guard_push -> @source.exports
 }
 
 
