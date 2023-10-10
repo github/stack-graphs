@@ -8,7 +8,7 @@ export { default as default } from "./a.js";
 
 /*--- path: c.js ---*/
 
-import foo from "./b.js";
+import bar from "./b.js";
 
-/**/ foo;
+/**/ bar;
 //   ^ defined: 3, 7, 11

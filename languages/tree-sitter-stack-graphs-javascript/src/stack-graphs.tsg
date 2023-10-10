@@ -917,53 +917,75 @@ inherit .return_or_yield
   node @import_specifier.after_scope
   node @import_specifier.before_scope
   node @import_specifier.source
+
+  edge @import_specifier.after_scope -> @import_specifier.before_scope
 }
 
 (
-
   (import_specifier
     name:(_)@name
-    !alias)@import_specifier
+  )@import_specifier
 
   (#not-eq? @name "default")
+) {
 
+  node @import_specifier.push
+
+  attr (@import_specifier.push) node_reference = @name
+  edge @import_specifier.push -> @import_specifier.source
+
+}
+
+(
+  (import_specifier
+    name:(_)@name
+  )@import_specifier
+
+  (#eq? @name "default")
+) {
+
+  node @import_specifier.push
+
+  attr (@import_specifier.push) symbol_reference = "GUARD:DEFAULT", source_node = @name
+  edge @import_specifier.push -> @import_specifier.source
+
+}
+
+( [
+    (import_specifier
+      name:(_)@alias
+      !alias)@import_specifier
+    (import_specifier
+      name:(_)
+      alias:(_)@alias)@import_specifier
+  ]
+
+  (#not-eq? @alias "default")
 ) {
 
   node name_pop
-  node name_push
 
-  edge @import_specifier.after_scope -> @import_specifier.before_scope
-
-  attr (name_pop) node_definition = @name
-  attr (name_push) node_reference = @name
-  edge name_pop -> name_push
-  edge name_push -> @import_specifier.source
+  attr (name_pop) node_definition = @alias
+  edge name_pop -> @import_specifier.push
   edge @import_specifier.after_scope -> name_pop
 
 }
 
-(
-
-  (import_specifier
-    name:(_)@name
-    alias:(_)@alias)@import_specifier
-
-  (#not-eq? @name "default")
-
-) {
-
-  node alias_pop
-  node name_push
-
-  edge @import_specifier.after_scope -> @import_specifier.before_scope
-
-  attr (alias_pop) node_definition = @alias
-  attr (name_push) node_reference = @name
-  edge alias_pop -> name_push
-  edge name_push -> @import_specifier.source
-  edge @import_specifier.after_scope -> alias_pop
-
-}
+; ( [
+;     (import_specifier
+;       name:(_)@alias
+;       !alias)@import_specifier
+;     (import_specifier
+;       name:(_)
+;       alias:(_)@alias)@import_specifier
+;   ]
+;
+;   (#eq? @name "default")
+; ) {
+;
+;   ;; IMPOSSIBLE SHOULD, NEVER HAPPEN
+;
+; }
 
 ; (import_statement
 ;   (import_clause
