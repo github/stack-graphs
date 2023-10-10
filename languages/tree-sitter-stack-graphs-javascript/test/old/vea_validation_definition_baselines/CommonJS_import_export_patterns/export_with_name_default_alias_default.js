@@ -1,14 +1,14 @@
 /*--- path: a.js ---*/
 
-export default function foo() { }
+module.exports = function foo() { };
 
 /*--- path: index.js ---*/
 
-export { default as default } from "./a.js";
+module.exports = require("./a.js");
 
 /*--- path: index2.js ---*/
 
-import bar from "./index.js";
+let bar = require("./index.js");
 
 /**/ bar;
 //   ^ defined: 3, 7, 11

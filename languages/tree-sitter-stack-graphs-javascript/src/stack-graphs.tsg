@@ -4118,6 +4118,29 @@ inherit .return_or_yield
   edge left_ignore_guard -> left_definiens_hook
 }
 
+(
+  (assignment_expression
+    left: (member_expression
+      object:(identifier)@_object
+      property:(_)@left
+    )
+    right: (_)@right)@assignment_expr
+  (#eq @_object "module")
+  (#eq @left "exports")
+) {
+
+  node left_definiens_hook
+  node left_ignore_guard
+
+  attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
+  attr (left_definiens_hook) node_definition = @left
+  attr (left_definiens_hook) definiens_node = @right
+  attr (left_definiens_hook) syntax_type = "function"
+  edge @assignment_expr.pkg_pop -> left_ignore_guard
+  edge left_ignore_guard -> left_definiens_hook
+
+}
+
 (variable_declaration
   (variable_declarator
     name:(identifier)@name
