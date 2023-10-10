@@ -160,6 +160,35 @@
 //! }
 //! ```
 //!
+//! ### Annotating nodes with syntax type information
+//!
+//! You can annotate any stack graph node with information about its syntax type. To do this, add a `syntax_type`
+//! attribute, whose value is a string indicating the syntax type.
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   node def
+//!   ; ...
+//!   attr (def) syntax_type = "function"
+//! }
+//! ```
+//!
+//! ### Annotating definitions with definiens information
+//!
+//! You cannot annotate definitions with a definiens, which is the thing the definition covers. For example, for
+//! a function definition, the definiens would be the function body. To do this, add a `definiens_node` attribute,
+//! whose value is a syntax node that spans the definiens.
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id body: (_) @body) @func {
+//!   node def
+//!   ; ...
+//!   attr (def) definiens_node = @body
+//! }
+//! ```
+//!
+//! Definiens are optional and setting them to `#null` explicitly is allowed.
+//!
 //! ### Connecting stack graph nodes with edges
 //!
 //! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
@@ -1020,10 +1049,14 @@ impl<'a> Builder<'a> {
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         self.verify_attributes(node, POP_SCOPED_SYMBOL_TYPE, &POP_SCOPED_SYMBOL_ATTRS);
-        Ok(self
+        let node_handle = self
             .stack_graph
             .add_pop_scoped_symbol_node(id, symbol, is_definition)
-            .unwrap())
+            .unwrap();
+        if is_definition {
+            self.load_definiens_info(node_ref, node_handle)?;
+        }
+        Ok(node_handle)
     }
 
     fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
@@ -1036,10 +1069,14 @@ impl<'a> Builder<'a> {
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         self.verify_attributes(node, POP_SYMBOL_TYPE, &POP_SYMBOL_ATTRS);
-        Ok(self
+        let node_handle = self
             .stack_graph
             .add_pop_symbol_node(id, symbol, is_definition)
-            .unwrap())
+            .unwrap();
+        if is_definition {
+            self.load_definiens_info(node_ref, node_handle)?;
+        }
+        Ok(node_handle)
     }
 
     fn load_push_scoped_symbol(
@@ -1137,13 +1174,23 @@ impl<'a> Builder<'a> {
             source_info.syntax_type = syntax_type.into();
         }
 
-        if let Some(definiens_node) = node.attributes.get(DEFINIENS_NODE_ATTR) {
-            let definiens_node = &self.graph[definiens_node.as_syntax_node_ref()?];
-            let definiens_span = self.span_calculator.for_node(definiens_node);
-            let source_info = self.stack_graph.source_info_mut(node_handle);
-            source_info.definiens_span = definiens_span;
-        }
+        Ok(())
+    }
 
+    fn load_definiens_info(
+        &mut self,
+        node_ref: GraphNodeRef,
+        node_handle: Handle<Node>,
+    ) -> Result<(), BuildError> {
+        let node = &self.graph[node_ref];
+        let definiens_node = match node.attributes.get(DEFINIENS_NODE_ATTR) {
+            Some(Value::Null) => return Ok(()),
+            Some(definiens_node) => &self.graph[definiens_node.as_syntax_node_ref()?],
+            None => return Ok(()),
+        };
+        let definiens_span = self.span_calculator.for_node(definiens_node);
+        let source_info = self.stack_graph.source_info_mut(node_handle);
+        source_info.definiens_span = definiens_span;
         Ok(())
     }
 
