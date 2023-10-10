@@ -588,15 +588,26 @@ inherit .return_or_yield
   edge @export_clause.after_scope -> @last_export.after_scope
 }
 
+;; Export specifiers have several cases:
+;;  - the reference into the source module can be default or named
+;;  - the definition from this module can be default or named.
+;;
+;; We model this using seperate sets of rules, two rules for the reference,
+;; and two rules for the definition. The `.def_to_ref` node is used to connect
+;; the two.
+
 (export_specifier)@export_specifier {
 
   node @export_specifier.after_scope
   node @export_specifier.before_scope
+  node @export_specifier.def_to_ref
   node @export_specifier.source
 
   edge @export_specifier.after_scope -> @export_specifier.before_scope
 
 }
+
+;; Export specifier reference rules
 
 ; export { default } from ...
 ; export { default as ... } from ...
@@ -610,7 +621,7 @@ inherit .return_or_yield
 
   node name_push
   attr (name_push) node_reference = @name
-  edge @export_specifier.pop -> name_push
+  edge @export_specifier.def_to_ref -> name_push
   edge name_push -> @export_specifier.source
 
 }
@@ -625,12 +636,15 @@ inherit .return_or_yield
   (#eq? @name "default")
 ) {
 
-  node export_specifier_push_guard_default
-  attr (export_specifier_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
-  edge @export_specifier.pop -> export_specifier_push_guard_default
-  edge export_specifier_push_guard_default -> @export_specifier.source
+  node push_guard_default
+
+  attr (push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
+  edge @export_specifier.def_to_ref -> push_guard_default
+  edge push_guard_default -> @export_specifier.source
 
 }
+
+;; Export specifier definition rules
 
 ; export { foo } from ...
 ; export { ... as foo } from ...
@@ -646,9 +660,11 @@ inherit .return_or_yield
   (#not-eq? @alias "default")
 ) {
 
-  node @export_specifier.pop
-  attr (@export_specifier.pop) node_definition = @alias, definiens_node = @export_specifier.export_statement
-  edge @export_specifier.exports -> @export_specifier.pop
+  node name_pop
+
+  attr (name_pop) node_definition = @alias, definiens_node = @export_specifier.export_statement
+  edge @export_specifier.exports -> name_pop
+  edge name_pop -> @export_specifier.def_to_ref
 
 }
 
@@ -666,9 +682,11 @@ inherit .return_or_yield
   (#eq? @alias "default")
 ) {
 
-  node @export_specifier.pop
-  attr (@export_specifier.pop) symbol_definition = "GUARD:DEFAULT", source_node = @alias, definiens_node = @export_specifier.export_statement
-  edge @export_specifier.exports -> @export_specifier.pop
+  node pop_guard_default
+
+  attr (pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @alias, definiens_node = @export_specifier.export_statement
+  edge @export_specifier.exports -> pop_guard_default
+  edge pop_guard_default -> @export_specifier.def_to_ref
 
 }
 
@@ -678,13 +696,13 @@ inherit .return_or_yield
 (export_statement
   value:(_)@default_expr)@export_stmt {
 
-  node export_stmt_default_guard
+  node pop_default_guard
 
-  attr (export_stmt_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @export_stmt, definiens_node = @export_stmt.export_statement
+  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @export_stmt, definiens_node = @export_stmt.export_statement
   edge @default_expr.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @default_expr.after_scope
-  edge @export_stmt.exports -> export_stmt_default_guard
-  edge export_stmt_default_guard -> @default_expr.value
+  edge @export_stmt.exports -> pop_default_guard
+  edge pop_default_guard -> @default_expr.value
 
 }
 
@@ -942,24 +960,25 @@ inherit .return_or_yield
   edge @named_imports.after_scope -> @last_import.after_scope
 }
 
+;; Import specifiers have several cases:
+;;  - the reference into the source module can be default or named
+;;  - the definition from this module can be default or named.
+;; The case where the definition is default instead of named is invalid.
+;;
+;; We model this using seperate sets of rules, two rules for the reference,
+;; and one rules for the definition. The `.def_to_ref` node is used to connect
+;; the two.
+
 (import_specifier)@import_specifier {
   node @import_specifier.after_scope
   node @import_specifier.before_scope
+  node @import_specifier.def_to_ref
   node @import_specifier.source
 
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 }
 
-;; The following two cases should never happen in valid code:
-;; 
-;; - aliased name, with alias = `default`
-;; - non-aliased name, with name = `default`
-;;
-;; These are both invalid JavaScript and so should never actually
-;; occur in valid code. But, of course, sometimes people write
-;; bad code, and also they do parse according to the Tree-sitter
-;; grammar. We should never ever match against them and produce
-;; any sort of graph components however.
+;; Import specifier reference rules
 
 (
   (import_specifier
@@ -969,10 +988,11 @@ inherit .return_or_yield
   (#not-eq? @name "default")
 ) {
 
-  node @import_specifier.push
+  node name_push
 
-  attr (@import_specifier.push) node_reference = @name
-  edge @import_specifier.push -> @import_specifier.source
+  attr (name_push) node_reference = @name
+  edge name_push -> @import_specifier.source
+  edge @import_specifier.def_to_ref -> name_push
 
 }
 
@@ -984,12 +1004,15 @@ inherit .return_or_yield
   (#eq? @name "default")
 ) {
 
-  node @import_specifier.push
+  node push_guard_default
 
-  attr (@import_specifier.push) symbol_reference = "GUARD:DEFAULT", source_node = @name
-  edge @import_specifier.push -> @import_specifier.source
+  attr (push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
+  edge push_guard_default -> @import_specifier.source
+  edge @import_specifier.def_to_ref -> push_guard_default
 
 }
+
+;; Import specifier definition rules
 
 ( [
     (import_specifier
@@ -1006,7 +1029,7 @@ inherit .return_or_yield
   node name_pop
 
   attr (name_pop) node_definition = @alias, definiens_node = @import_specifier.import_statement
-  edge name_pop -> @import_specifier.push
+  edge name_pop -> @import_specifier.def_to_ref
   edge @import_specifier.after_scope -> name_pop
 
 }
