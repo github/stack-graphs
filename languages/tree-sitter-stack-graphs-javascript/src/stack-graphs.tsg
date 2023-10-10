@@ -921,6 +921,17 @@ inherit .return_or_yield
   edge @import_specifier.after_scope -> @import_specifier.before_scope
 }
 
+;; The following two cases should never happen in valid code:
+;; 
+;; - aliased name, with alias = `default`
+;; - non-aliased name, with name = `default`
+;;
+;; These are both invalid JavaScript and so should never actually
+;; occur in valid code. But, of course, sometimes people write
+;; bad code, and also they do parse according to the Tree-sitter
+;; grammar. We should never ever match against them and produce
+;; any sort of graph components however.
+
 (
   (import_specifier
     name:(_)@name
@@ -970,22 +981,6 @@ inherit .return_or_yield
   edge @import_specifier.after_scope -> name_pop
 
 }
-
-; ( [
-;     (import_specifier
-;       name:(_)@alias
-;       !alias)@import_specifier
-;     (import_specifier
-;       name:(_)
-;       alias:(_)@alias)@import_specifier
-;   ]
-;
-;   (#eq? @name "default")
-; ) {
-;
-;   ;; IMPOSSIBLE SHOULD, NEVER HAPPEN
-;
-; }
 
 ; (import_statement
 ;   (import_clause
