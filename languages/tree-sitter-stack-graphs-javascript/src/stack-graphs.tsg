@@ -522,17 +522,6 @@ inherit .return_or_yield
 
 }
 
-; set definiens for exported declarations that do not normally have a definiens associated
-(export_statement
-  declaration: [
-    (lexical_declaration (variable_declarator name:(identifier)@name))
-    (variable_declaration (variable_declarator name:(identifier)@name))
-  ]@decl)@_export_stmt {
-
-  attr (@name.pop) definiens_node = @decl
-
-}
-
 ; TODO
 ; export let [x,y] = [1,2];
 (export_statement
@@ -4143,15 +4132,30 @@ inherit .return_or_yield
 
 (variable_declaration
   (variable_declarator
+    name:(identifier)@name))@decl {
+
+  attr (@name.pop) definiens_node = @decl
+
+}
+
+(lexical_declaration
+  (variable_declarator
+    name:(identifier)@name))@decl {
+
+  attr (@name.pop) definiens_node = @decl
+
+}
+
+(variable_declaration
+  (variable_declarator
     name:(identifier)@name
     value: [
       (function)
       (generator_function)
       (arrow_function)
       (class)
-    ]@initializer)) {
+    ])) {
 
-  attr (@name.pop) definiens_node = @initializer
   attr (@name.pop) syntax_type = "function"
 
 }
@@ -4164,9 +4168,8 @@ inherit .return_or_yield
       (generator_function)
       (arrow_function)
       (class)
-    ]@initializer)) {
+    ])) {
 
-  attr (@name.pop) definiens_node = @initializer
   attr (@name.pop) syntax_type = "function"
 
 }
