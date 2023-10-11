@@ -554,10 +554,10 @@ inherit .return_or_yield
   node @export_clause.source
 }
 
-; LATER-TODO tree sitter doesn't yet support empty switch bodies
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(export_clause)@export_clause {
-  edge @export_clause.after_scope -> @export_clause.before_scope
+(export_clause (_)* @clauses)@export_clause {
+  if (is-empty @clauses) {
+    edge @export_clause.after_scope -> @export_clause.before_scope
+  }
 }
 
 (export_clause
@@ -853,9 +853,7 @@ inherit .return_or_yield
 
 ; import "foo.js";
 ; only used for side effects not imports.
-; HACK this is not a good solution, but we can't do better with the
-; current tree sitter grammar
-(import_statement)@import_stmt {
+(import_statement . source:(_))@import_stmt {
   edge @import_stmt.after_scope -> @import_stmt.before_scope
 }
 
@@ -926,10 +924,10 @@ inherit .return_or_yield
   node @named_imports.source
 }
 
-; LATER-TODO tree sitter doesn't yet support empty named imports
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(named_imports)@named_imports {
-  edge @named_imports.after_scope -> @named_imports.before_scope
+(named_imports (_)* @specs)@named_imports {
+  if (is-empty @specs) {
+    edge @named_imports.after_scope -> @named_imports.before_scope
+  }
 }
 
 (named_imports
@@ -1421,12 +1419,15 @@ inherit .return_or_yield
 }
 
 
-; LATER-TODO tree sitter doesn't yet support empty switch bodies
-; THIS IS A HUGE HACK AND MUST BE FIXED
 (class_body)@class_body {
   node @class_body.after_scope
   node @class_body.before_scope
-  edge @class_body.after_scope -> @class_body.before_scope
+}
+
+(class_body (_)* @decls)@class_body {
+  if (is-empty @decls) {
+    edge @class_body.after_scope -> @class_body.before_scope
+  }
 }
 
 (class_body
@@ -1694,8 +1695,6 @@ inherit .return_or_yield
     edge @switch_stmt.after_scope -> @body.after_scope
 }
 
-; LATER-TODO tree sitter doesn't yet support empty switch bodies
-; THIS IS A HUGE HACK AND MUST BE FIXED
 (switch_body)@switch_body {
   node @switch_body.after_scope
   node @switch_body.before_scope
@@ -1743,10 +1742,10 @@ inherit .return_or_yield
   node @switch_case.before_scope
 }
 
-; LATER-TODO tree sitter doesnt yet support switch case's with no statements
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(switch_case)@switch_case {
+(switch_case (_)* @stmts)@switch_case {
+  if (is-empty @stmts) {
     edge @switch_case.after_scope -> @switch_case.before_scope
+  }
 }
 
 ; switch case, non-empty statements, first statement
@@ -1786,10 +1785,10 @@ inherit .return_or_yield
   node @switch_default.before_scope
 }
 
-; LATER-TODO tree sitter doesnt yet support empty defaults
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(switch_default)@switch_default {
-  edge @switch_default.after_scope -> @switch_default.before_scope
+(switch_default (_)* @defaults)@switch_default {
+  if (is-empty @defaults) {
+    edge @switch_default.after_scope -> @switch_default.before_scope
+  }
 }
 
 ; switch default, non-empty statements, first statement
@@ -2237,10 +2236,10 @@ inherit .return_or_yield
 ;; #### Template Strings
 
 ; template_strings w/ no substitutions
-; LATER-TODO tree sitter queries don't let us find the absence of substitutions
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(template_string)@template_string {
-  edge @template_string.after_scope -> @template_string.before_scope
+(template_string (_)* @substs)@template_string {
+  if (is-empty @substs) {
+    edge @template_string.after_scope -> @template_string.before_scope
+  }
 }
 
 ; nonempty template string, value
@@ -2390,10 +2389,10 @@ inherit .return_or_yield
 }
 
 ; empty objects
-; LATER-TODO currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(object)@object_expr {
-  edge @object_expr.after_scope -> @object_expr.before_scope
+(object (_)* @entries)@object_expr {
+  if (is-empty @entries) {
+    edge @object_expr.after_scope -> @object_expr.before_scope
+  }
 }
 
 ; non-empty objects, scopes, first entry
@@ -2541,10 +2540,10 @@ inherit .return_or_yield
 }
 
 ; empty arrays
-; LATER-TODO currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(array)@array_expr {
-  edge @array_expr.after_scope -> @array_expr.before_scope
+(array (_)* @elems)@array_expr {
+  if (is-empty @elems) {
+    edge @array_expr.after_scope -> @array_expr.before_scope
+  }
 }
 
 ; nonempty arrays, first element
@@ -2587,14 +2586,15 @@ inherit .return_or_yield
 
 ;; #### Formal Parameters
 
-; LATER-TODO scope propagation through empty formal parameters
-; currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-
 (formal_parameters)@formal_params {
   node @formal_params.after_scope
   node @formal_params.before_scope
-  edge @formal_params.after_scope -> @formal_params.before_scope
+}
+
+(formal_parameters (_)* @params)@formal_params {
+  if (is-empty @params) {
+    edge @formal_params.after_scope -> @formal_params.before_scope
+  }
 }
 
 ; first parameter
@@ -2985,12 +2985,15 @@ inherit .return_or_yield
 
 ;; #### Arguments
 
-; LATER-TODO currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
 (arguments)@arguments {
   node @arguments.after_scope
   node @arguments.before_scope
-  edge @arguments.after_scope -> @arguments.before_scope
+}
+
+(arguments (_)* @args)@arguments {
+  if (is-empty @args) {
+    edge @arguments.after_scope -> @arguments.before_scope
+  }
 }
 
 (arguments
@@ -3701,8 +3704,10 @@ inherit .return_or_yield
 ; LATER-TODO scope propagation through empty object patterns
 ; currently unsupported by tree sitter queries
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-(object_pattern)@object_pat {
-  edge @object_pat.after_scope -> @object_pat.before_scope
+(object_pattern (_)* @entries)@object_pat {
+  if (is-empty @entries) {
+    edge @object_pat.after_scope -> @object_pat.before_scope
+  }
 }
 
 ; scope propagation through object patterns, first entry
@@ -3823,11 +3828,10 @@ inherit .return_or_yield
 
 ;; #### Array Patterns
 
-; LATER-TODO scope propagation through empty array patterns
-; currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(array_pattern)@array_pat {
-  edge @array_pat.after_scope -> @array_pat.before_scope
+(array_pattern (_)* @pats)@array_pat {
+  if (is-empty @pats) {
+    edge @array_pat.after_scope -> @array_pat.before_scope
+  }
 }
 
 ; scope propagation through array patterns, first element
