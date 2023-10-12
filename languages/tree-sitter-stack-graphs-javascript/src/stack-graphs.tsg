@@ -3130,15 +3130,15 @@ inherit .return_or_yield
 
 ; augmentation of scope via identifiers
 (assignment_expression
-  left: (identifier)@left
+  left: (identifier)@name
   right: (_)@right)@assignment_expr {
 
-    node @assignment_expr.pop
+    node @name.pop
 
     ; augments the scope by adding a lookup edge, ie. a pop
-    attr (@assignment_expr.pop) node_definition = @left
-    edge @assignment_expr.after_scope -> @assignment_expr.pop
-    edge @assignment_expr.pop -> @right.value
+    attr (@name.pop) node_definition = @name
+    edge @assignment_expr.after_scope -> @name.pop
+    edge @name.pop -> @right.value
 
     ; ensure the scope flows through the identifier
     edge @assignment_expr.after_scope -> @right.after_scope
@@ -4132,16 +4132,39 @@ inherit .return_or_yield
 ;; kinds of definitions.
 
 (assignment_expression
-  left: (identifier)@_left
+  left: [
+    (identifier)@left
+  ; (member_expression property:(_)@left) ; FIXME member expressions are references and have no .pop
+  ]
+  right: [
+    (function)
+    (generator_function)
+    (arrow_function)
+  ]) {
+
+  attr (@left.pop) syntax_type = "function"
+}
+
+(assignment_expression
+  left: [
+    (identifier)@left
+  ; (member_expression property:(_)@left) ; FIXME member expressions are references and have no .pop
+  ]
+  right: (class)) {
+
+  attr (@left.pop) syntax_type = "class"
+}
+
+(assignment_expression
+  left: (identifier)@left
   right: [
     (function)
     (generator_function)
     (arrow_function)
     (class)
-  ]@right)@assignment_expr {
+  ]@right) {
 
-  attr (@assignment_expr.pop) definiens_node = @right
-  attr (@assignment_expr.pop) syntax_type = "function"
+  attr (@left.pop) definiens_node = @right
 
 }
 
@@ -4151,11 +4174,7 @@ inherit .return_or_yield
       object:(identifier)@_object
       property:(_)@left
     )
-    right:  [
-      (function)
-      (generator_function)
-      (arrow_function)
-    ]@right)@assignment_expr
+    right:  (_)@right)@assignment_expr
   (#not-eq @_object "module")
   (#not-eq @left "exports")
 ) {
@@ -4166,7 +4185,6 @@ inherit .return_or_yield
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
   attr (left_definiens_hook) definiens_node = @right
-  attr (left_definiens_hook) syntax_type = "function"
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 }
@@ -4188,7 +4206,6 @@ inherit .return_or_yield
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
   attr (left_definiens_hook) definiens_node = @right
-  attr (left_definiens_hook) syntax_type = "function"
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 
@@ -4217,10 +4234,18 @@ inherit .return_or_yield
       (function)
       (generator_function)
       (arrow_function)
-      (class)
     ])) {
 
   attr (@name.pop) syntax_type = "function"
+
+}
+
+(variable_declaration
+  (variable_declarator
+    name:(identifier)@name
+    value: (class))) {
+
+  attr (@name.pop) syntax_type = "class"
 
 }
 
@@ -4231,10 +4256,38 @@ inherit .return_or_yield
       (function)
       (generator_function)
       (arrow_function)
-      (class)
     ])) {
 
   attr (@name.pop) syntax_type = "function"
+
+}
+
+(lexical_declaration
+  (variable_declarator
+    name:(identifier)@name
+    value: (class))) {
+
+  attr (@name.pop) syntax_type = "class"
+
+}
+
+(pair
+  key: (_)@name
+  value: [
+    (function)
+    (generator_function)
+    (arrow_function)
+  ]) {
+
+  attr (@name.definiens_hook) syntax_type = "function"
+
+}
+
+(pair
+  key: (_)@name
+  value: (class)) {
+
+  attr (@name.definiens_hook) syntax_type = "class"
 
 }
 
@@ -4247,14 +4300,13 @@ inherit .return_or_yield
     (class)
   ]@value)@pair_expr {
 
-  node name_definiens_hook
+  node @name.definiens_hook
   node name_ignore_guard
 
   attr (name_ignore_guard) pop_symbol = "GUARD:GANDALF"
-  attr (name_definiens_hook) node_definition = @name
-  attr (name_definiens_hook) definiens_node = @value
-  attr (name_definiens_hook) syntax_type = "function"
+  attr (@name.definiens_hook) node_definition = @name
+  attr (@name.definiens_hook) definiens_node = @value
   edge @pair_expr.pkg_pop -> name_ignore_guard
-  edge name_ignore_guard -> name_definiens_hook
+  edge name_ignore_guard -> @name.definiens_hook
 
 }
