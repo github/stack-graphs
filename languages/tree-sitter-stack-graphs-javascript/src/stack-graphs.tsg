@@ -288,7 +288,6 @@ inherit .return_or_yield
     node prog_module_pop
     node prog_module_scope
     node prog_exports_pop
-    node prog_exports_pop_dot
     node prog_pkg_pop_guard
     node prog_pkg_push_guard
     node prog_legacy_qname_guard
@@ -343,9 +342,6 @@ inherit .return_or_yield
     attr (prog_exports_pop) pop_symbol = "GUARD:EXPORTS"
     edge module_pop_end -> prog_exports_pop
     edge prog_exports_pop -> @prog.exports
-    attr (prog_exports_pop_dot) pop_symbol = "GUARD:MEMBER"
-    edge prog_exports_pop -> prog_exports_pop_dot
-    edge prog_exports_pop_dot -> @prog.exports
 
     ; allow direct access from the package to the modules exports
     ; this is used from package.json
@@ -801,7 +797,6 @@ inherit .return_or_yield
       }
       attr (push_start) is_reference, source_node = @source
 
-      edge @source.exports -> source_push_guard_exports
       edge source_push_guard_exports -> push_start
       edge source_push_end -> @source.pkg_push
     }
@@ -823,13 +818,15 @@ inherit .return_or_yield
         }
       }
 
-      edge @source.exports -> source_push_guard_exports
       edge source_push_guard_exports -> push_start
       edge source_push_end -> source_push_guard_pkg
       attr (source_push_guard_pkg) push_symbol = "GUARD:PKG"
       edge source_push_guard_pkg -> @source.pkg_push
     }
   }
+
+  edge @source.exports -> source_push_guard_exports
+
 }
 
 ; import "foo.js";
@@ -3894,24 +3891,43 @@ inherit .return_or_yield
 
 (
   (assignment_expression
-    left: (member_expression
-      object:(identifier)@exports
-      property:(_)@property)
+    left: [
+      ( ; exports.foo = ...
+        (member_expression
+          object:(identifier)@exports
+          property:(_)@property)
+        (#eq? @exports "exports")
+      )
+      ( ; module.exports.foo = ...
+        (member_expression
+          object:(member_expression
+            object:(identifier)@_module
+            property:(_)@exports)
+          property:(_)@property)
+        (#eq? @_module "module")
+        (#eq? @exports "exports")
+      )
+    ]
     right: (_)@right)@assignment_expr
-  (#eq? @exports "exports")
+
 ) {
 
-  node property_pop
-  node property_pop_dot
-  node assignment_expr_guard_default
+  node pop_default_guard
+  node pop_dot
+  node pop_name
 
-  attr (property_pop) node_definition = @property
-  attr (property_pop_dot) pop_symbol = "GUARD:MEMBER"
-  edge property_pop -> @right.value
-  edge property_pop_dot -> property_pop
-  attr (assignment_expr_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @exports
-  edge assignment_expr_guard_default -> property_pop_dot
-  edge @assignment_expr.exports -> assignment_expr_guard_default
+  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
+  edge @assignment_expr.exports -> pop_default_guard
+
+  attr (pop_dot) pop_symbol = "GUARD:MEMBER"
+  edge pop_default_guard -> pop_dot
+
+  attr (pop_name) node_definition = @property
+  edge pop_dot -> pop_name
+  edge pop_name -> @right.value
+
+  ;; For ES6 interoperability, expose members as named exports
+  edge @assignment_expr.exports -> pop_name
 
 }
 
@@ -3925,36 +3941,21 @@ inherit .return_or_yield
   (#eq? @exports "exports")
 ) {
 
-  node assignment_expr_guard_default
+  node pop_default_guard
+  node pop_dot
 
-  attr (assignment_expr_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @exports
-  edge assignment_expr_guard_default -> @right.value
-  edge @assignment_expr.exports -> assignment_expr_guard_default
-  edge @assignment_expr.exports -> @right.value
+  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
+  edge @assignment_expr.exports -> pop_default_guard
+  edge pop_default_guard -> @right.value
+
+  ;; For ES6 interoperability, expose members as named exports
+  attr (pop_dot) pop_symbol = "GAURD:MEMBER"
+  edge @assignment_expr.exports -> pop_dot
+  edge pop_dot -> @right.value
 
 }
 
-;; ## ES6-style Imports
-
-;; ES6 modules can also be imported using an import function. In general,
-;; these look like `import(expr)`, but in practice the expression is a string
-;; constant, which is the only case we handle.
-
-(
-  (call_expression
-    function:(_)@_import
-    arguments:(arguments (string)@source))@call_expr
-  (#eq? @_import "import")
-) {
-
-  node call_expr_pop_dot
-
-  attr (call_expr_pop_dot) pop_symbol = "GUARD:MEMBER"
-  edge @call_expr.value -> call_expr_pop_dot
-  edge call_expr_pop_dot -> @source.exports
-}
-
-;; ## CommonJS-style Imports
+;; ### CommonJS-style Imports
 
 ;; Similar to exports, CommonJS also defines a way to do imports. In general,
 ;; these look like `require(expr)`, but in practice the expression is a string
@@ -3962,19 +3963,78 @@ inherit .return_or_yield
 
 (
   (call_expression
-    function:(_)@require
+    function:(identifier)@require
     arguments:(arguments (string)@source))@call_expr
   (#eq? @require "require")
 ) {
 
   node default_guard_push
+
   attr (default_guard_push) symbol_reference = "GUARD:DEFAULT", source_node = @require
   edge @call_expr.value -> default_guard_push
   edge default_guard_push -> @source.exports
+
 }
 
+;; ### Dynamic Imports
 
+;; Both ES6 and CommonJS modules can be imported using an import function.
+;; In general, these look like `import(expr)`, but in practice the expression
+;; is a string constant, which is the only case we handle.
+;;
+;; The return value of the import function is an object whose properties are
+;; the exports of the module. The default export is assigned to the `default`
+;; property.
+;;
+;; The import function is async and returns a promise. Since we do not support
+;; async functions and promises, we only support the case where the function
+;; is called as `await import(...)`.
 
+(
+  (await_expression
+    (call_expression
+      function:(_)@_import
+      arguments:(arguments (string)@source))
+  )@await_expr
+  (#eq? @_import "import")
+) {
+
+  node pop_dot
+  node pop_default
+  node push_guard_default
+
+  attr (pop_dot) pop_symbol = "GUARD:MEMBER"
+  edge @await_expr.value -> pop_dot
+  edge pop_dot -> @source.exports
+
+  attr (pop_default) pop_symbol = "default"
+  edge pop_dot -> pop_default
+
+  attr (push_guard_default) push_symbol = "GUARD:DEFAULT"
+  edge pop_default -> push_guard_default
+  edge push_guard_default -> @source.exports
+
+}
+
+;; ### ES6 and CommonJS interoperability
+
+;; Nodes supports some interoperability between ES6 and CommonJS modules.
+;;
+;; A CommonJS module can be imported in an ES6 module:
+;;
+;;  - `import foo from "cjs_module"` binds `foo` to the value of `module.exports`.
+;;  - `import { foo } from "cjs_module"` binds `foo` to the value of `module.exports.foo`.
+;;  - `import("cjs_module")` returns (a promise to) an object with
+;;     - property `default` bound to the value of `module.exports`, and
+;;     - other properties bound to the value of those properties in `module.exports`
+;;       (e.g., `foo` binds `module.exports.foo`).
+;;
+;; A ES6 module can be import in an CommonJS module:
+;;
+;;  - `import("es6_module")` returns (a promise to) an object with
+;;    - property default bound to the value of `export default`, and
+;;    - other properties bound to named exports (e.g., `foo` binds `export { foo }`).
+;;  - `require("es6_module")` is not supported.
 
 
 
