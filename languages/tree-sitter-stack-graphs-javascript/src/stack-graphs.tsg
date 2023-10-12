@@ -499,10 +499,11 @@ inherit .return_or_yield
   edge @decl.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @decl.after_scope
 
-  ; !!!! TODO HACK
-  ; the tree-sitter grammar doesn't make it possible to distinguish
-  ; between default exports and non-default exports so this is required
-  ; to ensure that default exports work properly
+}
+
+(export_statement "default"
+  (declaration)@decl)@export_stmt {
+
   node export_stmt_pop_guard_default
   attr (export_stmt_pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @decl, definiens_node = @export_stmt.export_statement
   edge @export_stmt.exports -> export_stmt_pop_guard_default
