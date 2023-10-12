@@ -3894,14 +3894,14 @@ inherit .return_or_yield
     left: [
       ( ; exports.foo = ...
         (member_expression
-          object:(identifier)@exports
+          object:(_)@exports
           property:(_)@property)
         (#eq? @exports "exports")
       )
       ( ; module.exports.foo = ...
         (member_expression
           object:(member_expression
-            object:(identifier)@_module
+            object:(_)@_module
             property:(_)@exports)
           property:(_)@property)
         (#eq? @_module "module")
