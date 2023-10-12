@@ -1561,6 +1561,12 @@ inherit .return_or_yield
 
 ;; #### Statement Block
 
+(statement_block (_)* @stmts)@statement_block {
+  if (is-empty @stmts) {
+    edge @statement_block.after_scope -> @statement_block.before_scope
+  }
+}
+
 ; statement block, first statement
 (statement_block
   .
