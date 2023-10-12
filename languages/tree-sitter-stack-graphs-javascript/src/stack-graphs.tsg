@@ -251,6 +251,7 @@ inherit .class_value
 inherit .constructor
 inherit .export_statement
 inherit .exports
+inherit .hoist_point
 inherit .import_statement
 inherit .pkg_pop
 inherit .pkg_push
@@ -292,6 +293,7 @@ inherit .return_or_yield
     node prog_pkg_push_guard
     node prog_legacy_qname_guard
     node @prog.exports
+    node @prog.hoist_point
     node @prog.pkg_pop
     node @prog.pkg_push
 
@@ -322,6 +324,7 @@ inherit .return_or_yield
     }
 
     edge @prog.before_scope -> @prog.pkg_push
+    edge @prog.before_scope -> @prog.hoist_point
 
     attr (prog_module_scope) pop_symbol = "GUARD:MODULE"
     edge @prog.pkg_pop -> prog_module_pop_start
@@ -880,8 +883,10 @@ inherit .return_or_yield
   (import_clause)@import_clause
   source:(_)@source)@import_stmt {
 
+  edge @import_stmt.after_scope -> @import_stmt.before_scope
+
   edge @import_clause.before_scope -> @import_stmt.before_scope
-  edge @import_stmt.after_scope -> @import_clause.after_scope
+  edge @import_stmt.hoist_point -> @import_clause.after_scope
 
   edge @import_clause.source -> @source.exports
 
@@ -1210,7 +1215,7 @@ inherit .return_or_yield
 
   ; with an augmentation for the function
   attr (@name.pop) node_definition = @name
-  edge @fun_decl.after_scope -> @name.pop
+  edge @fun_decl.hoist_point -> @name.pop
   edge @name.pop -> fun_decl_function_value
 
   ; function values have drop nodes that handle closures, that points to the
@@ -1294,7 +1299,7 @@ inherit .return_or_yield
 
   ; with an augmentation for the function
   attr (@name.pop) node_definition = @name
-  edge @fun_decl.after_scope -> @name.pop
+  edge @fun_decl.hoist_point -> @name.pop
   edge @name.pop -> fun_decl_function_value
 
   ; function values have drop nodes that handle closures, that points to the
@@ -1561,6 +1566,13 @@ inherit .return_or_yield
 
 ;; #### Statement Block
 
+(statement_block)@statement_block {
+
+  node @statement_block.hoist_point
+  edge @statement_block.before_scope -> @statement_block.hoist_point
+
+}
+
 (statement_block (_)* @stmts)@statement_block {
   if (is-empty @stmts) {
     edge @statement_block.after_scope -> @statement_block.before_scope
@@ -1599,6 +1611,13 @@ inherit .return_or_yield
 
 ;; #### If
 
+(if_statement
+  consequence:(_)@consequence)@if_stmt {
+
+    let @if_stmt.hoist_point = @consequence.before_scope
+
+}
+
 (if_statement condition:(_)@condition)@if_stmt {
     ; scopes flow from the if statement to the condition
     edge @condition.before_scope -> @if_stmt.before_scope
@@ -1611,6 +1630,7 @@ inherit .return_or_yield
     ; scopes flow from the condition to the consequence, then to the if statement
     edge @consequence.before_scope -> @condition.after_scope
     edge @if_stmt.after_scope -> @consequence.after_scope
+
 }
 
 (if_statement
@@ -1620,6 +1640,13 @@ inherit .return_or_yield
     ; scopes flow from the condition to the alternative, then to the if statement
     edge @alternative.before_scope -> @condition.after_scope
     edge @if_stmt.after_scope -> @alternative.after_scope
+}
+
+(else_clause
+  (_)@inner)@else_clause {
+
+    let @else_clause.hoist_point = @inner.before_scope
+
 }
 
 (else_clause (_)@inner)@else_clause {
@@ -1650,7 +1677,15 @@ inherit .return_or_yield
 (switch_body)@switch_body {
   node @switch_body.after_scope
   node @switch_body.before_scope
-  edge @switch_body.after_scope -> @switch_body.before_scope
+  node @switch_body.hoist_point
+
+  edge @switch_body.before_scope -> @switch_body.hoist_point
+}
+
+(switch_body (_)* @choices)@switch_body {
+  if (is-empty @choices) {
+    edge @switch_body.after_scope -> @switch_body.before_scope
+  }
 }
 
 ; switch body, first choice
@@ -1770,6 +1805,13 @@ inherit .return_or_yield
 ;; #### For
 
 (for_statement
+  body:(_)@body)@for_stmt {
+
+    let @for_stmt.hoist_point = @body.before_scope
+
+}
+
+(for_statement
   initializer:(_)@initializer
   condition:(_)@condition
   increment:(_)@increment
@@ -1787,11 +1829,19 @@ inherit .return_or_yield
 
     ; scopes also flow from condition out to statement
     edge @for_stmt.after_scope -> @condition.after_scope
+
 }
 
 
 
 ;; #### For In
+
+(for_in_statement
+  body:(_)@body)@for_in_stmt {
+
+    let @for_in_stmt.hoist_point = @body.before_scope
+
+}
 
 (for_in_statement
   left:(_)@_left
@@ -1823,6 +1873,13 @@ inherit .return_or_yield
 ;; #### While
 
 (while_statement
+  body:(_)@body)@while_stmt {
+
+    let @while_stmt.hoist_point = @body.before_scope
+
+}
+
+(while_statement
   condition:(_)@condition
   body:(_)@body)@while_stmt
 {
@@ -1834,11 +1891,19 @@ inherit .return_or_yield
 
     ; scopes also flow back into the condition
     edge @condition.before_scope -> @body.after_scope
+
 }
 
 
 
 ;; #### Do
+
+(do_statement
+  body:(_)@body)@do_stmt {
+
+    let @do_stmt.hoist_point = @body.before_scope
+
+}
 
 (do_statement
   body:(_)@body
@@ -1930,12 +1995,18 @@ inherit .return_or_yield
 
 ;; #### With
 
+(with_statement body:(_)@body)@with_stmt {
+
+  let @with_stmt.hoist_point = @body.before_scope
+
+}
+
 (with_statement
   object:(_)@object
   body:(_)@body)@with_stmt
 {
 
-  node with_stmt_push_dot
+    node with_stmt_push_dot
 
     ; scopes flow from the statement into the object then into the body then back out
     edge @object.before_scope -> @with_stmt.before_scope
@@ -1943,7 +2014,6 @@ inherit .return_or_yield
     edge @with_stmt.after_scope -> @body.after_scope
     edge @with_stmt.after_scope -> @with_stmt.before_scope
     attr (@with_stmt.after_scope -> @with_stmt.before_scope) precedence = 1
-
 
     attr (with_stmt_push_dot) push_symbol = "GUARD:MEMBER"
     edge with_stmt_push_dot -> @object.value
