@@ -4236,30 +4236,6 @@ inherit .return_or_yield
 ;; kinds of definitions.
 
 (assignment_expression
-  left: [
-    (identifier)@left
-  ; (member_expression property:(_)@left) ; FIXME member expressions are references and have no .pop
-  ]
-  right: [
-    (function)
-    (generator_function)
-    (arrow_function)
-  ]) {
-
-  attr (@left.pop) syntax_type = "function"
-}
-
-(assignment_expression
-  left: [
-    (identifier)@left
-  ; (member_expression property:(_)@left) ; FIXME member expressions are references and have no .pop
-  ]
-  right: (class)) {
-
-  attr (@left.pop) syntax_type = "class"
-}
-
-(assignment_expression
   left: (identifier)@left
   right: [
     (function)
@@ -4331,47 +4307,36 @@ inherit .return_or_yield
 
 }
 
-(variable_declaration
-  (variable_declarator
-    name:(identifier)@name
-    value: [
+[
+  (variable_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: [
+        (function)
+        (generator_function)
+        (arrow_function)
+      ]))
+  (lexical_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: [
+        (function)
+        (generator_function)
+        (arrow_function)
+      ]))
+  (assignment_expression
+    left: [
+      (identifier)@name
+    ; (member_expression property:(_)@name) ; FIXME member expressions are references and have no .pop
+    ]
+    right: [
       (function)
       (generator_function)
       (arrow_function)
-    ])) {
+    ])
+] {
 
   attr (@name.pop) syntax_type = "function"
-
-}
-
-(variable_declaration
-  (variable_declarator
-    name:(identifier)@name
-    value: (class))) {
-
-  attr (@name.pop) syntax_type = "class"
-
-}
-
-(lexical_declaration
-  (variable_declarator
-    name:(identifier)@name
-    value: [
-      (function)
-      (generator_function)
-      (arrow_function)
-    ])) {
-
-  attr (@name.pop) syntax_type = "function"
-
-}
-
-(lexical_declaration
-  (variable_declarator
-    name:(identifier)@name
-    value: (class))) {
-
-  attr (@name.pop) syntax_type = "class"
 
 }
 
@@ -4384,6 +4349,28 @@ inherit .return_or_yield
   ]) {
 
   attr (@name.definiens_hook) syntax_type = "function"
+
+}
+
+
+[
+  (variable_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: (class)))
+  (lexical_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: (class)))
+  (assignment_expression
+    left: [
+      (identifier)@name
+    ; (member_expression property:(_)@name) ; FIXME member expressions are references and have no .pop
+    ]
+    right: (class))
+] {
+
+  attr (@name.pop) syntax_type = "class"
 
 }
 
