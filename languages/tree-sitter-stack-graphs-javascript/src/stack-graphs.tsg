@@ -3064,7 +3064,6 @@ inherit .return_or_yield
     edge subscript_expr_push_dot -> @object.value
 
   ; this is done differently depending on what the index is
-    ; attr @index.push "push" = @index, "reference"
     edge @subscript_expr.value -> @subscript_expr.index_push
     edge @subscript_expr.index_push -> subscript_expr_push_dot
 
@@ -3075,7 +3074,8 @@ inherit .return_or_yield
   index: (string)@index)@subscript_expr
 {
 
-    attr (@subscript_expr.index_push) push_symbol = (replace (source-text @index) "[\"\']" "")
+    attr (@subscript_expr.index_push) symbol_reference = (replace (source-text @index) "[\"\']" ""), source_node = @index
+
 }
 
 (subscript_expression
