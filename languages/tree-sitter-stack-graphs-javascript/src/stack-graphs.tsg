@@ -4074,7 +4074,7 @@ inherit .return_or_yield
 
   node default_guard_push
 
-  attr (default_guard_push) symbol_reference = "GUARD:DEFAULT", source_node = @require
+  attr (default_guard_push) symbol_reference = "GUARD:DEFAULT", source_node = @source
   edge @call_expr.value -> default_guard_push
   edge default_guard_push -> @source.exports
 
@@ -4114,7 +4114,7 @@ inherit .return_or_yield
   attr (pop_default) pop_symbol = "default"
   edge pop_dot -> pop_default
 
-  attr (push_guard_default) push_symbol = "GUARD:DEFAULT"
+  attr (push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @source
   edge pop_default -> push_guard_default
   edge push_guard_default -> @source.exports
 
