@@ -4025,6 +4025,7 @@ inherit .return_or_yield
   edge pop_default_guard -> pop_dot
 
   attr (pop_name) node_definition = @property
+  attr (pop_name) definiens_node = @assignment_expr
   edge pop_dot -> pop_name
   edge pop_name -> @right.value
 
@@ -4047,6 +4048,7 @@ inherit .return_or_yield
   node pop_dot
 
   attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
+  attr (pop_default_guard) definiens_node = @assignment_expr
   edge @assignment_expr.exports -> pop_default_guard
   edge pop_default_guard -> @right.value
 
