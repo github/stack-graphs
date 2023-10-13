@@ -4067,9 +4067,9 @@ inherit .return_or_yield
 
 (
   (call_expression
-    function:(identifier)@require
+    function:(identifier)@_require
     arguments:(arguments (string)@source))@call_expr
-  (#eq? @require "require")
+  (#eq? @_require "require")
 ) {
 
   node default_guard_push
@@ -4266,9 +4266,9 @@ inherit .return_or_yield
     (generator_function)
     (arrow_function)
     (class)
-  ]@right) {
+  ])@assignment_expr {
 
-  attr (@left.pop) definiens_node = @right
+  attr (@left.pop) definiens_node = @assignment_expr
 
 }
 
@@ -4402,14 +4402,14 @@ inherit .return_or_yield
     (generator_function)
     (arrow_function)
     (class)
-  ]@value)@pair_expr {
+  ])@pair_expr {
 
   node @name.definiens_hook
   node name_ignore_guard
 
   attr (name_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (@name.definiens_hook) node_definition = @name
-  attr (@name.definiens_hook) definiens_node = @value
+  attr (@name.definiens_hook) definiens_node = @pair_expr
   edge @pair_expr.pkg_pop -> name_ignore_guard
   edge name_ignore_guard -> @name.definiens_hook
 
