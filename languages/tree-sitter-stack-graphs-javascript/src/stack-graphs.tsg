@@ -2237,6 +2237,7 @@ inherit .return_or_yield
   (update_expression)
   (new_expression)
   (yield_expression)
+  (spread_element)
 ]@expr {
   
   node @expr.after_scope
