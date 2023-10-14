@@ -3094,17 +3094,17 @@ inherit .return_or_yield
   node subscript_expr_push_dot
 
   ; scopes flow left to right
-    edge @object.before_scope -> @subscript_expr.before_scope
+  edge @object.before_scope -> @subscript_expr.before_scope
   edge @index.before_scope -> @object.after_scope
-    edge @subscript_expr.after_scope -> @index.after_scope
+  edge @subscript_expr.after_scope -> @index.after_scope
 
   ; value is a subscript lookup, ie a push then push dot
-    attr (subscript_expr_push_dot) push_symbol = "GUARD:MEMBER"
-    edge subscript_expr_push_dot -> @object.value
+  attr (subscript_expr_push_dot) push_symbol = "GUARD:MEMBER"
+  edge subscript_expr_push_dot -> @object.value
 
   ; this is done differently depending on what the index is
-    edge @subscript_expr.value -> @subscript_expr.index_push
-    edge @subscript_expr.index_push -> subscript_expr_push_dot
+  edge @subscript_expr.value -> @subscript_expr.index_push
+  edge @subscript_expr.index_push -> subscript_expr_push_dot
 
 }
 
@@ -3263,7 +3263,7 @@ inherit .return_or_yield
   ; scopes flow into the RHS then back out to the whole expr,
   ; augmented (in subsequent rules) by the LHS
   edge @right.before_scope -> @assignment_expr.before_scope
-  
+
   ; value of the whole thing is value of the RHS
   edge @assignment_expr.value -> @right.value
 }
@@ -3279,6 +3279,21 @@ inherit .return_or_yield
     attr (@name.pop) node_definition = @name
     edge @assignment_expr.after_scope -> @name.pop
     edge @name.pop -> @right.value
+
+    ; ensure the scope flows through the identifier
+    edge @assignment_expr.after_scope -> @right.after_scope
+
+}
+
+(assignment_expression
+  left: [
+    (member_expression)
+    (subscript_expression)
+  ]@left
+  right: (_)@right)@assignment_expr {
+
+    ; scope flows from LHS into pattern then back to assignment
+    edge @left.before_scope -> @assignment_expr.before_scope
 
     ; ensure the scope flows through the identifier
     edge @assignment_expr.after_scope -> @right.after_scope
@@ -3322,6 +3337,7 @@ inherit .return_or_yield
   ; scope flows from LHS into pattern then back to assignment
   edge @left.before_scope -> @right.after_scope
   edge @assignment_expr.after_scope -> @left.after_scope
+
 }
 
 
