@@ -4262,6 +4262,11 @@ inherit .return_or_yield
 ;;    - property default bound to the value of `export default`, and
 ;;    - other properties bound to named exports (e.g., `foo` binds `export { foo }`).
 ;;  - `require("es6_module")` is not supported.
+;;
+;; References:
+;;
+;;  - https://nodejs.org/api/esm.html#interoperability-with-commonjs
+;;
 
 
 
