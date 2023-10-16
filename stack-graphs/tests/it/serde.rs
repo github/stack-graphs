@@ -12,7 +12,7 @@ use stack_graphs::graph;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::serde;
-use stack_graphs::stitching::{Database, ForwardPartialPathStitcher};
+use stack_graphs::stitching::{Database, ForwardPartialPathStitcher, StitcherConfig};
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -984,6 +984,7 @@ fn can_serialize_partial_paths() {
             &graph,
             &mut partials,
             file,
+            &StitcherConfig::default(),
             &NoCancellation,
             |g, ps, p| {
                 db.add_partial_path(g, ps, p.clone());

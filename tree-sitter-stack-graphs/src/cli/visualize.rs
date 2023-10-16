@@ -10,6 +10,7 @@ use clap::ValueHint;
 use stack_graphs::serde::NoFilter;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::SQLiteReader;
 use stack_graphs::NoCancellation;
 use std::path::Path;
@@ -54,9 +55,16 @@ impl VisualizeArgs {
             .filter(|n| graph[*n].is_reference())
             .collect::<Vec<_>>();
         let mut complete_paths_db = Database::new();
+        // FIXME We use the default stitcher config here, because we currently do not retrieve language
+        //       configurations during querying. A first step to fixing this would be to lookup the language
+        //       corresponding to the file that is queried. However, to solve this properly we would need to
+        //       isolate graphs and paths per language so we don't accidently mix different languages that
+        //       require different stitcher settings.
+        let config = StitcherConfig::default();
         ForwardPartialPathStitcher::find_all_complete_partial_paths(
             &mut db,
             starting_nodes,
+            &config,
             cancellation_flag,
             |g, ps, p| {
                 complete_paths_db.add_partial_path(g, ps, p.clone());

@@ -28,6 +28,7 @@ use stack_graphs::c::sg_partial_path_list_free;
 use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_stack_graph;
+use stack_graphs::c::sg_stitcher_config;
 use stack_graphs::copious_debugging;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
@@ -55,11 +56,15 @@ impl StorageLayer {
         let rust_graph = unsafe { &(*graph).inner };
         let path_list = sg_partial_path_list_new();
         for file in rust_graph.iter_files() {
+            let config = sg_stitcher_config {
+                detect_similar_paths: false,
+            };
             sg_partial_path_arena_find_partial_paths_in_file(
                 graph,
                 partials,
                 file.as_u32(),
                 path_list,
+                config,
                 std::ptr::null(),
             );
         }
@@ -117,6 +122,9 @@ fn check_find_qualified_definitions(
     let partials = sg_partial_path_arena_new();
     let rust_partials = unsafe { &mut (*partials).inner };
     let db = sg_partial_path_database_new();
+    let config = sg_stitcher_config {
+        detect_similar_paths: false,
+    };
 
     // Create a new external storage layer holding _all_ of the partial paths in the stack graph.
     let mut storage_layer = StorageLayer::new(graph.graph, partials);
@@ -149,6 +157,7 @@ fn check_find_qualified_definitions(
         partials,
         1,
         &initial_partial_path as *const PartialPath as *const _,
+        config,
     );
     sg_forward_partial_path_stitcher_set_max_work_per_phase(stitcher, 1);
     let rust_stitcher = unsafe { &mut *stitcher };

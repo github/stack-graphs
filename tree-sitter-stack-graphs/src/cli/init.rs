@@ -721,6 +721,7 @@ impl ProjectSettings<'_> {
             use tree_sitter_stack_graphs::loader::FileAnalyzers;
             use tree_sitter_stack_graphs::loader::LanguageConfiguration;
             use tree_sitter_stack_graphs::loader::LoadError;
+            use tree_sitter_stack_graphs::loader::StitcherConfig;
             use tree_sitter_stack_graphs::CancellationFlag;
 
             /// The stack graphs tsg source for this language.
@@ -758,6 +759,7 @@ impl ProjectSettings<'_> {
                     )),
                     Some(STACK_GRAPHS_BUILTINS_CONFIG),
                     FileAnalyzers::new(),
+                    StitcherConfig::default(),
                     cancellation_flag,
                 )
             }}

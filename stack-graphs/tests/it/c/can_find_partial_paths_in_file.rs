@@ -22,6 +22,7 @@ use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_partial_scope_stack;
 use stack_graphs::c::sg_partial_symbol_stack;
+use stack_graphs::c::sg_stitcher_config;
 use stack_graphs::c::SG_LIST_EMPTY_HANDLE;
 use stack_graphs::c::SG_NULL_HANDLE;
 use stack_graphs::partial::PartialPath;
@@ -77,11 +78,15 @@ fn check_partial_paths_in_file(graph: &TestGraph, file: &str, expected_paths: &[
 
     let partials = sg_partial_path_arena_new();
     let path_list = sg_partial_path_list_new();
+    let config = sg_stitcher_config {
+        detect_similar_paths: false,
+    };
     sg_partial_path_arena_find_partial_paths_in_file(
         graph.graph,
         partials,
         file.as_u32(),
         path_list,
+        config,
         std::ptr::null(),
     );
 

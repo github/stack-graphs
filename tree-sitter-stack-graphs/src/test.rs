@@ -74,6 +74,7 @@ use stack_graphs::graph::SourceInfo;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::StitcherConfig;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -623,13 +624,20 @@ impl Test {
         &mut self,
         partials: &mut PartialPaths,
         db: &mut Database,
+        stitcher_config: &StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<TestResult, stack_graphs::CancellationError> {
         let mut result = TestResult::new();
         for fragment in &self.fragments {
             for assertion in &fragment.assertions {
                 match assertion
-                    .run(&self.graph, partials, db, &cancellation_flag)
+                    .run(
+                        &self.graph,
+                        partials,
+                        db,
+                        stitcher_config,
+                        &cancellation_flag,
+                    )
                     .map_or_else(|e| self.from_error(e), |v| Ok(v))
                 {
                     Ok(_) => result.add_success(),

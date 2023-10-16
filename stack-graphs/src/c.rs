@@ -32,6 +32,7 @@ use crate::stitching::Database;
 use crate::stitching::DatabaseCandidates;
 use crate::stitching::ForwardPartialPathStitcher;
 use crate::stitching::GraphEdgeCandidates;
+use crate::stitching::StitcherConfig;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -1173,6 +1174,7 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     partials: *mut sg_partial_path_arena,
     file: sg_file_handle,
     partial_path_list: *mut sg_partial_path_list,
+    config: sg_stitcher_config,
     cancellation_flag: *const usize,
 ) -> sg_result {
     let graph = unsafe { &(*graph).inner };
@@ -1185,6 +1187,7 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
         graph,
         partials,
         file,
+        &config.into(),
         &AtomicUsizeCancellationFlag(cancellation_flag),
         |_graph, partials, path| {
             let mut path = path.clone();
@@ -1210,6 +1213,7 @@ pub extern "C" fn sg_partial_path_arena_find_all_complete_paths(
     starting_node_count: usize,
     starting_nodes: *const sg_node_handle,
     path_list: *mut sg_partial_path_list,
+    config: sg_stitcher_config,
     cancellation_flag: *const usize,
 ) -> sg_result {
     let graph = unsafe { &(*graph).inner };
@@ -1221,6 +1225,7 @@ pub extern "C" fn sg_partial_path_arena_find_all_complete_paths(
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
         &mut GraphEdgeCandidates::new(graph, partials, None),
         starting_nodes.iter().copied().map(sg_node_handle::into),
+        &config.into(),
         &AtomicUsizeCancellationFlag(cancellation_flag),
         |graph, _partials, path| {
             if path.is_complete(graph) {
@@ -1391,6 +1396,19 @@ pub struct sg_forward_partial_path_stitcher {
     pub is_complete: bool,
 }
 
+// Configuration for partial path stitchers.
+#[repr(C)]
+pub struct sg_stitcher_config {
+    /// Enables similar path detection during stiching.
+    pub detect_similar_paths: bool,
+}
+
+impl Into<StitcherConfig> for sg_stitcher_config {
+    fn into(self) -> StitcherConfig {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
 // This is the Rust equivalent of a common C trick, where you have two versions of a struct — a
 // publicly visible one and a private one containing internal implementation details.  In our case,
 // `sg_forward_partial_path_stitcher` is the public struct, and
@@ -1443,6 +1461,7 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     partials: *mut sg_partial_path_arena,
     count: usize,
     starting_nodes: *const sg_node_handle,
+    config: sg_stitcher_config,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
@@ -1457,7 +1476,12 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
             p
         })
         .collect::<Vec<_>>();
-    let stitcher = ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
+    let stitcher = ForwardPartialPathStitcher::from_partial_paths(
+        graph,
+        partials,
+        initial_paths,
+        &config.into(),
+    );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,
     ))) as *mut _
@@ -1471,6 +1495,7 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
     partials: *mut sg_partial_path_arena,
     count: usize,
     initial_partial_paths: *const sg_partial_path,
+    config: sg_stitcher_config,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
@@ -1480,6 +1505,7 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
         graph,
         partials,
         initial_partial_paths.to_vec(),
+        &config.into(),
     );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,

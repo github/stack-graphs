@@ -15,6 +15,7 @@ use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -33,6 +34,7 @@ fn check_node_partial_paths(
         graph,
         &mut partials,
         file,
+        &StitcherConfig::default(),
         &NoCancellation,
         |graph, partials, path| {
             db.add_partial_path(graph, partials, path.clone());

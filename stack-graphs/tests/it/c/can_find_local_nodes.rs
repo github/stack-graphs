@@ -22,6 +22,7 @@ use stack_graphs::c::sg_partial_path_list_free;
 use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_stack_graph_nodes;
+use stack_graphs::c::sg_stitcher_config;
 use stack_graphs::graph::Node;
 
 use crate::c::test_graph::TestGraph;
@@ -33,11 +34,15 @@ fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str
 
     let partials = sg_partial_path_arena_new();
     let path_list = sg_partial_path_list_new();
+    let config = sg_stitcher_config {
+        detect_similar_paths: false,
+    };
     sg_partial_path_arena_find_partial_paths_in_file(
         graph.graph,
         partials,
         file.as_u32(),
         path_list,
+        config,
         std::ptr::null(),
     );
 

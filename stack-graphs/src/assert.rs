@@ -20,6 +20,7 @@ use crate::partial::PartialPaths;
 use crate::stitching::Database;
 use crate::stitching::DatabaseCandidates;
 use crate::stitching::ForwardPartialPathStitcher;
+use crate::stitching::StitcherConfig;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -149,12 +150,19 @@ impl Assertion {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
+        stitcher_config: &StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
         match self {
-            Self::Defined { source, targets } => {
-                self.run_defined(graph, partials, db, source, targets, cancellation_flag)
-            }
+            Self::Defined { source, targets } => self.run_defined(
+                graph,
+                partials,
+                db,
+                source,
+                targets,
+                stitcher_config,
+                cancellation_flag,
+            ),
             Self::Defines { source, symbols } => self.run_defines(graph, source, symbols),
             Self::Refers { source, symbols } => self.run_refers(graph, source, symbols),
         }
@@ -167,6 +175,7 @@ impl Assertion {
         db: &mut Database,
         source: &AssertionSource,
         expected_targets: &Vec<AssertionTarget>,
+        stitcher_config: &StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
         let references = source.iter_references(graph).collect::<Vec<_>>();
@@ -182,6 +191,7 @@ impl Assertion {
             ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 &mut DatabaseCandidates::new(graph, partials, db),
                 vec![*reference],
+                stitcher_config,
                 cancellation_flag,
                 |_, _, p| {
                     reference_paths.push(p.clone());

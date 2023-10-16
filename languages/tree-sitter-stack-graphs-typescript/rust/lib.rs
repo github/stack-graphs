@@ -8,6 +8,7 @@
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::loader::LoadError;
+use tree_sitter_stack_graphs::loader::StitcherConfig;
 use tree_sitter_stack_graphs::CancellationFlag;
 
 use crate::npm_package::NpmPackageAnalyzer;
@@ -56,6 +57,7 @@ pub fn try_language_configuration(
         FileAnalyzers::new()
             .add("tsconfig.json".to_string(), TsConfigAnalyzer {})
             .add("package.json".to_string(), NpmPackageAnalyzer {}),
+        StitcherConfig::default(),
         cancellation_flag,
     )
 }

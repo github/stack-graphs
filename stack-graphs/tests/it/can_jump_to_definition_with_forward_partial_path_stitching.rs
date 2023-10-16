@@ -13,6 +13,7 @@ use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -27,6 +28,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
             graph,
             &mut partials,
             file,
+            &StitcherConfig::default(),
             &NoCancellation,
             |graph, partials, path| {
                 db.add_partial_path(graph, partials, path.clone());
@@ -42,6 +44,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
         &mut DatabaseCandidates::new(graph, &mut partials, &mut db),
         references,
+        &StitcherConfig::default(),
         &NoCancellation,
         |_, _, p| {
             complete_partial_paths.push(p.clone());
