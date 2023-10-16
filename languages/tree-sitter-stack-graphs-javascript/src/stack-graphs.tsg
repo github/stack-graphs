@@ -2535,10 +2535,18 @@ inherit .return_or_yield
 
 }
 
-(pair key:(string)@key) {
+(pair
+  key:(string)@key
+    value:(_)@value)@pair
+{
 
   node @key.pop
   attr (@key.pop) pop_symbol = (replace (source-text @key) "\"" "")
+
+    ; scopes flow into the value, then back to the pair
+    edge @value.before_scope -> @pair.before_scope
+    edge @pair.after_scope -> @value.after_scope
+
 }
 
 (pair
