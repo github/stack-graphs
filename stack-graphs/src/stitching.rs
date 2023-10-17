@@ -775,7 +775,7 @@ impl<H> ForwardPartialPathStitcher<H> {
             initial_paths: next_iteration.0.len(),
             next_iteration,
             appended_paths,
-            similar_path_detector: None,
+            similar_path_detector: Some(SimilarPathDetector::new()),
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -807,13 +807,13 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 
     /// Sets whether similar path detection should be enabled during path stitching. Paths are similar
     /// if start and end node, and pre- and postconditions are the same. The presence of similar paths
-    /// can lead to exponential blow up during path stitching. Similar path detection is disabled by
-    /// default because of the associated preformance cost.
+    /// can lead to exponential blow up during path stitching. Similar path detection is enabled by
+    /// default.
     pub fn set_similar_path_detection(&mut self, detect_similar_paths: bool) {
-        if detect_similar_paths {
-            self.similar_path_detector = Some(SimilarPathDetector::new());
-        } else {
+        if !detect_similar_paths {
             self.similar_path_detector = None;
+        } else if self.similar_path_detector.is_none() {
+            self.similar_path_detector = Some(SimilarPathDetector::new());
         }
     }
 
