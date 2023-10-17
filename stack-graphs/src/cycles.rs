@@ -31,6 +31,7 @@
 
 use enumset::EnumSet;
 use smallvec::SmallVec;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::arena::Arena;
@@ -97,22 +98,23 @@ where
     /// Determines whether we should process this path during the path-finding algorithm.  If we have seen
     /// a path with the same start and end node, and the same pre- and postcondition, then we return false.
     /// Otherwise, we return true.
-    pub fn has_similar_path<Eq>(
+    pub fn has_similar_path<Cmp>(
         &mut self,
         _graph: &StackGraph,
         arena: &mut P::Arena,
         path: &P,
-        eq: Eq,
+        cmp: Cmp,
     ) -> bool
     where
-        Eq: Fn(&mut P::Arena, &P, &P) -> bool,
+        Cmp: Fn(&mut P::Arena, &P, &P) -> Option<Ordering>,
     {
         let key = path.key();
 
         let possibly_similar_paths = self.paths.entry(key).or_default();
         for other_path in possibly_similar_paths.iter() {
-            if eq(arena, path, other_path) {
-                return true;
+            match cmp(arena, path, other_path) {
+                Some(ord) if ord != Ordering::Less => return true,
+                _ => continue,
             }
         }
 

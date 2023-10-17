@@ -35,6 +35,7 @@
 //! [`Database`]: struct.Database.html
 //! [`PathStitcher`]: struct.PathStitcher.html
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 #[cfg(feature = "copious-debugging")]
@@ -897,7 +898,19 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                         graph,
                         partials,
                         &new_partial_path,
-                        |ps, left, right| left.equals(ps, right),
+                        |ps, left, right| {
+                            if !left.equals(ps, right) {
+                                None
+                            } else {
+                                if left.shadows(ps, right) {
+                                    Some(Ordering::Less)
+                                } else if right.shadows(ps, left) {
+                                    Some(Ordering::Greater)
+                                } else {
+                                    Some(Ordering::Equal)
+                                }
+                            }
+                        },
                     ) {
                         copious_debugging!("        is rejected: too many similar");
                         continue;
