@@ -1,5 +1,4 @@
 # Rust build stuff
-Cargo.lock
 /target/
 */target/
 
@@ -7,3 +6,5 @@ Cargo.lock
 /.crates.toml
 /.crates2.json
 /bin/
+
+.direnv
