@@ -687,8 +687,25 @@ if none @is_type {
 (export_statement
   "*" source:(_)@name
 )@export_stmt {
-  ; export everything from source module
-  edge @export_stmt.exports -> @name.mod_ref
+  node expr_pop
+  node expr_push
+  attr (expr_pop) pop_symbol = "%E"
+  attr (expr_push) push_symbol = "%E"
+  edge expr_pop -> expr_push
+
+  node type_pop
+  node type_push
+  attr (type_pop) pop_symbol = "%E"
+  attr (type_push) push_symbol = "%E"
+  edge type_pop -> type_push
+
+  ; export all expressions from source module
+  edge @export_stmt.exports -> expr_pop
+  edge expr_push -> @name.mod_ref
+
+  ; export all types from source module
+  edge @export_stmt.exports -> type_pop
+  edge type_push -> @name.mod_ref
 }
 
 ; export CLAUSE from MODULE
