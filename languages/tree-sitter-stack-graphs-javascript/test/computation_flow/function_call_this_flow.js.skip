@@ -1,0 +1,16 @@
+function foo() {
+    return this;
+}
+
+foo().x;
+//    ^ defined:
+
+foo.apply({
+    x: 1
+}).x
+// ^ defined: 9
+
+foo.call({
+    x: 1
+}).x
+// ^ defined: 14

@@ -1,0 +1,12 @@
+class Foo {
+    bar;
+    baz() {
+
+    }
+    quux() {
+        this.bar;
+        //   ^ defined: 2
+        this.baz;
+        //   ^ defined: 3
+    }
+}

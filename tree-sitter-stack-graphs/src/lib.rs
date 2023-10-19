@@ -393,7 +393,7 @@ static SCOPE_TYPE: &'static str = "scope";
 
 // Node attribute names
 static DEBUG_ATTR_PREFIX: &'static str = "debug_";
-static DEFINIENS_NODE: &'static str = "definiens_node";
+static DEFINIENS_NODE_ATTR: &'static str = "definiens_node";
 static EMPTY_SOURCE_SPAN_ATTR: &'static str = "empty_source_span";
 static IS_DEFINITION_ATTR: &'static str = "is_definition";
 static IS_ENDPOINT_ATTR: &'static str = "is_endpoint";
@@ -402,14 +402,28 @@ static IS_REFERENCE_ATTR: &'static str = "is_reference";
 static SCOPE_ATTR: &'static str = "scope";
 static SOURCE_NODE_ATTR: &'static str = "source_node";
 static SYMBOL_ATTR: &'static str = "symbol";
-static SYNTAX_TYPE: &'static str = "syntax_type";
+static SYNTAX_TYPE_ATTR: &'static str = "syntax_type";
 static TYPE_ATTR: &'static str = "type";
 
 // Expected attributes per node type
-static POP_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
-    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR, DEFINIENS_NODE]));
-static POP_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
-    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR, DEFINIENS_NODE]));
+static POP_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    HashSet::from([
+        TYPE_ATTR,
+        SYMBOL_ATTR,
+        IS_DEFINITION_ATTR,
+        DEFINIENS_NODE_ATTR,
+        SYNTAX_TYPE_ATTR,
+    ])
+});
+static POP_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    HashSet::from([
+        TYPE_ATTR,
+        SYMBOL_ATTR,
+        IS_DEFINITION_ATTR,
+        DEFINIENS_NODE_ATTR,
+        SYNTAX_TYPE_ATTR,
+    ])
+});
 static PUSH_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
     Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, SCOPE_ATTR, IS_REFERENCE_ATTR]));
 static PUSH_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
@@ -1136,27 +1150,30 @@ impl<'a> Builder<'a> {
         node_handle: Handle<Node>,
     ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
+
         if let Some(source_node) = node.attributes.get(SOURCE_NODE_ATTR) {
             let source_node = &self.graph[source_node.as_syntax_node_ref()?];
-            let mut span = self.span_calculator.for_node(source_node);
+            let mut source_span = self.span_calculator.for_node(source_node);
             if match node.attributes.get(EMPTY_SOURCE_SPAN_ATTR) {
                 Some(empty_source_span) => empty_source_span.as_boolean()?,
                 None => false,
             } {
-                span.end = span.start.clone();
+                source_span.end = source_span.start.clone();
             }
-            let containing_line = &self.source[span.start.containing_line.clone()];
+            let containing_line = &self.source[source_span.start.containing_line.clone()];
             let containing_line = self.stack_graph.add_string(containing_line);
             let source_info = self.stack_graph.source_info_mut(node_handle);
-            source_info.span = span;
+            source_info.span = source_span;
             source_info.containing_line = ControlledOption::some(containing_line);
-        };
-        if let Some(syntax_type) = node.attributes.get(SYNTAX_TYPE) {
-            let syntax_type = syntax_type.as_str()?;
-            let interned_string = self.stack_graph.add_string(syntax_type);
-            let source_info = self.stack_graph.source_info_mut(node_handle);
-            source_info.syntax_type = interned_string.into();
         }
+
+        if let Some(syntax_type) = node.attributes.get(SYNTAX_TYPE_ATTR) {
+            let syntax_type = syntax_type.as_str()?;
+            let syntax_type = self.stack_graph.add_string(syntax_type);
+            let source_info = self.stack_graph.source_info_mut(node_handle);
+            source_info.syntax_type = syntax_type.into();
+        }
+
         Ok(())
     }
 
@@ -1166,14 +1183,14 @@ impl<'a> Builder<'a> {
         node_handle: Handle<Node>,
     ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
-        let definiens_node = match node.attributes.get(DEFINIENS_NODE) {
+        let definiens_node = match node.attributes.get(DEFINIENS_NODE_ATTR) {
             Some(Value::Null) => return Ok(()),
             Some(definiens_node) => &self.graph[definiens_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };
-        let span = self.span_calculator.for_node(definiens_node);
+        let definiens_span = self.span_calculator.for_node(definiens_node);
         let source_info = self.stack_graph.source_info_mut(node_handle);
-        source_info.definiens_span = span;
+        source_info.definiens_span = definiens_span;
         Ok(())
     }
 
