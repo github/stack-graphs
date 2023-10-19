@@ -249,7 +249,10 @@ inherit .builtins_string
 inherit .builtins_undefined
 inherit .class_value
 inherit .constructor
+inherit .export_statement
 inherit .exports
+inherit .hoist_point
+inherit .import_statement
 inherit .pkg_pop
 inherit .pkg_push
 inherit .return_or_yield
@@ -290,6 +293,7 @@ inherit .return_or_yield
     node prog_pkg_push_guard
     node prog_legacy_qname_guard
     node @prog.exports
+    node @prog.hoist_point
     node @prog.pkg_pop
     node @prog.pkg_push
 
@@ -320,6 +324,7 @@ inherit .return_or_yield
     }
 
     edge @prog.before_scope -> @prog.pkg_push
+    edge @prog.before_scope -> @prog.hoist_point
 
     attr (prog_module_scope) pop_symbol = "GUARD:MODULE"
     edge @prog.pkg_pop -> prog_module_pop_start
@@ -460,6 +465,10 @@ inherit .return_or_yield
 
 ;; #### Export
 
+(export_statement)@export_stmt {
+  let @export_stmt.export_statement = @export_stmt
+}
+
 ; exports of just names
 ; eg
 ;  export { foo, bar as baz };
@@ -486,8 +495,58 @@ inherit .return_or_yield
 
 (export_statement
   (declaration)@decl)@export_stmt {
+
   edge @decl.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @decl.after_scope
+
+}
+
+(export_statement "default"
+  (declaration)@decl)@export_stmt {
+
+  node pop_guard_default
+  attr (pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @decl, definiens_node = @export_stmt.export_statement
+  edge @export_stmt.exports -> pop_guard_default
+  ;; edge export_stmt_pop_guard_default -> @decl.value ;; FIXME declarations have no .value
+
+  ; !!!! HACK These detour nodes are a massive hack to allow find all refs land on defs
+  ; for the default values of modules that have useful names like the module name or
+  ; package name
+
+  node detour_push
+  node detour_pop
+
+  scan FILE_PATH {
+
+    "^(.+/)?([^/]+)/index\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (detour_pop) symbol_definition = module_name, source_node = @decl, definiens_node = @export_stmt
+      edge pop_guard_default -> detour_push
+      edge detour_push -> detour_pop
+      ; edge detour_pop -> @decl.value ;; FIXME declarations have no .value
+    }
+
+    "^(.+/)?([^/]+)\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (detour_pop) symbol_definition = module_name, source_node = @decl, definiens_node = @export_stmt
+      edge pop_guard_default -> detour_push
+      edge detour_push -> detour_pop
+      ; edge detour_pop -> @decl.value ;; FIXME declarations have no .value
+    }
+
+  }
+
+  node default_detour_push
+  node default_detour_pop
+
+  attr (default_detour_push) push_symbol = "default"
+  attr (default_detour_pop) symbol_definition = "default", source_node = @decl, definiens_node = @decl
+  edge pop_guard_default -> default_detour_push
+  edge default_detour_push -> default_detour_pop
+  ; edge default_detour_pop -> @decl.value ;; FIXME declarations have no .value
+
 }
 
 (export_statement
@@ -502,6 +561,7 @@ inherit .return_or_yield
   ; TODO this doesn't support destructuring exports
 
   edge @export_stmt.exports -> @name.pop
+
 }
 
 ; TODO
@@ -532,10 +592,10 @@ inherit .return_or_yield
   node @export_clause.source
 }
 
-; LATER-TODO tree sitter doesn't yet support empty switch bodies
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(export_clause)@export_clause {
-  edge @export_clause.after_scope -> @export_clause.before_scope
+(export_clause (_)* @clauses)@export_clause {
+  if (is-empty @clauses) {
+    edge @export_clause.after_scope -> @export_clause.before_scope
+  }
 }
 
 (export_clause
@@ -566,92 +626,105 @@ inherit .return_or_yield
   edge @export_clause.after_scope -> @last_export.after_scope
 }
 
+;; Export specifiers have several cases:
+;;  - the reference into the source module can be default or named
+;;  - the definition from this module can be default or named.
+;;
+;; We model this using seperate sets of rules, two rules for the reference,
+;; and two rules for the definition. The `.def_to_ref` node is used to connect
+;; the two.
+
 (export_specifier)@export_specifier {
 
   node @export_specifier.after_scope
   node @export_specifier.before_scope
+  node @export_specifier.def_to_ref
   node @export_specifier.source
 
   edge @export_specifier.after_scope -> @export_specifier.before_scope
 
 }
 
+;; Export specifier reference rules
+
+; export { default } from ...
+; export { default as ... } from ...
 (
   (export_specifier
     name:(_)@name
-    !alias)@export_specifier
+  )@export_specifier
 
   (#not-eq? @name "default")
 ) {
 
-  node name_pop
   node name_push
-
-  attr (name_pop) node_definition = @name
   attr (name_push) node_reference = @name
-  edge name_pop -> name_push
+  edge @export_specifier.def_to_ref -> name_push
   edge name_push -> @export_specifier.source
 
-  edge @export_specifier.exports -> name_pop
 }
 
+; export { foo } from ...
+; export { foo as ... } from ...
 (
   (export_specifier
     name:(_)@name
-    alias:(_)@alias)@export_specifier
-
-  (#not-eq? @alias "default")
-
-) {
-
-  node alias_pop
-  node name_push
-
-  attr (alias_pop) node_definition = @alias
-  attr (name_push) node_reference = @name
-  edge alias_pop -> name_push
-  edge name_push -> @export_specifier.source
-
-  edge @export_specifier.exports -> alias_pop
-}
-
-(
-  (export_specifier
-    name:(_)@name
-    !alias)@export_specifier
+  )@export_specifier
 
   (#eq? @name "default")
-
 ) {
 
-  node export_specifier_pop_guard_default
-  node export_specifier_push_guard_default
+  node push_guard_default
 
-  attr (export_specifier_pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @name
-  attr (export_specifier_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
-  edge @export_specifier.exports -> export_specifier_pop_guard_default
-  edge export_specifier_pop_guard_default -> export_specifier_push_guard_default
-  edge export_specifier_push_guard_default -> @export_specifier.source
+  attr (push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
+  edge @export_specifier.def_to_ref -> push_guard_default
+  edge push_guard_default -> @export_specifier.source
 
 }
 
-(
-  (export_specifier
-    name:(_)@name
-    alias:(_)@alias)@export_specifier
+;; Export specifier definition rules
 
-  (#eq? @alias "default")
+; export { foo } from ...
+; export { ... as foo } from ...
+( [
+    (export_specifier
+      name:(_)@alias
+      !alias)@export_specifier
+    (export_specifier
+      name:(_)
+      alias:(_)@alias)@export_specifier
+  ]
 
+  (#not-eq? @alias "default")
 ) {
 
-  node export_specifier_guard_default
-  node name_push
+  node name_pop
 
-  attr (name_push) push_node = @name
-  attr (export_specifier_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @alias
-  edge name_push -> @export_specifier.source
-  edge export_specifier_guard_default -> name_push
-  edge @export_specifier.exports -> export_specifier_guard_default
+  attr (name_pop) node_definition = @alias, definiens_node = @export_specifier.export_statement
+  edge @export_specifier.exports -> name_pop
+  edge name_pop -> @export_specifier.def_to_ref
+
+}
+
+; export { default } from ...
+; export { ... as default } from ...
+( [
+    (export_specifier
+      name:(_)@alias
+      !alias)@export_specifier
+    (export_specifier
+      name:(_)
+      alias:(_)@alias)@export_specifier
+  ]
+
+  (#eq? @alias "default")
+) {
+
+  node pop_guard_default
+
+  attr (pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @alias, definiens_node = @export_specifier.export_statement
+  edge @export_specifier.exports -> pop_guard_default
+  edge pop_guard_default -> @export_specifier.def_to_ref
 
 }
 
@@ -661,13 +734,13 @@ inherit .return_or_yield
 (export_statement
   value:(_)@default_expr)@export_stmt {
 
-  node export_stmt_default_guard
+  node pop_default_guard
 
-  attr (export_stmt_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @export_stmt
+  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @export_stmt, definiens_node = @export_stmt.export_statement
   edge @default_expr.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @default_expr.after_scope
-  edge @export_stmt.exports -> export_stmt_default_guard
-  edge export_stmt_default_guard -> @default_expr.value
+  edge @export_stmt.exports -> pop_default_guard
+  edge pop_default_guard -> @default_expr.value
 
 }
 
@@ -696,7 +769,7 @@ inherit .return_or_yield
 
   edge @export_statement.after_scope -> @export_statement.before_scope
 
-  attr (alias_pop) node_definition = @alias
+  attr (alias_pop) node_definition = @alias, definiens_node = @export_statement.export_statement
   attr (alias_pop_dot) pop_symbol = "GUARD:MEMBER"
   edge @export_statement.exports -> alias_pop
   edge alias_pop -> alias_pop_dot
@@ -739,6 +812,10 @@ inherit .return_or_yield
 ;;  - ES6: https://nodejs.org/api/esm.html, https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import
 ;;  - CommonJS: https://nodejs.org/api/modules.html
 
+(import_statement)@import_stmt {
+  let @import_stmt.import_statement = @import_stmt
+}
+
 [
   (import_statement source:(_)@source)
   (export_statement source:(_)@source)
@@ -780,7 +857,6 @@ inherit .return_or_yield
       }
       attr (push_start) is_reference, source_node = @source
 
-      edge @source.exports -> source_push_guard_exports
       edge source_push_guard_exports -> push_start
       edge source_push_end -> @source.pkg_push
     }
@@ -802,20 +878,20 @@ inherit .return_or_yield
         }
       }
 
-      edge @source.exports -> source_push_guard_exports
       edge source_push_guard_exports -> push_start
       edge source_push_end -> source_push_guard_pkg
       attr (source_push_guard_pkg) push_symbol = "GUARD:PKG"
       edge source_push_guard_pkg -> @source.pkg_push
     }
   }
+
+  edge @source.exports -> source_push_guard_exports
+
 }
 
 ; import "foo.js";
 ; only used for side effects not imports.
-; HACK this is not a good solution, but we can't do better with the
-; current tree sitter grammar
-(import_statement)@import_stmt {
+(import_statement . source:(_))@import_stmt {
   edge @import_stmt.after_scope -> @import_stmt.before_scope
 }
 
@@ -844,7 +920,7 @@ inherit .return_or_yield
 
   edge @namespace_import.after_scope -> @namespace_import.before_scope
 
-  attr (imported_as_pop) node_definition = @imported_as
+  attr (imported_as_pop) node_definition = @imported_as, definiens_node = @namespace_import.import_statement
   attr (imported_as_pop_dot) pop_symbol = "GUARD:MEMBER"
   edge imported_as_pop -> imported_as_pop_dot
   edge imported_as_pop_dot -> @namespace_import.source
@@ -862,8 +938,10 @@ inherit .return_or_yield
   (import_clause)@import_clause
   source:(_)@source)@import_stmt {
 
+  edge @import_stmt.after_scope -> @import_stmt.before_scope
+
   edge @import_clause.before_scope -> @import_stmt.before_scope
-  edge @import_stmt.after_scope -> @import_clause.after_scope
+  edge @import_stmt.hoist_point -> @import_clause.after_scope
 
   edge @import_clause.source -> @source.exports
 
@@ -884,10 +962,10 @@ inherit .return_or_yield
   node @named_imports.source
 }
 
-; LATER-TODO tree sitter doesn't yet support empty named imports
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(named_imports)@named_imports {
-  edge @named_imports.after_scope -> @named_imports.before_scope
+(named_imports (_)* @specs)@named_imports {
+  if (is-empty @specs) {
+    edge @named_imports.after_scope -> @named_imports.before_scope
+  }
 }
 
 (named_imports
@@ -918,55 +996,77 @@ inherit .return_or_yield
   edge @named_imports.after_scope -> @last_import.after_scope
 }
 
+;; Import specifiers have several cases:
+;;  - the reference into the source module can be default or named
+;;  - the definition from this module can be default or named.
+;; The case where the definition is default instead of named is invalid.
+;;
+;; We model this using seperate sets of rules, two rules for the reference,
+;; and one rules for the definition. The `.def_to_ref` node is used to connect
+;; the two.
+
 (import_specifier)@import_specifier {
   node @import_specifier.after_scope
   node @import_specifier.before_scope
+  node @import_specifier.def_to_ref
   node @import_specifier.source
+
+  edge @import_specifier.after_scope -> @import_specifier.before_scope
+}
+
+;; Import specifier reference rules
+
+(
+  (import_specifier
+    name:(_)@name
+  )@import_specifier
+
+  (#not-eq? @name "default")
+) {
+
+  node name_push
+
+  attr (name_push) node_reference = @name
+  edge name_push -> @import_specifier.source
+  edge @import_specifier.def_to_ref -> name_push
+
 }
 
 (
-
   (import_specifier
     name:(_)@name
-    !alias)@import_specifier
+  )@import_specifier
 
-  (#not-eq? @name "default")
+  (#eq? @name "default")
+) {
 
+  node push_guard_default
+
+  attr (push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @name
+  edge push_guard_default -> @import_specifier.source
+  edge @import_specifier.def_to_ref -> push_guard_default
+
+}
+
+;; Import specifier definition rules
+
+( [
+    (import_specifier
+      name:(_)@alias
+      !alias)@import_specifier
+    (import_specifier
+      name:(_)
+      alias:(_)@alias)@import_specifier
+  ]
+
+  (#not-eq? @alias "default")
 ) {
 
   node name_pop
-  node name_push
 
-  edge @import_specifier.after_scope -> @import_specifier.before_scope
-
-  attr (name_pop) node_definition = @name
-  attr (name_push) node_reference = @name
-  edge name_pop -> name_push
-  edge name_push -> @import_specifier.source
+  attr (name_pop) node_definition = @alias, definiens_node = @import_specifier.import_statement
+  edge name_pop -> @import_specifier.def_to_ref
   edge @import_specifier.after_scope -> name_pop
-
-}
-
-(
-
-  (import_specifier
-    name:(_)@name
-    alias:(_)@alias)@import_specifier
-
-  (#not-eq? @name "default")
-
-) {
-
-  node alias_pop
-  node name_push
-
-  edge @import_specifier.after_scope -> @import_specifier.before_scope
-
-  attr (alias_pop) node_definition = @alias
-  attr (name_push) node_reference = @name
-  edge alias_pop -> name_push
-  edge name_push -> @import_specifier.source
-  edge @import_specifier.after_scope -> alias_pop
 
 }
 
@@ -1011,7 +1111,7 @@ inherit .return_or_yield
 
   edge @import_clause.after_scope -> @import_clause.before_scope
 
-  attr (default_name_pop) node_definition = @default_name
+  attr (default_name_pop) node_definition = @default_name, definiens_node = @import_clause.import_statement
   attr (default_name_push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @default_name
   edge default_name_pop -> default_name_push_guard_default
   edge default_name_push_guard_default -> @import_clause.source
@@ -1175,7 +1275,7 @@ inherit .return_or_yield
 
   ; with an augmentation for the function
   attr (@name.pop) node_definition = @name
-  edge @fun_decl.after_scope -> @name.pop
+  edge @fun_decl.hoist_point -> @name.pop
   edge @name.pop -> fun_decl_function_value
 
   ; function values have drop nodes that handle closures, that points to the
@@ -1259,7 +1359,7 @@ inherit .return_or_yield
 
   ; with an augmentation for the function
   attr (@name.pop) node_definition = @name
-  edge @fun_decl.after_scope -> @name.pop
+  edge @fun_decl.hoist_point -> @name.pop
   edge @name.pop -> fun_decl_function_value
 
   ; function values have drop nodes that handle closures, that points to the
@@ -1357,12 +1457,15 @@ inherit .return_or_yield
 }
 
 
-; LATER-TODO tree sitter doesn't yet support empty switch bodies
-; THIS IS A HUGE HACK AND MUST BE FIXED
 (class_body)@class_body {
   node @class_body.after_scope
   node @class_body.before_scope
-  edge @class_body.after_scope -> @class_body.before_scope
+}
+
+(class_body (_)* @decls)@class_body {
+  if (is-empty @decls) {
+    edge @class_body.after_scope -> @class_body.before_scope
+  }
 }
 
 (class_body
@@ -1402,12 +1505,10 @@ inherit .return_or_yield
   (#eq? @name "constructor")
 ) {
   
-  node name_constructor_guard
-
   ; augmentation for the constructor
-  attr (name_constructor_guard) symbol_definition = "GUARD:CONSTRUCTOR", source_node = @name
-  edge @method_def.class_value -> name_constructor_guard
-  edge name_constructor_guard -> @method_def.constructor
+  attr (@name.pop) symbol_definition = "GUARD:CONSTRUCTOR", source_node = @name
+  edge @method_def.class_value -> @name.pop
+  edge @name.pop -> @method_def.constructor
   edge @method_def.constructor -> @method_def.method_value
 }
 
@@ -1526,6 +1627,19 @@ inherit .return_or_yield
 
 ;; #### Statement Block
 
+(statement_block)@statement_block {
+
+  node @statement_block.hoist_point
+  edge @statement_block.before_scope -> @statement_block.hoist_point
+
+}
+
+(statement_block (_)* @stmts)@statement_block {
+  if (is-empty @stmts) {
+    edge @statement_block.after_scope -> @statement_block.before_scope
+  }
+}
+
 ; statement block, first statement
 (statement_block
   .
@@ -1558,6 +1672,13 @@ inherit .return_or_yield
 
 ;; #### If
 
+(if_statement
+  consequence:(_)@consequence)@if_stmt {
+
+    let @if_stmt.hoist_point = @consequence.before_scope
+
+}
+
 (if_statement condition:(_)@condition)@if_stmt {
     ; scopes flow from the if statement to the condition
     edge @condition.before_scope -> @if_stmt.before_scope
@@ -1570,6 +1691,7 @@ inherit .return_or_yield
     ; scopes flow from the condition to the consequence, then to the if statement
     edge @consequence.before_scope -> @condition.after_scope
     edge @if_stmt.after_scope -> @consequence.after_scope
+
 }
 
 (if_statement
@@ -1579,6 +1701,13 @@ inherit .return_or_yield
     ; scopes flow from the condition to the alternative, then to the if statement
     edge @alternative.before_scope -> @condition.after_scope
     edge @if_stmt.after_scope -> @alternative.after_scope
+}
+
+(else_clause
+  (_)@inner)@else_clause {
+
+    let @else_clause.hoist_point = @inner.before_scope
+
 }
 
 (else_clause (_)@inner)@else_clause {
@@ -1604,12 +1733,18 @@ inherit .return_or_yield
     edge @switch_stmt.after_scope -> @body.after_scope
 }
 
-; LATER-TODO tree sitter doesn't yet support empty switch bodies
-; THIS IS A HUGE HACK AND MUST BE FIXED
 (switch_body)@switch_body {
   node @switch_body.after_scope
   node @switch_body.before_scope
-  edge @switch_body.after_scope -> @switch_body.before_scope
+  node @switch_body.hoist_point
+
+  edge @switch_body.before_scope -> @switch_body.hoist_point
+}
+
+(switch_body (_)* @choices)@switch_body {
+  if (is-empty @choices) {
+    edge @switch_body.after_scope -> @switch_body.before_scope
+  }
 }
 
 ; switch body, first choice
@@ -1645,10 +1780,10 @@ inherit .return_or_yield
   node @switch_case.before_scope
 }
 
-; LATER-TODO tree sitter doesnt yet support switch case's with no statements
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(switch_case)@switch_case {
+(switch_case (_)* @stmts)@switch_case {
+  if (is-empty @stmts) {
     edge @switch_case.after_scope -> @switch_case.before_scope
+  }
 }
 
 ; switch case, non-empty statements, first statement
@@ -1688,10 +1823,10 @@ inherit .return_or_yield
   node @switch_default.before_scope
 }
 
-; LATER-TODO tree sitter doesnt yet support empty defaults
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(switch_default)@switch_default {
-  edge @switch_default.after_scope -> @switch_default.before_scope
+(switch_default (_)* @defaults)@switch_default {
+  if (is-empty @defaults) {
+    edge @switch_default.after_scope -> @switch_default.before_scope
+  }
 }
 
 ; switch default, non-empty statements, first statement
@@ -1729,6 +1864,13 @@ inherit .return_or_yield
 ;; #### For
 
 (for_statement
+  body:(_)@body)@for_stmt {
+
+    let @for_stmt.hoist_point = @body.before_scope
+
+}
+
+(for_statement
   initializer:(_)@initializer
   condition:(_)@condition
   increment:(_)@increment
@@ -1746,11 +1888,19 @@ inherit .return_or_yield
 
     ; scopes also flow from condition out to statement
     edge @for_stmt.after_scope -> @condition.after_scope
+
 }
 
 
 
 ;; #### For In
+
+(for_in_statement
+  body:(_)@body)@for_in_stmt {
+
+    let @for_in_stmt.hoist_point = @body.before_scope
+
+}
 
 (for_in_statement
   left:(_)@_left
@@ -1782,6 +1932,13 @@ inherit .return_or_yield
 ;; #### While
 
 (while_statement
+  body:(_)@body)@while_stmt {
+
+    let @while_stmt.hoist_point = @body.before_scope
+
+}
+
+(while_statement
   condition:(_)@condition
   body:(_)@body)@while_stmt
 {
@@ -1793,11 +1950,19 @@ inherit .return_or_yield
 
     ; scopes also flow back into the condition
     edge @condition.before_scope -> @body.after_scope
+
 }
 
 
 
 ;; #### Do
+
+(do_statement
+  body:(_)@body)@do_stmt {
+
+    let @do_stmt.hoist_point = @body.before_scope
+
+}
 
 (do_statement
   body:(_)@body
@@ -1889,12 +2054,18 @@ inherit .return_or_yield
 
 ;; #### With
 
+(with_statement body:(_)@body)@with_stmt {
+
+  let @with_stmt.hoist_point = @body.before_scope
+
+}
+
 (with_statement
   object:(_)@object
   body:(_)@body)@with_stmt
 {
 
-  node with_stmt_push_dot
+    node with_stmt_push_dot
 
     ; scopes flow from the statement into the object then into the body then back out
     edge @object.before_scope -> @with_stmt.before_scope
@@ -1902,7 +2073,6 @@ inherit .return_or_yield
     edge @with_stmt.after_scope -> @body.after_scope
     edge @with_stmt.after_scope -> @with_stmt.before_scope
     attr (@with_stmt.after_scope -> @with_stmt.before_scope) precedence = 1
-
 
     attr (with_stmt_push_dot) push_symbol = "GUARD:MEMBER"
     edge with_stmt_push_dot -> @object.value
@@ -2067,6 +2237,7 @@ inherit .return_or_yield
   (update_expression)
   (new_expression)
   (yield_expression)
+  (spread_element)
 ]@expr {
   
   node @expr.after_scope
@@ -2104,10 +2275,10 @@ inherit .return_or_yield
 ;; #### Template Strings
 
 ; template_strings w/ no substitutions
-; LATER-TODO tree sitter queries don't let us find the absence of substitutions
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(template_string)@template_string {
-  edge @template_string.after_scope -> @template_string.before_scope
+(template_string (_)* @substs)@template_string {
+  if (is-empty @substs) {
+    edge @template_string.after_scope -> @template_string.before_scope
+  }
 }
 
 ; nonempty template string, value
@@ -2257,10 +2428,10 @@ inherit .return_or_yield
 }
 
 ; empty objects
-; LATER-TODO currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(object)@object_expr {
-  edge @object_expr.after_scope -> @object_expr.before_scope
+(object (_)* @entries)@object_expr {
+  if (is-empty @entries) {
+    edge @object_expr.after_scope -> @object_expr.before_scope
+  }
 }
 
 ; non-empty objects, scopes, first entry
@@ -2364,10 +2535,18 @@ inherit .return_or_yield
 
 }
 
-(pair key:(string)@key) {
+(pair
+  key:(string)@key
+    value:(_)@value)@pair
+{
 
   node @key.pop
   attr (@key.pop) pop_symbol = (replace (source-text @key) "\"" "")
+
+    ; scopes flow into the value, then back to the pair
+    edge @value.before_scope -> @pair.before_scope
+    edge @pair.after_scope -> @value.after_scope
+
 }
 
 (pair
@@ -2408,10 +2587,10 @@ inherit .return_or_yield
 }
 
 ; empty arrays
-; LATER-TODO currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(array)@array_expr {
-  edge @array_expr.after_scope -> @array_expr.before_scope
+(array (_)* @elems)@array_expr {
+  if (is-empty @elems) {
+    edge @array_expr.after_scope -> @array_expr.before_scope
+  }
 }
 
 ; nonempty arrays, first element
@@ -2454,14 +2633,15 @@ inherit .return_or_yield
 
 ;; #### Formal Parameters
 
-; LATER-TODO scope propagation through empty formal parameters
-; currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-
 (formal_parameters)@formal_params {
   node @formal_params.after_scope
   node @formal_params.before_scope
-  edge @formal_params.after_scope -> @formal_params.before_scope
+}
+
+(formal_parameters (_)* @params)@formal_params {
+  if (is-empty @params) {
+    edge @formal_params.after_scope -> @formal_params.before_scope
+  }
 }
 
 ; first parameter
@@ -2852,12 +3032,15 @@ inherit .return_or_yield
 
 ;; #### Arguments
 
-; LATER-TODO currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
 (arguments)@arguments {
   node @arguments.after_scope
   node @arguments.before_scope
-  edge @arguments.after_scope -> @arguments.before_scope
+}
+
+(arguments (_)* @args)@arguments {
+  if (is-empty @args) {
+    edge @arguments.after_scope -> @arguments.before_scope
+  }
 }
 
 (arguments
@@ -2919,18 +3102,17 @@ inherit .return_or_yield
   node subscript_expr_push_dot
 
   ; scopes flow left to right
-    edge @object.before_scope -> @subscript_expr.before_scope
+  edge @object.before_scope -> @subscript_expr.before_scope
   edge @index.before_scope -> @object.after_scope
-    edge @subscript_expr.after_scope -> @index.after_scope
+  edge @subscript_expr.after_scope -> @index.after_scope
 
   ; value is a subscript lookup, ie a push then push dot
-    attr (subscript_expr_push_dot) push_symbol = "GUARD:MEMBER"
-    edge subscript_expr_push_dot -> @object.value
+  attr (subscript_expr_push_dot) push_symbol = "GUARD:MEMBER"
+  edge subscript_expr_push_dot -> @object.value
 
   ; this is done differently depending on what the index is
-    ; attr @index.push "push" = @index, "reference"
-    edge @subscript_expr.value -> @subscript_expr.index_push
-    edge @subscript_expr.index_push -> subscript_expr_push_dot
+  edge @subscript_expr.value -> @subscript_expr.index_push
+  edge @subscript_expr.index_push -> subscript_expr_push_dot
 
 }
 
@@ -2939,7 +3121,8 @@ inherit .return_or_yield
   index: (string)@index)@subscript_expr
 {
 
-    attr (@subscript_expr.index_push) push_symbol = (replace (source-text @index) "[\"\']" "")
+    attr (@subscript_expr.index_push) symbol_reference = (replace (source-text @index) "[\"\']" ""), source_node = @index
+
 }
 
 (subscript_expression
@@ -3088,22 +3271,39 @@ inherit .return_or_yield
   ; scopes flow into the RHS then back out to the whole expr,
   ; augmented (in subsequent rules) by the LHS
   edge @right.before_scope -> @assignment_expr.before_scope
-  
+
   ; value of the whole thing is value of the RHS
   edge @assignment_expr.value -> @right.value
 }
 
 ; augmentation of scope via identifiers
 (assignment_expression
-  left: (identifier)@left
+  left: (identifier)@name
   right: (_)@right)@assignment_expr {
 
-    node @assignment_expr.pop
+    node @name.pop
 
     ; augments the scope by adding a lookup edge, ie. a pop
-    attr (@assignment_expr.pop) node_definition = @left
-    edge @assignment_expr.after_scope -> @assignment_expr.pop
-    edge @assignment_expr.pop -> @right.value
+    attr (@name.pop) node_definition = @name
+    edge @assignment_expr.after_scope -> @name.pop
+    edge @name.pop -> @right.value
+
+    ; ensure the scope flows through the identifier
+    edge @assignment_expr.after_scope -> @right.after_scope
+
+}
+
+(assignment_expression
+  left: [
+    (member_expression)
+    (subscript_expression)
+  ]@left
+  right: (_)@right)@assignment_expr {
+
+    ; scope flows from LHS into pattern then back to assignment
+    edge @left.before_scope -> @assignment_expr.before_scope
+
+    ; ensure the scope flows through the identifier
     edge @assignment_expr.after_scope -> @right.after_scope
 
 }
@@ -3145,6 +3345,7 @@ inherit .return_or_yield
   ; scope flows from LHS into pattern then back to assignment
   edge @left.before_scope -> @right.after_scope
   edge @assignment_expr.after_scope -> @left.after_scope
+
 }
 
 
@@ -3566,8 +3767,10 @@ inherit .return_or_yield
 ; LATER-TODO scope propagation through empty object patterns
 ; currently unsupported by tree sitter queries
 ; THIS IS A HUGE HACK AND MUST BE FIXED
-(object_pattern)@object_pat {
-  edge @object_pat.after_scope -> @object_pat.before_scope
+(object_pattern (_)* @entries)@object_pat {
+  if (is-empty @entries) {
+    edge @object_pat.after_scope -> @object_pat.before_scope
+  }
 }
 
 ; scope propagation through object patterns, first entry
@@ -3688,11 +3891,10 @@ inherit .return_or_yield
 
 ;; #### Array Patterns
 
-; LATER-TODO scope propagation through empty array patterns
-; currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
-(array_pattern)@array_pat {
-  edge @array_pat.after_scope -> @array_pat.before_scope
+(array_pattern (_)* @pats)@array_pat {
+  if (is-empty @pats) {
+    edge @array_pat.after_scope -> @array_pat.before_scope
+  }
 }
 
 ; scope propagation through array patterns, first element
@@ -3835,26 +4037,6 @@ inherit .return_or_yield
 
 }
 
-;; ## ES6-style Imports
-
-;; ES6 modules can also be imported using an import function. In general,
-;; these look like `require(expr)`, but in practice the expression is a string
-;; constant, which is the only case we handle.
-
-(
-  (call_expression
-    function:(_)@_import
-    arguments:(arguments (string)@source))@call_expr
-  (#eq? @_import "import")
-) {
-
-  node call_expr_pop_dot
-
-  attr (call_expr_pop_dot) pop_symbol = "GUARD:MEMBER"
-  edge @call_expr.value -> call_expr_pop_dot
-  edge call_expr_pop_dot -> @source.exports
-}
-
 ;; ### CommonJS-style Exports
 
 ;; CommonJS introduced an export style for pre-ES6 JavaScript that permitted
@@ -3874,52 +4056,225 @@ inherit .return_or_yield
 
 (
   (assignment_expression
-    left: (member_expression
-      object:(identifier)@_exports
-      property:(_)@property)
+    left: [
+      ( ; exports.foo = ...
+        (member_expression
+          object:(_)@exports
+          property:(_)@property)
+        (#eq? @exports "exports")
+      )
+      ( ; module.exports.foo = ...
+        (member_expression
+          object:(member_expression
+            object:(_)@_module
+            property:(_)@exports)
+          property:(_)@property)
+        (#eq? @_module "module")
+        (#eq? @exports "exports")
+      )
+    ]
     right: (_)@right)@assignment_expr
-  (#eq? @_exports "exports")
+
 ) {
 
-  node property_pop
-  node property_pop_dot
-  attr (property_pop) node_definition = @property
-  attr (property_pop_dot) pop_symbol = "GUARD:MEMBER"
-  edge @assignment_expr.exports -> property_pop_dot
-  edge property_pop_dot -> property_pop
-  edge property_pop -> @right.value
+  node pop_default_guard
+  node pop_dot
+  node pop_name
+
+  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
+  edge @assignment_expr.exports -> pop_default_guard
+
+  attr (pop_dot) pop_symbol = "GUARD:MEMBER"
+  edge pop_default_guard -> pop_dot
+
+  attr (pop_name) node_definition = @property
+  attr (pop_name) definiens_node = @assignment_expr
+  edge pop_dot -> pop_name
+  edge pop_name -> @right.value
+
+  ;; For ES6 interoperability, expose members as named exports
+  edge @assignment_expr.exports -> pop_name
+
+  node detour_push
+  node detour_pop
+
+  scan FILE_PATH {
+
+    "^(.+/)?([^/]+)/index\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      edge pop_default_guard -> detour_push
+      edge detour_push -> detour_pop
+      edge detour_pop -> @right.value
+    }
+
+    "^(.+/)?([^/]+)\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      edge pop_default_guard -> detour_push
+      edge detour_push -> detour_pop
+      edge detour_pop -> @right.value
+    }
+
+  }
+
+  node default_detour_push
+  node default_detour_pop
+
+  attr (default_detour_push) push_symbol = "default"
+  attr (default_detour_pop) symbol_definition = "default", source_node = @assignment_expr, definiens_node = @assignment_expr
+  edge pop_default_guard -> default_detour_push
+  edge default_detour_push -> default_detour_pop
+  edge default_detour_pop -> @right.value
+
 }
 
 (
   (assignment_expression
     left: (member_expression
-      object:(identifier)@_module
-      property:(_)@_exports)
+      object:(_)@_module
+      property:(_)@exports)
     right: (_)@right)@assignment_expr
   (#eq? @_module "module")
-  (#eq? @_exports "exports")
+  (#eq? @exports "exports")
 ) {
 
-  edge @assignment_expr.exports -> @right.value
+  node pop_default_guard
+  node pop_dot
+
+  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
+  attr (pop_default_guard) definiens_node = @assignment_expr
+  edge @assignment_expr.exports -> pop_default_guard
+  edge pop_default_guard -> @right.value
+
+  ;; For ES6 interoperability, expose members as named exports
+  attr (pop_dot) pop_symbol = "GAURD:MEMBER"
+  edge @assignment_expr.exports -> pop_dot
+  edge pop_dot -> @right.value
+
+  node detour_push
+  node detour_pop
+
+  scan FILE_PATH {
+
+    "^(.+/)?([^/]+)/index\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      edge pop_default_guard -> detour_push
+      edge detour_push -> detour_pop
+      edge detour_pop -> @right.value
+    }
+
+    "^(.+/)?([^/]+)\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      edge pop_default_guard -> detour_push
+      edge detour_push -> detour_pop
+      edge detour_pop -> @right.value
+    }
+
+  }
+
+  node default_detour_push
+  node default_detour_pop
+
+  attr (default_detour_push) push_symbol = "default"
+  attr (default_detour_pop) symbol_definition = "default", source_node = @assignment_expr, definiens_node = @assignment_expr
+  edge pop_default_guard -> default_detour_push
+  edge default_detour_push -> default_detour_pop
+  edge default_detour_pop -> @right.value
+
 }
 
-;; ## CommonJS-style Imports
+;; ### CommonJS-style Imports
 
 ;; Similar to exports, CommonJS also defines a way to do imports. In general,
 ;; these look like `require(expr)`, but in practice the expression is a string
-;; constant, which is the only case we hand.
+;; constant, which is the only case we handle.
 
 (
   (call_expression
-    function:(_)@_require
+    function:(identifier)@_require
     arguments:(arguments (string)@source))@call_expr
   (#eq? @_require "require")
 ) {
-  edge @call_expr.value -> @source.exports
+
+  node default_guard_push
+
+  attr (default_guard_push) symbol_reference = "GUARD:DEFAULT", source_node = @source
+  edge @call_expr.value -> default_guard_push
+  edge default_guard_push -> @source.exports
+
 }
 
+;; ### Dynamic Imports
 
+;; Both ES6 and CommonJS modules can be imported using an import function.
+;; In general, these look like `import(expr)`, but in practice the expression
+;; is a string constant, which is the only case we handle.
+;;
+;; The return value of the import function is an object whose properties are
+;; the exports of the module. The default export is assigned to the `default`
+;; property.
+;;
+;; The import function is async and returns a promise. Since we do not support
+;; async functions and promises, we only support the case where the function
+;; is called as `await import(...)`.
 
+(
+  (await_expression
+    (call_expression
+      function:(_)@_import
+      arguments:(arguments (string)@source))
+  )@await_expr
+  (#eq? @_import "import")
+) {
+
+  node pop_dot
+  node pop_default
+  node push_guard_default
+
+  attr (pop_dot) pop_symbol = "GUARD:MEMBER"
+  edge @await_expr.value -> pop_dot
+  edge pop_dot -> @source.exports
+
+  attr (pop_default) pop_symbol = "default"
+  edge pop_dot -> pop_default
+
+  attr (push_guard_default) symbol_reference = "GUARD:DEFAULT", source_node = @source
+  edge pop_default -> push_guard_default
+  edge push_guard_default -> @source.exports
+
+}
+
+;; ### ES6 and CommonJS interoperability
+
+;; Nodes supports some interoperability between ES6 and CommonJS modules.
+;;
+;; A CommonJS module can be imported in an ES6 module:
+;;
+;;  - `import foo from "cjs_module"` binds `foo` to the value of `module.exports`.
+;;  - `import { foo } from "cjs_module"` binds `foo` to the value of `module.exports.foo`.
+;;  - `import("cjs_module")` returns (a promise to) an object with
+;;     - property `default` bound to the value of `module.exports`, and
+;;     - other properties bound to the value of those properties in `module.exports`
+;;       (e.g., `foo` binds `module.exports.foo`).
+;;
+;; A ES6 module can be import in an CommonJS module:
+;;
+;;  - `import("es6_module")` returns (a promise to) an object with
+;;    - property default bound to the value of `export default`, and
+;;    - other properties bound to named exports (e.g., `foo` binds `export { foo }`).
+;;  - `require("es6_module")` is not supported.
+;;
+;; References:
+;;
+;;  - https://nodejs.org/api/esm.html#interoperability-with-commonjs
+;;
 
 
 
@@ -4017,24 +4372,28 @@ inherit .return_or_yield
 ;; kinds of definitions.
 
 (assignment_expression
-  left: (identifier)@_left
+  left: (identifier)@left
   right: [
     (function)
     (generator_function)
     (arrow_function)
-  ]@right)@assignment_expr {
+    (class)
+  ])@assignment_expr {
 
-  attr (@assignment_expr.pop) definiens_node = @right
+  attr (@left.pop) definiens_node = @assignment_expr
 
 }
 
-(assignment_expression
-  left: (member_expression property:(_)@left)
-  right:  [
-    (function)
-    (generator_function)
-    (arrow_function)
-  ]@right)@assignment_expr {
+(
+  (assignment_expression
+    left: (member_expression
+      object:(identifier)@_object
+      property:(_)@left
+    )
+    right:  (_)@right)@assignment_expr
+  (#not-eq @_object "module")
+  (#not-eq @left "exports")
+) {
 
   node left_definiens_hook
   node left_ignore_guard
@@ -4046,29 +4405,74 @@ inherit .return_or_yield
   edge left_ignore_guard -> left_definiens_hook
 }
 
+(
+  (assignment_expression
+    left: (member_expression
+      object:(identifier)@_object
+      property:(_)@left
+    )
+    right: (_)@right)@assignment_expr
+  (#eq @_object "module")
+  (#eq @left "exports")
+) {
+
+  node left_definiens_hook
+  node left_ignore_guard
+
+  attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
+  attr (left_definiens_hook) node_definition = @left
+  attr (left_definiens_hook) definiens_node = @right
+  edge @assignment_expr.pkg_pop -> left_ignore_guard
+  edge left_ignore_guard -> left_definiens_hook
+
+}
+
 (variable_declaration
   (variable_declarator
-    name:(identifier)@name
-    value: [
-      (function)
-      (generator_function)
-      (arrow_function)
-    ]@initializer)) {
+    name:(identifier)@name))@decl {
 
-  attr (@name.pop) definiens_node = @initializer
+  attr (@name.pop) definiens_node = @decl
 
 }
 
 (lexical_declaration
   (variable_declarator
-    name:(identifier)@name
-    value: [
+    name:(identifier)@name))@decl {
+
+  attr (@name.pop) definiens_node = @decl
+
+}
+
+[
+  (variable_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: [
+        (function)
+        (generator_function)
+        (arrow_function)
+      ]))
+  (lexical_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: [
+        (function)
+        (generator_function)
+        (arrow_function)
+      ]))
+  (assignment_expression
+    left: [
+      (identifier)@name
+    ; (member_expression property:(_)@name) ; FIXME member expressions are references and have no .pop
+    ]
+    right: [
       (function)
       (generator_function)
       (arrow_function)
-    ]@initializer)) {
+    ])
+] {
 
-  attr (@name.pop) definiens_node = @initializer
+  attr (@name.pop) syntax_type = "function"
 
 }
 
@@ -4078,15 +4482,58 @@ inherit .return_or_yield
     (function)
     (generator_function)
     (arrow_function)
-  ]@value)@pair_expr {
+  ]) {
 
-  node name_definiens_hook
+  attr (@name.definiens_hook) syntax_type = "function"
+
+}
+
+
+[
+  (variable_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: (class)))
+  (lexical_declaration
+    (variable_declarator
+      name:(identifier)@name
+      value: (class)))
+  (assignment_expression
+    left: [
+      (identifier)@name
+    ; (member_expression property:(_)@name) ; FIXME member expressions are references and have no .pop
+    ]
+    right: (class))
+] {
+
+  attr (@name.pop) syntax_type = "class"
+
+}
+
+(pair
+  key: (_)@name
+  value: (class)) {
+
+  attr (@name.definiens_hook) syntax_type = "class"
+
+}
+
+(pair
+  key: (_)@name
+  value: [
+    (function)
+    (generator_function)
+    (arrow_function)
+    (class)
+  ])@pair_expr {
+
+  node @name.definiens_hook
   node name_ignore_guard
 
   attr (name_ignore_guard) pop_symbol = "GUARD:GANDALF"
-  attr (name_definiens_hook) node_definition = @name
-  attr (name_definiens_hook) definiens_node = @value
+  attr (@name.definiens_hook) node_definition = @name
+  attr (@name.definiens_hook) definiens_node = @pair_expr
   edge @pair_expr.pkg_pop -> name_ignore_guard
-  edge name_ignore_guard -> name_definiens_hook
+  edge name_ignore_guard -> @name.definiens_hook
 
 }

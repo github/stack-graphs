@@ -86,6 +86,10 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         //     [root] -> [pop "GUARD:PKG"] -> [pop PKG_NAME]* -> [push PKG_INTERNAL_NAME] -> [push "GUARD:PKG_INTERNAL"] -> [root]
         //
         if !npm_pkg.name.is_empty() {
+            // NOTE Because all modules expose their exports at the top-level, both paths created below are equivalent for
+            //      exports of the main module. This means multiple equivalent paths to those exports, which is bad for
+            //      performance. At the moment, we have no mechanism to prevent this from happening.
+
             // reach package internals via package name
             //
             //     [root] -> [pop "GUARD:PKG"] -> [pop pkg_name]* -> [push pkg_internal_name]
@@ -112,7 +116,9 @@ impl FileAnalyzer for NpmPackageAnalyzer {
                 "exports_guard_pop",
             );
             replace_edge(graph, pkg_name_pop, exports_guard_pop, 1);
-            let main = NormalizedRelativePath::from_str(&npm_pkg.main)
+            let main = Some(npm_pkg.main)
+                .filter(|main| !main.is_empty())
+                .and_then(|main| NormalizedRelativePath::from_str(&main))
                 .map(|p| p.into_path_buf())
                 .unwrap_or(PathBuf::from("index"))
                 .with_extension("");
