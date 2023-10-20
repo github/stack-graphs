@@ -1276,7 +1276,7 @@ if none @is_type {
   attr (@name.expr_def__ns) pop_symbol = "%E"
   edge @name.expr_def__ns -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "function"
 
   ; function type
   edge @name.expr_def -> @name.expr_def__typeof
@@ -1430,10 +1430,17 @@ if none @is_async {
   edge @class_decl.type_export -> @class_decl.generic_type
 }
 [
-  (abstract_class_declaration name:(_))
-  (class_declaration          name:(_))
+  (interface_declaration name:(_)@name)
+] {
+  attr (@name.type_def) syntax_type = "interface"
+}
+[
+  (abstract_class_declaration name:(_)@name)
+  (class_declaration          name:(_)@name)
 ; NOTE not for interface_declaration as body is already a type with an endpoint of needed
 ]@class_decl {
+  attr (@name.type_def) syntax_type = "class"
+
   ; mark type scope as endpoint
   attr (@class_decl.generic_inner_type) is_endpoint
 }
@@ -1449,7 +1456,7 @@ if none @is_async {
   attr (@name.expr_def__ns) pop_symbol = "%E"
   edge @name.expr_def__ns -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "class"
 
   ; type of expression is .static_type
   edge @name.expr_def -> @name.expr_def__typeof
@@ -2291,7 +2298,7 @@ if none @is_async {
   attr (@name.expr_def__ns) pop_symbol = "%E"
   edge @name.expr_def__ns -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "module"
 
   ; namespaces mimic objects with members to access exported expressions
   edge @name.expr_def -> @name.expr_def__typeof
@@ -2311,7 +2318,7 @@ if none @is_async {
   attr (@name.type_def__ns) pop_symbol = "%T"
   edge @name.type_def__ns -> @name.type_def
   ;
-  attr (@name.type_def) node_definition = @name
+  attr (@name.type_def) node_definition = @name, syntax_type = "module"
 
   ; namespaces mimic types with member types to access exported expressions
   edge @name.type_def -> @mod.type_member
@@ -2353,7 +2360,7 @@ if none @is_async {
   attr (@name.expr_def__ns) pop_symbol = "%E"
   edge @name.expr_def__ns -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "module"
 
   ; namespaces mimic objects with members to access exported expressions
   edge @name.expr_def -> @name.expr_def__typeof
@@ -2373,7 +2380,7 @@ if none @is_async {
   attr (@name.type_def__ns) pop_symbol = "%T"
   edge @name.type_def__ns -> @name.type_def
   ;
-  attr (@name.type_def) node_definition = @name
+  attr (@name.type_def) node_definition = @name, syntax_type = "module"
 
   ; namespaces mimic types with member types to access exported expressions
   edge @name.type_def -> @mod.type_member
@@ -2472,7 +2479,7 @@ if none @is_async {
   attr (@name.expr_def__ns) pop_symbol = "%E"
   edge @name.expr_def__ns -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "type"
 
   ; type of enum expression is members
   edge @name.expr_def -> @name.expr_def__typeof
@@ -2494,7 +2501,7 @@ if none @is_async {
   attr (@name.type_def__ns) pop_symbol = "%T"
   edge @name.type_def__ns -> @name.type_def
   ;
-  attr (@name.type_def) node_definition = @name
+  attr (@name.type_def) node_definition = @name, syntax_type = "type"
   edge @name.type_def -> @enum_decl.type
   ;
   edge @enum_decl.type -> @body.type_members
@@ -2584,7 +2591,7 @@ if none @is_async {
   attr (@name.type_def__ns) pop_symbol = "%T"
   edge @name.type_def__ns -> @name.type_def
   ;
-  attr (@name.type_def) node_definition = @name
+  attr (@name.type_def) node_definition = @name, syntax_type = "type"
   edge @name.type_def -> @decl.generic_type
   ;
   ; type parameters are handled by generics rules below
@@ -4468,7 +4475,7 @@ if none @is_async {
   attr (@sig.member) pop_symbol = "."
   edge @sig.member -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "field"
 }
 
 (property_signature
@@ -4506,7 +4513,7 @@ if none @is_async {
   attr (@def.member) pop_symbol = "."
   edge @def.member -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "field"
 }
 
 (public_field_definition
@@ -4590,7 +4597,7 @@ if none @is_acc {
   attr (@mem.member) pop_symbol = "."
   edge @mem.member -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "method"
 
   ; type of method is callable generic type
   edge @name.expr_def -> @name.expr_def__typeof
@@ -4675,7 +4682,7 @@ if none @is_acc {
   attr (@mem.member) pop_symbol = "."
   edge @mem.member -> @name.expr_def
   ;
-  attr (@name.expr_def) node_definition = @name
+  attr (@name.expr_def) node_definition = @name, syntax_type = "field"
 }
 
 [
