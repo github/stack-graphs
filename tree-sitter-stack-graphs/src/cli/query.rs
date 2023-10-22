@@ -9,6 +9,7 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
+use indoc::printdoc;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::FileStatus;
@@ -34,6 +35,9 @@ pub struct QueryArgs {
     #[clap(long)]
     pub wait_at_start: bool,
 
+    #[clap(long)]
+    pub stats: bool,
+
     #[clap(subcommand)]
     target: Target,
 }
@@ -44,7 +48,23 @@ impl QueryArgs {
             wait_for_input()?;
         }
         let mut db = SQLiteReader::open(&db_path)?;
-        self.target.run(&mut db)
+        self.target.run(&mut db)?;
+        if self.stats {
+            let stats = db.stats();
+            printdoc! {r#"
+
+             db stats   | loads  | cached
+            ------------+--------+--------
+             files      | {:>6} | {:>6}
+             root paths | {:>6} | {:>6}
+             node paths | {:>6} | {:>6}
+            "#,
+                stats.file_loads, stats.file_cached,
+                stats.root_path_loads, stats.root_path_cached,
+                stats.node_path_loads, stats.node_path_cached,
+            };
+        }
+        Ok(())
     }
 }
 
