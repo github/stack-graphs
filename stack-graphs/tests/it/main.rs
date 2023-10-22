@@ -25,4 +25,6 @@ mod partial;
 #[cfg(feature = "serde")]
 mod serde;
 mod stitching;
+#[cfg(feature = "storage")]
+mod storage;
 mod util;
