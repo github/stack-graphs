@@ -6146,7 +6146,7 @@ if none @is_acc {
   attr (@async.async_type__type_app) push_scoped_symbol = "<>", scope = @async.async_type__type_args
   edge @async.async_type__type_app -> @async.async_type__promise_ref
   ;
-  attr (@async.async_type__promise_ref) symbol_reference = "Promise", source_node = @async
+  attr (@async.async_type__promise_ref) symbol_reference = "Promise", source_node = @async, empty_source_span
   edge @async.async_type__promise_ref -> @async.async_type__promise_ref__ns
   ;
   attr (@async.async_type__promise_ref__ns) push_symbol = "%T"
