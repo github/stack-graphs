@@ -1,0 +1,15 @@
+let Foo = class {
+    bar() {
+
+    }
+};
+
+let Bar = class extends Foo {
+    bar() {
+
+    }
+    quux() {
+        super.bar;
+        //    ^ defined: 2
+    }
+};

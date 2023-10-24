@@ -160,6 +160,35 @@
 //! }
 //! ```
 //!
+//! ### Annotating nodes with syntax type information
+//!
+//! You can annotate any stack graph node with information about its syntax type. To do this, add a `syntax_type`
+//! attribute, whose value is a string indicating the syntax type.
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id) @func {
+//!   node def
+//!   ; ...
+//!   attr (def) syntax_type = "function"
+//! }
+//! ```
+//!
+//! ### Annotating definitions with definiens information
+//!
+//! You cannot annotate definitions with a definiens, which is the thing the definition covers. For example, for
+//! a function definition, the definiens would be the function body. To do this, add a `definiens_node` attribute,
+//! whose value is a syntax node that spans the definiens.
+//!
+//! ``` skip
+//! (function_definition name: (identifier) @id body: (_) @body) @func {
+//!   node def
+//!   ; ...
+//!   attr (def) definiens_node = @body
+//! }
+//! ```
+//!
+//! Definiens are optional and setting them to `#null` explicitly is allowed.
+//!
 //! ### Connecting stack graph nodes with edges
 //!
 //! To connect two stack graph nodes, use the `edge` statement to add an edge between them:
@@ -364,6 +393,7 @@ static SCOPE_TYPE: &'static str = "scope";
 
 // Node attribute names
 static DEBUG_ATTR_PREFIX: &'static str = "debug_";
+static DEFINIENS_NODE_ATTR: &'static str = "definiens_node";
 static EMPTY_SOURCE_SPAN_ATTR: &'static str = "empty_source_span";
 static IS_DEFINITION_ATTR: &'static str = "is_definition";
 static IS_ENDPOINT_ATTR: &'static str = "is_endpoint";
@@ -372,13 +402,28 @@ static IS_REFERENCE_ATTR: &'static str = "is_reference";
 static SCOPE_ATTR: &'static str = "scope";
 static SOURCE_NODE_ATTR: &'static str = "source_node";
 static SYMBOL_ATTR: &'static str = "symbol";
+static SYNTAX_TYPE_ATTR: &'static str = "syntax_type";
 static TYPE_ATTR: &'static str = "type";
 
 // Expected attributes per node type
-static POP_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
-    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]));
-static POP_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
-    Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, IS_DEFINITION_ATTR]));
+static POP_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    HashSet::from([
+        TYPE_ATTR,
+        SYMBOL_ATTR,
+        IS_DEFINITION_ATTR,
+        DEFINIENS_NODE_ATTR,
+        SYNTAX_TYPE_ATTR,
+    ])
+});
+static POP_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    HashSet::from([
+        TYPE_ATTR,
+        SYMBOL_ATTR,
+        IS_DEFINITION_ATTR,
+        DEFINIENS_NODE_ATTR,
+        SYNTAX_TYPE_ATTR,
+    ])
+});
 static PUSH_SCOPED_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
     Lazy::new(|| HashSet::from([TYPE_ATTR, SYMBOL_ATTR, SCOPE_ATTR, IS_REFERENCE_ATTR]));
 static PUSH_SYMBOL_ATTRS: Lazy<HashSet<&'static str>> =
@@ -612,6 +657,10 @@ impl<'a> Builder<'a> {
             .debug_attributes(
                 [DEBUG_ATTR_PREFIX, "tsg_location"].concat().as_str().into(),
                 [DEBUG_ATTR_PREFIX, "tsg_variable"].concat().as_str().into(),
+                [DEBUG_ATTR_PREFIX, "tsg_match_node"]
+                    .concat()
+                    .as_str()
+                    .into(),
             );
 
         // The execute_into() method requires that the reference to the tree matches the lifetime
@@ -881,7 +930,7 @@ impl<'a> Builder<'a> {
                 NodeType::PushSymbol => self.load_push_symbol(node_ref)?,
                 NodeType::Scope => self.load_scope(node_ref)?,
             };
-            self.load_span(node_ref, handle)?;
+            self.load_source_info(node_ref, handle)?;
             self.load_node_debug_info(node_ref, handle)?;
         }
 
@@ -1000,10 +1049,14 @@ impl<'a> Builder<'a> {
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         self.verify_attributes(node, POP_SCOPED_SYMBOL_TYPE, &POP_SCOPED_SYMBOL_ATTRS);
-        Ok(self
+        let node_handle = self
             .stack_graph
             .add_pop_scoped_symbol_node(id, symbol, is_definition)
-            .unwrap())
+            .unwrap();
+        if is_definition {
+            self.load_definiens_info(node_ref, node_handle)?;
+        }
+        Ok(node_handle)
     }
 
     fn load_pop_symbol(&mut self, node_ref: GraphNodeRef) -> Result<Handle<Node>, BuildError> {
@@ -1016,10 +1069,14 @@ impl<'a> Builder<'a> {
         let id = self.node_id_for_graph_node(node_ref);
         let is_definition = self.load_flag(node, IS_DEFINITION_ATTR)?;
         self.verify_attributes(node, POP_SYMBOL_TYPE, &POP_SYMBOL_ATTRS);
-        Ok(self
+        let node_handle = self
             .stack_graph
             .add_pop_symbol_node(id, symbol, is_definition)
-            .unwrap())
+            .unwrap();
+        if is_definition {
+            self.load_definiens_info(node_ref, node_handle)?;
+        }
+        Ok(node_handle)
     }
 
     fn load_push_scoped_symbol(
@@ -1087,28 +1144,53 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn load_span(
+    fn load_source_info(
         &mut self,
         node_ref: GraphNodeRef,
         node_handle: Handle<Node>,
     ) -> Result<(), BuildError> {
         let node = &self.graph[node_ref];
-        let source_node = match node.attributes.get(SOURCE_NODE_ATTR) {
-            Some(source_node) => &self.graph[source_node.as_syntax_node_ref()?],
+
+        if let Some(source_node) = node.attributes.get(SOURCE_NODE_ATTR) {
+            let source_node = &self.graph[source_node.as_syntax_node_ref()?];
+            let mut source_span = self.span_calculator.for_node(source_node);
+            if match node.attributes.get(EMPTY_SOURCE_SPAN_ATTR) {
+                Some(empty_source_span) => empty_source_span.as_boolean()?,
+                None => false,
+            } {
+                source_span.end = source_span.start.clone();
+            }
+            let containing_line = &self.source[source_span.start.containing_line.clone()];
+            let containing_line = self.stack_graph.add_string(containing_line);
+            let source_info = self.stack_graph.source_info_mut(node_handle);
+            source_info.span = source_span;
+            source_info.containing_line = ControlledOption::some(containing_line);
+        }
+
+        if let Some(syntax_type) = node.attributes.get(SYNTAX_TYPE_ATTR) {
+            let syntax_type = syntax_type.as_str()?;
+            let syntax_type = self.stack_graph.add_string(syntax_type);
+            let source_info = self.stack_graph.source_info_mut(node_handle);
+            source_info.syntax_type = syntax_type.into();
+        }
+
+        Ok(())
+    }
+
+    fn load_definiens_info(
+        &mut self,
+        node_ref: GraphNodeRef,
+        node_handle: Handle<Node>,
+    ) -> Result<(), BuildError> {
+        let node = &self.graph[node_ref];
+        let definiens_node = match node.attributes.get(DEFINIENS_NODE_ATTR) {
+            Some(Value::Null) => return Ok(()),
+            Some(definiens_node) => &self.graph[definiens_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };
-        let mut span = self.span_calculator.for_node(source_node);
-        if match node.attributes.get(EMPTY_SOURCE_SPAN_ATTR) {
-            Some(empty_source_span) => empty_source_span.as_boolean()?,
-            None => false,
-        } {
-            span.end = span.start.clone();
-        }
-        let containing_line = &self.source[span.start.containing_line.clone()];
-        let containing_line = self.stack_graph.add_string(containing_line);
+        let definiens_span = self.span_calculator.for_node(definiens_node);
         let source_info = self.stack_graph.source_info_mut(node_handle);
-        source_info.span = span;
-        source_info.containing_line = ControlledOption::some(containing_line);
+        source_info.definiens_span = definiens_span;
         Ok(())
     }
 

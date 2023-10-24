@@ -29,7 +29,9 @@ use crate::partial::PartialScopeStack;
 use crate::partial::PartialScopedSymbol;
 use crate::partial::PartialSymbolStack;
 use crate::stitching::Database;
+use crate::stitching::DatabaseCandidates;
 use crate::stitching::ForwardPartialPathStitcher;
+use crate::stitching::GraphEdgeCandidates;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -1179,17 +1181,18 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     let partial_path_list = unsafe { &mut *partial_path_list };
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
-    partials
-        .find_minimal_partial_path_set_in_file(
-            graph,
-            file,
-            &AtomicUsizeCancellationFlag(cancellation_flag),
-            |_graph, partials, mut path| {
-                path.ensure_both_directions(partials);
-                partial_path_list.partial_paths.push(path);
-            },
-        )
-        .into()
+    ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+        graph,
+        partials,
+        file,
+        &AtomicUsizeCancellationFlag(cancellation_flag),
+        |_graph, partials, path| {
+            let mut path = path.clone();
+            path.ensure_both_directions(partials);
+            partial_path_list.partial_paths.push(path);
+        },
+    )
+    .into()
 }
 
 /// Finds all complete paths reachable from a set of starting nodes, placing the result into the
@@ -1215,18 +1218,17 @@ pub extern "C" fn sg_partial_path_arena_find_all_complete_paths(
     let path_list = unsafe { &mut *path_list };
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
-    partials
-        .find_all_complete_paths(
-            graph,
-            starting_nodes.iter().copied().map(sg_node_handle::into),
-            &AtomicUsizeCancellationFlag(cancellation_flag),
-            |graph, _partials, path| {
-                if path.is_complete(graph) {
-                    path_list.partial_paths.push(path);
-                }
-            },
-        )
-        .into()
+    ForwardPartialPathStitcher::find_all_complete_partial_paths(
+        &mut GraphEdgeCandidates::new(graph, partials, None),
+        starting_nodes.iter().copied().map(sg_node_handle::into),
+        &AtomicUsizeCancellationFlag(cancellation_flag),
+        |graph, _partials, path| {
+            if path.is_complete(graph) {
+                path_list.partial_paths.push(path.clone());
+            }
+        },
+    )
+    .into()
 }
 
 /// A handle to a partial path in a partial path database.  A zero handle represents a missing
@@ -1404,12 +1406,12 @@ struct InternalForwardPartialPathStitcher {
     previous_phase_partial_paths: *const PartialPath,
     previous_phase_partial_paths_length: usize,
     is_complete: bool,
-    stitcher: ForwardPartialPathStitcher,
+    stitcher: ForwardPartialPathStitcher<Handle<PartialPath>>,
 }
 
 impl InternalForwardPartialPathStitcher {
     fn new(
-        stitcher: ForwardPartialPathStitcher,
+        stitcher: ForwardPartialPathStitcher<Handle<PartialPath>>,
         partials: &mut PartialPaths,
     ) -> InternalForwardPartialPathStitcher {
         let mut this = InternalForwardPartialPathStitcher {
@@ -1434,7 +1436,7 @@ impl InternalForwardPartialPathStitcher {
 }
 
 /// Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
-/// nodes.
+/// nodes. The path stitcher will be set up to find complete paths only.
 #[no_mangle]
 pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     graph: *const sg_stack_graph,
@@ -1445,11 +1447,17 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, count) };
-    let stitcher = ForwardPartialPathStitcher::from_nodes(
-        graph,
-        partials,
-        starting_nodes.iter().copied().map(sg_node_handle::into),
-    );
+    let initial_paths = starting_nodes
+        .iter()
+        .copied()
+        .map(sg_node_handle::into)
+        .map(|n| {
+            let mut p = PartialPath::from_node(graph, partials, n);
+            p.eliminate_precondition_stack_variables(partials);
+            p
+        })
+        .collect::<Vec<_>>();
+    let stitcher = ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,
     ))) as *mut _
@@ -1526,7 +1534,10 @@ pub extern "C" fn sg_forward_partial_path_stitcher_process_next_phase(
     let partials = unsafe { &mut (*partials).inner };
     let db = unsafe { &mut (*db).inner };
     let stitcher = unsafe { &mut *(stitcher as *mut InternalForwardPartialPathStitcher) };
-    stitcher.stitcher.process_next_phase(graph, partials, db);
+    stitcher.stitcher.process_next_phase(
+        &mut DatabaseCandidates::new(graph, partials, db),
+        |_, _, _| true,
+    );
     stitcher.update_previous_phase_partial_paths(partials);
 }
 

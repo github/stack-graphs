@@ -9,13 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Library
 
+#### Changed
+
+- A new `Reporter` trait is used to support reporting status from CLI actions such as indexing and testing. The CLI actions have been cleaned up to ensure that they are not writing directly to the console anymore, but only call the reporter for output. The `Reporter` trait replaces the old inaccessible `Logger` trait so that clients can more easily implement their own reporters if necessary. A `ConsoleLogger` is provided for clients who just need console printing.
+
+## v0.7.1 -- 2023-07-27
+
+Support `stack-graphs` version `0.12`.
+
+## v0.7.0 -- 2023-06-08
+
+### Library
+
 #### Added
 
 - A new `CancelAfterDuration` implementation of `CancellationFlag` that cancels the computation after a certain amount of time.
+- Tests can use new `defines` and `refers` assertions to check that a definition or reference with the give name exists at the assertion's source location.
 
 #### Changed
 
 - The `LanguageConfiguration::matches_file` method takes a `ContentProvider` instead of an `Option<&str>` value. This allows lazy file reading *after* the filename is checked, instead of the unconditional loading required before. To give content readers the opportunity to cache read values, a mutable reference is required. The return type has changed to `std::io::Result` to propagate possible errors from content providers. A `FileReader` implementation that caches the last read file is provided as well.
+- Tests run with the CI `Tester` timeout after 60 seconds by default. Set `Tester::max_test_time` to change this behavior.
+- A new `StackGraphLanguage::from_source` function can be used to construct a stack graph language from a given TSG source. The `StackGraphLanguage` type can also record the TSG file path, which is used when displaying errors.
+- The `LoadError` type has been renamed to `BuildError` to avoid confusion between it and the `loader::LoadError` type.
+- Cancellation flags support the `|` (or) operator to allow easy composition.
+- The `LanguageConfiguration::from_tsg_str` method has been renamed to `LanguageConfiguration::from_sources`, and additionally accepts path parameters which are used for error message display.
+- The `loader::LoadError` type now has a lifetime parameter and supports pretty error display.
+- The loaders return a `FileLanguageConfiguration` value instead of a `StackGraphLanguage`, which contains both the primary `StackGraphLanguage` as well as any file analyzers for other secondary languages.
 
 #### Fixed
 
@@ -25,8 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
-- A new `analyze` command that computes stack graphs and partial paths for all given source files and directories. The command does not produce any output at the moment. Analysis per file can be limited using the `--max-file-time` flag.
+- A new `analyze` command that computes stack graphs and partial paths for all given source files and directories and stores results in a database. The command does not produce any output at the moment. Analysis per file can be limited using the `--max-file-time` flag.
+- A new `query` command can be used to resolve references using the analysis database.
+- A new `status` command shows the status of files in the analysis database. The status includes whether the file was analyzed or not, and if the analysis was successful.
+- A new `clean` command can be used to clean the analysis database, either completely or for specific paths.
 - A new `match` command executes the query patterns from the TSG source and outputs the matches with captured nodes to the console. The `--stanza/-S` flag can be used to select specific stanzas to match by giving the line number where the stanza appears in the source. (Any line that is part of the stanza will work.)
+- A new `visualize` command generates HTML visualizations based on the analysis database. Note that visualizations do not scale well, so this should only be used on small and few files.
+- A new `lsp` command implements a basic LSP server that can be used in e.g. a VS Code plugin. Note that the implementation is not optimized and currently rather slow.
+- The `init` command was updated and supports a `--internal` flag to easily generate language projects that are meant to be part of the projects repository.
 
 #### Changed
 
@@ -36,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The output of the `test` and `analyze` commands has changed in debug builds to include the run time per file.
 - The `--hide-failure-errors` has been renamed to the more general `--hide-error-details`. The new flag is supported by the `test` and `analyze` commands.
 - The files in directory arguments are now processed in filename order.
+- The `test` command also skips directories with a `.skip` extension, not just files.
 
 ## v0.6.0 -- 2023-01-13
 

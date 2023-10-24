@@ -31,20 +31,21 @@
 
 use enumset::EnumSet;
 use smallvec::SmallVec;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
+use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::List;
 use crate::arena::ListArena;
-use crate::graph::Edge;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::paths::PathResolutionError;
-use crate::stitching::Database;
-use crate::stitching::OwnedOrDatabasePath;
+use crate::stitching::Appendable;
+use crate::stitching::ToAppendable;
 
 /// Helps detect similar paths in the path-finding algorithm.
 pub struct SimilarPathDetector<P> {
@@ -97,22 +98,23 @@ where
     /// Determines whether we should process this path during the path-finding algorithm.  If we have seen
     /// a path with the same start and end node, and the same pre- and postcondition, then we return false.
     /// Otherwise, we return true.
-    pub fn has_similar_path<Eq>(
+    pub fn has_similar_path<Cmp>(
         &mut self,
         _graph: &StackGraph,
         arena: &mut P::Arena,
         path: &P,
-        eq: Eq,
+        cmp: Cmp,
     ) -> bool
     where
-        Eq: Fn(&mut P::Arena, &P, &P) -> bool,
+        Cmp: Fn(&mut P::Arena, &P, &P) -> Option<Ordering>,
     {
         let key = path.key();
 
         let possibly_similar_paths = self.paths.entry(key).or_default();
         for other_path in possibly_similar_paths.iter() {
-            if eq(arena, path, other_path) {
-                return true;
+            match cmp(arena, path, other_path) {
+                Some(ord) if ord != Ordering::Less => return true,
+                _ => continue,
             }
         }
 
@@ -129,71 +131,155 @@ where
 // ----------------------------------------------------------------------------
 // Cycle detector
 
-pub trait Appendable {
-    type Ctx;
+/// An arena used by [`AppendingCycleDetector`][] to store the path component lists.
+/// The arena is shared between all cycle detectors in a path stitching run, so that
+/// the cycle detectors themselves can be small and cheaply cloned.
+pub struct Appendables<H> {
+    /// List arena for appendable lists
+    elements: ListArena<InternedOrHandle<H>>,
+    /// Arena for interned partial paths
+    interned: Arena<PartialPath>,
+}
 
-    fn append_to(
+impl<H> Appendables<H> {
+    pub fn new() -> Self {
+        Self {
+            elements: ListArena::new(),
+            interned: Arena::new(),
+        }
+    }
+}
+
+/// Enum that unifies handles to initial paths interned in the cycle detector, and appended
+/// handles to appendables in the external database.
+#[derive(Clone)]
+enum InternedOrHandle<H> {
+    Interned(Handle<PartialPath>),
+    Database(H),
+}
+
+impl<H> InternedOrHandle<H>
+where
+    H: Clone,
+{
+    fn append_to<'a, A, Db>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        ctx: &mut Self::Ctx,
+        db: &'a Db,
+        interned: &Arena<PartialPath>,
         path: &mut PartialPath,
-    ) -> Result<(), PathResolutionError>;
-    fn start_node(&self, ctx: &mut Self::Ctx) -> Handle<Node>;
-    fn end_node(&self, ctx: &mut Self::Ctx) -> Handle<Node>;
+    ) -> Result<(), PathResolutionError>
+    where
+        A: Appendable + 'a,
+        Db: ToAppendable<H, A>,
+    {
+        match self {
+            Self::Interned(h) => interned.get(*h).append_to(graph, partials, path),
+            Self::Database(h) => db.get_appendable(h).append_to(graph, partials, path),
+        }
+    }
+
+    fn start_node<'a, A, Db>(&self, db: &'a Db, interned: &Arena<PartialPath>) -> Handle<Node>
+    where
+        A: Appendable + 'a,
+        Db: ToAppendable<H, A>,
+    {
+        match self {
+            Self::Interned(h) => interned.get(*h).start_node,
+            Self::Database(h) => db.get_appendable(h).start_node(),
+        }
+    }
+
+    fn end_node<'a, A, Db>(&self, db: &'a Db, interned: &Arena<PartialPath>) -> Handle<Node>
+    where
+        A: Appendable + 'a,
+        Db: ToAppendable<H, A>,
+    {
+        match self {
+            Self::Interned(h) => interned.get(*h).end_node,
+            Self::Database(h) => db.get_appendable(h).end_node(),
+        }
+    }
 }
 
+/// A cycle detector that builds up paths by appending elements to it.
+/// Path elements are stored in a shared arena that must be provided
+/// when calling methods, so that cloning the cycle detector itself is
+/// cheap.
 #[derive(Clone)]
-pub struct AppendingCycleDetector<A> {
-    appendages: List<A>,
+pub struct AppendingCycleDetector<H> {
+    appendages: List<InternedOrHandle<H>>,
 }
 
-pub type Appendables<A> = ListArena<A>;
-
-impl<A: Appendable + Clone> AppendingCycleDetector<A> {
+impl<H> AppendingCycleDetector<H> {
     pub fn new() -> Self {
         Self {
             appendages: List::empty(),
         }
     }
 
-    pub fn from(appendables: &mut Appendables<A>, appendage: A) -> Self {
+    pub fn from(appendables: &mut Appendables<H>, path: PartialPath) -> Self {
+        let h = appendables.interned.add(path);
         let mut result = Self::new();
-        result.appendages.push_front(appendables, appendage);
+        result
+            .appendages
+            .push_front(&mut appendables.elements, InternedOrHandle::Interned(h));
         result
     }
 
-    pub fn append(&mut self, appendables: &mut Appendables<A>, appendage: A) {
-        self.appendages.push_front(appendables, appendage);
+    pub fn append(&mut self, appendables: &mut Appendables<H>, appendage: H) {
+        self.appendages.push_front(
+            &mut appendables.elements,
+            InternedOrHandle::Database(appendage),
+        );
     }
+}
 
+impl<H> AppendingCycleDetector<H>
+where
+    H: Clone,
+{
     /// Tests if the path is cyclic. Returns a vector indicating the kind of cycles that were found.
     /// If appending or concatenating all fragments succeeds, this function will never raise and error.
-    pub fn is_cyclic(
+    pub fn is_cyclic<'a, A, Db>(
         &self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        ctx: &mut A::Ctx,
-        appendables: &mut Appendables<A>,
-    ) -> Result<EnumSet<Cyclicity>, PathResolutionError> {
+        db: &'a Db,
+        appendables: &mut Appendables<H>,
+    ) -> Result<EnumSet<Cyclicity>, PathResolutionError>
+    where
+        A: Appendable + 'a,
+        Db: ToAppendable<H, A>,
+    {
         let mut cycles = EnumSet::new();
 
-        let end_node = match self.appendages.clone().pop_front(appendables) {
-            Some(appendage) => appendage.end_node(ctx),
+        let end_node = match self.appendages.clone().pop_front(&mut appendables.elements) {
+            Some(appendage) => appendage.end_node(db, &appendables.interned),
             None => return Ok(cycles),
         };
 
         let mut maybe_cyclic_path = None;
-        let mut appendages = self.appendages;
+        let mut remaining_appendages = self.appendages;
+        // Unlike the stored appendages, which are stored in a shared arena, we use a _local_
+        // buffer to collect the prefix appendages that we collect for possible cycles. This is
+        // to prevent adding elements to the shared arena for every invocation of this method,
+        // because they would remain in the arena after the method returns. We take care to
+        // minimize (re)allocations by (a) only allocating when a possible cycle is detected,
+        // (b) reserving all necessary space before adding elements, and (c) reusing the buffer
+        // between loop iterations.
+        let mut prefix_appendages = Vec::new();
         loop {
-            // get prefix elements
-            let mut prefix_appendages = List::empty();
+            // find cycle length
+            let mut counting_appendages = remaining_appendages;
+            let mut cycle_length = 0usize;
             loop {
-                let appendable = appendages.pop_front(appendables).cloned();
+                let appendable = counting_appendages.pop_front(&mut appendables.elements);
                 match appendable {
                     Some(appendage) => {
-                        let is_cycle = appendage.start_node(ctx) == end_node;
-                        prefix_appendages.push_front(appendables, appendage);
+                        cycle_length += 1;
+                        let is_cycle = appendage.start_node(db, &appendables.interned) == end_node;
                         if is_cycle {
                             break;
                         }
@@ -202,68 +288,39 @@ impl<A: Appendable + Clone> AppendingCycleDetector<A> {
                 }
             }
 
+            // collect prefix elements (reversing their order)
+            prefix_appendages.clear();
+            prefix_appendages.reserve(cycle_length);
+            for _ in 0..cycle_length {
+                let appendable = remaining_appendages
+                    .pop_front(&mut appendables.elements)
+                    .expect("")
+                    .clone();
+                prefix_appendages.push(appendable);
+            }
+
             // build prefix path -- prefix starts at end_node, because this is a cycle
             let mut prefix_path = PartialPath::from_node(graph, partials, end_node);
-            while let Some(appendage) = prefix_appendages.pop_front(appendables) {
-                prefix_path.resolve_to_node(graph, partials, appendage.start_node(ctx))?;
-                appendage.append_to(graph, partials, ctx, &mut prefix_path)?;
+            while let Some(appendage) = prefix_appendages.pop() {
+                appendage.append_to(
+                    graph,
+                    partials,
+                    db,
+                    &appendables.interned,
+                    &mut prefix_path,
+                )?;
             }
 
             // build cyclic path
             let cyclic_path = maybe_cyclic_path
                 .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
-            prefix_path.resolve_to_node(graph, partials, cyclic_path.start_node)?;
-            prefix_path.ensure_no_overlapping_variables(partials, &cyclic_path);
-            prefix_path.concatenate(graph, partials, &cyclic_path)?;
-            if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
-                cycles |= cyclicity;
+            cyclic_path.append_to(graph, partials, &mut prefix_path)?;
+            if prefix_path.edges.len() > 0 {
+                if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
+                    cycles |= cyclicity;
+                }
             }
             maybe_cyclic_path = Some(prefix_path);
         }
-    }
-}
-
-impl Appendable for Edge {
-    type Ctx = ();
-
-    fn append_to(
-        &self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        _: &mut (),
-        path: &mut PartialPath,
-    ) -> Result<(), PathResolutionError> {
-        path.append(graph, partials, *self)
-    }
-
-    fn start_node(&self, _: &mut ()) -> Handle<Node> {
-        self.source
-    }
-
-    fn end_node(&self, _: &mut ()) -> Handle<Node> {
-        self.sink
-    }
-}
-
-impl Appendable for OwnedOrDatabasePath {
-    type Ctx = Database;
-
-    fn append_to(
-        &self,
-        graph: &StackGraph,
-        partials: &mut PartialPaths,
-        db: &mut Database,
-        path: &mut PartialPath,
-    ) -> Result<(), PathResolutionError> {
-        path.ensure_no_overlapping_variables(partials, self.get(db));
-        path.concatenate(graph, partials, self.get(db))
-    }
-
-    fn start_node(&self, db: &mut Database) -> Handle<Node> {
-        self.get(db).start_node
-    }
-
-    fn end_node(&self, db: &mut Database) -> Handle<Node> {
-        self.get(db).end_node
     }
 }

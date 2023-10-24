@@ -9,6 +9,7 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteReader;
 use std::path::Path;
@@ -16,16 +17,15 @@ use std::path::PathBuf;
 use thiserror::Error;
 use tree_sitter_graph::parse_error::Excerpt;
 
+use crate::cli::util::reporter::ConsoleReporter;
+use crate::cli::util::reporter::Reporter;
+use crate::cli::util::sha1;
+use crate::cli::util::wait_for_input;
+use crate::cli::util::SourcePosition;
+use crate::cli::util::SourceSpan;
 use crate::loader::FileReader;
 use crate::CancellationFlag;
 use crate::NoCancellation;
-
-use super::util::sha1;
-use super::util::wait_for_input;
-use super::util::ConsoleLogger;
-use super::util::Logger;
-use super::util::SourcePosition;
-use super::util::SourceSpan;
 
 #[derive(Args)]
 pub struct QueryArgs {
@@ -54,8 +54,8 @@ pub enum Target {
 
 impl Target {
     pub fn run(self, db: &mut SQLiteReader) -> anyhow::Result<()> {
-        let logger = ConsoleLogger::new(true, true);
-        let mut querier = Querier::new(db, &logger);
+        let reporter = ConsoleReporter::details();
+        let mut querier = Querier::new(db, &reporter);
         match self {
             Self::Definition(cmd) => cmd.run(&mut querier),
         }
@@ -135,12 +135,12 @@ impl Definition {
 
 pub struct Querier<'a> {
     db: &'a mut SQLiteReader,
-    logger: &'a dyn Logger,
+    reporter: &'a dyn Reporter,
 }
 
 impl<'a> Querier<'a> {
-    pub fn new(db: &'a mut SQLiteReader, logger: &'a dyn Logger) -> Self {
-        Self { db, logger }
+    pub fn new(db: &'a mut SQLiteReader, reporter: &'a dyn Reporter) -> Self {
+        Self { db, reporter }
     }
 
     pub fn definitions(
@@ -149,7 +149,6 @@ impl<'a> Querier<'a> {
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Vec<QueryResult>> {
         let log_path = PathBuf::from(reference.to_string());
-        let mut logger = self.logger.file(&log_path);
 
         let mut file_reader = FileReader::new();
         let tag = file_reader.get(&reference.path).ok().map(sha1);
@@ -159,12 +158,13 @@ impl<'a> Querier<'a> {
         {
             FileStatus::Indexed => {}
             _ => {
-                logger.failure("file not indexed", None);
+                self.reporter.started(&log_path);
+                self.reporter.failed(&log_path, "file not indexed", None);
                 return Ok(Vec::default());
             }
         }
 
-        logger.processing();
+        self.reporter.started(&log_path);
 
         self.db
             .load_graph_for_file(&reference.path.to_string_lossy())?;
@@ -172,7 +172,8 @@ impl<'a> Querier<'a> {
 
         let starting_nodes = reference.iter_references(graph).collect::<Vec<_>>();
         if starting_nodes.is_empty() {
-            logger.warning("no references at location", None);
+            self.reporter
+                .cancelled(&log_path, "no references at location", None);
             return Ok(Vec::default());
         }
 
@@ -184,14 +185,15 @@ impl<'a> Querier<'a> {
             };
 
             let mut reference_paths = Vec::new();
-            if let Err(err) = self.db.find_all_complete_partial_paths(
+            if let Err(err) = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+                self.db,
                 std::iter::once(node),
                 &cancellation_flag,
                 |_g, _ps, p| {
                     reference_paths.push(p.clone());
                 },
             ) {
-                logger.failure("query timed out", None);
+                self.reporter.failed(&log_path, "query timed out", None);
                 return Err(err.into());
             }
 
@@ -199,7 +201,7 @@ impl<'a> Querier<'a> {
             let mut actual_paths = Vec::new();
             for reference_path in &reference_paths {
                 if let Err(err) = cancellation_flag.check("shadowing") {
-                    logger.failure("query timed out", None);
+                    self.reporter.failed(&log_path, "query timed out", None);
                     return Err(err.into());
                 }
                 if reference_paths
@@ -232,7 +234,8 @@ impl<'a> Querier<'a> {
         }
 
         let count: usize = result.iter().map(|r| r.targets.len()).sum();
-        logger.success(
+        self.reporter.succeeded(
+            &log_path,
             &format!(
                 "found {} definitions for {} references",
                 count,
@@ -253,6 +256,12 @@ pub enum QueryError {
     ReadError(#[from] std::io::Error),
     #[error(transparent)]
     StorageError(#[from] stack_graphs::storage::StorageError),
+}
+
+impl From<stack_graphs::CancellationError> for QueryError {
+    fn from(value: stack_graphs::CancellationError) -> Self {
+        Self::Cancelled(value.0)
+    }
 }
 
 impl From<crate::CancellationError> for QueryError {

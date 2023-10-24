@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-stack-graphs"
-version = "0.6.0"
+version = "0.7.1"
 description = "Create stack graphs using tree-sitter parsers"
 homepage = "https://github.com/github/stack-graphs/tree/main/tree-sitter-stack-graphs"
 repository = "https://github.com/github/stack-graphs/"
@@ -26,8 +26,8 @@ cli = [
   "base64",
   "clap",
   "colored",
-  "dirs",
   "dialoguer",
+  "dirs",
   "env_logger",
   "indoc",
   "pathdiff",
@@ -52,12 +52,12 @@ lsp = [
 anyhow = "1.0"
 base64 = { version = "0.21", optional = true }
 capture-it = { version = "0.3", optional = true }
-clap = { version = "4", optional = true, features=["derive"] }
+clap = { version = "4", optional = true, features = ["derive"] }
 colored = { version = "2.0", optional = true }
 controlled-option = ">=0.4"
 crossbeam-channel = { version = "0.5", optional = true }
 dialoguer = { version = "0.10", optional = true }
-dirs = { version = "5", optional=true }
+dirs = { version = "5", optional = true }
 env_logger = { version = "0.9", optional = true }
 indoc = { version = "1.0", optional = true }
 itertools = "0.10"
@@ -69,14 +69,14 @@ regex = "1"
 rust-ini = "0.18"
 serde_json = { version="1.0", optional=true }
 sha1 = { version="0.10", optional=true }
-stack-graphs = { version="0.10", path="../stack-graphs" }
+stack-graphs = { version=">=0.11, <=0.12", path="../stack-graphs" }
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
 tokio = { version = "1.26", optional = true, features = ["io-std", "rt", "rt-multi-thread"] }
 tower-lsp = { version = "0.19", optional = true }
 tree-sitter = ">= 0.19"
 tree-sitter-config = { version = "0.19", optional = true }
-tree-sitter-graph = "0.10.1"
+tree-sitter-graph = "0.11"
 tree-sitter-loader = "0.20"
 walkdir = { version = "2.3", optional = true }
 

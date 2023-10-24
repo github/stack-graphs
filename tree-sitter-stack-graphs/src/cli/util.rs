@@ -12,7 +12,6 @@ use clap::builder::TypedValueParser;
 use clap::error::ContextKind;
 use clap::error::ContextValue;
 use clap::error::ErrorKind;
-use colored::Colorize;
 use lsp_positions::Span;
 use sha1::Digest;
 use sha1::Sha1;
@@ -26,9 +25,11 @@ use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-#[cfg(debug_assertions)]
-use std::time::Instant;
 use walkdir::WalkDir;
+
+use self::reporter::Reporter;
+
+pub mod reporter;
 
 #[derive(Clone)]
 pub(crate) struct ExistingPathBufValueParser;
@@ -297,13 +298,13 @@ pub struct SourceSpan {
 }
 
 impl SourceSpan {
-    pub fn first_line(&self) -> usize {
+    pub(crate) fn first_line(&self) -> usize {
         self.span.start.line
     }
 
     /// Returns a range for the first line of this span. If multiple lines are spanned, it
     /// will use usize::MAX for the range's end.
-    pub fn first_line_column_range(&self) -> Range<usize> {
+    pub(crate) fn first_line_column_range(&self) -> Range<usize> {
         let start = self.span.start.column.grapheme_offset;
         let end = if self.span.start.line == self.span.end.line {
             self.span.end.column.grapheme_offset
@@ -314,13 +315,13 @@ impl SourceSpan {
     }
 }
 
-pub fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
+pub(crate) fn duration_from_seconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     let seconds = s.parse::<u64>()?;
     Ok(Duration::new(seconds, 0))
 }
 
 #[cfg(feature = "lsp")]
-pub fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
+pub(crate) fn duration_from_milliseconds_str(s: &str) -> Result<Duration, anyhow::Error> {
     let milliseconds = s.parse::<u64>()?;
     let seconds = milliseconds / 1000;
     let nano_seconds = (milliseconds % 1000) as u32 * 1_000_000;
@@ -364,182 +365,98 @@ where
         .flatten()
 }
 
-pub trait Logger {
-    fn file<'a>(&self, path: &'a Path) -> Box<dyn FileLogger + 'a>;
-}
-
-pub trait FileLogger {
-    fn processing(&mut self) {}
-    fn failure(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
-    fn skipped(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
-    fn success(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
-    fn warning(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
-    fn default_failure(&mut self, _status: &str, _details: Option<&dyn std::fmt::Display>) {}
-}
-
-pub struct ConsoleLogger {
-    show_info: bool,
-    show_details: bool,
-}
-
-impl ConsoleLogger {
-    pub fn new(show_info: bool, show_details: bool) -> Self {
-        Self {
-            show_info,
-            show_details,
-        }
-    }
-}
-
-impl Logger for ConsoleLogger {
-    fn file<'a>(&self, path: &'a Path) -> Box<dyn FileLogger + 'a> {
-        Box::new(ConsoleFileLogger::new(
-            path,
-            self.show_info,
-            self.show_details,
-        ))
-    }
-}
-
-pub struct ConsoleFileLogger<'a> {
+/// Wraps a reporter and ensures that reporter is called properly without requiring
+/// the caller of the wrapper to be overly careful about which methods must be called
+/// in which order
+pub(super) struct CLIFileReporter<'a> {
+    reporter: &'a dyn Reporter,
     path: &'a Path,
-    show_info: bool,
-    show_details: bool,
     path_logged: bool,
-    #[cfg(debug_assertions)]
-    processing_started: Option<Instant>,
+    status_logged: bool,
 }
 
-impl<'a> ConsoleFileLogger<'a> {
-    pub fn new(path: &'a Path, show_info: bool, show_details: bool) -> Self {
+impl<'a> CLIFileReporter<'a> {
+    pub(super) fn new(reporter: &'a dyn Reporter, path: &'a Path) -> Self {
         Self {
+            reporter,
             path,
-            show_info,
-            show_details,
             path_logged: false,
-            #[cfg(debug_assertions)]
-            processing_started: None,
+            status_logged: false,
         }
     }
 
-    fn print_path(&mut self) {
+    pub(super) fn processing(&mut self) {
         if self.path_logged {
-            return;
+            panic!("Already started or finished");
         }
-        print!("{}: ", self.path.display());
+        self.reporter.started(self.path);
         self.path_logged = true;
     }
 
-    #[cfg(debug_assertions)]
-    fn print_processing_time(&mut self) {
-        if let Some(processing_started) = self.processing_started {
-            print!(" [{:.2} s]", processing_started.elapsed().as_secs_f64());
+    fn ensure_started(&mut self) {
+        if self.status_logged {
+            panic!("Status already logged");
+        }
+        if !self.path_logged {
+            self.reporter.started(self.path);
+            self.path_logged = true;
         }
     }
 
-    fn flush(&mut self) {
-        std::io::stdout().flush().expect("flush should succeed");
-    }
-}
-
-impl FileLogger for ConsoleFileLogger<'_> {
-    fn processing(&mut self) {
-        #[cfg(debug_assertions)]
-        {
-            self.processing_started = Some(Instant::now());
-        }
-        if !self.show_info {
-            return;
-        }
-        self.print_path();
-        self.flush();
+    pub(super) fn success(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        self.ensure_started();
+        self.reporter.succeeded(self.path, status, details);
+        self.status_logged = true;
     }
 
-    fn success(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
-        if !self.show_info {
-            return;
+    pub(super) fn skipped(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        if self.path_logged {
+            panic!("Skipped after starting");
         }
-        self.print_path();
-        print!("{}", status.green());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        self.flush();
-        if !self.show_details {
-            return;
+        if self.status_logged {
+            panic!("Status already logged");
         }
-        if let Some(details) = details {
-            println!("{}", details);
-        }
+        self.reporter.skipped(self.path, status, details);
+        self.status_logged = true;
     }
 
-    fn skipped(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
-        if !self.show_info {
-            return;
-        }
-        self.print_path();
-        print!("{}", status.dimmed());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        self.flush();
-        if !self.show_details {
-            return;
-        }
-        if let Some(details) = details {
-            println!("{}", details);
-        }
+    pub(super) fn warning(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        self.ensure_started();
+        self.reporter.cancelled(self.path, status, details);
+        self.status_logged = true;
     }
 
-    fn warning(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
-        self.print_path();
-        print!("{}", status.yellow());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        self.flush();
-        if !self.show_details {
-            return;
-        }
-        if let Some(details) = details {
-            println!("{}", details);
-        }
+    pub(super) fn failure(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+        self.ensure_started();
+        self.reporter.failed(self.path, status, details);
+        self.status_logged = true;
     }
 
-    fn failure(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
-        self.print_path();
-        print!("{}", status.red());
-        #[cfg(debug_assertions)]
-        self.print_processing_time();
-        println!();
-        self.path_logged = false;
-        self.flush();
-        if !self.show_details {
-            return;
-        }
-        if let Some(details) = details {
-            println!("{}", details);
-        }
-    }
-
-    fn default_failure(&mut self, status: &str, details: Option<&dyn std::fmt::Display>) {
+    pub(super) fn failure_if_processing(
+        &mut self,
+        status: &str,
+        details: Option<&dyn std::fmt::Display>,
+    ) {
         if !self.path_logged {
             return;
         }
         self.failure(status, details);
     }
+
+    pub(super) fn assert_reported(&mut self) {
+        if self.path_logged && !self.status_logged {
+            panic!("status not reported");
+        }
+    }
 }
 
-pub fn sha1(value: &str) -> String {
+pub(crate) fn sha1(value: &str) -> String {
     let mut hasher = Sha1::new();
     hasher.update(value);
     base64::prelude::BASE64_STANDARD_NO_PAD.encode(hasher.finalize())
 }
 
-pub fn wait_for_input() -> anyhow::Result<()> {
+pub(crate) fn wait_for_input() -> anyhow::Result<()> {
     print!("<press ENTER to continue>");
     std::io::stdout().flush()?;
     let mut input = String::new();
@@ -548,7 +465,7 @@ pub fn wait_for_input() -> anyhow::Result<()> {
 }
 
 /// Wraps a build error with the relevant sources
-pub struct BuildErrorWithSource<'a> {
+pub(crate) struct BuildErrorWithSource<'a> {
     pub inner: crate::BuildError,
     pub source_path: PathBuf,
     pub source_str: &'a str,

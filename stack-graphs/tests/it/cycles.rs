@@ -6,13 +6,16 @@
 // ------------------------------------------------------------------------------------------------
 
 use enumset::enum_set;
+use stack_graphs::arena::Handle;
 use stack_graphs::cycles::Appendables;
 use stack_graphs::cycles::AppendingCycleDetector;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::Cyclicity;
+use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
-use stack_graphs::stitching::OwnedOrDatabasePath;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::GraphEdges;
 use stack_graphs::CancelAfterDuration;
 use std::time::Duration;
 
@@ -168,7 +171,7 @@ fn finding_simple_identity_cycle_is_detected() {
     {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
-        let ctx = &mut ();
+        let db = &GraphEdges;
 
         for edge in &[
             edge(r, foo_ref, 0),
@@ -177,15 +180,14 @@ fn finding_simple_identity_cycle_is_detected() {
         ] {
             cd.append(&mut edges, *edge);
             assert!(cd
-                .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .is_cyclic(&graph, &mut partials, db, &mut edges)
                 .unwrap()
                 .is_empty());
         }
         cd.append(&mut edges, edge(foo_def, r, 0));
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
-            cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
-                .unwrap()
+            cd.is_cyclic(&graph, &mut partials, db, &mut edges).unwrap()
         );
     }
 
@@ -193,8 +195,9 @@ fn finding_simple_identity_cycle_is_detected() {
     {
         let mut path_count = 0usize;
         let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
-        let result = partials.find_minimal_partial_path_set_in_file(
+        let result = ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &cancellation_flag,
             |_, _, _| path_count += 1,
@@ -224,8 +227,8 @@ fn stitching_simple_identity_cycle_is_detected() {
     // test partial path cycle detector
     {
         let mut paths = Appendables::new();
-        let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
-            AppendingCycleDetector::from(&mut paths, p0.into());
+        let mut cd: AppendingCycleDetector<Handle<PartialPath>> =
+            AppendingCycleDetector::from(&mut paths, db[p0].clone());
         cd.append(&mut paths, p1.into());
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
@@ -258,7 +261,7 @@ fn finding_composite_identity_cycle_is_detected() {
     {
         let mut edges = Appendables::new();
         let mut cd = AppendingCycleDetector::new();
-        let ctx = &mut ();
+        let db = &GraphEdges;
         for edge in &[
             edge(r, s, 0),
             edge(r, s, 0),
@@ -270,15 +273,14 @@ fn finding_composite_identity_cycle_is_detected() {
         ] {
             cd.append(&mut edges, *edge);
             assert!(cd
-                .is_cyclic(&graph, &mut partials, ctx, &mut edges)
+                .is_cyclic(&graph, &mut partials, db, &mut edges)
                 .unwrap()
                 .is_empty());
         }
         cd.append(&mut edges, edge(bar_ref, s, 0));
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
-            cd.is_cyclic(&graph, &mut partials, ctx, &mut edges)
-                .unwrap()
+            cd.is_cyclic(&graph, &mut partials, db, &mut edges).unwrap()
         );
     }
 
@@ -286,8 +288,9 @@ fn finding_composite_identity_cycle_is_detected() {
     {
         let mut path_count = 0usize;
         let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
-        let result = partials.find_minimal_partial_path_set_in_file(
+        let result = ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &cancellation_flag,
             |_, _, _| path_count += 1,
@@ -320,8 +323,8 @@ fn stitching_composite_identity_cycle_is_detected() {
     // test joining cycle detector
     {
         let mut paths = Appendables::new();
-        let mut cd: AppendingCycleDetector<OwnedOrDatabasePath> =
-            AppendingCycleDetector::from(&mut paths, p0.into());
+        let mut cd: AppendingCycleDetector<Handle<PartialPath>> =
+            AppendingCycleDetector::from(&mut paths, db[p0].clone());
         cd.append(&mut paths, p1.into());
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
@@ -346,8 +349,9 @@ fn appending_eliminating_cycle_terminates() {
     {
         let mut path_count = 0usize;
         let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
-        let result = partials.find_minimal_partial_path_set_in_file(
+        let result = ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &cancellation_flag,
             |_, _, _| path_count += 1,

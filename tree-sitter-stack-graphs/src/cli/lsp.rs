@@ -28,20 +28,18 @@ use tower_lsp::LanguageServer;
 use tower_lsp::LspService;
 use tower_lsp::Server;
 
+use crate::cli::index::Indexer;
+use crate::cli::query::Querier;
+use crate::cli::query::QueryError;
+use crate::cli::util::duration_from_milliseconds_str;
+use crate::cli::util::duration_from_seconds_str;
+use crate::cli::util::reporter::Reporter;
+use crate::cli::util::SourcePosition;
+use crate::cli::util::SourceSpan;
 use crate::loader::Loader;
 use crate::AtomicCancellationFlag;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
-
-use super::index::Indexer;
-use super::query::Querier;
-use super::query::QueryError;
-use super::util::duration_from_milliseconds_str;
-use super::util::duration_from_seconds_str;
-use super::util::FileLogger;
-use super::util::Logger;
-use super::util::SourcePosition;
-use super::util::SourceSpan;
 
 #[derive(Args, Clone)]
 pub struct LspArgs {
@@ -208,14 +206,14 @@ impl Backend {
             }
         };
 
-        let logger = LspLogger {
+        let reporter = LspReporter {
             handle: handle.clone(),
             logger: self.logger.clone(),
         };
         let folder_cancellation_flag =
             CancelAfterDuration::from_option(self.args.max_folder_index_time);
         let cancellation_flag = cancellation_flag | folder_cancellation_flag.as_ref();
-        let mut indexer = Indexer::new(&mut db, &mut loader, &logger);
+        let mut indexer = Indexer::new(&mut db, &mut loader, &reporter);
         indexer.max_file_time = self.args.max_file_index_time;
         let result = indexer.index_all(vec![path], None::<&Path>, &cancellation_flag);
 
@@ -283,12 +281,12 @@ impl Backend {
         };
 
         let handle = Handle::current();
-        let logger = LspLogger {
+        let reporter = LspReporter {
             handle: handle.clone(),
             logger: self.logger.clone(),
         };
         let result = {
-            let mut querier = Querier::new(&mut db, &logger);
+            let mut querier = Querier::new(&mut db, &reporter);
             let cancellation_flag = CancelAfterDuration::from_option(self.args.max_query_time);
             querier.definitions(reference, cancellation_flag.as_ref())
         };
@@ -530,16 +528,16 @@ struct BackendLogger {
 }
 
 impl BackendLogger {
-    async fn info<M: std::fmt::Display>(&self, message: M) {
-        self.client.log_message(MessageType::INFO, message).await
+    async fn log<M: std::fmt::Display>(&self, level: MessageType, message: M) {
+        self.client.log_message(level, message).await
     }
 
-    async fn warning<M: std::fmt::Display>(&self, message: M) {
-        self.client.log_message(MessageType::WARNING, message).await
+    async fn info<M: std::fmt::Display>(&self, message: M) {
+        self.log(MessageType::INFO, message).await
     }
 
     async fn error<M: std::fmt::Display>(&self, message: M) {
-        self.client.log_message(MessageType::ERROR, message).await
+        self.log(MessageType::ERROR, message).await
     }
 }
 
@@ -596,90 +594,43 @@ impl Job {
     }
 }
 
-struct LspLogger {
-    handle: Handle,
-    logger: BackendLogger,
-}
-struct LspFileLogger<'a> {
-    path: &'a Path,
+struct LspReporter {
     handle: Handle,
     logger: BackendLogger,
 }
 
-impl Logger for LspLogger {
-    fn file<'a>(&self, path: &'a Path) -> Box<dyn super::util::FileLogger + 'a> {
-        Box::new(LspFileLogger {
-            path,
-            handle: self.handle.clone(),
-            logger: self.logger.clone(),
-        })
+impl LspReporter {
+    fn report(&self, level: MessageType, path: &Path, status: &str) {
+        let logger = self.logger.clone();
+        let path = path.to_owned();
+        let status = status.to_owned();
+        self.handle.spawn(async move {
+            logger
+                .log(level, format!("{}: {}", path.display(), status))
+                .await;
+        });
     }
 }
 
-impl FileLogger for LspFileLogger<'_> {
-    fn default_failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        let logger = self.logger.clone();
-        let path = self.path.to_owned();
-        let status = status.to_owned();
-        self.handle.spawn(async move {
-            logger
-                .error(format!("{}: {}", path.display(), status))
-                .await;
-        });
+impl Reporter for LspReporter {
+    fn skipped(&self, path: &Path, summary: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.report(MessageType::INFO, path, summary)
     }
 
-    fn failure(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        let logger = self.logger.clone();
-        let path = self.path.to_owned();
-        let status = status.to_owned();
-        self.handle.spawn(async move {
-            logger
-                .error(format!("{}: {}", path.display(), status))
-                .await;
-        });
+    fn started(&self, path: &Path) {
+        self.report(MessageType::INFO, path, "started")
     }
 
-    fn skipped(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        let logger = self.logger.clone();
-        let path = self.path.to_owned();
-        let status = status.to_owned();
-        self.handle.spawn(async move {
-            logger
-                .info(format!("{}: skipped: {}", path.display(), status))
-                .await;
-        });
+    fn succeeded(&self, path: &Path, summary: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.report(MessageType::INFO, path, summary)
     }
 
-    fn warning(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        let logger = self.logger.clone();
-        let path = self.path.to_owned();
-        let status = status.to_owned();
-        self.handle.spawn(async move {
-            logger
-                .warning(format!("{}: {}", path.display(), status))
-                .await;
-        });
+    fn failed(&self, path: &Path, summary: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.report(MessageType::ERROR, path, summary)
     }
 
-    fn success(&mut self, status: &str, _details: Option<&dyn std::fmt::Display>) {
-        let logger = self.logger.clone();
-        let path = self.path.to_owned();
-        let status = status.to_owned();
-        self.handle.spawn(async move {
-            logger
-                .info(format!("{}: success: {}", path.display(), status))
-                .await;
-        });
-    }
-
-    fn processing(&mut self) {
-        let logger = self.logger.clone();
-        let path = self.path.to_owned();
-        self.handle.spawn(async move {
-            logger
-                .info(format!("{}: processing...", path.display()))
-                .await;
-        });
+    fn cancelled(&self, path: &Path, summary: &str, _details: Option<&dyn std::fmt::Display>) {
+        self.report(MessageType::WARNING, path, summary)
     }
 }
 

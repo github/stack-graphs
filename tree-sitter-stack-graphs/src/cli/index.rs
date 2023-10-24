@@ -11,6 +11,7 @@ use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
+use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
@@ -20,6 +21,16 @@ use std::time::Duration;
 use thiserror::Error;
 use tree_sitter_graph::Variables;
 
+use crate::cli::util::duration_from_seconds_str;
+use crate::cli::util::iter_files_and_directories;
+use crate::cli::util::reporter::ConsoleReporter;
+use crate::cli::util::reporter::Level;
+use crate::cli::util::reporter::Reporter;
+use crate::cli::util::sha1;
+use crate::cli::util::wait_for_input;
+use crate::cli::util::BuildErrorWithSource;
+use crate::cli::util::CLIFileReporter;
+use crate::cli::util::ExistingPathBufValueParser;
 use crate::loader::FileLanguageConfigurations;
 use crate::loader::FileReader;
 use crate::loader::Loader;
@@ -27,16 +38,6 @@ use crate::BuildError;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
 use crate::NoCancellation;
-
-use super::util::duration_from_seconds_str;
-use super::util::iter_files_and_directories;
-use super::util::sha1;
-use super::util::wait_for_input;
-use super::util::BuildErrorWithSource;
-use super::util::ConsoleLogger;
-use super::util::ExistingPathBufValueParser;
-use super::util::FileLogger;
-use super::util::Logger;
 
 #[derive(Args)]
 pub struct IndexArgs {
@@ -100,8 +101,8 @@ impl IndexArgs {
             wait_for_input()?;
         }
         let mut db = SQLiteWriter::open(&db_path)?;
-        let logger = ConsoleLogger::new(self.verbose, !self.hide_error_details);
-        let mut indexer = Indexer::new(&mut db, &mut loader, &logger);
+        let reporter = self.get_reporter();
+        let mut indexer = Indexer::new(&mut db, &mut loader, &reporter);
         indexer.force = self.force;
         indexer.max_file_time = self.max_file_time;
 
@@ -113,12 +114,37 @@ impl IndexArgs {
         indexer.index_all(source_paths, self.continue_from, &NoCancellation)?;
         Ok(())
     }
+
+    fn get_reporter(&self) -> ConsoleReporter {
+        return ConsoleReporter {
+            skipped_level: if self.verbose {
+                Level::Summary
+            } else {
+                Level::None
+            },
+            succeeded_level: if self.verbose {
+                Level::Summary
+            } else {
+                Level::None
+            },
+            failed_level: if self.hide_error_details {
+                Level::Summary
+            } else {
+                Level::Details
+            },
+            canceled_level: if self.hide_error_details {
+                Level::Summary
+            } else {
+                Level::Details
+            },
+        };
+    }
 }
 
 pub struct Indexer<'a> {
     db: &'a mut SQLiteWriter,
     loader: &'a mut Loader,
-    logger: &'a dyn Logger,
+    reporter: &'a dyn Reporter,
     /// Index files, even if they already exist in the database.
     pub force: bool,
     /// Maximum time per file.
@@ -126,11 +152,15 @@ pub struct Indexer<'a> {
 }
 
 impl<'a> Indexer<'a> {
-    pub fn new(db: &'a mut SQLiteWriter, loader: &'a mut Loader, logger: &'a dyn Logger) -> Self {
+    pub fn new(
+        db: &'a mut SQLiteWriter,
+        loader: &'a mut Loader,
+        reporter: &'a dyn Reporter,
+    ) -> Self {
         Self {
             db,
             loader,
-            logger,
+            reporter,
             force: false,
             max_file_time: None,
         }
@@ -148,6 +178,7 @@ impl<'a> Indexer<'a> {
         Q: AsRef<Path>,
     {
         for (source_root, source_path, strict) in iter_files_and_directories(source_paths) {
+            let mut file_status = CLIFileReporter::new(self.reporter, &source_path);
             cancellation_flag.check("indexing all files")?;
             self.index_file(
                 &source_root,
@@ -155,7 +186,9 @@ impl<'a> Indexer<'a> {
                 strict,
                 &mut continue_from,
                 cancellation_flag,
+                &mut file_status,
             )?;
+            file_status.assert_reported();
         }
         Ok(())
     }
@@ -166,13 +199,16 @@ impl<'a> Indexer<'a> {
         source_path: &Path,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<()> {
+        let mut file_status = CLIFileReporter::new(self.reporter, source_path);
         self.index_file(
             &source_root,
             &source_path,
             true,
             &mut None::<&Path>,
             cancellation_flag,
+            &mut file_status,
         )?;
+        file_status.assert_reported();
         Ok(())
     }
 
@@ -184,22 +220,25 @@ impl<'a> Indexer<'a> {
         missing_is_error: bool,
         continue_from: &mut Option<P>,
         cancellation_flag: &dyn CancellationFlag,
+        file_status: &mut CLIFileReporter,
     ) -> Result<()>
     where
         P: AsRef<Path>,
     {
-        let mut file_status = self.logger.file(source_path);
         match self.index_file_inner(
             source_root,
             source_path,
             missing_is_error,
             continue_from,
             cancellation_flag,
-            file_status.as_mut(),
+            file_status,
         ) {
-            ok @ Ok(_) => ok,
+            ok @ Ok(_) => {
+                file_status.assert_reported();
+                ok
+            }
             err @ Err(_) => {
-                file_status.default_failure("error", Some(&format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display())));
+                file_status.failure_if_processing("error", Some(&format!("Error analyzing file {}. To continue analysis from this file later, add: --continue-from {}", source_path.display(), source_path.display())));
                 err
             }
         }
@@ -212,7 +251,7 @@ impl<'a> Indexer<'a> {
         missing_is_error: bool,
         continue_from: &mut Option<P>,
         cancellation_flag: &dyn CancellationFlag,
-        file_status: &mut dyn FileLogger,
+        file_status: &mut CLIFileReporter<'_>,
     ) -> Result<()>
     where
         P: AsRef<Path>,
@@ -244,22 +283,28 @@ impl<'a> Indexer<'a> {
         let source = file_reader.get(source_path)?;
         let tag = sha1(source);
 
-        if !self.force {
-            match self
-                .db
-                .status_for_file(&source_path.to_string_lossy(), Some(&tag))?
-            {
-                FileStatus::Missing => {}
-                FileStatus::Indexed => {
+        let success_status = match self
+            .db
+            .status_for_file(&source_path.to_string_lossy(), Some(&tag))?
+        {
+            FileStatus::Missing => "indexed",
+            FileStatus::Indexed => {
+                if self.force {
+                    "reindexed"
+                } else {
                     file_status.skipped("cached index", None);
                     return Ok(());
                 }
-                FileStatus::Error(error) => {
+            }
+            FileStatus::Error(error) => {
+                if self.force {
+                    "reindexed"
+                } else {
                     file_status.skipped(&format!("cached error ({})", error), None);
                     return Ok(());
                 }
             }
-        }
+        };
 
         let file_cancellation_flag = CancelAfterDuration::from_option(self.max_file_time);
         let cancellation_flag = cancellation_flag | file_cancellation_flag.as_ref();
@@ -306,12 +351,13 @@ impl<'a> Indexer<'a> {
 
         let mut partials = PartialPaths::new();
         let mut paths = Vec::new();
-        match partials.find_minimal_partial_path_set_in_file(
+        match ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
             &graph,
+            &mut partials,
             file,
             &(&cancellation_flag as &dyn CancellationFlag),
             |_g, _ps, p| {
-                paths.push(p);
+                paths.push(p.clone());
             },
         ) {
             Ok(_) => {}
@@ -329,7 +375,7 @@ impl<'a> Indexer<'a> {
         self.db
             .store_result_for_file(&graph, file, &tag, &mut partials, &paths)?;
 
-        file_status.success("success", None);
+        file_status.success(success_status, None);
 
         Ok(())
     }

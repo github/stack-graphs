@@ -11,6 +11,7 @@ use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::NoCancellation;
 
@@ -22,16 +23,16 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
 
     // Generate partial paths for everything in the database.
     for file in graph.iter_files() {
-        partials
-            .find_minimal_partial_path_set_in_file(
-                graph,
-                file,
-                &NoCancellation,
-                |graph, partials, path| {
-                    db.add_partial_path(graph, partials, path);
-                },
-            )
-            .expect("should never be cancelled");
+        ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+            graph,
+            &mut partials,
+            file,
+            &NoCancellation,
+            |graph, partials, path| {
+                db.add_partial_path(graph, partials, path.clone());
+            },
+        )
+        .expect("should never be cancelled");
     }
 
     let references = graph
@@ -39,9 +40,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
         .filter(|handle| graph[*handle].is_reference());
     let mut complete_partial_paths = Vec::new();
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
-        graph,
-        &mut partials,
-        &mut db,
+        &mut DatabaseCandidates::new(graph, &mut partials, &mut db),
         references,
         &NoCancellation,
         |_, _, p| {

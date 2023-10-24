@@ -284,3 +284,76 @@ fn can_calculate_spans() {
     let trimmed_line = &python[source_info.span.start.trimmed_line.clone()];
     assert_eq!(trimmed_line, "a");
 }
+
+#[test]
+fn can_set_definiens() {
+    let tsg = r#"
+      (function_definition name:(_)@name body:(_)@body) {
+         node result
+         attr (result) type = "pop_symbol", symbol = (source-text @name), source_node = @name, is_definition
+         attr (result) definiens_node = @body
+      }
+    "#;
+    let python = r#"
+      def foo():
+        pass
+    "#;
+
+    let (graph, file) = build_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.nodes_for_file(file).next().unwrap();
+    let source_info = graph.source_info(node_handle).unwrap();
+
+    let actual_span = format!(
+        "{}:{}-{}:{}",
+        source_info.definiens_span.start.line,
+        source_info.definiens_span.start.column.utf8_offset,
+        source_info.definiens_span.end.line,
+        source_info.definiens_span.end.column.utf8_offset,
+    );
+    assert_eq!("2:8-2:12", actual_span)
+}
+
+#[test]
+fn can_set_null_definiens() {
+    let tsg = r#"
+      (function_definition name:(_)@name) {
+         node result
+         attr (result) type = "pop_symbol", symbol = (source-text @name), source_node = @name, is_definition
+         attr (result) definiens_node = #null
+      }
+    "#;
+    let python = r#"
+      def foo():
+        pass
+    "#;
+
+    let (graph, file) = build_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.nodes_for_file(file).next().unwrap();
+    let source_info = graph.source_info(node_handle).unwrap();
+    assert_eq!(lsp_positions::Span::default(), source_info.definiens_span)
+}
+
+#[test]
+fn can_set_syntax_type() {
+    let tsg = r#"
+      (function_definition) {
+         node result
+         attr (result) syntax_type = "function"
+      }
+    "#;
+    let python = r#"
+      def foo():
+        pass
+    "#;
+
+    let (graph, file) = build_stack_graph(python, tsg).unwrap();
+    let node_handle = graph.nodes_for_file(file).next().unwrap();
+    let source_info = graph.source_info(node_handle).unwrap();
+
+    let syntax_type = source_info
+        .syntax_type
+        .into_option()
+        .map(|s| &graph[s])
+        .unwrap_or("MISSING");
+    assert_eq!("function", syntax_type)
+}

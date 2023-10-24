@@ -16,6 +16,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::serde::Filter;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use std::path::Path;
 use std::path::PathBuf;
@@ -24,9 +25,10 @@ use tree_sitter_graph::Variables;
 
 use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::iter_files_and_directories;
-use crate::cli::util::ConsoleFileLogger;
+use crate::cli::util::reporter::ConsoleReporter;
+use crate::cli::util::reporter::Level;
+use crate::cli::util::CLIFileReporter;
 use crate::cli::util::ExistingPathBufValueParser;
-use crate::cli::util::FileLogger;
 use crate::cli::util::PathSpec;
 use crate::loader::ContentProvider;
 use crate::loader::FileReader;
@@ -171,9 +173,13 @@ impl TestArgs {
     }
 
     pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
+        let reporter = self.get_reporter();
         let mut total_result = TestResult::new();
         for (test_root, test_path, _) in iter_files_and_directories(self.test_paths.clone()) {
-            let test_result = self.run_test(&test_root, &test_path, &mut loader)?;
+            let mut file_status = CLIFileReporter::new(&reporter, &test_path);
+            let test_result =
+                self.run_test(&test_root, &test_path, &mut loader, &mut file_status)?;
+            file_status.assert_reported();
             total_result.absorb(test_result);
         }
         if total_result.failure_count() > 0 {
@@ -182,19 +188,39 @@ impl TestArgs {
         Ok(())
     }
 
+    fn get_reporter(&self) -> ConsoleReporter {
+        return ConsoleReporter {
+            skipped_level: if self.show_skipped {
+                Level::Summary
+            } else {
+                Level::None
+            },
+            succeeded_level: if self.quiet {
+                Level::None
+            } else {
+                Level::Summary
+            },
+            failed_level: if self.hide_error_details {
+                Level::Summary
+            } else {
+                Level::Details
+            },
+            canceled_level: Level::Details, // tester doesn't report canceled
+        };
+    }
+
     /// Run test file. Takes care of the output when an error is returned.
     fn run_test(
         &self,
         test_root: &Path,
         test_path: &Path,
         loader: &mut Loader,
+        file_status: &mut CLIFileReporter,
     ) -> anyhow::Result<TestResult> {
-        let mut file_status =
-            ConsoleFileLogger::new(test_path, !self.quiet, !self.hide_error_details);
-        match self.run_test_inner(test_root, test_path, loader, &mut file_status) {
+        match self.run_test_inner(test_root, test_path, loader, file_status) {
             ok @ Ok(_) => ok,
             err @ Err(_) => {
-                file_status.default_failure("error", None);
+                file_status.failure_if_processing("error", None);
                 err
             }
         }
@@ -205,7 +231,7 @@ impl TestArgs {
         test_root: &Path,
         test_path: &Path,
         loader: &mut Loader,
-        file_status: &mut ConsoleFileLogger,
+        file_status: &mut CLIFileReporter,
     ) -> anyhow::Result<TestResult> {
         let cancellation_flag = CancelAfterDuration::from_option(self.max_test_time);
 
@@ -230,9 +256,7 @@ impl TestArgs {
                 .map_or(false, |e| e == "skip"),
             _ => false,
         }) {
-            if self.show_skipped {
-                file_status.warning("skipped", None);
-            }
+            file_status.skipped("skipped", None);
             return Ok(TestResult::new());
         }
 
@@ -303,18 +327,19 @@ impl TestArgs {
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
         for file in test.graph.iter_files() {
-            partials.find_minimal_partial_path_set_in_file(
+            ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
                 &test.graph,
+                &mut partials,
                 file,
                 &cancellation_flag.as_ref(),
                 |g, ps, p| {
-                    db.add_partial_path(g, ps, p);
+                    db.add_partial_path(g, ps, p.clone());
                 },
             )?;
         }
         let result = test.run(&mut partials, &mut db, cancellation_flag.as_ref())?;
-        let success = self.handle_result(&result, file_status)?;
-        if self.output_mode.test(!success) {
+        let success = result.failure_count() == 0;
+        let outputs = if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
             self.save_output(
                 test_root,
@@ -325,8 +350,30 @@ impl TestArgs {
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
                 cancellation_flag.as_ref(),
-            )?;
+            )?
+        } else {
+            Vec::default()
+        };
+
+        if success {
+            let details = outputs.join("\n");
+            file_status.success("success", Some(&details));
+        } else {
+            let details = result
+                .failures_iter()
+                .map(|f| f.to_string())
+                .chain(outputs)
+                .join("\n");
+            file_status.failure(
+                &format!(
+                    "{}/{} assertions failed",
+                    result.failure_count(),
+                    result.count(),
+                ),
+                Some(&details),
+            );
         }
+
         Ok(result)
     }
 
@@ -341,27 +388,6 @@ impl TestArgs {
         Ok(())
     }
 
-    fn handle_result(
-        &self,
-        result: &TestResult,
-        file_status: &mut ConsoleFileLogger,
-    ) -> anyhow::Result<bool> {
-        let success = result.failure_count() == 0;
-        if success {
-            file_status.success("success", None);
-        } else {
-            file_status.failure(
-                &format!(
-                    "{}/{} assertions failed",
-                    result.failure_count(),
-                    result.count(),
-                ),
-                Some(&result.failures_iter().join("\n")),
-            );
-        }
-        Ok(success)
-    }
-
     fn save_output(
         &self,
         test_root: &Path,
@@ -372,7 +398,8 @@ impl TestArgs {
         filter: &dyn Filter,
         success: bool,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<String>> {
+        let mut outputs = Vec::with_capacity(3);
         let save_graph = self
             .save_graph
             .as_ref()
@@ -389,7 +416,11 @@ impl TestArgs {
         if let Some(path) = save_graph {
             self.save_graph(&path, &graph, filter)?;
             if !success || !self.quiet {
-                println!("{}: graph at {}", test_path.display(), path.display());
+                outputs.push(format!(
+                    "{}: graph at {}",
+                    test_path.display(),
+                    path.display()
+                ));
             }
         }
 
@@ -402,21 +433,25 @@ impl TestArgs {
         if let Some(path) = save_paths {
             self.save_paths(&path, graph, partials, &mut db, filter)?;
             if !success || !self.quiet {
-                println!("{}: paths at {}", test_path.display(), path.display());
+                outputs.push(format!(
+                    "{}: paths at {}",
+                    test_path.display(),
+                    path.display()
+                ));
             }
         }
 
         if let Some(path) = save_visualization {
             self.save_visualization(&path, graph, partials, &mut db, filter, &test_path)?;
             if !success || !self.quiet {
-                println!(
+                outputs.push(format!(
                     "{}: visualization at {}",
                     test_path.display(),
                     path.display()
-                );
+                ));
             }
         }
-        Ok(())
+        Ok(outputs)
     }
 
     fn save_graph(
@@ -447,9 +482,7 @@ impl TestArgs {
             .collect::<Vec<_>>();
         let mut paths = Vec::new();
         ForwardPartialPathStitcher::find_all_complete_partial_paths(
-            graph,
-            partials,
-            db,
+            &mut DatabaseCandidates::new(graph, partials, db),
             references.clone(),
             &cancellation_flag,
             |_, _, p| {

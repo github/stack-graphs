@@ -1,0 +1,15 @@
+class Foo {
+    bar() {
+
+    }
+}
+
+class Baz extends Foo {
+    bar() {
+
+    }
+    quux() {
+        super.bar;
+        //    ^ defined: 2
+    }
+}

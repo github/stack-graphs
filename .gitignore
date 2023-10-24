@@ -7,3 +7,6 @@ Cargo.lock
 /.crates.toml
 /.crates2.json
 /bin/
+
+# MacOS stuff
+.DS_Store
