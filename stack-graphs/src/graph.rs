@@ -425,7 +425,7 @@ impl Handle<File> {
 /// Each node (except for the _root node_ and _jump to scope_ node) lives in a file, and has a
 /// _local ID_ that must be unique within its file.
 #[repr(C)]
-#[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeID {
     file: ControlledOption<Handle<File>>,
     local_id: u32,

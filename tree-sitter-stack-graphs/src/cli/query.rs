@@ -5,17 +5,22 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use std::fmt::Display;
+use std::hash::Hash;
+use std::path::Path;
+use std::path::PathBuf;
+
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
-use indoc::printdoc;
+use stack_graphs::stats::FrequencyDistribution;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::Stats as StitchingStats;
 use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteReader;
-use std::path::Path;
-use std::path::PathBuf;
+use stack_graphs::storage::Stats as StorageStats;
 use thiserror::Error;
 use tree_sitter_graph::parse_error::Excerpt;
 
@@ -48,23 +53,90 @@ impl QueryArgs {
             wait_for_input()?;
         }
         let mut db = SQLiteReader::open(&db_path)?;
-        self.target.run(&mut db)?;
+        let stitcher_stats = self.target.run(&mut db)?;
         if self.stats {
-            let stats = db.stats();
-            printdoc! {r#"
-
-             db stats   | loads  | cached
-            ------------+--------+--------
-             files      | {:>6} | {:>6}
-             root paths | {:>6} | {:>6}
-             node paths | {:>6} | {:>6}
-            "#,
-                stats.file_loads, stats.file_cached,
-                stats.root_path_loads, stats.root_path_cached,
-                stats.node_path_loads, stats.node_path_cached,
-            };
+            Self::print_stats(stitcher_stats, db.stats());
         }
         Ok(())
+    }
+
+    fn print_stats(stitcher_stats: StitchingStats, db_stats: StorageStats) {
+        fn quartiles<X: Display + Eq + Hash + Ord>(hist: FrequencyDistribution<X>) -> String {
+            let qs = hist.quantiles(4);
+            if qs.is_empty() {
+                format!(
+                    "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
+                    "-", "-", "-", "-", "-", 0
+                )
+            } else {
+                format!(
+                    "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
+                    qs[0],
+                    qs[1],
+                    qs[2],
+                    qs[3],
+                    qs[4],
+                    hist.total(),
+                )
+            }
+        }
+        println!("      stitching stats      |   min   |   p25   |   p50   |   p75   |   max   |  total  ");
+        println!("---------------------------+---------+---------+---------+---------+---------+---------");
+        println!(
+            " queued paths per phase    | {} ",
+            quartiles(stitcher_stats.queued_paths_per_phase)
+        );
+        println!(
+            " processed paths per phase | {} ",
+            quartiles(stitcher_stats.processed_paths_per_phase)
+        );
+        println!(
+            " accepted path length      | {} ",
+            quartiles(stitcher_stats.accepted_path_length)
+        );
+        println!(
+            " maximal path length       | {} ",
+            quartiles(stitcher_stats.maximal_path_lengh)
+        );
+        println!(
+            " node path candidates      | {} ",
+            quartiles(stitcher_stats.candidates_per_node_path)
+        );
+        println!(
+            " node path extensions      | {} ",
+            quartiles(stitcher_stats.extensions_per_node_path)
+        );
+        println!(
+            " root path candidates      | {} ",
+            quartiles(stitcher_stats.candidates_per_root_path)
+        );
+        println!(
+            " root path extensions      | {} ",
+            quartiles(stitcher_stats.extensions_per_root_path)
+        );
+        println!(
+            " node visits               | {} ",
+            quartiles(stitcher_stats.node_visits.frequencies())
+        );
+        println!(
+            " root visits               | {:>7} ",
+            stitcher_stats.root_visits
+        );
+        println!();
+        println!("      database stats       |  loads  | cached  ");
+        println!("---------------------------+---------+---------");
+        println!(
+            " files                     | {:>7} | {:>7} ",
+            db_stats.file_loads, db_stats.file_cached
+        );
+        println!(
+            " node paths                | {:>7} | {:>7} ",
+            db_stats.node_path_loads, db_stats.node_path_cached
+        );
+        println!(
+            " root paths                | {:>7} | {:>7} ",
+            db_stats.root_path_loads, db_stats.root_path_cached
+        );
     }
 }
 
@@ -74,7 +146,7 @@ pub enum Target {
 }
 
 impl Target {
-    pub fn run(self, db: &mut SQLiteReader) -> anyhow::Result<()> {
+    pub fn run(self, db: &mut SQLiteReader) -> anyhow::Result<StitchingStats> {
         let reporter = ConsoleReporter::details();
         let mut querier = Querier::new(db, &reporter);
         match self {
@@ -96,13 +168,16 @@ pub struct Definition {
 }
 
 impl Definition {
-    pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
+    pub fn run(self, querier: &mut Querier) -> anyhow::Result<StitchingStats> {
         let cancellation_flag = NoCancellation;
+        let mut stats = StitchingStats::default();
         let mut file_reader = FileReader::new();
         for mut reference in self.references {
             reference.canonicalize()?;
 
-            let results = querier.definitions(reference.clone(), &cancellation_flag)?;
+            let (results, ref_stats) =
+                querier.definitions(reference.clone(), &cancellation_flag)?;
+            stats += &ref_stats;
             let numbered = results.len() > 1;
             let indent = if numbered { 6 } else { 0 };
             if numbered {
@@ -150,7 +225,7 @@ impl Definition {
                 }
             }
         }
-        Ok(())
+        Ok(stats)
     }
 }
 
@@ -168,7 +243,7 @@ impl<'a> Querier<'a> {
         &mut self,
         reference: SourcePosition,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<Vec<QueryResult>> {
+    ) -> Result<(Vec<QueryResult>, StitchingStats)> {
         let log_path = PathBuf::from(reference.to_string());
 
         let mut file_reader = FileReader::new();
@@ -181,7 +256,7 @@ impl<'a> Querier<'a> {
             _ => {
                 self.reporter.started(&log_path);
                 self.reporter.failed(&log_path, "file not indexed", None);
-                return Ok(Vec::default());
+                return Ok(Default::default());
             }
         }
 
@@ -195,10 +270,11 @@ impl<'a> Querier<'a> {
         if starting_nodes.is_empty() {
             self.reporter
                 .cancelled(&log_path, "no references at location", None);
-            return Ok(Vec::default());
+            return Ok(Default::default());
         }
 
         let mut result = Vec::new();
+        let mut stats = StitchingStats::default();
         for (node, span) in starting_nodes {
             let reference_span = SourceSpan {
                 path: reference.path.clone(),
@@ -209,7 +285,7 @@ impl<'a> Querier<'a> {
             let stitcher_config = StitcherConfig::default()
                 // always detect similar paths, we don't know the language configurations for the data in the database
                 .with_detect_similar_paths(true);
-            if let Err(err) = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+            let ref_result = ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 self.db,
                 std::iter::once(node),
                 stitcher_config,
@@ -217,9 +293,13 @@ impl<'a> Querier<'a> {
                 |_g, _ps, p| {
                     reference_paths.push(p.clone());
                 },
-            ) {
-                self.reporter.failed(&log_path, "query timed out", None);
-                return Err(err.into());
+            );
+            match ref_result {
+                Ok(ref_stats) => stats += &ref_stats,
+                Err(err) => {
+                    self.reporter.failed(&log_path, "query timed out", None);
+                    return Err(err.into());
+                }
             }
 
             let (graph, partials, _) = self.db.get();
@@ -269,7 +349,7 @@ impl<'a> Querier<'a> {
             None,
         );
 
-        Ok(result)
+        Ok((result, stats))
     }
 }
 
