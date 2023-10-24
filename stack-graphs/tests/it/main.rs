@@ -24,6 +24,7 @@ mod graph;
 mod partial;
 #[cfg(feature = "serde")]
 mod serde;
+mod stats;
 mod stitching;
 #[cfg(feature = "storage")]
 mod storage;
