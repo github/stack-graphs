@@ -501,7 +501,7 @@ impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
     }
 }
 
-pub(super) fn print_stitcher_stats(stats: StitchingStats) {
+pub(super) fn print_stitching_stats(stats: StitchingStats) {
     fn quartiles<X: Display + Eq + Hash + Ord>(hist: FrequencyDistribution<X>) -> String {
         let qs = hist.quantiles(4);
         if qs.is_empty() {

@@ -21,7 +21,7 @@ use thiserror::Error;
 use tree_sitter_graph::parse_error::Excerpt;
 
 use crate::cli::util::print_database_stats;
-use crate::cli::util::print_stitcher_stats;
+use crate::cli::util::print_stitching_stats;
 use crate::cli::util::reporter::ConsoleReporter;
 use crate::cli::util::reporter::Reporter;
 use crate::cli::util::sha1;
@@ -51,10 +51,10 @@ impl QueryArgs {
             wait_for_input()?;
         }
         let mut db = SQLiteReader::open(&db_path)?;
-        let stitcher_stats = self.target.run(&mut db)?;
+        let stitching_stats = self.target.run(&mut db)?;
         if self.stats {
             println!();
-            print_stitcher_stats(stitcher_stats);
+            print_stitching_stats(stitching_stats);
             println!();
             print_database_stats(db.stats());
         }

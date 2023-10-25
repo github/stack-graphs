@@ -25,7 +25,7 @@ use tree_sitter_graph::Variables;
 
 use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::iter_files_and_directories;
-use crate::cli::util::print_stitcher_stats;
+use crate::cli::util::print_stitching_stats;
 use crate::cli::util::reporter::ConsoleReporter;
 use crate::cli::util::reporter::Level;
 use crate::cli::util::reporter::Reporter;
@@ -122,7 +122,7 @@ impl IndexArgs {
 
         if self.stats {
             println!();
-            print_stitcher_stats(indexer.into_stats());
+            print_stitching_stats(indexer.into_stats());
         }
         Ok(())
     }
