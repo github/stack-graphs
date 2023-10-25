@@ -14,6 +14,7 @@ use stack_graphs::partial::Cyclicity;
 use stack_graphs::partial::PartialPath;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
+use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::GraphEdges;
 use stack_graphs::CancelAfterDuration;
@@ -358,5 +359,64 @@ fn appending_eliminating_cycle_terminates() {
         );
         assert!(result.is_ok());
         assert_eq!(1, path_count);
+    }
+}
+
+#[test]
+fn cycles_remain_available_for_stitching() {
+    let mut graph = StackGraph::new();
+    let file = graph.add_file("test").unwrap();
+    let r = StackGraph::root_node();
+    let s = create_scope_node(&mut graph, file, false);
+    let foo_ref_1 = create_push_symbol_node(&mut graph, file, "foo", false);
+    let foo_ref_2 = create_push_symbol_node(&mut graph, file, "foo", false);
+    let foo_def = create_pop_symbol_node(&mut graph, file, "foo", false);
+    let bar_ref = create_push_symbol_node(&mut graph, file, "bar", true);
+    let bar_def = create_pop_symbol_node(&mut graph, file, "bar", true);
+    let qux_ref = create_push_symbol_node(&mut graph, file, "qux", false);
+    let qux_def = create_pop_symbol_node(&mut graph, file, "qux", false);
+
+    let mut partials = PartialPaths::new();
+    create_partial_path_and_edges(
+        &mut graph,
+        &mut partials,
+        &[bar_ref, foo_ref_1, foo_ref_2, qux_ref, r],
+    )
+    .unwrap();
+    create_partial_path_and_edges(
+        &mut graph,
+        &mut partials,
+        &[r, qux_def, s, foo_def, s, bar_def],
+    )
+    .unwrap();
+
+    let mut db = Database::new();
+    let cancellation_flag = CancelAfterDuration::new(TEST_TIMEOUT);
+
+    // build minimal path database
+    {
+        let result = ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+            &graph,
+            &mut partials,
+            file,
+            &cancellation_flag,
+            |g, ps, p| {
+                db.add_partial_path(g, ps, p.clone());
+            },
+        );
+        assert!(result.is_ok());
+    }
+
+    // resolve using minimal path database
+    {
+        let mut path_count = 0;
+        let result = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+            &mut DatabaseCandidates::new(&graph, &mut partials, &mut db),
+            vec![bar_ref],
+            &cancellation_flag,
+            |_, _, _| path_count += 1,
+        );
+        assert!(result.is_ok());
+        assert_eq!(1, path_count)
     }
 }
