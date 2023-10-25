@@ -437,7 +437,7 @@ impl<'a> CLIFileReporter<'a> {
         status: &str,
         details: Option<&dyn std::fmt::Display>,
     ) {
-        if !self.path_logged {
+        if !self.path_logged || self.status_logged {
             return;
         }
         self.failure(status, details);
