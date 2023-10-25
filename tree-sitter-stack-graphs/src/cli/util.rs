@@ -18,8 +18,13 @@ use sha1::Sha1;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::stats::FrequencyDistribution;
+use stack_graphs::stitching::Stats as StitchingStats;
+use stack_graphs::storage::Stats as StorageStats;
 use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::fmt::Display;
+use std::hash::Hash;
 use std::io::Write;
 use std::ops::Range;
 use std::path::Path;
@@ -494,4 +499,86 @@ impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
             )
         )
     }
+}
+
+pub(super) fn print_stitcher_stats(stats: StitchingStats) {
+    fn quartiles<X: Display + Eq + Hash + Ord>(hist: FrequencyDistribution<X>) -> String {
+        let qs = hist.quantiles(4);
+        if qs.is_empty() {
+            format!(
+                "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
+                "-", "-", "-", "-", "-", 0
+            )
+        } else {
+            format!(
+                "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
+                qs[0],
+                qs[1],
+                qs[2],
+                qs[3],
+                qs[4],
+                hist.total(),
+            )
+        }
+    }
+    println!(
+        "      stitching stats      |   min   |   p25   |   p50   |   p75   |   max   |  total  "
+    );
+    println!(
+        "---------------------------+---------+---------+---------+---------+---------+---------"
+    );
+    println!(
+        " queued paths per phase    | {} ",
+        quartiles(stats.queued_paths_per_phase)
+    );
+    println!(
+        " processed paths per phase | {} ",
+        quartiles(stats.processed_paths_per_phase)
+    );
+    println!(
+        " accepted path length      | {} ",
+        quartiles(stats.accepted_path_length)
+    );
+    println!(
+        " maximal path length       | {} ",
+        quartiles(stats.maximal_path_lengh)
+    );
+    println!(
+        " node path candidates      | {} ",
+        quartiles(stats.candidates_per_node_path)
+    );
+    println!(
+        " node path extensions      | {} ",
+        quartiles(stats.extensions_per_node_path)
+    );
+    println!(
+        " root path candidates      | {} ",
+        quartiles(stats.candidates_per_root_path)
+    );
+    println!(
+        " root path extensions      | {} ",
+        quartiles(stats.extensions_per_root_path)
+    );
+    println!(
+        " node visits               | {} ",
+        quartiles(stats.node_visits.frequencies())
+    );
+    println!(" root visits               | {:>7} ", stats.root_visits);
+}
+
+pub(super) fn print_database_stats(stats: StorageStats) {
+    println!("      database stats       |  loads  | cached  ");
+    println!("---------------------------+---------+---------");
+    println!(
+        " files                     | {:>7} | {:>7} ",
+        stats.file_loads, stats.file_cached
+    );
+    println!(
+        " node paths                | {:>7} | {:>7} ",
+        stats.node_path_loads, stats.node_path_cached
+    );
+    println!(
+        " root paths                | {:>7} | {:>7} ",
+        stats.root_path_loads, stats.root_path_cached
+    );
 }

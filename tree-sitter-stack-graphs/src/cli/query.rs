@@ -5,8 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::fmt::Display;
-use std::hash::Hash;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -14,16 +12,16 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
-use stack_graphs::stats::FrequencyDistribution;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::Stats as StitchingStats;
 use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteReader;
-use stack_graphs::storage::Stats as StorageStats;
 use thiserror::Error;
 use tree_sitter_graph::parse_error::Excerpt;
 
+use crate::cli::util::print_database_stats;
+use crate::cli::util::print_stitcher_stats;
 use crate::cli::util::reporter::ConsoleReporter;
 use crate::cli::util::reporter::Reporter;
 use crate::cli::util::sha1;
@@ -55,88 +53,11 @@ impl QueryArgs {
         let mut db = SQLiteReader::open(&db_path)?;
         let stitcher_stats = self.target.run(&mut db)?;
         if self.stats {
-            Self::print_stats(stitcher_stats, db.stats());
+            print_stitcher_stats(stitcher_stats);
+            println!();
+            print_database_stats(db.stats());
         }
         Ok(())
-    }
-
-    fn print_stats(stitcher_stats: StitchingStats, db_stats: StorageStats) {
-        fn quartiles<X: Display + Eq + Hash + Ord>(hist: FrequencyDistribution<X>) -> String {
-            let qs = hist.quantiles(4);
-            if qs.is_empty() {
-                format!(
-                    "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
-                    "-", "-", "-", "-", "-", 0
-                )
-            } else {
-                format!(
-                    "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
-                    qs[0],
-                    qs[1],
-                    qs[2],
-                    qs[3],
-                    qs[4],
-                    hist.total(),
-                )
-            }
-        }
-        println!("      stitching stats      |   min   |   p25   |   p50   |   p75   |   max   |  total  ");
-        println!("---------------------------+---------+---------+---------+---------+---------+---------");
-        println!(
-            " queued paths per phase    | {} ",
-            quartiles(stitcher_stats.queued_paths_per_phase)
-        );
-        println!(
-            " processed paths per phase | {} ",
-            quartiles(stitcher_stats.processed_paths_per_phase)
-        );
-        println!(
-            " accepted path length      | {} ",
-            quartiles(stitcher_stats.accepted_path_length)
-        );
-        println!(
-            " maximal path length       | {} ",
-            quartiles(stitcher_stats.maximal_path_lengh)
-        );
-        println!(
-            " node path candidates      | {} ",
-            quartiles(stitcher_stats.candidates_per_node_path)
-        );
-        println!(
-            " node path extensions      | {} ",
-            quartiles(stitcher_stats.extensions_per_node_path)
-        );
-        println!(
-            " root path candidates      | {} ",
-            quartiles(stitcher_stats.candidates_per_root_path)
-        );
-        println!(
-            " root path extensions      | {} ",
-            quartiles(stitcher_stats.extensions_per_root_path)
-        );
-        println!(
-            " node visits               | {} ",
-            quartiles(stitcher_stats.node_visits.frequencies())
-        );
-        println!(
-            " root visits               | {:>7} ",
-            stitcher_stats.root_visits
-        );
-        println!();
-        println!("      database stats       |  loads  | cached  ");
-        println!("---------------------------+---------+---------");
-        println!(
-            " files                     | {:>7} | {:>7} ",
-            db_stats.file_loads, db_stats.file_cached
-        );
-        println!(
-            " node paths                | {:>7} | {:>7} ",
-            db_stats.node_path_loads, db_stats.node_path_cached
-        );
-        println!(
-            " root paths                | {:>7} | {:>7} ",
-            db_stats.root_path_loads, db_stats.root_path_cached
-        );
     }
 }
 
