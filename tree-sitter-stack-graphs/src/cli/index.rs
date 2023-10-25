@@ -121,6 +121,7 @@ impl IndexArgs {
         indexer.index_all(source_paths, self.continue_from, &NoCancellation)?;
 
         if self.stats {
+            println!();
             print_stitcher_stats(indexer.into_stats());
         }
         Ok(())

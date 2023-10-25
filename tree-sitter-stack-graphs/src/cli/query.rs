@@ -53,6 +53,7 @@ impl QueryArgs {
         let mut db = SQLiteReader::open(&db_path)?;
         let stitcher_stats = self.target.run(&mut db)?;
         if self.stats {
+            println!();
             print_stitcher_stats(stitcher_stats);
             println!();
             print_database_stats(db.stats());
@@ -132,7 +133,7 @@ impl Definition {
                     n => println!("{}has {} definitions", " ".repeat(indent), n),
                 }
                 for definition in definitions.into_iter() {
-                    println!(
+                    print!(
                         "{}",
                         Excerpt::from_source(
                             &definition.path,
