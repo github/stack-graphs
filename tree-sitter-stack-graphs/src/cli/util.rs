@@ -506,12 +506,12 @@ pub(super) fn print_stitching_stats(stats: StitchingStats) {
         let qs = hist.quantiles(4);
         if qs.is_empty() {
             format!(
-                "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
+                "{:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9}",
                 "-", "-", "-", "-", "-", 0
             )
         } else {
             format!(
-                "{:>7} | {:>7} | {:>7} | {:>7} | {:>7} | {:>7}",
+                "{:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9}",
                 qs[0],
                 qs[1],
                 qs[2],
@@ -522,10 +522,10 @@ pub(super) fn print_stitching_stats(stats: StitchingStats) {
         }
     }
     println!(
-        "      stitching stats      |   min   |   p25   |   p50   |   p75   |   max   |  total  "
+        "      stitching stats      |    min    |    p25    |    p50    |    p75    |    max    |   total   "
     );
     println!(
-        "---------------------------+---------+---------+---------+---------+---------+---------"
+        "---------------------------+-----------+-----------+-----------+-----------+-----------+-----------"
     );
     println!(
         " queued paths per phase    | {} ",
@@ -563,22 +563,22 @@ pub(super) fn print_stitching_stats(stats: StitchingStats) {
         " node visits               | {} ",
         quartiles(stats.node_visits.frequencies())
     );
-    println!(" root visits               | {:>7} ", stats.root_visits);
+    println!(" root visits               | {:>9} ", stats.root_visits);
 }
 
 pub(super) fn print_database_stats(stats: StorageStats) {
     println!("      database stats       |  loads  | cached  ");
     println!("---------------------------+---------+---------");
     println!(
-        " files                     | {:>7} | {:>7} ",
+        " files                     | {:>9} | {:>9} ",
         stats.file_loads, stats.file_cached
     );
     println!(
-        " node paths                | {:>7} | {:>7} ",
+        " node paths                | {:>9} | {:>9} ",
         stats.node_path_loads, stats.node_path_cached
     );
     println!(
-        " root paths                | {:>7} | {:>7} ",
+        " root paths                | {:>9} | {:>9} ",
         stats.root_path_loads, stats.root_path_cached
     );
 }
