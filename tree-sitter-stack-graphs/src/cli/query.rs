@@ -96,9 +96,8 @@ impl Definition {
         for mut reference in self.references {
             reference.canonicalize()?;
 
-            let (results, ref_stats) =
-                querier.definitions(reference.clone(), &cancellation_flag)?;
-            stats += &ref_stats;
+            let results = querier.definitions(reference.clone(), &cancellation_flag)?;
+            stats += querier.stats();
             let numbered = results.len() > 1;
             let indent = if numbered { 6 } else { 0 };
             if numbered {
@@ -153,18 +152,23 @@ impl Definition {
 pub struct Querier<'a> {
     db: &'a mut SQLiteReader,
     reporter: &'a dyn Reporter,
+    stats: StitchingStats,
 }
 
 impl<'a> Querier<'a> {
     pub fn new(db: &'a mut SQLiteReader, reporter: &'a dyn Reporter) -> Self {
-        Self { db, reporter }
+        Self {
+            db,
+            reporter,
+            stats: StitchingStats::default(),
+        }
     }
 
     pub fn definitions(
         &mut self,
         reference: SourcePosition,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<(Vec<QueryResult>, StitchingStats)> {
+    ) -> Result<Vec<QueryResult>> {
         let log_path = PathBuf::from(reference.to_string());
 
         let mut file_reader = FileReader::new();
@@ -195,7 +199,6 @@ impl<'a> Querier<'a> {
         }
 
         let mut result = Vec::new();
-        let mut stats = StitchingStats::default();
         for (node, span) in starting_nodes {
             let reference_span = SourceSpan {
                 path: reference.path.clone(),
@@ -216,7 +219,7 @@ impl<'a> Querier<'a> {
                 },
             );
             match ref_result {
-                Ok(ref_stats) => stats += &ref_stats,
+                Ok(ref_stats) => self.stats += &ref_stats,
                 Err(err) => {
                     self.reporter.failed(&log_path, "query timed out", None);
                     return Err(err.into());
@@ -270,7 +273,15 @@ impl<'a> Querier<'a> {
             None,
         );
 
-        Ok((result, stats))
+        Ok(result)
+    }
+
+    pub fn stats(&self) -> &StitchingStats {
+        &self.stats
+    }
+
+    pub fn into_stats(self) -> StitchingStats {
+        self.stats
     }
 }
 

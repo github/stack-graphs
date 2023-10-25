@@ -12,6 +12,7 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::Stats as StitchingStats;
 use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteWriter;
@@ -24,6 +25,7 @@ use tree_sitter_graph::Variables;
 
 use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::iter_files_and_directories;
+use crate::cli::util::print_stitcher_stats;
 use crate::cli::util::reporter::ConsoleReporter;
 use crate::cli::util::reporter::Level;
 use crate::cli::util::reporter::Reporter;
@@ -79,6 +81,9 @@ pub struct IndexArgs {
     )]
     pub max_file_time: Option<Duration>,
 
+    #[clap(long)]
+    pub stats: bool,
+
     /// Wait for user input before starting analysis. Useful for profiling.
     #[clap(long)]
     pub wait_at_start: bool,
@@ -94,6 +99,7 @@ impl IndexArgs {
             hide_error_details: false,
             max_file_time: None,
             wait_at_start: false,
+            stats: false,
         }
     }
 
@@ -113,6 +119,10 @@ impl IndexArgs {
             .map(|p| p.canonicalize())
             .collect::<std::result::Result<Vec<_>, _>>()?;
         indexer.index_all(source_paths, self.continue_from, &NoCancellation)?;
+
+        if self.stats {
+            print_stitcher_stats(indexer.into_stats());
+        }
         Ok(())
     }
 
@@ -146,6 +156,7 @@ pub struct Indexer<'a> {
     db: &'a mut SQLiteWriter,
     loader: &'a mut Loader,
     reporter: &'a dyn Reporter,
+    stats: StitchingStats,
     /// Index files, even if they already exist in the database.
     pub force: bool,
     /// Maximum time per file.
@@ -164,6 +175,7 @@ impl<'a> Indexer<'a> {
             reporter,
             force: false,
             max_file_time: None,
+            stats: StitchingStats::default(),
         }
     }
 
@@ -364,7 +376,9 @@ impl<'a> Indexer<'a> {
                 paths.push(p.clone());
             },
         ) {
-            Ok(_) => {}
+            Ok(stats) => {
+                self.stats += &stats;
+            }
             Err(_) => {
                 file_status.warning("path computation timed out", None);
                 self.db.store_error_for_file(
@@ -441,6 +455,14 @@ impl<'a> Indexer<'a> {
         };
         *continue_from = None;
         false
+    }
+
+    pub fn stats(&self) -> &StitchingStats {
+        &self.stats
+    }
+
+    pub fn into_stats(self) -> StitchingStats {
+        self.stats
     }
 }
 
