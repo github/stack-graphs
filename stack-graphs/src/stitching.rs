@@ -1066,17 +1066,19 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         let (graph, _, _) = candidates.get_graph_partials_and_db();
         let end_node = &graph[partial_path.end_node];
         if end_node.is_root() {
-            self.stats.candidates_per_root_path += candidate_count;
-            self.stats.extensions_per_root_path += extension_count;
+            self.stats.candidates_per_root_path.record(candidate_count);
+            self.stats.extensions_per_root_path.record(extension_count);
             self.stats.root_visits += 1;
         } else {
-            self.stats.candidates_per_node_path += candidate_count;
-            self.stats.extensions_per_node_path += extension_count;
-            self.stats.node_visits += end_node.id();
+            self.stats.candidates_per_node_path.record(candidate_count);
+            self.stats.extensions_per_node_path.record(extension_count);
+            self.stats.node_visits.record(end_node.id());
         }
 
         if extension_count == 0 {
-            self.stats.maximal_path_lengh += partial_path.edges.len();
+            self.stats
+                .maximal_path_lengh
+                .record(partial_path.edges.len());
         }
         candidate_count
     }
@@ -1111,7 +1113,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             self.next_iteration.1.drain(..),
             self.next_iteration.2.drain(..),
         ));
-        self.stats.queued_paths_per_phase += self.queue.len();
+        self.stats.queued_paths_per_phase.record(self.queue.len());
         let mut work_performed = 0;
         while let Some((partial_path, cycle_detector, has_split)) = self.queue.pop_front() {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
@@ -1133,7 +1135,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 break;
             }
         }
-        self.stats.processed_paths_per_phase += work_performed;
+        self.stats.processed_paths_per_phase.record(work_performed);
 
         #[cfg(feature = "copious-debugging")]
         {
@@ -1202,7 +1204,7 @@ impl ForwardPartialPathStitcher<Edge> {
             );
             for path in stitcher.previous_phase_partial_paths() {
                 if as_complete_as_necessary(graph, path) {
-                    accepted_path_length += path.edges.len();
+                    accepted_path_length.record(path.edges.len());
                     visit(graph, partials, path);
                 }
             }
@@ -1267,7 +1269,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             for path in stitcher.previous_phase_partial_paths() {
                 if path.is_complete(graph) {
-                    accepted_path_length += path.edges.len();
+                    accepted_path_length.record(path.edges.len());
                     visit(graph, partials, path);
                 }
             }
@@ -1302,6 +1304,21 @@ pub struct Stats {
     pub root_visits: usize,
     /// The distribution of the number of times a regular node is visited
     pub node_visits: FrequencyDistribution<crate::graph::NodeID>,
+}
+
+impl std::ops::AddAssign<Self> for Stats {
+    fn add_assign(&mut self, rhs: Self) {
+        self.queued_paths_per_phase += rhs.queued_paths_per_phase;
+        self.processed_paths_per_phase += rhs.processed_paths_per_phase;
+        self.accepted_path_length += rhs.accepted_path_length;
+        self.maximal_path_lengh += rhs.maximal_path_lengh;
+        self.candidates_per_node_path += rhs.candidates_per_node_path;
+        self.candidates_per_root_path += rhs.candidates_per_root_path;
+        self.extensions_per_node_path += rhs.extensions_per_node_path;
+        self.extensions_per_root_path += rhs.extensions_per_root_path;
+        self.root_visits += rhs.root_visits;
+        self.node_visits += rhs.node_visits;
+    }
 }
 
 impl std::ops::AddAssign<&Self> for Stats {

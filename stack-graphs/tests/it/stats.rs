@@ -1,3 +1,10 @@
+// -*- coding: utf-8 -*-
+// ------------------------------------------------------------------------------------------------
+// Copyright © 2023, stack-graphs authors.
+// Licensed under either of Apache License, Version 2.0, or MIT license, at your option.
+// Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
+// ------------------------------------------------------------------------------------------------
+
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
 
@@ -18,7 +25,7 @@ fn empty_distribution() {
 #[test]
 fn singleton_distribution() {
     let mut hist = FrequencyDistribution::default();
-    hist += 42;
+    hist.record(42);
 
     assert_eq!(1, hist.unique());
     assert_eq!(1, hist.total());
@@ -31,10 +38,10 @@ fn singleton_distribution() {
 #[test]
 fn four_value_distribution() {
     let mut hist = FrequencyDistribution::default();
-    hist += 3;
-    hist += 4;
-    hist += 1;
-    hist += 2;
+    hist.record(3);
+    hist.record(4);
+    hist.record(1);
+    hist.record(2);
 
     assert_eq!(4, hist.unique());
     assert_eq!(4, hist.total());

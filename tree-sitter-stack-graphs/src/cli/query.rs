@@ -72,8 +72,9 @@ impl Target {
         let reporter = ConsoleReporter::details();
         let mut querier = Querier::new(db, &reporter);
         match self {
-            Self::Definition(cmd) => cmd.run(&mut querier),
+            Self::Definition(cmd) => cmd.run(&mut querier)?,
         }
+        Ok(querier.into_stats())
     }
 }
 
@@ -90,15 +91,13 @@ pub struct Definition {
 }
 
 impl Definition {
-    pub fn run(self, querier: &mut Querier) -> anyhow::Result<StitchingStats> {
+    pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
         let cancellation_flag = NoCancellation;
-        let mut stats = StitchingStats::default();
         let mut file_reader = FileReader::new();
         for mut reference in self.references {
             reference.canonicalize()?;
 
             let results = querier.definitions(reference.clone(), &cancellation_flag)?;
-            stats += querier.stats();
             let numbered = results.len() > 1;
             let indent = if numbered { 6 } else { 0 };
             if numbered {
@@ -146,7 +145,7 @@ impl Definition {
                 }
             }
         }
-        Ok(stats)
+        Ok(())
     }
 }
 
@@ -220,7 +219,7 @@ impl<'a> Querier<'a> {
                 },
             );
             match ref_result {
-                Ok(ref_stats) => self.stats += &ref_stats,
+                Ok(ref_stats) => self.stats += ref_stats,
                 Err(err) => {
                     self.reporter.failed(&log_path, "query timed out", None);
                     return Err(err.into());

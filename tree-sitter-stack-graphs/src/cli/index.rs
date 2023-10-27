@@ -378,7 +378,7 @@ impl<'a> Indexer<'a> {
             },
         ) {
             Ok(stats) => {
-                self.stats += &stats;
+                self.stats += stats;
             }
             Err(_) => {
                 file_status.warning("path computation timed out", None);

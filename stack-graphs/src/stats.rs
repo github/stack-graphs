@@ -1,3 +1,10 @@
+// -*- coding: utf-8 -*-
+// ------------------------------------------------------------------------------------------------
+// Copyright © 2023, stack-graphs authors.
+// Licensed under either of Apache License, Version 2.0, or MIT license, at your option.
+// Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
+// ------------------------------------------------------------------------------------------------
+
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -14,6 +21,11 @@ where
 }
 
 impl<T: Eq + Hash> FrequencyDistribution<T> {
+    pub fn record(&mut self, value: T) {
+        *self.values.entry(value).or_default() += 1;
+        self.total += 1;
+    }
+
     pub fn total(&self) -> usize {
         return self.total;
     }
@@ -25,7 +37,7 @@ impl<T: Eq + Hash> FrequencyDistribution<T> {
     pub fn frequencies(&self) -> FrequencyDistribution<usize> {
         let mut fs = FrequencyDistribution::default();
         for count in self.values.values() {
-            fs += *count
+            fs.record(*count);
         }
         fs
     }
@@ -67,13 +79,15 @@ impl<T: Eq + Hash + Ord> FrequencyDistribution<T> {
     }
 }
 
-impl<T> std::ops::AddAssign<T> for FrequencyDistribution<T>
+impl<T> std::ops::AddAssign<Self> for FrequencyDistribution<T>
 where
     T: Eq + Hash,
 {
-    fn add_assign(&mut self, rhs: T) {
-        *self.values.entry(rhs).or_default() += 1;
-        self.total += 1;
+    fn add_assign(&mut self, rhs: Self) {
+        for (value, count) in rhs.values {
+            *self.values.entry(value).or_default() += count;
+        }
+        self.total += rhs.total;
     }
 }
 
