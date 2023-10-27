@@ -284,7 +284,12 @@ pub struct Database {
     symbol_stack_keys: ListArena<Handle<Symbol>>,
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
-    root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
+    root_paths_by_precondition_prefix:
+        SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
+    root_paths_by_precondition_with_variable:
+        SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
+    root_paths_by_precondition_without_variable:
+        SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
     incoming_paths: SupplementalArena<Node, Degree>,
 }
 
@@ -297,7 +302,9 @@ impl Database {
             symbol_stack_keys: List::new_arena(),
             symbol_stack_key_cache: HashMap::new(),
             paths_by_start_node: SupplementalArena::new(),
-            root_paths_by_precondition: SupplementalArena::new(),
+            root_paths_by_precondition_prefix: SupplementalArena::new(),
+            root_paths_by_precondition_with_variable: SupplementalArena::new(),
+            root_paths_by_precondition_without_variable: SupplementalArena::new(),
             incoming_paths: SupplementalArena::new(),
         }
     }
@@ -311,7 +318,9 @@ impl Database {
         self.symbol_stack_keys.clear();
         self.symbol_stack_key_cache.clear();
         self.paths_by_start_node.clear();
-        self.root_paths_by_precondition.clear();
+        self.root_paths_by_precondition_prefix.clear();
+        self.root_paths_by_precondition_with_variable.clear();
+        self.root_paths_by_precondition_without_variable.clear();
         self.incoming_paths.clear();
     }
 
@@ -341,14 +350,21 @@ impl Database {
         if graph[start_node].is_root() {
             // The join node is root, so there's no need to use half-open symbol stacks here, as we
             // do for [`PartialPath::concatenate`][].
-            let key = SymbolStackKey::from_partial_symbol_stack(
+            let mut key = SymbolStackKey::from_partial_symbol_stack(
                 partials,
                 self,
                 symbol_stack_precondition,
             );
             if !key.is_empty() {
-                let key_handle = key.back_handle();
-                self.root_paths_by_precondition[key_handle].push(handle);
+                match symbol_stack_precondition.has_variable() {
+                    true => self.root_paths_by_precondition_with_variable[key.back_handle()]
+                        .push(handle),
+                    false => self.root_paths_by_precondition_without_variable[key.back_handle()]
+                        .push(handle),
+                }
+            }
+            while key.pop_back(self).is_some() && !key.is_empty() {
+                self.root_paths_by_precondition_prefix[key.back_handle()].push(handle);
             }
         } else {
             // Otherwise index it by its source node.
@@ -374,12 +390,12 @@ impl Database {
         if graph[path.end_node].is_root() {
             // The join node is root, so there's no need to use half-open symbol stacks here, as we
             // do for [`PartialPath::concatenate`][].
-            let key = SymbolStackKey::from_partial_symbol_stack(
+            self.find_candidate_partial_paths_from_root(
+                graph,
                 partials,
-                self,
-                path.symbol_stack_postcondition,
+                Some(path.symbol_stack_postcondition),
+                result,
             );
-            self.find_candidate_partial_paths_from_root(graph, partials, Some(key), result);
         } else {
             self.find_candidate_partial_paths_from_node(graph, partials, path.end_node, result);
         }
@@ -392,7 +408,7 @@ impl Database {
         &mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-        symbol_stack: Option<SymbolStackKey>,
+        symbol_stack: Option<PartialSymbolStack>,
         result: &mut R,
     ) where
         R: std::iter::Extend<Handle<PartialPath>>,
@@ -400,31 +416,76 @@ impl Database {
         // If the path currently ends at the root node, then we need to look up partial paths whose
         // symbol stack precondition is compatible with the path.
         match symbol_stack {
-            Some(mut symbol_stack) => loop {
+            Some(symbol_stack) => {
+                let mut key =
+                    SymbolStackKey::from_partial_symbol_stack(partials, self, symbol_stack);
                 copious_debugging!(
                     "      Search for symbol stack <{}>",
-                    symbol_stack.display(graph, self)
+                    key.display(graph, self)
                 );
-                let key_handle = symbol_stack.back_handle();
-                if let Some(paths) = self.root_paths_by_precondition.get(key_handle) {
+                // paths that have exactly this symbol stack
+                if let Some(paths) = self
+                    .root_paths_by_precondition_without_variable
+                    .get(key.back_handle())
+                {
                     #[cfg(feature = "copious-debugging")]
                     {
                         for path in paths {
                             copious_debugging!(
-                                "        Found path {}",
+                                "        Found path with exact stack {}",
                                 self[*path].display(graph, partials)
                             );
                         }
                     }
                     result.extend(paths.iter().copied());
                 }
-                if symbol_stack.pop_back(self).is_none() {
-                    break;
+                // paths that have an extension of this symbol stack
+                if symbol_stack.has_variable() {
+                    if let Some(paths) = self
+                        .root_paths_by_precondition_prefix
+                        .get(key.back_handle())
+                    {
+                        #[cfg(feature = "copious-debugging")]
+                        {
+                            for path in paths {
+                                copious_debugging!(
+                                    "        Found path with smaller stack {}",
+                                    self[*path].display(graph, partials)
+                                );
+                            }
+                        }
+                        result.extend(paths.iter().copied());
+                    }
                 }
-            },
+                loop {
+                    // paths that have a prefix of this symbol stack
+                    if let Some(paths) = self
+                        .root_paths_by_precondition_with_variable
+                        .get(key.back_handle())
+                    {
+                        #[cfg(feature = "copious-debugging")]
+                        {
+                            for path in paths {
+                                copious_debugging!(
+                                    "        Found path with smaller stack {}",
+                                    self[*path].display(graph, partials)
+                                );
+                            }
+                        }
+                        result.extend(paths.iter().copied());
+                    }
+                    if key.pop_back(self).is_none() {
+                        break;
+                    }
+                }
+            }
             None => {
                 copious_debugging!("      Search for all root paths");
-                for (_, paths) in self.root_paths_by_precondition.iter() {
+                for (_, paths) in self
+                    .root_paths_by_precondition_with_variable
+                    .iter()
+                    .chain(self.root_paths_by_precondition_without_variable.iter())
+                {
                     #[cfg(feature = "copious-debugging")]
                     {
                         for path in paths {
