@@ -13,11 +13,13 @@ authors = [
 edition = "2018"
 
 [features]
+default = ["tree-sitter"]
 bincode = ["dep:bincode", "lsp-positions/bincode"]
 copious-debugging = []
 serde = ["dep:serde", "serde_with", "lsp-positions/serde"]
 storage = ["bincode", "rusqlite"]
 visualization = ["serde", "serde_json"]
+tree-sitter = ["lsp-positions/tree-sitter"]
 
 [lib]
 # All of our tests are in the tests/it "integration" test executable.
@@ -32,7 +34,7 @@ enumset = "1.1"
 fxhash = "0.2"
 itertools = "0.10"
 libc = "0.2"
-lsp-positions = { version = "0.3", path = "../lsp-positions" }
+lsp-positions = { version = "0.3", path = "../lsp-positions", default-features=false }
 rusqlite = { version = "0.28", optional = true, features = ["bundled", "functions"] }
 serde = { version = "1.0", optional = true, features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
