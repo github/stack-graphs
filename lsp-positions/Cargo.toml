@@ -17,7 +17,7 @@ edition = "2018"
 test = false
 
 [features]
-default = ["tree-sitter"]
+default = ["dep:tree-sitter"]
 bincode = ["dep:bincode"]
 
 [dependencies]
