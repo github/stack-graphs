@@ -13,13 +13,12 @@ authors = [
 edition = "2018"
 
 [features]
-default = ["tree-sitter"]
+default = []
 bincode = ["dep:bincode", "lsp-positions/bincode"]
 copious-debugging = []
 serde = ["dep:serde", "serde_with", "lsp-positions/serde"]
 storage = ["bincode", "rusqlite"]
 visualization = ["serde", "serde_json"]
-tree-sitter = ["lsp-positions/tree-sitter"]
 
 [lib]
 # All of our tests are in the tests/it "integration" test executable.
