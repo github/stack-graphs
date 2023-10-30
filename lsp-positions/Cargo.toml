@@ -17,8 +17,8 @@ edition = "2018"
 test = false
 
 [features]
-default = ["tree-sitter"]
 bincode = ["dep:bincode"]
+tree-sitter = ["dep:tree-sitter"]
 
 [dependencies]
 memchr = "2.4"
