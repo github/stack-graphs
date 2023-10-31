@@ -3476,6 +3476,255 @@ inherit .return_or_yield
   edge @class.after_scope -> @name.after_scope
 }
 
+(jsx_element
+  open_tag:(_)@open_tag
+  close_tag:(_)@close_tag)@jsx_element {
+
+  node @jsx_element.before_scope
+  node @jsx_element.after_scope
+  node @jsx_element.value
+
+  edge @open_tag.before_scope -> @jsx_element.before_scope
+  edge @jsx_element.after_scope -> @close_tag.after_scope
+
+  ; LATER-TODO scope propagation through empty JSX children
+  ; currently unsupported by tree sitter queries
+  ; THIS IS A HUGE HACK AND MUST BE FIXED
+  edge @close_tag.before_scope -> @open_tag.after_scope
+
+}
+
+(jsx_element
+  open_tag:(_)@open_tag
+  .
+  [
+    (jsx_text)
+    (jsx_element)
+    (jsx_self_closing_element)
+    (jsx_fragment)
+    (jsx_expression)
+  ]@first_child
+) {
+  edge @first_child.before_scope -> @open_tag.after_scope
+}
+
+(jsx_element
+  [
+    (jsx_text)
+    (jsx_element)
+    (jsx_self_closing_element)
+    (jsx_fragment)
+    (jsx_expression)
+  ]@left_child
+  .
+  [
+    (jsx_text)
+    (jsx_element)
+    (jsx_self_closing_element)
+    (jsx_fragment)
+    (jsx_expression)
+  ]@right_child
+) {
+  edge @right_child.before_scope -> @left_child.after_scope
+}
+
+(jsx_element
+  [
+    (jsx_text)
+    (jsx_element)
+    (jsx_self_closing_element)
+    (jsx_fragment)
+    (jsx_expression)
+  ]@last_child
+  .
+  close_tag:(_)@close_tag
+) {
+  edge @close_tag.before_scope -> @last_child.after_scope
+}
+
+(jsx_text)@jsx_text {
+  node @jsx_text.before_scope
+  node @jsx_text.after_scope
+  
+  edge @jsx_text.after_scope -> @jsx_text.before_scope
+}
+
+(jsx_opening_element
+  name:(_)@element_name)@jsx_opening_element {
+
+  node @jsx_opening_element.before_scope
+  node @jsx_opening_element.after_scope
+
+  edge @element_name.before_scope -> @jsx_opening_element.before_scope
+
+}
+
+(jsx_opening_element
+  name:(_)@element_name
+  !attribute)@jsx_opening_element
+{
+  
+  edge @jsx_opening_element.after_scope -> @element_name.after_scope
+
+}
+
+(jsx_opening_element
+  name:(_)@element_name
+  .
+  attribute:(_)@first_attr
+) {
+
+  edge @first_attr.before_scope -> @element_name.after_scope
+
+}
+
+(jsx_opening_element
+  attribute:(_)@left_attr
+  .
+  attribute:(_)@right_attr
+) {
+
+  edge @right_attr.before_scope -> @left_attr.after_scope
+
+}
+
+(jsx_opening_element
+  attribute:(_)@last_attr
+  .)@jsx_opening_element
+{
+
+  edge @jsx_opening_element.after_scope -> @last_attr.after_scope
+
+}
+
+(jsx_opening_element name:(identifier)@name) {
+
+  node @name.before_scope
+  node @name.after_scope
+
+  edge @name.after_scope -> @name.before_scope
+
+}
+
+(jsx_attribute)@jsx_attribute {
+
+  node @jsx_attribute.before_scope
+  node @jsx_attribute.after_scope
+
+  ; LATER-TODO scope propagation through empty child lists
+  ; currently unsupported by tree sitter queries
+  ; THIS IS A HUGE HACK AND MUST BE FIXED
+  edge @jsx_attribute.after_scope -> @jsx_attribute.before_scope
+
+}
+
+(jsx_attribute (_) . (_)@attr_value)@jsx_attribute {
+
+  edge @attr_value.before_scope -> @jsx_attribute.before_scope
+  edge @jsx_attribute.after_scope -> @attr_value.after_scope
+
+}
+
+(jsx_self_closing_element
+  name:(_)@element_name)@jsx_self_closing_element {
+
+  node @jsx_self_closing_element.before_scope
+  node @jsx_self_closing_element.after_scope
+
+  edge @element_name.before_scope -> @jsx_self_closing_element.before_scope
+
+}
+
+(jsx_self_closing_element
+  name:(_)@element_name
+  !attribute)@jsx_self_closing_element
+{
+  
+  edge @jsx_self_closing_element.after_scope -> @element_name.after_scope
+
+}
+
+(jsx_self_closing_element
+  name:(_)@element_name
+  .
+  attribute:(_)@first_attr
+) {
+
+  edge @first_attr.before_scope -> @element_name.after_scope
+
+}
+
+(jsx_self_closing_element
+  attribute:(_)@left_attr
+  .
+  attribute:(_)@right_attr
+) {
+
+  edge @right_attr.before_scope -> @left_attr.after_scope
+
+}
+
+(jsx_self_closing_element
+  attribute:(_)@last_attr
+  .)@jsx_self_closing_element
+{
+
+  edge @jsx_self_closing_element.after_scope -> @last_attr.after_scope
+
+}
+
+(jsx_self_closing_element name:(identifier)@name) {
+
+  node @name.before_scope
+  node @name.after_scope
+
+  edge @name.after_scope -> @name.before_scope
+
+}
+
+(jsx_expression)@jsx_expression {
+
+  node @jsx_expression.before_scope
+  node @jsx_expression.after_scope
+
+  ; LATER-TODO scope propagation through empty child lists
+  ; currently unsupported by tree sitter queries
+  ; THIS IS A HUGE HACK AND MUST BE FIXED
+  edge @jsx_expression.after_scope -> @jsx_expression.before_scope
+
+}
+
+(jsx_expression (_)@child)@jsx_expression {
+
+  edge @child.before_scope -> @jsx_expression.before_scope
+  edge @jsx_expression.after_scope -> @child.after_scope
+
+}
+
+(jsx_closing_element
+  name:(_)@element_name)@jsx_closing_element
+{
+
+  node @jsx_closing_element.before_scope
+  node @jsx_closing_element.after_scope
+  
+  edge @element_name.before_scope -> @jsx_closing_element.before_scope
+  edge @jsx_closing_element.after_scope -> @element_name.after_scope
+
+}
+
+(jsx_closing_element
+  name:(_)@element_name)
+{
+
+  node @element_name.before_scope
+  node @element_name.after_scope
+  
+  edge @element_name.after_scope -> @element_name.before_scope
+
+}
+
+
 
 
 
