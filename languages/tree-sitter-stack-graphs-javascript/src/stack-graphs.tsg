@@ -3630,6 +3630,7 @@ inherit .return_or_yield
 
   node @jsx_self_closing_element.before_scope
   node @jsx_self_closing_element.after_scope
+  node @jsx_self_closing_element.value
 
   edge @element_name.before_scope -> @jsx_self_closing_element.before_scope
 
