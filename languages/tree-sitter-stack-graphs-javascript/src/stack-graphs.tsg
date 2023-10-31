@@ -3725,6 +3725,37 @@ inherit .return_or_yield
 
 }
 
+(jsx_fragment)@jsx_fragment {
+  node @jsx_fragment.before_scope
+  node @jsx_fragment.after_scope
+
+  ; LATER-TODO scope propagation through empty child lists
+  ; currently unsupported by tree sitter queries
+  ; THIS IS A HUGE HACK AND MUST BE FIXED
+  edge @jsx_fragment.after_scope -> @jsx_fragment.before_scope
+}
+
+(jsx_fragment
+  .
+  (_)@first_child)@jsx_fragment
+{
+  edge @first_child.before_scope -> @jsx_fragment.before_scope
+}
+
+(jsx_fragment
+  (_)@left_child
+  .
+  (_)@right_child)
+{
+  edge @right_child.before_scope -> @left_child.after_scope
+}
+
+(jsx_fragment
+  (_)@last_child
+  .)@jsx_fragment
+{
+  edge @jsx_fragment.after_scope -> @last_child.after_scope
+}
 
 
 
