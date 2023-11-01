@@ -4034,9 +4034,6 @@ inherit .return_or_yield
 
 ;; #### Object Patterns
 
-; LATER-TODO scope propagation through empty object patterns
-; currently unsupported by tree sitter queries
-; THIS IS A HUGE HACK AND MUST BE FIXED
 (object_pattern (_)* @entries)@object_pat {
   if (is-empty @entries) {
     edge @object_pat.after_scope -> @object_pat.before_scope
