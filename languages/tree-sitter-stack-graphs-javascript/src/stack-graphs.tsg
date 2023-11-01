@@ -3478,7 +3478,8 @@ inherit .return_or_yield
 
 (jsx_element
   open_tag:(_)@open_tag
-  close_tag:(_)@close_tag)@jsx_element {
+  close_tag:(_)@close_tag
+  (_)*@children)@jsx_element {
 
   node @jsx_element.before_scope
   node @jsx_element.after_scope
@@ -3487,10 +3488,9 @@ inherit .return_or_yield
   edge @open_tag.before_scope -> @jsx_element.before_scope
   edge @jsx_element.after_scope -> @close_tag.after_scope
 
-  ; LATER-TODO scope propagation through empty JSX children
-  ; currently unsupported by tree sitter queries
-  ; THIS IS A HUGE HACK AND MUST BE FIXED
-  edge @close_tag.before_scope -> @open_tag.after_scope
+  if (is-empty @children) {
+    edge @close_tag.before_scope -> @open_tag.after_scope
+  }
 
 }
 
@@ -3606,22 +3606,17 @@ inherit .return_or_yield
 
 }
 
-(jsx_attribute)@jsx_attribute {
+(jsx_attribute (_) . (_)?@attr_value)@jsx_attribute {
 
   node @jsx_attribute.before_scope
   node @jsx_attribute.after_scope
 
-  ; LATER-TODO scope propagation through empty child lists
-  ; currently unsupported by tree sitter queries
-  ; THIS IS A HUGE HACK AND MUST BE FIXED
-  edge @jsx_attribute.after_scope -> @jsx_attribute.before_scope
-
-}
-
-(jsx_attribute (_) . (_)@attr_value)@jsx_attribute {
-
-  edge @attr_value.before_scope -> @jsx_attribute.before_scope
-  edge @jsx_attribute.after_scope -> @attr_value.after_scope
+  if none @attr_value {
+    edge @jsx_attribute.after_scope -> @jsx_attribute.before_scope
+  } else {
+    edge @attr_value.before_scope -> @jsx_attribute.before_scope
+    edge @jsx_attribute.after_scope -> @attr_value.after_scope
+  }
 
 }
 
@@ -3683,22 +3678,17 @@ inherit .return_or_yield
 
 }
 
-(jsx_expression)@jsx_expression {
+(jsx_expression (_)?@child)@jsx_expression {
 
   node @jsx_expression.before_scope
   node @jsx_expression.after_scope
 
-  ; LATER-TODO scope propagation through empty child lists
-  ; currently unsupported by tree sitter queries
-  ; THIS IS A HUGE HACK AND MUST BE FIXED
-  edge @jsx_expression.after_scope -> @jsx_expression.before_scope
-
-}
-
-(jsx_expression (_)@child)@jsx_expression {
-
-  edge @child.before_scope -> @jsx_expression.before_scope
-  edge @jsx_expression.after_scope -> @child.after_scope
+  if none @child {
+    edge @jsx_expression.after_scope -> @jsx_expression.before_scope
+  } else {
+    edge @child.before_scope -> @jsx_expression.before_scope
+    edge @jsx_expression.after_scope -> @child.after_scope
+  }
 
 }
 
@@ -3725,14 +3715,13 @@ inherit .return_or_yield
 
 }
 
-(jsx_fragment)@jsx_fragment {
+(jsx_fragment (_)*@children)@jsx_fragment {
   node @jsx_fragment.before_scope
   node @jsx_fragment.after_scope
 
-  ; LATER-TODO scope propagation through empty child lists
-  ; currently unsupported by tree sitter queries
-  ; THIS IS A HUGE HACK AND MUST BE FIXED
-  edge @jsx_fragment.after_scope -> @jsx_fragment.before_scope
+  if (is-empty @children) {
+    edge @jsx_fragment.after_scope -> @jsx_fragment.before_scope
+  }
 }
 
 (jsx_fragment
