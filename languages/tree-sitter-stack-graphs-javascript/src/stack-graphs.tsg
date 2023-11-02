@@ -3597,7 +3597,7 @@ inherit .return_or_yield
 
 }
 
-(jsx_opening_element name:(identifier)@name) {
+(jsx_opening_element name:(_)@name) {
 
   node @name.before_scope
   node @name.after_scope
@@ -3628,6 +3628,17 @@ inherit .return_or_yield
   node @jsx_self_closing_element.value
 
   edge @element_name.before_scope -> @jsx_self_closing_element.before_scope
+
+}
+
+(jsx_self_closing_element
+  name:(_)@element_name)
+{
+
+  node @element_name.before_scope
+  node @element_name.after_scope
+  
+  edge @element_name.after_scope -> @element_name.before_scope
 
 }
 
@@ -3718,6 +3729,7 @@ inherit .return_or_yield
 (jsx_fragment (_)*@children)@jsx_fragment {
   node @jsx_fragment.before_scope
   node @jsx_fragment.after_scope
+  node @jsx_fragment.value
 
   if (is-empty @children) {
     edge @jsx_fragment.after_scope -> @jsx_fragment.before_scope
