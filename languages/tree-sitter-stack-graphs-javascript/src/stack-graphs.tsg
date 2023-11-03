@@ -327,6 +327,7 @@ inherit .return_or_yield
     edge @prog.before_scope -> @prog.hoist_point
 
     attr (prog_module_scope) pop_symbol = "GUARD:MODULE"
+    attr (prog_module_pop_start) definiens = @prog
     edge @prog.pkg_pop -> prog_module_pop_start
     edge module_pop_end -> prog_module_scope
     edge prog_module_scope -> @prog.after_scope
