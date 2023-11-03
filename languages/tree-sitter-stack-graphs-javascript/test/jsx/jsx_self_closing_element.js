@@ -12,35 +12,24 @@ let x = 1;
 
 // Flow In
 
-const el = <foo bar={x}>{x}</foo>;
+const el = <foo bar={x} />;
 //                   ^ defined: 11
-//                       ^ defined: 11
 
-const el2 = <x></x>
+const el2 = <x />
 //           ^ defined: 11
-//               ^ defined: 11
 
 // Flow Out
 
-const el = <foo bar={y = 1}>
-    {z = 3}
-</foo>;
+const el = <foo bar={y = 1} />;
 
 /**/ y;
-//   ^ defined: 25
-
-/**/ z;
-//   ^ defined: 26
+//   ^ defined: 23
 
 // Flow Across
 
-const el = <foo bar={w = 1}>
-    {w}</foo>;
-//   ^ defined: 37
-
 const el = <foo bar={q = 1}
-    baz={q}></foo>;
-//       ^ defined: 41
+    baz={q} />;
+//       ^ defined: 30
 
 // Flow Around
 

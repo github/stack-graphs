@@ -3597,15 +3597,6 @@ inherit .return_or_yield
 
 }
 
-(jsx_opening_element name:(_)@name) {
-
-  node @name.before_scope
-  node @name.after_scope
-
-  edge @name.after_scope -> @name.before_scope
-
-}
-
 (jsx_attribute (_) . (_)?@attr_value)@jsx_attribute {
 
   node @jsx_attribute.before_scope
@@ -3628,17 +3619,6 @@ inherit .return_or_yield
   node @jsx_self_closing_element.value
 
   edge @element_name.before_scope -> @jsx_self_closing_element.before_scope
-
-}
-
-(jsx_self_closing_element
-  name:(_)@element_name)
-{
-
-  node @element_name.before_scope
-  node @element_name.after_scope
-  
-  edge @element_name.after_scope -> @element_name.before_scope
 
 }
 
@@ -3680,15 +3660,6 @@ inherit .return_or_yield
 
 }
 
-(jsx_self_closing_element name:(identifier)@name) {
-
-  node @name.before_scope
-  node @name.after_scope
-
-  edge @name.after_scope -> @name.before_scope
-
-}
-
 (jsx_expression (_)?@child)@jsx_expression {
 
   node @jsx_expression.before_scope
@@ -3715,8 +3686,14 @@ inherit .return_or_yield
 
 }
 
-(jsx_closing_element
-  name:(_)@element_name)
+[
+  (jsx_opening_element
+    name:(identifier)@element_name)
+  (jsx_self_closing_element
+    name:(identifier)@element_name)
+  (jsx_closing_element
+    name:(identifier)@element_name)
+]
 {
 
   node @element_name.before_scope
@@ -3724,6 +3701,62 @@ inherit .return_or_yield
   
   edge @element_name.after_scope -> @element_name.before_scope
 
+  scan (source-text @element_name) {
+    ; standard HTML elements
+    "^(a|abbr|acronym|address|applet|area|article|aside|audio|b|base|basefont|bdi|bdo|big|blockquote|body|br|button|canvas|caption|center|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|dir|div|dl|dt|em|embed|fieldset|figcaption|figure|font|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noframes|noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|search|section|select|small|source|span|strike|strong|style|sub|summary|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|tt|u|ul|var|video|wbr)$" {
+      ; do nothing!
+    }
+
+    ; everything else
+    "^.+$" {
+      node element_name_pop
+      attr (element_name_pop) node_reference = @element_name
+      edge element_name_pop -> @element_name.before_scope
+    }
+  }
+
+}
+
+(nested_identifier)@nested_identifier {
+  node @nested_identifier.before_scope
+  node @nested_identifier.after_scope
+  node @nested_identifier.value
+
+  edge @nested_identifier.after_scope -> @nested_identifier.before_scope
+}
+
+(nested_identifier
+  (identifier)@first_part
+  (identifier)@second_part)@nested_identifier
+{
+  node @first_part.value
+  node @second_part.value
+  node guard_member
+
+  attr (@first_part.value) node_reference = @first_part
+  attr (@second_part.value) node_reference = @second_part
+  attr (guard_member) symbol_reference = "GUARD:MEMBER"
+
+  edge @first_part.value -> @nested_identifier.before_scope
+  edge guard_member -> @first_part.value
+  edge @second_part.value -> guard_member
+  edge @nested_identifier.value -> @second_part.value
+}
+
+(nested_identifier
+  (nested_identifier)@first_part
+  (identifier)@second_part)@nested_identifier
+{
+  node @second_part.value
+  node guard_member
+
+  attr (@second_part.value) node_reference = @second_part
+  attr (guard_member) symbol_reference = "GUARD:MEMBER"
+
+  edge @first_part.before_scope -> @nested_identifier.before_scope
+  edge guard_member -> @first_part.value
+  edge @second_part.value -> guard_member
+  edge @nested_identifier.value -> @second_part.value
 }
 
 (jsx_fragment (_)*@children)@jsx_fragment {
