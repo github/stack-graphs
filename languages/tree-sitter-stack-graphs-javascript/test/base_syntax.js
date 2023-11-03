@@ -63,3 +63,8 @@ x += 1;
 (1, 2);
 1 ? 2 : 3;
 class { };
+<foo bar={baz}>
+    <quux0.quux1.quux2 />
+    <>doo</>
+    {garply}
+</foo>
