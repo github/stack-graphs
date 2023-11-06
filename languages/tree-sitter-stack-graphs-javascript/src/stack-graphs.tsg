@@ -320,7 +320,7 @@ inherit .return_or_yield
       "([^/]+)$" {
         attr (module_pop_end) symbol_definition = $1, source_node = @prog
         attr (module_pop_end) empty_source_span
-        attr (module_pop_end) definiens = @prog
+        attr (module_pop_end) definiens_node = @prog
       }
     }
 
