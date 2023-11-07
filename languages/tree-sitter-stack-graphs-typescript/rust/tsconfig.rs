@@ -498,15 +498,15 @@ fn longest_common_prefix(left: &Path, right: &Path) -> Option<PathBuf> {
     Some(prefix)
 }
 
-struct NormalizedRelativePath(PathBuf);
+pub(crate) struct NormalizedRelativePath(PathBuf);
 
 impl NormalizedRelativePath {
-    pub(self) fn from_str(path: &str) -> Option<Self> {
+    pub(crate) fn from_str(path: &str) -> Option<Self> {
         Self::from_path(Path::new(path))
     }
 
     /// Creates a new normalized, relative path from a path.
-    pub(self) fn from_path(path: &Path) -> Option<Self> {
+    pub(crate) fn from_path(path: &Path) -> Option<Self> {
         let mut np = PathBuf::new();
         let mut normal_components = 0usize;
         for c in path.components() {
@@ -538,18 +538,18 @@ impl NormalizedRelativePath {
     }
 
     /// Returns if the relative path escapes to the parent.
-    pub(self) fn escapes(&self) -> bool {
+    pub(crate) fn escapes(&self) -> bool {
         self.0
             .components()
             .next()
             .map_or(false, |c| c == Component::ParentDir)
     }
 
-    pub(self) fn as_path(&self) -> &Path {
+    pub(crate) fn as_path(&self) -> &Path {
         &self.0
     }
 
-    pub(self) fn into_path_buf(self) -> PathBuf {
+    pub(crate) fn into_path_buf(self) -> PathBuf {
         self.0
     }
 }
