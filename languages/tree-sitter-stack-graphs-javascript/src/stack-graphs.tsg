@@ -4699,12 +4699,7 @@ inherit .return_or_yield
 
 (assignment_expression
   left: (identifier)@left
-  right: [
-    (function)
-    (generator_function)
-    (arrow_function)
-    (class)
-  ])@assignment_expr {
+  right: (_))@assignment_expr {
 
   attr (@left.pop) definiens_node = @assignment_expr
 
@@ -4716,7 +4711,7 @@ inherit .return_or_yield
       object:(identifier)@_object
       property:(_)@left
     )
-    right:  (_)@right)@assignment_expr
+    right: (_))@assignment_expr
   (#not-eq @_object "module")
   (#not-eq @left "exports")
 ) {
@@ -4726,7 +4721,7 @@ inherit .return_or_yield
 
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
-  attr (left_definiens_hook) definiens_node = @right
+  attr (left_definiens_hook) definiens_node = @assignment_expr
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 }
@@ -4737,7 +4732,7 @@ inherit .return_or_yield
       object:(identifier)@_object
       property:(_)@left
     )
-    right: (_)@right)@assignment_expr
+    right: (_))@assignment_expr
   (#eq @_object "module")
   (#eq @left "exports")
 ) {
@@ -4747,7 +4742,7 @@ inherit .return_or_yield
 
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
-  attr (left_definiens_hook) definiens_node = @right
+  attr (left_definiens_hook) definiens_node = @assignment_expr
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 
@@ -4846,12 +4841,7 @@ inherit .return_or_yield
 
 (pair
   key: (_)@name
-  value: [
-    (function)
-    (generator_function)
-    (arrow_function)
-    (class)
-  ])@pair_expr {
+  value: (_))@pair_expr {
 
   node @name.definiens_hook
   node name_ignore_guard
