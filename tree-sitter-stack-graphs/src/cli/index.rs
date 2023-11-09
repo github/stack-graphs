@@ -11,6 +11,7 @@ use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
+use stack_graphs::stats::FrequencyDistribution;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::Stats as StitchingStats;
 use stack_graphs::stitching::StitcherConfig;
@@ -25,7 +26,7 @@ use tree_sitter_graph::Variables;
 
 use crate::cli::util::duration_from_seconds_str;
 use crate::cli::util::iter_files_and_directories;
-use crate::cli::util::print_stitching_stats;
+use crate::cli::util::print_indexing_stats;
 use crate::cli::util::reporter::ConsoleReporter;
 use crate::cli::util::reporter::Level;
 use crate::cli::util::reporter::Reporter;
@@ -122,7 +123,7 @@ impl IndexArgs {
 
         if self.stats {
             println!();
-            print_stitching_stats(indexer.into_stats());
+            print_indexing_stats(indexer.into_stats());
         }
         Ok(())
     }
@@ -157,7 +158,7 @@ pub struct Indexer<'a> {
     db: &'a mut SQLiteWriter,
     loader: &'a mut Loader,
     reporter: &'a dyn Reporter,
-    stats: StitchingStats,
+    stats: IndexingStats,
     /// Index files, even if they already exist in the database.
     pub force: bool,
     /// Maximum time per file.
@@ -176,7 +177,7 @@ impl<'a> Indexer<'a> {
             reporter,
             force: false,
             max_file_time: None,
-            stats: StitchingStats::default(),
+            stats: IndexingStats::default(),
         }
     }
 
@@ -364,6 +365,21 @@ impl<'a> Indexer<'a> {
                 }
             }
         };
+        {
+            self.stats
+                .total_graph_nodes
+                .record(graph.iter_nodes().count());
+            let mut total_edges = 0;
+            for node_edges in graph
+                .iter_nodes()
+                .filter(|n| !graph[*n].is_root())
+                .map(|n| graph.outgoing_edges(n).count())
+            {
+                self.stats.node_out_degrees.record(node_edges);
+                total_edges += node_edges;
+            }
+            self.stats.total_graph_edges.record(total_edges);
+        }
 
         let mut partials = PartialPaths::new();
         let mut paths = Vec::new();
@@ -377,8 +393,8 @@ impl<'a> Indexer<'a> {
                 paths.push(p.clone());
             },
         ) {
-            Ok(stats) => {
-                self.stats += stats;
+            Ok(stitching_stats) => {
+                self.stats.stitching_stats += stitching_stats;
             }
             Err(_) => {
                 file_status.warning("path computation timed out", None);
@@ -458,11 +474,11 @@ impl<'a> Indexer<'a> {
         false
     }
 
-    pub fn stats(&self) -> &StitchingStats {
+    pub fn stats(&self) -> &IndexingStats {
         &self.stats
     }
 
-    pub fn into_stats(self) -> StitchingStats {
+    pub fn into_stats(self) -> IndexingStats {
         self.stats
     }
 }
@@ -488,3 +504,15 @@ impl From<crate::CancellationError> for IndexError {
 }
 
 type Result<T> = std::result::Result<T, IndexError>;
+
+#[derive(Clone, Debug, Default)]
+pub struct IndexingStats {
+    // The distribution of the total number of nodes per file graph.
+    pub total_graph_nodes: FrequencyDistribution<usize>,
+    // The distribution of the total number of edges per file graph.
+    pub total_graph_edges: FrequencyDistribution<usize>,
+    // The distribution of the out-degrees of non-root nodes.
+    pub node_out_degrees: FrequencyDistribution<usize>,
+    // The stitching statistics.
+    pub stitching_stats: StitchingStats,
+}

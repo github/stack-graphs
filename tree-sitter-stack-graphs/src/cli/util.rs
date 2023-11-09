@@ -32,7 +32,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
 
-use self::reporter::Reporter;
+use crate::cli::index::IndexingStats;
+use crate::cli::util::reporter::Reporter;
 
 pub mod reporter;
 
@@ -501,69 +502,27 @@ impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
     }
 }
 
+pub(super) fn print_indexing_stats(stats: IndexingStats) {
+    print_quartiles_header("graph stats");
+    print_quartiles_row("total graph nodes", stats.total_graph_nodes);
+    print_quartiles_row("total graph edges", stats.total_graph_edges);
+    print_quartiles_row("node out degrees", stats.node_out_degrees);
+    println!();
+    print_stitching_stats(stats.stitching_stats);
+}
+
 pub(super) fn print_stitching_stats(stats: StitchingStats) {
-    fn quartiles<X: Display + Eq + Hash + Ord>(hist: FrequencyDistribution<X>) -> String {
-        let qs = hist.quantiles(4);
-        if qs.is_empty() {
-            format!(
-                "{:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9}",
-                "-", "-", "-", "-", "-", 0
-            )
-        } else {
-            format!(
-                "{:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9}",
-                qs[0],
-                qs[1],
-                qs[2],
-                qs[3],
-                qs[4],
-                hist.total(),
-            )
-        }
-    }
-    println!(
-        "      stitching stats      |    min    |    p25    |    p50    |    p75    |    max    |   total   "
-    );
-    println!(
-        "---------------------------+-----------+-----------+-----------+-----------+-----------+-----------"
-    );
-    println!(
-        " queued paths per phase    | {} ",
-        quartiles(stats.queued_paths_per_phase)
-    );
-    println!(
-        " processed paths per phase | {} ",
-        quartiles(stats.processed_paths_per_phase)
-    );
-    println!(
-        " accepted path length      | {} ",
-        quartiles(stats.accepted_path_length)
-    );
-    println!(
-        " maximal path length       | {} ",
-        quartiles(stats.maximal_path_lengh)
-    );
-    println!(
-        " node path candidates      | {} ",
-        quartiles(stats.candidates_per_node_path)
-    );
-    println!(
-        " node path extensions      | {} ",
-        quartiles(stats.extensions_per_node_path)
-    );
-    println!(
-        " root path candidates      | {} ",
-        quartiles(stats.candidates_per_root_path)
-    );
-    println!(
-        " root path extensions      | {} ",
-        quartiles(stats.extensions_per_root_path)
-    );
-    println!(
-        " node visits               | {} ",
-        quartiles(stats.node_visits.frequencies())
-    );
-    println!(" root visits               | {:>9} ", stats.root_visits);
+    print_quartiles_header("stitching stats");
+    print_quartiles_row("queued paths per phase", stats.queued_paths_per_phase);
+    print_quartiles_row("processed paths per phase", stats.processed_paths_per_phase);
+    print_quartiles_row("accepted path length", stats.accepted_path_length);
+    print_quartiles_row("maximal path length", stats.maximal_path_lengh);
+    print_quartiles_row("node path candidates", stats.candidates_per_node_path);
+    print_quartiles_row("node path extensions", stats.extensions_per_node_path);
+    print_quartiles_row("root path candidates", stats.candidates_per_root_path);
+    print_quartiles_row("root path extensions", stats.extensions_per_root_path);
+    print_quartiles_row("node visits", stats.node_visits.frequencies());
+    print_value_row("root visits", stats.root_visits);
 }
 
 pub(super) fn print_database_stats(stats: StorageStats) {
@@ -580,5 +539,43 @@ pub(super) fn print_database_stats(stats: StorageStats) {
     println!(
         " root paths                | {:>9} | {:>9} ",
         stats.root_path_loads, stats.root_path_cached
+    );
+}
+
+fn print_quartiles_header(title: &str) {
+    println!(
+        "| {:^25} |    min    |    p25    |    p50    |    p75    |    max    |   total   |",
+        title
+    );
+    println!(
+        "|---------------------------|-----------|-----------|-----------|-----------|-----------|-----------|"
+    );
+}
+
+fn print_quartiles_row<X: Display + Eq + Hash + Ord>(title: &str, hist: FrequencyDistribution<X>) {
+    let qs = hist.quantiles(4);
+    if qs.is_empty() {
+        println!(
+            "| {:>25} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} |",
+            title, "-", "-", "-", "-", "-", 0
+        );
+    } else {
+        println!(
+            "| {:>25} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} |",
+            title,
+            qs[0],
+            qs[1],
+            qs[2],
+            qs[3],
+            qs[4],
+            hist.total(),
+        );
+    }
+}
+
+fn print_value_row<X: Display>(title: &str, value: X) {
+    println!(
+        "| {:>25} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} |",
+        title, "-", "-", "-", "-", "-", value
     );
 }
