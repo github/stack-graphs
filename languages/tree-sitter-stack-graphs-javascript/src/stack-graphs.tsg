@@ -1441,7 +1441,7 @@ inherit .return_or_yield
   edge @class_decl.class_value -> guard_prototype
   edge guard_prototype -> @class_decl.prototype
 
-  edge @body.before_scope -> @class_decl.before_scope
+  edge @body.before_scope -> @class_decl.closure_point
   edge @class_decl.prototype -> @body.after_scope
   edge @class_decl.after_scope -> @class_decl.before_scope
 }
@@ -1553,7 +1553,7 @@ inherit .return_or_yield
   ; method values have drop nodes that handle closures, that points to the
   ; before scope from method def
   attr (method_def_method_value_drop) type = "drop_scopes"
-  edge method_def_method_value_drop -> @method_def.closure_point
+  edge method_def_method_value_drop -> @method_def.before_scope
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> method_def_method_value_drop
@@ -3454,7 +3454,7 @@ inherit .return_or_yield
   node @class.constructor
   attr (guard_prototype) pop_symbol = "GUARD:PROTOTYPE"
 
-  edge @body.before_scope -> @class.before_scope
+  edge @body.before_scope -> @class.closure_point
   edge @class.value -> @class.class_value
   edge @class.class_value -> guard_prototype
   edge guard_prototype -> @class.prototype

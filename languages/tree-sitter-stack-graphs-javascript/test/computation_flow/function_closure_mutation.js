@@ -36,3 +36,8 @@ class C {
 }
 
 x = 2;
+
+(function bar() {
+    /**/ bar;
+    //   ^ defined: 40
+});
