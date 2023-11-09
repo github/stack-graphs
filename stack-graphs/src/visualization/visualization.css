@@ -315,6 +315,40 @@
 }
 
 /* ------------------------------------------------------------------------------------------------
+ * Legend
+ */
+
+#sg-legend {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    background-color: #bbbbbb;
+    padding: 6px;
+    border-radius: 6px;
+    z-index: 1;
+}
+
+#sg-legend h1 {
+    font-variant: small-caps;
+    font-weight: bold;
+    font-size: inherit;
+    border-bottom: solid 1px #777777;
+    margin: 0px;
+}
+
+#sg-legend ul {
+    list-style: none;
+    padding: 0px;
+    margin: 0px;
+}
+
+#sg-legend li {
+    padding: 3px 6px;
+    margin: 3px 0px;
+    border: 1px solid white;
+}
+
+/* ------------------------------------------------------------------------------------------------
  * Help
  */
 
@@ -419,6 +453,9 @@
 .sg .node.global .background {
     fill: #0077bb; /* blue */
 }
+#sg-legend .global {
+    background-color: #0077bb; /* blue */
+}
 .sg .edge.global path,
 .sg .edge.global text {
     stroke: #0077bb; /* blue */
@@ -427,7 +464,9 @@
 .sg .node.file-0 .background {
     fill: #77aadd; /* light blue */
 }
-
+#sg-legend .file-0 {
+    background-color: #77aadd; /* light blue */
+}
 .sg .node.file-0 .arrow,
 .sg .edge.file-0 text
 {
@@ -447,6 +486,9 @@
 {
     fill: #ee8866; /* orange */
 }
+#sg-legend .file-1 {
+    background-color: #ee8866; /* orange */
+}
 .sg .node.file-1 .arrow {
     fill: #3d1407; /* orange (darkened) */
 }
@@ -463,6 +505,9 @@
 .sg .edge.file-2 text
 {
     fill: #eedd88; /* light yellow */
+}
+#sg-legend .file-2 {
+    background-color: #eedd88; /* light yellow */
 }
 .sg .node.file-2 .arrow {
     fill: #413809; /* light yellow (darkened) */
@@ -481,6 +526,9 @@
 {
     fill: #ffaabb; /* pink */
 }
+#sg-legend .file-3 {
+    background-color: #ffaabb; /* pink */
+}
 .sg .node.file-3 .arrow {
     fill: #550011; /* pink (darkened) */
 }
@@ -497,6 +545,9 @@
 .sg .edge.file-4 text
 {
     fill: #99ddff; /* light cyan */
+}
+#sg-legend .file-4 {
+    background-color: #99ddff; /* light cyan */
 }
 .sg .node.file-4 .arrow {
     fill: #003652; /* light cyan (darkened) */
@@ -515,6 +566,9 @@
 {
     fill: #44bb99; /* mint */
 }
+#sg-legend .file-5 {
+    background-color: #44bb99; /* mint */
+}
 .sg .node.file-5 .arrow {
     fill: #0e251f; /* mint (darkened) */
 }
@@ -532,6 +586,9 @@
 {
     fill: #bbcc33; /* pear */
 }
+#sg-legend .file-6 {
+    background-color: #bbcc33; /* pear */
+}
 .sg .node.file-6 .arrow {
     fill: #25290a; /* pear (darkened) */
 }
@@ -548,6 +605,9 @@
 .sg .edge.file-7 text
 {
     fill: #aaaa00; /* olive */
+}
+#sg-legend .file-7 {
+    background-color: #aaaa00; /* olive */
 }
 .sg .node.file-7 .arrow {
     fill: #222200; /* olive (darkened) */

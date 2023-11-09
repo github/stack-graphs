@@ -163,7 +163,8 @@ class StackGraph {
         // render UI
         this.render_help();
         this.render_tooltip();
-        this.render_graph()
+        this.render_legend();
+        this.render_graph();
 
         // pan & zoom
         let zoom = d3.zoom()
@@ -471,9 +472,9 @@ class StackGraph {
         }
     }
 
-    /* ------------------------------------------------------------------------------------------------
-    * Path Highlighting
-    */
+    // ------------------------------------------------------------------------------------------------
+    // Path Highlighting
+    //
 
     paths_mouseover(e, node) {
         if (this.paths_lock !== null) {
@@ -782,6 +783,30 @@ class StackGraph {
     }
 
     // ------------------------------------------------------------------------------------------------
+    // Legend
+    //
+
+    render_legend() {
+        const legend = d3.select('body').append('div')
+            .attr('id', 'sg-legend')
+        legend.append("h1").text("Files");
+        const items = legend.append("ul");
+        items.append("li")
+            .classed("global", true)
+            .text("[global]");
+        for (const file in this.F) {
+            items.append("li")
+                .classed('file-' + this.F[file], true)
+                .text(file);
+        }
+    }
+
+    legend_update() {
+        const legend = d3.select('#sg-legend');
+        legend.style('visibility', this.show_file_legend() ? null : 'hidden');
+    }
+
+    // ------------------------------------------------------------------------------------------------
     // Help
     //
 
@@ -802,6 +827,10 @@ class StackGraph {
             Pan by dragging the background with the mouse.
             Zoom using the scroll wheel.
         `);
+        this.show_files_legend_toggle = this.new_setting(help_content, "sg-files-legend", "Show files legend (<kbd>f</kbd>)", true);
+        this.show_files_legend_toggle.on("change", (e => {
+            this.legend_update();
+        }));
         this.show_all_node_labels_toggle = this.new_setting(help_content, "sg-scope-labels", "Show all node labels (<kbd>l</kbd>)", false);
         this.show_all_node_labels_toggle.on("change", (e => {
             this.render_graph();
@@ -838,6 +867,10 @@ class StackGraph {
 
     help_keypress(e) {
         switch (e.keyCode) {
+            case 70: // f
+                this.show_files_legend_toggle.property("checked", !this.show_files_legend_toggle.property("checked"));
+                this.legend_update();
+                break;
             case 72: // h
                 this.help_toggle.property("checked", !this.help_toggle.property("checked"));
                 break;
@@ -858,6 +891,10 @@ class StackGraph {
 
     show_all_node_labels() {
         return this.show_all_node_labels_toggle.property("checked");
+    }
+
+    show_file_legend() {
+        return this.show_files_legend_toggle.property("checked");
     }
 
     new_setting(element, id, html, initial) {
