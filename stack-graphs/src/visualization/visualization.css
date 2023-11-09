@@ -85,6 +85,10 @@
     stroke: black;
 }
 
+.sg .node.definition .background {
+    stroke-width: 2px;
+}
+
 /* --- push symbol --- */
 
 .sg .node.push_scoped_symbol .push_scope {
@@ -100,6 +104,10 @@
 
 .sg .node.push_scoped_symbol.focus .push_scope-focus-point {
     fill: black;
+}
+
+.sg .node.reference .background {
+    stroke-width: 2px;
 }
 
 /* --- root --- */
@@ -128,6 +136,10 @@
     fill: black;
 }
 
+.sg .node.scope.exported .background {
+    stroke-width: 2px;
+}
+
 /* --- plain labeled node --- */
 
 .sg .node.scope.plain_labeled_node .border {
@@ -137,10 +149,6 @@
 
 .sg .node.scope.plain_labeled_node .background {
     rx: 6px;
-}
-
-.sg .node.scope.plain_labeled_node.exported .background {
-    stroke: black;
 }
 
 /* --- path highlight --- */
