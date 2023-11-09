@@ -111,10 +111,22 @@ where
         let key = path.key();
 
         let possibly_similar_paths = self.paths.entry(key).or_default();
-        for other_path in possibly_similar_paths.iter() {
-            match cmp(arena, path, other_path) {
-                Some(ord) if ord != Ordering::Less => return true,
-                _ => continue,
+        let mut idx = 0;
+        while idx < possibly_similar_paths.len() {
+            match cmp(arena, path, &possibly_similar_paths[idx]) {
+                Some(Ordering::Less) => {
+                    // the new path is betetr, remove the old one
+                    possibly_similar_paths.remove(idx);
+                    // keep `idx` which now points to the next element
+                    continue;
+                }
+                Some(_) => {
+                    // the new path is equal or worse, and ignored
+                    return true;
+                }
+                None => {
+                    idx += 1;
+                }
             }
         }
 
