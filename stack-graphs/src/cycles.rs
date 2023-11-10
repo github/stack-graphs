@@ -49,7 +49,7 @@ use crate::stitching::ToAppendable;
 
 /// Helps detect similar paths in the path-finding algorithm.
 pub struct SimilarPathDetector<P> {
-    paths: HashMap<PathKey, SmallVec<[P; 8]>>,
+    paths: HashMap<PathKey, SmallVec<[P; 3]>>,
 }
 
 #[doc(hidden)]
