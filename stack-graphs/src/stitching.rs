@@ -54,6 +54,7 @@ use crate::arena::SupplementalArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
+use crate::cycles::SimilarPathStats;
 use crate::graph::Degree;
 use crate::graph::Edge;
 use crate::graph::File;
@@ -913,7 +914,10 @@ impl<H> ForwardPartialPathStitcher<H> {
         self.max_work_per_phase = max_work_per_phase;
     }
 
-    pub fn into_stats(self) -> Stats {
+    pub fn into_stats(mut self) -> Stats {
+        if let Some(similar_path_detector) = self.similar_path_detector {
+            self.stats.similar_paths_stats = similar_path_detector.stats();
+        }
         self.stats
     }
 }
@@ -1212,7 +1216,7 @@ impl ForwardPartialPathStitcher<Edge> {
 
         Ok(Stats {
             accepted_path_length,
-            ..stitcher.stats
+            ..stitcher.into_stats()
         })
     }
 }
@@ -1277,7 +1281,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 
         Ok(Stats {
             accepted_path_length,
-            ..stitcher.stats
+            ..stitcher.into_stats()
         })
     }
 }
@@ -1304,6 +1308,8 @@ pub struct Stats {
     pub root_visits: usize,
     /// The distribution of the number of times a regular node is visited
     pub node_visits: FrequencyDistribution<crate::graph::NodeID>,
+    /// The distribution of the number of similar paths between node pairs.
+    pub similar_paths_stats: SimilarPathStats,
 }
 
 impl std::ops::AddAssign<Self> for Stats {
@@ -1318,6 +1324,7 @@ impl std::ops::AddAssign<Self> for Stats {
         self.extensions_per_root_path += rhs.extensions_per_root_path;
         self.root_visits += rhs.root_visits;
         self.node_visits += rhs.node_visits;
+        self.similar_paths_stats += rhs.similar_paths_stats;
     }
 }
 
@@ -1333,6 +1340,7 @@ impl std::ops::AddAssign<&Self> for Stats {
         self.extensions_per_root_path += &rhs.extensions_per_root_path;
         self.root_visits += rhs.root_visits;
         self.node_visits += &rhs.node_visits;
+        self.similar_paths_stats += &rhs.similar_paths_stats;
     }
 }
 

@@ -522,6 +522,14 @@ pub(super) fn print_stitching_stats(stats: StitchingStats) {
     print_quartiles_row("root path candidates", stats.candidates_per_root_path);
     print_quartiles_row("root path extensions", stats.extensions_per_root_path);
     print_quartiles_row("node visits", stats.node_visits.frequencies());
+    print_quartiles_row(
+        "similar path counts",
+        stats.similar_paths_stats.similar_path_count,
+    );
+    print_quartiles_row(
+        "similar path bucket sizes",
+        stats.similar_paths_stats.similar_path_bucket_size,
+    );
     print_value_row("root visits", stats.root_visits);
 }
 
