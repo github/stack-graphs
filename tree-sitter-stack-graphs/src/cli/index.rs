@@ -370,13 +370,14 @@ impl<'a> Indexer<'a> {
                 .total_graph_nodes
                 .record(graph.iter_nodes().count());
             let mut total_edges = 0;
-            for node_edges in graph
-                .iter_nodes()
-                .filter(|n| !graph[*n].is_root())
-                .map(|n| graph.outgoing_edges(n).count())
-            {
-                self.stats.node_out_degrees.record(node_edges);
-                total_edges += node_edges;
+            for n in graph.iter_nodes() {
+                let edge_count = graph.outgoing_edges(n).count();
+                if graph[n].is_root() {
+                    self.stats.root_out_degree = edge_count;
+                } else {
+                    self.stats.node_out_degrees.record(edge_count);
+                    total_edges += edge_count;
+                }
             }
             self.stats.total_graph_edges.record(total_edges);
         }
@@ -513,6 +514,8 @@ pub struct IndexingStats {
     pub total_graph_edges: FrequencyDistribution<usize>,
     // The distribution of the out-degrees of non-root nodes.
     pub node_out_degrees: FrequencyDistribution<usize>,
+    // The root node's out-degree.
+    pub root_out_degree: usize,
     // The stitching statistics.
     pub stitching_stats: StitchingStats,
 }

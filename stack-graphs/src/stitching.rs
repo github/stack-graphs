@@ -866,6 +866,8 @@ impl<H> ForwardPartialPathStitcher<H> {
                 (p, c, false)
             })
             .multiunzip();
+        let mut stats = Stats::default();
+        stats.initial_paths.record(next_iteration.0.len());
         Self {
             candidates: Vec::new(),
             extensions: Vec::new(),
@@ -879,7 +881,7 @@ impl<H> ForwardPartialPathStitcher<H> {
             check_only_join_nodes: false,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
-            stats: Stats::default(),
+            stats,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
         }
@@ -1081,7 +1083,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 
         if extension_count == 0 {
             self.stats
-                .maximal_path_lengh
+                .nonextensible_path_lengh
                 .record(partial_path.edges.len());
         }
         candidate_count
@@ -1185,7 +1187,7 @@ impl ForwardPartialPathStitcher<Edge> {
     {
         fn as_complete_as_necessary(graph: &StackGraph, path: &PartialPath) -> bool {
             path.starts_at_endpoint(graph)
-                && (path.ends_at_endpoint(graph) || graph[path.end_node].is_jump_to())
+                && (path.ends_at_endpoint(graph) || path.ends_in_jump(graph))
         }
 
         let initial_paths = graph
@@ -1288,6 +1290,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 
 #[derive(Clone, Debug, Default)]
 pub struct Stats {
+    /// The distribution of the number of initial paths
+    pub initial_paths: FrequencyDistribution<usize>,
     /// The distribution of the number of queued paths per stitching phase
     pub queued_paths_per_phase: FrequencyDistribution<usize>,
     /// The distribution of the number of processed paths per stitching phase
@@ -1295,7 +1299,7 @@ pub struct Stats {
     /// The distribution of the length of accepted paths
     pub accepted_path_length: FrequencyDistribution<usize>,
     /// The distribution of the maximal length of paths (when they cannot be extended more)
-    pub maximal_path_lengh: FrequencyDistribution<usize>,
+    pub nonextensible_path_lengh: FrequencyDistribution<usize>,
     /// The distribution of the number of candidates for paths ending in a regular node
     pub candidates_per_node_path: FrequencyDistribution<usize>,
     /// The distribution of the number of candidates for paths ending in the root node
@@ -1314,10 +1318,11 @@ pub struct Stats {
 
 impl std::ops::AddAssign<Self> for Stats {
     fn add_assign(&mut self, rhs: Self) {
+        self.initial_paths += rhs.initial_paths;
         self.queued_paths_per_phase += rhs.queued_paths_per_phase;
         self.processed_paths_per_phase += rhs.processed_paths_per_phase;
         self.accepted_path_length += rhs.accepted_path_length;
-        self.maximal_path_lengh += rhs.maximal_path_lengh;
+        self.nonextensible_path_lengh += rhs.nonextensible_path_lengh;
         self.candidates_per_node_path += rhs.candidates_per_node_path;
         self.candidates_per_root_path += rhs.candidates_per_root_path;
         self.extensions_per_node_path += rhs.extensions_per_node_path;
@@ -1330,10 +1335,10 @@ impl std::ops::AddAssign<Self> for Stats {
 
 impl std::ops::AddAssign<&Self> for Stats {
     fn add_assign(&mut self, rhs: &Self) {
-        self.queued_paths_per_phase += &rhs.queued_paths_per_phase;
+        self.initial_paths += &rhs.initial_paths;
         self.processed_paths_per_phase += &rhs.processed_paths_per_phase;
         self.accepted_path_length += &rhs.accepted_path_length;
-        self.maximal_path_lengh += &rhs.maximal_path_lengh;
+        self.nonextensible_path_lengh += &rhs.nonextensible_path_lengh;
         self.candidates_per_node_path += &rhs.candidates_per_node_path;
         self.candidates_per_root_path += &rhs.candidates_per_root_path;
         self.extensions_per_node_path += &rhs.extensions_per_node_path;

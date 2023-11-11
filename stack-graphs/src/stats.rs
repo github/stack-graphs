@@ -26,10 +26,12 @@ impl<T: Eq + Hash> FrequencyDistribution<T> {
         self.total += 1;
     }
 
-    pub fn total(&self) -> usize {
+    // The number of recorded values.
+    pub fn count(&self) -> usize {
         return self.total;
     }
 
+    // The number of unique recorded values.
     pub fn unique(&self) -> usize {
         return self.values.len();
     }

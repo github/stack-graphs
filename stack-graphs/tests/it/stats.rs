@@ -15,7 +15,7 @@ fn empty_distribution() {
     let hist: FrequencyDistribution<i32> = FrequencyDistribution::default();
 
     assert_eq!(0, hist.unique());
-    assert_eq!(0, hist.total());
+    assert_eq!(0, hist.count());
 
     let result = hist.quantiles(0).into_iter().cloned().collect_vec();
     let expected: Vec<i32> = vec![];
@@ -28,7 +28,7 @@ fn singleton_distribution() {
     hist.record(42);
 
     assert_eq!(1, hist.unique());
-    assert_eq!(1, hist.total());
+    assert_eq!(1, hist.count());
 
     let result = hist.quantiles(4).into_iter().cloned().collect_vec();
     let expected: Vec<i32> = vec![42, 42, 42, 42, 42];
@@ -44,7 +44,7 @@ fn four_value_distribution() {
     hist.record(2);
 
     assert_eq!(4, hist.unique());
-    assert_eq!(4, hist.total());
+    assert_eq!(4, hist.count());
 
     let result = hist.quantiles(4).into_iter().cloned().collect_vec();
     let expected: Vec<i32> = vec![1, 1, 2, 3, 4];
