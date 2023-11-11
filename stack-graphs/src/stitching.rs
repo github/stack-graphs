@@ -914,7 +914,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         self.next_iteration.1.reserve(extension_count);
         self.next_iteration.2.reserve(extension_count);
         for (new_partial_path, new_cycle_detector) in self.extensions.drain(..) {
-            if new_has_split {
+            let can_converge = graph.incoming_edge_count(new_partial_path.end_node) > 1;
+            if new_has_split && can_converge {
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {
                     if similar_path_detector.has_similar_path(
                         graph,

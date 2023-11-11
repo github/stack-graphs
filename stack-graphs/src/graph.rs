@@ -1303,6 +1303,7 @@ impl StackGraph {
         let edges = &mut self.outgoing_edges[source];
         if let Err(index) = edges.binary_search_by_key(&sink, |o| o.sink) {
             edges.insert(index, OutgoingEdge { sink, precedence });
+            self.incoming_edges[sink] += 1;
         }
     }
 
@@ -1311,6 +1312,7 @@ impl StackGraph {
         let edges = &mut self.outgoing_edges[source];
         if let Ok(index) = edges.binary_search_by_key(&sink, |o| o.sink) {
             edges.remove(index);
+            self.incoming_edges[sink] -= 1;
         }
     }
 
@@ -1324,6 +1326,11 @@ impl StackGraph {
             })),
             None => Either::Left(std::iter::empty()),
         }
+    }
+
+    /// Returns the number of edges that end at a particular sink node.
+    pub fn incoming_edge_count(&self, sink: Handle<Node>) -> u32 {
+        self.incoming_edges[sink]
     }
 }
 
@@ -1443,6 +1450,7 @@ pub struct StackGraph {
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
+    incoming_edges: SupplementalArena<Node, u32>,
     pub(crate) node_debug_info: SupplementalArena<Node, DebugInfo>,
     pub(crate) edge_debug_info: SupplementalArena<Node, SmallVec<[(Handle<Node>, DebugInfo); 8]>>,
 }
@@ -1625,6 +1633,7 @@ impl Default for StackGraph {
             source_info: SupplementalArena::new(),
             node_id_handles: NodeIDHandles::new(),
             outgoing_edges: SupplementalArena::new(),
+            incoming_edges: SupplementalArena::new(),
             node_debug_info: SupplementalArena::new(),
             edge_debug_info: SupplementalArena::new(),
         }
