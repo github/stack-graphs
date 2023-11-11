@@ -1083,7 +1083,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 
         if extension_count == 0 {
             self.stats
-                .nonextensible_path_lengh
+                .terminal_path_lengh
                 .record(partial_path.edges.len());
         }
         candidate_count
@@ -1299,7 +1299,7 @@ pub struct Stats {
     /// The distribution of the length of accepted paths
     pub accepted_path_length: FrequencyDistribution<usize>,
     /// The distribution of the maximal length of paths (when they cannot be extended more)
-    pub nonextensible_path_lengh: FrequencyDistribution<usize>,
+    pub terminal_path_lengh: FrequencyDistribution<usize>,
     /// The distribution of the number of candidates for paths ending in a regular node
     pub candidates_per_node_path: FrequencyDistribution<usize>,
     /// The distribution of the number of candidates for paths ending in the root node
@@ -1322,7 +1322,7 @@ impl std::ops::AddAssign<Self> for Stats {
         self.queued_paths_per_phase += rhs.queued_paths_per_phase;
         self.processed_paths_per_phase += rhs.processed_paths_per_phase;
         self.accepted_path_length += rhs.accepted_path_length;
-        self.nonextensible_path_lengh += rhs.nonextensible_path_lengh;
+        self.terminal_path_lengh += rhs.terminal_path_lengh;
         self.candidates_per_node_path += rhs.candidates_per_node_path;
         self.candidates_per_root_path += rhs.candidates_per_root_path;
         self.extensions_per_node_path += rhs.extensions_per_node_path;
@@ -1338,7 +1338,7 @@ impl std::ops::AddAssign<&Self> for Stats {
         self.initial_paths += &rhs.initial_paths;
         self.processed_paths_per_phase += &rhs.processed_paths_per_phase;
         self.accepted_path_length += &rhs.accepted_path_length;
-        self.nonextensible_path_lengh += &rhs.nonextensible_path_lengh;
+        self.terminal_path_lengh += &rhs.terminal_path_lengh;
         self.candidates_per_node_path += &rhs.candidates_per_node_path;
         self.candidates_per_root_path += &rhs.candidates_per_root_path;
         self.extensions_per_node_path += &rhs.extensions_per_node_path;

@@ -518,7 +518,7 @@ pub(super) fn print_stitching_stats(stats: StitchingStats) {
     print_quartiles_row("queued paths per phase", stats.queued_paths_per_phase);
     print_quartiles_row("processed paths per phase", stats.processed_paths_per_phase);
     print_quartiles_row("accepted path length", stats.accepted_path_length);
-    print_quartiles_row("non-extensible path length", stats.nonextensible_path_lengh);
+    print_quartiles_row("terminal path length", stats.terminal_path_lengh);
     print_quartiles_row("node path candidates", stats.candidates_per_node_path);
     print_quartiles_row("node path extensions", stats.extensions_per_node_path);
     print_quartiles_row("root path candidates", stats.candidates_per_root_path);
