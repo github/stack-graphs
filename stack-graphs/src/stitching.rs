@@ -41,6 +41,9 @@ use std::collections::VecDeque;
 #[cfg(feature = "copious-debugging")]
 use std::fmt::Display;
 
+use itertools::izip;
+use itertools::Itertools;
+
 use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::HandleSet;
@@ -60,6 +63,7 @@ use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::partial::PartialSymbolStack;
+use crate::paths::Extend;
 use crate::paths::PathResolutionError;
 use crate::CancellationError;
 use crate::CancellationFlag;
@@ -736,13 +740,18 @@ impl<'a> Display for DisplaySymbolStackKey<'a> {
 /// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
 pub struct ForwardPartialPathStitcher<H> {
     candidates: Vec<H>,
-    queue: VecDeque<(PartialPath, AppendingCycleDetector<H>)>,
+    extensions: Vec<(PartialPath, AppendingCycleDetector<H>)>,
+    queue: VecDeque<(PartialPath, AppendingCycleDetector<H>, bool)>,
     // tracks the number of initial paths in the queue because we do not want call
     // extend_until on those
     initial_paths: usize,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
-    next_iteration: (VecDeque<PartialPath>, VecDeque<AppendingCycleDetector<H>>),
+    next_iteration: (
+        VecDeque<PartialPath>,
+        VecDeque<AppendingCycleDetector<H>>,
+        VecDeque<bool>,
+    ),
     appended_paths: Appendables<H>,
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
     max_work_per_phase: usize,
@@ -763,15 +772,16 @@ impl<H> ForwardPartialPathStitcher<H> {
         I: IntoIterator<Item = PartialPath>,
     {
         let mut appended_paths = Appendables::new();
-        let next_iteration: (VecDeque<_>, VecDeque<_>) = initial_partial_paths
+        let next_iteration: (VecDeque<_>, VecDeque<_>, VecDeque<_>) = initial_partial_paths
             .into_iter()
             .map(|p| {
                 let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
-                (p, c)
+                (p, c, false)
             })
-            .unzip();
+            .multiunzip();
         Self {
             candidates: Vec::new(),
+            extensions: Vec::new(),
             queue: VecDeque::new(),
             initial_paths: next_iteration.0.len(),
             next_iteration,
@@ -835,6 +845,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         candidates: &mut C,
         partial_path: &PartialPath,
         cycle_detector: AppendingCycleDetector<H>,
+        has_split: bool,
     ) -> usize
     where
         A: Appendable,
@@ -871,15 +882,15 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         // find candidates to append
         self.candidates.clear();
         candidates.get_forward_candidates(partial_path, &mut self.candidates);
+        let (graph, partials, db) = candidates.get_graph_partials_and_db();
 
         // try to extend path with candidates
-        let extension_count = self.candidates.len();
-        self.next_iteration.0.reserve(extension_count);
-        self.next_iteration.1.reserve(extension_count);
-        for extension in &self.candidates {
-            let (graph, partials, db) = candidates.get_graph_partials_and_db();
-            let extension_path = db.get_appendable(extension);
-            copious_debugging!("      with {}", extension_path.display(graph, partials));
+        let candidate_count = self.candidates.len();
+        self.extensions.clear();
+        self.extensions.reserve(candidate_count);
+        for candidate in &self.candidates {
+            let appendable = db.get_appendable(candidate);
+            copious_debugging!("      with {}", appendable.display(graph, partials));
 
             let mut new_partial_path = partial_path.clone();
             let mut new_cycle_detector = cycle_detector.clone();
@@ -887,12 +898,23 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             // partial path, just skip the extension — it's not a fatal error.
             #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
             {
-                if let Err(err) = extension_path.append_to(graph, partials, &mut new_partial_path) {
+                if let Err(err) = appendable.append_to(graph, partials, &mut new_partial_path) {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                copious_debugging!("        is {}", new_partial_path.display(graph, partials));
-                new_cycle_detector.append(&mut self.appended_paths, extension.clone());
+            }
+            new_cycle_detector.append(&mut self.appended_paths, candidate.clone());
+            copious_debugging!("        is {}", new_partial_path.display(graph, partials));
+            self.extensions.push((new_partial_path, new_cycle_detector));
+        }
+
+        let extension_count = self.extensions.len();
+        let new_has_split = has_split || self.extensions.len() > 1;
+        self.next_iteration.0.reserve(extension_count);
+        self.next_iteration.1.reserve(extension_count);
+        self.next_iteration.2.reserve(extension_count);
+        for (new_partial_path, new_cycle_detector) in self.extensions.drain(..) {
+            if new_has_split {
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {
                     if similar_path_detector.has_similar_path(
                         graph,
@@ -912,16 +934,22 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                             }
                         },
                     ) {
+                        copious_debugging!(
+                            " extension {}",
+                            new_partial_path.display(graph, partials)
+                        );
                         copious_debugging!("        is rejected: too many similar");
                         continue;
                     }
                 }
             }
-            self.next_iteration.0.push_back(new_partial_path);
-            self.next_iteration.1.push_back(new_cycle_detector);
+
+            self.next_iteration.0.push(new_partial_path);
+            self.next_iteration.1.push(new_cycle_detector);
+            self.next_iteration.2.push(new_has_split);
         }
 
-        extension_count
+        candidate_count
     }
 
     /// Returns whether the algorithm has completed.
@@ -949,14 +977,13 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         E: Fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
     {
         copious_debugging!("==> Start phase {}", self.phase_number);
-        self.queue.extend(
-            self.next_iteration
-                .0
-                .drain(..)
-                .zip(self.next_iteration.1.drain(..)),
-        );
+        self.queue.extend(izip!(
+            self.next_iteration.0.drain(..),
+            self.next_iteration.1.drain(..),
+            self.next_iteration.2.drain(..),
+        ));
         let mut work_performed = 0;
-        while let Some((partial_path, cycle_detector)) = self.queue.pop_front() {
+        while let Some((partial_path, cycle_detector, has_split)) = self.queue.pop_front() {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             copious_debugging!(
                 "--> Candidate partial path {}",
@@ -971,7 +998,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 );
                 continue;
             }
-            work_performed += self.extend(candidates, &partial_path, cycle_detector);
+            work_performed += self.extend(candidates, &partial_path, cycle_detector, has_split);
             if work_performed >= self.max_work_per_phase {
                 break;
             }
