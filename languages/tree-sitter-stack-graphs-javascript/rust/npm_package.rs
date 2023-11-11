@@ -61,7 +61,6 @@ impl FileAnalyzer for NpmPackageAnalyzer {
             pkg_internal_name,
             "pkg_internal_name_pop",
         );
-
         // reach package internals via root
         //
         //     [push pkg_internal_name] -> [push "GUARD:PKG_INTERNAL"] -> [root]
@@ -83,12 +82,20 @@ impl FileAnalyzer for NpmPackageAnalyzer {
 
         // reach exports via package name
         //
-        //     [root] -> [pop "GUARD:PKG"] -> [pop PKG_NAME]* -> [push PKG_INTERNAL_NAME] -> [push "GUARD:PKG_INTERNAL"] -> [root]
+        //     [root] -> [pop "GUARD:PKG"] -> [pop PKG_NAME]* -> [push "GUARD:MODULE"] -> [push PKG_INTERNAL_NAME] -> [push "GUARD:PKG_INTERNAL"] -> [root]
         //
         if !npm_pkg.name.is_empty() {
             // NOTE Because all modules expose their exports at the top-level, both paths created below are equivalent for
             //      exports of the main module. This means multiple equivalent paths to those exports, which is bad for
             //      performance. At the moment, we have no mechanism to prevent this from happening.
+
+            let module_guard = add_push(
+                graph,
+                file,
+                pkg_internal_name_push,
+                MODULE_GUARD,
+                "main_guard",
+            );
 
             // reach package internals via package name
             //
@@ -102,11 +109,11 @@ impl FileAnalyzer for NpmPackageAnalyzer {
                 pkg_guard_pop,
                 "pkg_name_pop",
             );
-            add_edge(graph, pkg_name_pop, pkg_internal_name_push, 0);
+            add_edge(graph, pkg_name_pop, module_guard, 0);
 
             // reach main exports directly via package name (with precedence)
             //
-            //     [pop pkg_name] -1-> [pop "GUARD:EXPORTS"] -> [push "GUARD:EXPORTS"] -> [push main]* -> [push pkg_internal_name]
+            //     [pop pkg_name] -1-> [pop "GUARD:EXPORTS"] -> [push "GUARD:EXPORTS"] -> [push main]* -> [push "GUARD:MODULE"] -> [push pkg_internal_name]
             //
             let exports_guard_pop = add_pop(
                 graph,
@@ -121,8 +128,7 @@ impl FileAnalyzer for NpmPackageAnalyzer {
                 .map(|p| p.into_path_buf())
                 .unwrap_or(PathBuf::from("index"))
                 .with_extension("");
-            let main_push =
-                add_module_pushes(graph, file, &main, pkg_internal_name_push, "main_push");
+            let main_push = add_module_pushes(graph, file, &main, module_guard, "main_push");
             let exports_guard_push =
                 add_push(graph, file, main_push, EXPORTS_GUARD, "exports_guard_push");
             add_edge(graph, exports_guard_pop, exports_guard_push, 0);
