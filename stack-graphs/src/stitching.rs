@@ -202,6 +202,9 @@ where
     where
         R: std::iter::Extend<H>;
 
+    /// Get the number of available candidates that share the given path's end node.
+    fn get_joining_candidate_count(&self, path: &PartialPath) -> u32;
+
     /// Get the graph, partial path arena, and database backing this candidates instance.
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Db);
 }
@@ -243,6 +246,10 @@ impl ForwardCandidates<Edge, Edge, GraphEdges, CancellationError> for GraphEdgeC
         }));
     }
 
+    fn get_joining_candidate_count(&self, path: &PartialPath) -> u32 {
+        self.graph.incoming_edge_count(path.end_node)
+    }
+
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &GraphEdges) {
         (self.graph, self.partials, &self.edges)
     }
@@ -277,6 +284,7 @@ pub struct Database {
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
     root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
+    incoming_paths: SupplementalArena<Node, u32>,
 }
 
 impl Database {
@@ -289,6 +297,7 @@ impl Database {
             symbol_stack_key_cache: HashMap::new(),
             paths_by_start_node: SupplementalArena::new(),
             root_paths_by_precondition: SupplementalArena::new(),
+            incoming_paths: SupplementalArena::new(),
         }
     }
 
@@ -302,6 +311,7 @@ impl Database {
         self.symbol_stack_key_cache.clear();
         self.paths_by_start_node.clear();
         self.root_paths_by_precondition.clear();
+        self.incoming_paths.clear();
     }
 
     /// Adds a partial path to this database.  We do not deduplicate partial paths in any way; it's
@@ -313,6 +323,7 @@ impl Database {
         path: PartialPath,
     ) -> Handle<PartialPath> {
         let start_node = path.start_node;
+        let end_node = path.end_node;
         copious_debugging!(
             "    Add {} path to database {}",
             if graph[start_node].is_root() {
@@ -343,6 +354,7 @@ impl Database {
             self.paths_by_start_node[start_node].push(handle);
         }
 
+        self.incoming_paths[end_node] += 1;
         handle
     }
 
@@ -600,6 +612,10 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, CancellationE
             .find_candidate_partial_paths(self.graph, self.partials, path, result);
     }
 
+    fn get_joining_candidate_count(&self, path: &PartialPath) -> u32 {
+        self.database.incoming_paths[path.end_node]
+    }
+
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
         (self.graph, self.partials, self.database)
     }
@@ -852,31 +868,37 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         Db: ToAppendable<H, A>,
         C: ForwardCandidates<H, A, Db, Err>,
     {
+        let check_cycle = partial_path.start_node == partial_path.end_node
+            || candidates.get_joining_candidate_count(partial_path) > 1;
+
         let (graph, partials, db) = candidates.get_graph_partials_and_db();
         copious_debugging!("    Extend {}", partial_path.display(graph, partials));
 
-        // check is path is cyclic, in which case we do not extend it
-        let has_precondition_variables = partial_path.symbol_stack_precondition.has_variable()
-            || partial_path.scope_stack_precondition.has_variable();
-        let cycles = cycle_detector
-            .is_cyclic(graph, partials, db, &mut self.appended_paths)
-            .expect("cyclic test failed when stitching partial paths");
-        let cyclic = match has_precondition_variables {
-            // If the precondition has no variables, we allow cycles that strengthen the
-            // precondition, because we know they cannot strengthen the precondition of
-            // the overall path.
-            false => !cycles
-                .into_iter()
-                .all(|c| c == Cyclicity::StrengthensPrecondition),
-            // If the precondition has variables, do not allow any cycles, not even those
-            // that strengthen the precondition. This is more strict than necessary. Better
-            // might be to disallow precondition strengthening cycles only if they would
-            // strengthen the overall path precondition.
-            true => !cycles.is_empty(),
-        };
-        if cyclic {
-            copious_debugging!("      is discontinued: cyclic");
-            return 0;
+        if check_cycle {
+            // Check is path is cyclic, in which case we do not extend it. We only do this if the start and end nodes are the same,
+            // or the current end node has multiple incoming edges. If neither of these hold, the path cannot end in a cycle.
+            let has_precondition_variables = partial_path.symbol_stack_precondition.has_variable()
+                || partial_path.scope_stack_precondition.has_variable();
+            let cycles = cycle_detector
+                .is_cyclic(graph, partials, db, &mut self.appended_paths)
+                .expect("cyclic test failed when stitching partial paths");
+            let cyclic = match has_precondition_variables {
+                // If the precondition has no variables, we allow cycles that strengthen the
+                // precondition, because we know they cannot strengthen the precondition of
+                // the overall path.
+                false => !cycles
+                    .into_iter()
+                    .all(|c| c == Cyclicity::StrengthensPrecondition),
+                // If the precondition has variables, do not allow any cycles, not even those
+                // that strengthen the precondition. This is more strict than necessary. Better
+                // might be to disallow precondition strengthening cycles only if they would
+                // strengthen the overall path precondition.
+                true => !cycles.is_empty(),
+            };
+            if cyclic {
+                copious_debugging!("      is discontinued: cyclic");
+                return 0;
+            }
         }
 
         // find candidates to append
