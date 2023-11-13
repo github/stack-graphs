@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::arena::Handle;
+use crate::graph::Degree;
 use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
@@ -734,6 +735,10 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, StorageError>
     {
         self.db
             .find_candidate_partial_paths(&self.graph, &mut self.partials, path, result);
+    }
+
+    fn get_joining_candidate_degree(&self, path: &PartialPath) -> Degree {
+        self.db.get_incoming_path_degree(path.end_node)
     }
 
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {

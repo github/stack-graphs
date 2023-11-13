@@ -115,7 +115,7 @@ impl FileAnalyzer for NpmPackageAnalyzer {
                 EXPORTS_GUARD,
                 "exports_guard_pop",
             );
-            replace_edge(graph, pkg_name_pop, exports_guard_pop, 1);
+            set_edge_precedence(graph, pkg_name_pop, exports_guard_pop, 1);
             let main = Some(npm_pkg.main)
                 .filter(|main| !main.is_empty())
                 .and_then(|main| NormalizedRelativePath::from_str(&main))
