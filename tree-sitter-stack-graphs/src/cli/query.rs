@@ -186,10 +186,13 @@ impl<'a> Querier<'a> {
             };
 
             let mut reference_paths = Vec::new();
+            let stitcher_config = StitcherConfig::default()
+                // always detect similar paths, we don't know the language configurations for the data in the database
+                .with_detect_similar_paths(true);
             if let Err(err) = ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 self.db,
                 std::iter::once(node),
-                StitcherConfig::default(),
+                stitcher_config,
                 &cancellation_flag,
                 |_g, _ps, p| {
                     reference_paths.push(p.clone());

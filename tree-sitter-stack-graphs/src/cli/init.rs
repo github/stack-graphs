@@ -758,8 +758,6 @@ impl ProjectSettings<'_> {
                         STACK_GRAPHS_BUILTINS_SOURCE,
                     )),
                     Some(STACK_GRAPHS_BUILTINS_CONFIG),
-                    FileAnalyzers::new(),
-                    StitcherConfig::default(),
                     cancellation_flag,
                 )
             }}

@@ -1,4 +1,3 @@
-use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::loader::LoadError;
 use tree_sitter_stack_graphs::CancellationFlag;
@@ -39,7 +38,6 @@ pub fn try_language_configuration(
             STACK_GRAPHS_BUILTINS_SOURCE,
         )),
         Some(STACK_GRAPHS_BUILTINS_CONFIG),
-        FileAnalyzers::new(),
         cancellation_flag,
     )
 }

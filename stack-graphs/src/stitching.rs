@@ -1246,7 +1246,18 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 #[derive(Clone, Copy, Debug)]
 pub struct StitcherConfig {
     /// Enables similar path detection during path stitching.
-    pub detect_similar_paths: bool,
+    detect_similar_paths: bool,
+}
+
+impl StitcherConfig {
+    pub fn detect_similar_paths(&self) -> bool {
+        self.detect_similar_paths
+    }
+
+    pub fn with_detect_similar_paths(mut self, detect_similar_paths: bool) -> Self {
+        self.detect_similar_paths = detect_similar_paths;
+        self
+    }
 }
 
 impl StitcherConfig {

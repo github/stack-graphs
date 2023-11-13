@@ -325,6 +325,8 @@ impl TestArgs {
                 Ok(_) => {}
             }
         }
+        let stitcher_config =
+            StitcherConfig::default().with_detect_similar_paths(lc.has_similar_paths);
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
         for file in test.graph.iter_files() {
@@ -332,7 +334,7 @@ impl TestArgs {
                 &test.graph,
                 &mut partials,
                 file,
-                StitcherConfig::default(),
+                stitcher_config,
                 &cancellation_flag.as_ref(),
                 |g, ps, p| {
                     db.add_partial_path(g, ps, p.clone());
@@ -342,7 +344,7 @@ impl TestArgs {
         let result = test.run(
             &mut partials,
             &mut db,
-            StitcherConfig::default(),
+            stitcher_config,
             cancellation_flag.as_ref(),
         )?;
         let success = result.failure_count() == 0;
@@ -356,7 +358,7 @@ impl TestArgs {
                 &mut db,
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
-                StitcherConfig::default(),
+                stitcher_config,
                 cancellation_flag.as_ref(),
             )?
         } else {

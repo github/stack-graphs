@@ -55,10 +55,13 @@ impl VisualizeArgs {
             .filter(|n| graph[*n].is_reference())
             .collect::<Vec<_>>();
         let mut complete_paths_db = Database::new();
+        let stitcher_config = StitcherConfig::default()
+            // always detect similar paths, we don't know the language configurations for the data in the database
+            .with_detect_similar_paths(true);
         ForwardPartialPathStitcher::find_all_complete_partial_paths(
             &mut db,
             starting_nodes,
-            StitcherConfig::default(),
+            stitcher_config,
             cancellation_flag,
             |g, ps, p| {
                 complete_paths_db.add_partial_path(g, ps, p.clone());

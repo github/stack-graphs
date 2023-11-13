@@ -280,6 +280,8 @@ impl<'a> Indexer<'a> {
             }
             Err(e) => return Err(IndexError::LoadError(e)),
         };
+        let stitcher_config =
+            StitcherConfig::default().with_detect_similar_paths(lcs.has_similar_paths());
 
         let source = file_reader.get(source_path)?;
         let tag = sha1(source);
@@ -356,7 +358,7 @@ impl<'a> Indexer<'a> {
             &graph,
             &mut partials,
             file,
-            StitcherConfig::default(),
+            stitcher_config,
             &(&cancellation_flag as &dyn CancellationFlag),
             |_g, _ps, p| {
                 paths.push(p.clone());
