@@ -718,10 +718,8 @@ impl ProjectSettings<'_> {
         let mut file = File::create(project_path.join("rust/lib.rs"))?;
         self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
-            use tree_sitter_stack_graphs::loader::FileAnalyzers;
             use tree_sitter_stack_graphs::loader::LanguageConfiguration;
             use tree_sitter_stack_graphs::loader::LoadError;
-            use tree_sitter_stack_graphs::loader::StitcherConfig;
             use tree_sitter_stack_graphs::CancellationFlag;
 
             /// The stack graphs tsg source for this language.
