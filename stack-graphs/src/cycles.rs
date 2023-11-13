@@ -110,12 +110,15 @@ where
     {
         let key = path.key();
 
+        // Iterate through the bucket to determine if this paths is better than any already known
+        // path. Note that the bucket might be modified during the loop if a path is removed which
+        // is shadowed by the new path!
         let possibly_similar_paths = self.paths.entry(key).or_default();
         let mut idx = 0;
         while idx < possibly_similar_paths.len() {
             match cmp(arena, path, &possibly_similar_paths[idx]) {
                 Some(Ordering::Less) => {
-                    // the new path is betetr, remove the old one
+                    // the new path is better, remove the old one
                     possibly_similar_paths.remove(idx);
                     // keep `idx` which now points to the next element
                     continue;
