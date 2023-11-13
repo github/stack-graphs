@@ -61,18 +61,6 @@ pub fn add_edge(graph: &mut StackGraph, from: Handle<Node>, to: Handle<Node>, pr
     graph.add_edge(from, to, precedence);
 }
 
-pub fn set_edge_precedence(
-    graph: &mut StackGraph,
-    from: Handle<Node>,
-    to: Handle<Node>,
-    precedence: i32,
-) {
-    if from == to {
-        return;
-    }
-    graph.set_edge_precedence(from, to, precedence);
-}
-
 pub fn add_module_pops(
     graph: &mut StackGraph,
     file: Handle<File>,

@@ -348,10 +348,6 @@ inherit .return_or_yield
     edge module_pop_end -> prog_exports_pop
     edge prog_exports_pop -> @prog.exports
 
-    ; allow direct access from the package to the modules exports
-    ; this is used from package.json
-    edge @prog.pkg_pop -> prog_exports_pop
-
     ;; builtin types
     node @prog.builtins_number
     node @prog.builtins_string
