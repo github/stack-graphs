@@ -8,6 +8,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
 
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
@@ -15,6 +16,7 @@ use stack_graphs::graph::StackGraph;
 use tree_sitter_stack_graphs::BuildError;
 use tree_sitter_stack_graphs::FileAnalyzer;
 
+use crate::tsconfig::NormalizedRelativePath;
 use crate::util::*;
 
 pub struct NpmPackageAnalyzer {}
@@ -74,16 +76,28 @@ impl FileAnalyzer for NpmPackageAnalyzer {
         };
 
         // package definition
-        let pkg_def = add_module_pops(
-            graph,
-            file,
-            NON_REL_M_NS,
-            Path::new(&npm_pkg.name),
-            root,
-            "npm_package.pkg_def",
-        );
-        let pkg_ref = add_push(graph, file, proj_scope, PKG_M_NS, "npm_package.pkg_ref");
-        add_edge(graph, pkg_def, pkg_ref, 0);
+        if !npm_pkg.name.is_empty() {
+            let pkg_def = add_module_pops(
+                graph,
+                file,
+                NON_REL_M_NS,
+                Path::new(&npm_pkg.name),
+                root,
+                "npm_package.pkg_def",
+            );
+            let pkg_ref = add_push(graph, file, proj_scope, PKG_M_NS, "npm_package.pkg_ref");
+            add_edge(graph, pkg_def, pkg_ref, 0);
+
+            let main = Some(npm_pkg.main)
+                .filter(|main| !main.is_empty())
+                .and_then(|main| NormalizedRelativePath::from_str(&main))
+                .map(|p| p.into_path_buf())
+                .unwrap_or(PathBuf::from("index"))
+                .with_extension("");
+            let main_ref =
+                add_module_pushes(graph, file, M_NS, &main, proj_scope, "npm_package.main_ref");
+            add_edge(graph, pkg_def, main_ref, 0);
+        }
 
         // dependencies (package references)
         for (i, (pkg_name, _)) in npm_pkg.dependencies.iter().enumerate() {
@@ -113,7 +127,10 @@ impl FileAnalyzer for NpmPackageAnalyzer {
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NpmPackage {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
+    pub main: String,
     #[serde(default)]
     pub dependencies: HashMap<String, serde_json::Value>,
 }
