@@ -1449,10 +1449,10 @@ pub struct StackGraph {
     pub(crate) nodes: Arena<Node>,
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
-    outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 8]>>,
+    outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 4]>>,
     incoming_edges: SupplementalArena<Node, u32>,
     pub(crate) node_debug_info: SupplementalArena<Node, DebugInfo>,
-    pub(crate) edge_debug_info: SupplementalArena<Node, SmallVec<[(Handle<Node>, DebugInfo); 8]>>,
+    pub(crate) edge_debug_info: SupplementalArena<Node, SmallVec<[(Handle<Node>, DebugInfo); 4]>>,
 }
 
 impl StackGraph {
