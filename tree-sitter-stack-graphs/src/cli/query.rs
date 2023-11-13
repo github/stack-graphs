@@ -51,7 +51,7 @@ impl QueryArgs {
             wait_for_input()?;
         }
         let mut db = SQLiteReader::open(&db_path)?;
-        let stitching_stats = self.target.run(&mut db)?;
+        let stitching_stats = self.target.run(&mut db, self.stats)?;
         if self.stats {
             println!();
             print_stitching_stats(stitching_stats);
@@ -68,9 +68,10 @@ pub enum Target {
 }
 
 impl Target {
-    pub fn run(self, db: &mut SQLiteReader) -> anyhow::Result<StitchingStats> {
+    fn run(self, db: &mut SQLiteReader, collect_stats: bool) -> anyhow::Result<StitchingStats> {
         let reporter = ConsoleReporter::details();
         let mut querier = Querier::new(db, &reporter);
+        querier.set_collect_stats(collect_stats);
         match self {
             Self::Definition(cmd) => cmd.run(&mut querier)?,
         }
@@ -152,7 +153,7 @@ impl Definition {
 pub struct Querier<'a> {
     db: &'a mut SQLiteReader,
     reporter: &'a dyn Reporter,
-    stats: StitchingStats,
+    stats: Option<StitchingStats>,
 }
 
 impl<'a> Querier<'a> {
@@ -160,7 +161,15 @@ impl<'a> Querier<'a> {
         Self {
             db,
             reporter,
-            stats: StitchingStats::default(),
+            stats: None,
+        }
+    }
+
+    pub fn set_collect_stats(&mut self, collect_stats: bool) {
+        if !collect_stats {
+            self.stats = None;
+        } else if self.stats.is_none() {
+            self.stats = Some(StitchingStats::default());
         }
     }
 
@@ -208,7 +217,8 @@ impl<'a> Querier<'a> {
             let mut reference_paths = Vec::new();
             let stitcher_config = StitcherConfig::default()
                 // always detect similar paths, we don't know the language configurations for the data in the database
-                .with_detect_similar_paths(true);
+                .with_detect_similar_paths(true)
+                .with_collect_stats(self.stats.is_some());
             let ref_result = ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 self.db,
                 std::iter::once(node),
@@ -219,7 +229,11 @@ impl<'a> Querier<'a> {
                 },
             );
             match ref_result {
-                Ok(ref_stats) => self.stats += ref_stats,
+                Ok(ref_stats) => {
+                    if let Some(stats) = &mut self.stats {
+                        *stats += ref_stats
+                    }
+                }
                 Err(err) => {
                     self.reporter.failed(&log_path, "query timed out", None);
                     return Err(err.into());
@@ -276,12 +290,8 @@ impl<'a> Querier<'a> {
         Ok(result)
     }
 
-    pub fn stats(&self) -> &StitchingStats {
-        &self.stats
-    }
-
     pub fn into_stats(self) -> StitchingStats {
-        self.stats
+        self.stats.unwrap_or_default()
     }
 }
 

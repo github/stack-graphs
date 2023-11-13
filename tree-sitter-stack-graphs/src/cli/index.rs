@@ -113,6 +113,7 @@ impl IndexArgs {
         let mut indexer = Indexer::new(&mut db, &mut loader, &reporter);
         indexer.force = self.force;
         indexer.max_file_time = self.max_file_time;
+        indexer.set_collect_stats(self.stats);
 
         let source_paths = self
             .source_paths
@@ -158,7 +159,7 @@ pub struct Indexer<'a> {
     db: &'a mut SQLiteWriter,
     loader: &'a mut Loader,
     reporter: &'a dyn Reporter,
-    stats: IndexingStats,
+    stats: Option<IndexingStats>,
     /// Index files, even if they already exist in the database.
     pub force: bool,
     /// Maximum time per file.
@@ -177,7 +178,15 @@ impl<'a> Indexer<'a> {
             reporter,
             force: false,
             max_file_time: None,
-            stats: IndexingStats::default(),
+            stats: None,
+        }
+    }
+
+    pub fn set_collect_stats(&mut self, collect_stats: bool) {
+        if !collect_stats {
+            self.stats = None;
+        } else if self.stats.is_none() {
+            self.stats = Some(IndexingStats::default());
         }
     }
 
@@ -294,8 +303,9 @@ impl<'a> Indexer<'a> {
             }
             Err(e) => return Err(IndexError::LoadError(e)),
         };
-        let stitcher_config =
-            StitcherConfig::default().with_detect_similar_paths(!lcs.no_similar_paths_in_file());
+        let stitcher_config = StitcherConfig::default()
+            .with_detect_similar_paths(!lcs.no_similar_paths_in_file())
+            .with_collect_stats(self.stats.is_some());
 
         let source = file_reader.get(source_path)?;
         let tag = sha1(source);
@@ -365,21 +375,19 @@ impl<'a> Indexer<'a> {
                 }
             }
         };
-        {
-            self.stats
-                .total_graph_nodes
-                .record(graph.iter_nodes().count());
+        if let Some(stats) = &mut self.stats {
+            stats.total_graph_nodes.record(graph.iter_nodes().count());
             let mut total_edges = 0;
             for n in graph.iter_nodes() {
                 let edge_count = graph.outgoing_edges(n).count();
                 if graph[n].is_root() {
-                    self.stats.root_out_degree = edge_count;
+                    stats.root_out_degree = edge_count;
                 } else {
-                    self.stats.node_out_degrees.record(edge_count);
+                    stats.node_out_degrees.record(edge_count);
                     total_edges += edge_count;
                 }
             }
-            self.stats.total_graph_edges.record(total_edges);
+            stats.total_graph_edges.record(total_edges);
         }
 
         let mut partials = PartialPaths::new();
@@ -395,7 +403,9 @@ impl<'a> Indexer<'a> {
             },
         ) {
             Ok(stitching_stats) => {
-                self.stats.stitching_stats += stitching_stats;
+                if let Some(stats) = &mut self.stats {
+                    stats.stitching_stats += stitching_stats;
+                }
             }
             Err(_) => {
                 file_status.warning("path computation timed out", None);
@@ -475,12 +485,8 @@ impl<'a> Indexer<'a> {
         false
     }
 
-    pub fn stats(&self) -> &IndexingStats {
-        &self.stats
-    }
-
     pub fn into_stats(self) -> IndexingStats {
-        self.stats
+        self.stats.unwrap_or_default()
     }
 }
 

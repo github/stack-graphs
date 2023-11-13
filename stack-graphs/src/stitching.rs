@@ -829,7 +829,7 @@ pub struct ForwardPartialPathStitcher<H> {
     queue: VecDeque<(PartialPath, AppendingCycleDetector<H>, bool)>,
     // tracks the number of initial paths in the queue because we do not want call
     // extend_until on those
-    initial_paths: usize,
+    initial_paths_in_queue: usize,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
     next_iteration: (
@@ -841,7 +841,8 @@ pub struct ForwardPartialPathStitcher<H> {
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
     check_only_join_nodes: bool,
     max_work_per_phase: usize,
-    stats: Stats,
+    initial_paths: usize,
+    stats: Option<Stats>,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
 }
@@ -866,13 +867,12 @@ impl<H> ForwardPartialPathStitcher<H> {
                 (p, c, false)
             })
             .multiunzip();
-        let mut stats = Stats::default();
-        stats.initial_paths.record(next_iteration.0.len());
+        let initial_paths = next_iteration.0.len();
         Self {
             candidates: Vec::new(),
             extensions: Vec::new(),
             queue: VecDeque::new(),
-            initial_paths: next_iteration.0.len(),
+            initial_paths_in_queue: initial_paths,
             next_iteration,
             appended_paths,
             // By default, all paths are checked for similarity
@@ -881,7 +881,8 @@ impl<H> ForwardPartialPathStitcher<H> {
             check_only_join_nodes: false,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
-            stats,
+            initial_paths,
+            stats: None,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
         }
@@ -916,11 +917,24 @@ impl<H> ForwardPartialPathStitcher<H> {
         self.max_work_per_phase = max_work_per_phase;
     }
 
-    pub fn into_stats(mut self) -> Stats {
-        if let Some(similar_path_detector) = self.similar_path_detector {
-            self.stats.similar_paths_stats = similar_path_detector.stats();
+    /// Sets whether to collect statistics during stitching.
+    pub fn set_collect_stats(&mut self, collect_stats: bool) {
+        if !collect_stats {
+            self.stats = None;
+        } else if self.stats.is_none() {
+            let mut stats = Stats::default();
+            stats.initial_paths.record(self.initial_paths);
+            self.stats = Some(stats);
         }
-        self.stats
+    }
+
+    pub fn into_stats(mut self) -> Stats {
+        if let (Some(stats), Some(similar_path_detector)) =
+            (&mut self.stats, self.similar_path_detector)
+        {
+            stats.similar_paths_stats = similar_path_detector.stats();
+        }
+        self.stats.unwrap_or_default()
     }
 }
 
@@ -1069,22 +1083,21 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             self.next_iteration.2.push(new_has_split);
         }
 
-        let (graph, _, _) = candidates.get_graph_partials_and_db();
-        let end_node = &graph[partial_path.end_node];
-        if end_node.is_root() {
-            self.stats.candidates_per_root_path.record(candidate_count);
-            self.stats.extensions_per_root_path.record(extension_count);
-            self.stats.root_visits += 1;
-        } else {
-            self.stats.candidates_per_node_path.record(candidate_count);
-            self.stats.extensions_per_node_path.record(extension_count);
-            self.stats.node_visits.record(end_node.id());
-        }
-
-        if extension_count == 0 {
-            self.stats
-                .terminal_path_lengh
-                .record(partial_path.edges.len());
+        if let Some(stats) = &mut self.stats {
+            let (graph, _, _) = candidates.get_graph_partials_and_db();
+            let end_node = &graph[partial_path.end_node];
+            if end_node.is_root() {
+                stats.candidates_per_root_path.record(candidate_count);
+                stats.extensions_per_root_path.record(extension_count);
+                stats.root_visits += 1;
+            } else {
+                stats.candidates_per_node_path.record(candidate_count);
+                stats.extensions_per_node_path.record(extension_count);
+                stats.node_visits.record(end_node.id());
+            }
+            if extension_count == 0 {
+                stats.terminal_path_lengh.record(partial_path.edges.len());
+            }
         }
         candidate_count
     }
@@ -1119,7 +1132,9 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             self.next_iteration.1.drain(..),
             self.next_iteration.2.drain(..),
         ));
-        self.stats.queued_paths_per_phase.record(self.queue.len());
+        if let Some(stats) = &mut self.stats {
+            stats.queued_paths_per_phase.record(self.queue.len());
+        }
         let mut work_performed = 0;
         while let Some((partial_path, cycle_detector, has_split)) = self.queue.pop_front() {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
@@ -1127,8 +1142,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 "--> Candidate partial path {}",
                 partial_path.display(graph, partials)
             );
-            if self.initial_paths > 0 {
-                self.initial_paths -= 1;
+            if self.initial_paths_in_queue > 0 {
+                self.initial_paths_in_queue -= 1;
             } else if !extend_while(graph, partials, &partial_path) {
                 copious_debugging!(
                     "    Do not extend {}",
@@ -1141,7 +1156,9 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 break;
             }
         }
-        self.stats.processed_paths_per_phase.record(work_performed);
+        if let Some(stats) = &mut self.stats {
+            stats.processed_paths_per_phase.record(work_performed);
+        }
 
         #[cfg(feature = "copious-debugging")]
         {
@@ -1354,6 +1371,8 @@ impl std::ops::AddAssign<&Self> for Stats {
 pub struct StitcherConfig {
     /// Enables similar path detection during path stitching.
     detect_similar_paths: bool,
+    /// Collect statistics about path stitching.
+    collect_stats: bool,
 }
 
 impl StitcherConfig {
@@ -1365,11 +1384,21 @@ impl StitcherConfig {
         self.detect_similar_paths = detect_similar_paths;
         self
     }
+
+    pub fn collect_stats(&self) -> bool {
+        self.collect_stats
+    }
+
+    pub fn with_collect_stats(mut self, collect_stats: bool) -> Self {
+        self.collect_stats = collect_stats;
+        self
+    }
 }
 
 impl StitcherConfig {
     fn apply<H>(&self, stitcher: &mut ForwardPartialPathStitcher<H>) {
         stitcher.set_similar_path_detection(self.detect_similar_paths);
+        stitcher.set_collect_stats(self.collect_stats);
     }
 }
 
@@ -1377,6 +1406,7 @@ impl Default for StitcherConfig {
     fn default() -> Self {
         Self {
             detect_similar_paths: true,
+            collect_stats: false,
         }
     }
 }
