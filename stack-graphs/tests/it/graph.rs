@@ -157,14 +157,6 @@ fn can_add_and_remove_edges() {
             .collect::<HashSet<_>>(),
         hashset! { (h2, 0), (h3, 0), (h4, 0) }
     );
-    graph.remove_edge(h1, h3);
-    assert_eq!(
-        graph
-            .outgoing_edges(h1)
-            .map(|edge| edge.sink)
-            .collect::<HashSet<_>>(),
-        hashset! { h2, h4 }
-    );
 }
 
 #[test]

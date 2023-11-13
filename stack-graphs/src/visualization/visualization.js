@@ -17,6 +17,8 @@ class StackGraph {
     static arrow_head_w = 16;
     static arrow_head_h = 8;
 
+    static number_of_file_colors = 8;
+
     constructor(container, graph, paths, metadata) {
         this.metadata = metadata;
 
@@ -32,10 +34,20 @@ class StackGraph {
     }
 
     compute_data() {
+        this.F = {};
         this.ID = {};
         this.N = [];
+        this.compute_file_data();
         this.compute_node_data();
         this.compute_path_data();
+    }
+
+    compute_file_data() {
+        for (let i in graph.files) {
+            const file = graph.files[i];
+            this.F[file] = i;
+        }
+        console.log(this.F);
     }
 
     compute_node_data() {
@@ -151,7 +163,8 @@ class StackGraph {
         // render UI
         this.render_help();
         this.render_tooltip();
-        this.render_graph()
+        this.render_legend();
+        this.render_graph();
 
         // pan & zoom
         let zoom = d3.zoom()
@@ -225,7 +238,7 @@ class StackGraph {
             .data(dag.links())
             .enter()
             .append("g")
-            .attr("class", (d) => d.data.is_jump ? "jump" : "edge")
+            .attr("class", (d) => `${d.data.is_jump ? "jump" : "edge"} ${this.edge_to_file_class(d.data)}`)
             .attr("id", (d) => this.edge_to_id_str(d.data));
         edges.append("path")
             .attr("id", (d) => this.edge_to_id_str(d.data) + ":path")
@@ -286,14 +299,14 @@ class StackGraph {
 
     render_node(node, g) {
         g.attr('id', this.node_to_id_str(node));
-        g.attr('class', `node ${node.type}`);
+        g.attr('class', `node ${node.type} ${this.node_to_file_class(node)}`);
 
         switch (node.type) {
             case "drop_scopes":
-                this.render_scope(g);
+                this.render_symbol_node(g, "[drop]", null, "");
                 break;
             case "jump_to_scope":
-                this.render_scope(g);
+                this.render_symbol_node(g, "[jump]", null, "");
                 break;
             case "pop_symbol":
                 this.render_symbol_node(g, node.symbol, null, "pop");
@@ -322,7 +335,7 @@ class StackGraph {
                 }
                 break;
             case "root":
-                this.render_scope(g);
+                this.render_symbol_node(g, "[root]", null, "");
                 break;
             case "scope":
                 if (this.show_all_node_labels()) {
@@ -347,6 +360,7 @@ class StackGraph {
                 break;
         }
     }
+
     render_symbol_node(g, text, scope, shape) {
         let content = g.append("g");
         content.append('text').text(text);
@@ -458,9 +472,9 @@ class StackGraph {
         }
     }
 
-    /* ------------------------------------------------------------------------------------------------
-    * Path Highlighting
-    */
+    // ------------------------------------------------------------------------------------------------
+    // Path Highlighting
+    //
 
     paths_mouseover(e, node) {
         if (this.paths_lock !== null) {
@@ -769,6 +783,30 @@ class StackGraph {
     }
 
     // ------------------------------------------------------------------------------------------------
+    // Legend
+    //
+
+    render_legend() {
+        const legend = d3.select('body').append('div')
+            .attr('id', 'sg-legend')
+        legend.append("h1").text("Files");
+        const items = legend.append("ul");
+        items.append("li")
+            .classed("global", true)
+            .text("[global]");
+        for (const file in this.F) {
+            items.append("li")
+                .classed('file-' + this.F[file], true)
+                .text(file);
+        }
+    }
+
+    legend_update() {
+        const legend = d3.select('#sg-legend');
+        legend.style('visibility', this.show_file_legend() ? null : 'hidden');
+    }
+
+    // ------------------------------------------------------------------------------------------------
     // Help
     //
 
@@ -789,6 +827,10 @@ class StackGraph {
             Pan by dragging the background with the mouse.
             Zoom using the scroll wheel.
         `);
+        this.show_files_legend_toggle = this.new_setting(help_content, "sg-files-legend", "Show files legend (<kbd>f</kbd>)", true);
+        this.show_files_legend_toggle.on("change", (e => {
+            this.legend_update();
+        }));
         this.show_all_node_labels_toggle = this.new_setting(help_content, "sg-scope-labels", "Show all node labels (<kbd>l</kbd>)", false);
         this.show_all_node_labels_toggle.on("change", (e => {
             this.render_graph();
@@ -825,6 +867,10 @@ class StackGraph {
 
     help_keypress(e) {
         switch (e.keyCode) {
+            case 70: // f
+                this.show_files_legend_toggle.property("checked", !this.show_files_legend_toggle.property("checked"));
+                this.legend_update();
+                break;
             case 72: // h
                 this.help_toggle.property("checked", !this.help_toggle.property("checked"));
                 break;
@@ -845,6 +891,10 @@ class StackGraph {
 
     show_all_node_labels() {
         return this.show_all_node_labels_toggle.property("checked");
+    }
+
+    show_file_legend() {
+        return this.show_files_legend_toggle.property("checked");
     }
 
     new_setting(element, id, html, initial) {
@@ -869,8 +919,22 @@ class StackGraph {
         return this.node_id_to_str(node.id);
     }
 
+    node_to_file_class(node) {
+        return this.node_id_to_file_class(node.id);
+    }
+
     edge_to_id_str(edge) {
         return this.node_id_to_str(edge.source) + "->" + this.node_id_to_str(edge.sink);
+    }
+
+    edge_to_file_class(edge) {
+        if (edge.source.hasOwnProperty('file')) {
+            return "file-" + (this.F[edge.source.file] % StackGraph.number_of_file_colors);
+        } else if (edge.sink.hasOwnProperty('file')) {
+            return "file-" + (this.F[edge.sink.file] % StackGraph.number_of_file_colors);
+        } else {
+            return "global";
+        }
     }
 
     node_id_to_str(id) {
@@ -878,6 +942,14 @@ class StackGraph {
             return id.file + "#" + id.local_id;
         } else {
             return "#" + id.local_id;
+        }
+    }
+
+    node_id_to_file_class(id) {
+        if (id.hasOwnProperty('file')) {
+            return "file-" + (this.F[id.file] % StackGraph.number_of_file_colors);
+        } else {
+            return "global";
         }
     }
 

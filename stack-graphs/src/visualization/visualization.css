@@ -9,13 +9,31 @@
 /* Paul Tol's Colorblind Friendly Color Scheme (vibrant)
  * Source: https://personal.sron.nl/~pault/
  *
+ * In default order:
+ *
+ * orange  #ee7733
  * blue    #0077bb
  * cyan    #33bbee
- * teal    #009988
- * orange  #ee7733
- * red     #cc3311
  * magenta #ee3377
+ * red     #cc3311
+ * teal    #009988
  * grey    #bbbbbb
+ */
+
+/* Paul Tol's Colorblind Friendly Color Scheme (light)
+ * Source: https://personal.sron.nl/~pault/
+ *
+ * In default order:
+ *
+ * light blue   #77aadd
+ * orange       #ee8866
+ * light yellow #eedd88
+ * pink         #ffaabb
+ * light cyan   #99ddff
+ * mint         #44bb99
+ * pear         #bbcc33
+ * olive        #aaaa00
+ * pale grey    #dddddd
  */
 
 .sg {
@@ -50,29 +68,16 @@
 /* --- drop scopes --- */
 
 .sg .node.drop_scopes .background {
-    fill: #cc3311;
     r: 6px;
 }
 
 /* --- jump to scope --- */
 
 .sg .node.jump_to_scope .background {
-    fill: #ee7733;
     r: 6px;
-    stroke: black;
 }
 
 /* --- pop symbol --- */
-
-.sg .node.pop_symbol .background,
-.sg .node.pop_scoped_symbol .background {
-    fill: #009988;
-}
-
-.sg .node.pop_symbol .arrow,
-.sg .node.pop_scoped_symbol .arrow {
-    fill: #005b51;
-}
 
 .sg .node.pop_scoped_symbol .pop_scope {
     fill: #ee7733;
@@ -81,20 +86,10 @@
 }
 
 .sg .node.definition .background {
-    stroke: black;
+    stroke-width: 2px;
 }
 
 /* --- push symbol --- */
-
-.sg .node.push_symbol .background,
-.sg .node.push_scoped_symbol .background {
-    fill: #33bbee;
-}
-
-.sg .node.push_symbol .arrow,
-.sg .node.push_scoped_symbol .arrow {
-    fill: #006e96;
-}
 
 .sg .node.push_scoped_symbol .push_scope {
     fill: #bbbbbb;
@@ -112,15 +107,13 @@
 }
 
 .sg .node.reference .background {
-    stroke: black;
+    stroke-width: 2px;
 }
 
 /* --- root --- */
 
 .sg .node.root .background {
-    fill: #0077bb;
     r: 6px;
-    stroke: black;
 }
 
 /* --- scope --- */
@@ -131,12 +124,7 @@
 }
 
 .sg .node.scope .background {
-    fill: #bbbbbb;
     r: 6px;
-}
-
-.sg .node.scope.exported .background {
-    stroke: black;
 }
 
 .sg .node.scope .focus-point {
@@ -148,6 +136,10 @@
     fill: black;
 }
 
+.sg .node.scope.exported .background {
+    stroke-width: 2px;
+}
+
 /* --- plain labeled node --- */
 
 .sg .node.scope.plain_labeled_node .border {
@@ -156,18 +148,12 @@
 }
 
 .sg .node.scope.plain_labeled_node .background {
-    fill: #bbbbbb;
     rx: 6px;
-}
-
-.sg .node.scope.plain_labeled_node.exported .background {
-    stroke: black;
 }
 
 /* --- path highlight --- */
 
 .sg .node.path-node .border {
-    stroke: #ee3377;
     stroke-width: 4px;
     stroke-dasharray: 5, 5;
 }
@@ -185,28 +171,19 @@
 }
 
 .sg .edge path {
-    stroke: black;
     stroke-width: 1px;
     fill: none;
 }
 
 .sg .edge text {
     font-size: 11pt;
-    stroke: black;
     stroke-width: 1px;
     dominant-baseline: central;
 }
 
 .sg .edge.path-edge path
 {
-    stroke: #ee3377;
     stroke-width: 3px;
-}
-
-.sg .edge.path-edge text
-{
-    stroke: #ee3377;
-    fill: #ee3377;
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -346,6 +323,40 @@
 }
 
 /* ------------------------------------------------------------------------------------------------
+ * Legend
+ */
+
+#sg-legend {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    background-color: #bbbbbb;
+    padding: 6px;
+    border-radius: 6px;
+    z-index: 1;
+}
+
+#sg-legend h1 {
+    font-variant: small-caps;
+    font-weight: bold;
+    font-size: inherit;
+    border-bottom: solid 1px #777777;
+    margin: 0px;
+}
+
+#sg-legend ul {
+    list-style: none;
+    padding: 0px;
+    margin: 0px;
+}
+
+#sg-legend li {
+    padding: 3px 6px;
+    margin: 3px 0px;
+    border: 1px solid white;
+}
+
+/* ------------------------------------------------------------------------------------------------
  * Help
  */
 
@@ -441,4 +452,190 @@
 .sg-toggle-label {
     margin: 0px 6px;
     cursor: pointer;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Colors
+ */
+
+.sg .node.global .background {
+    fill: #0077bb; /* blue */
+}
+#sg-legend .global {
+    background-color: #0077bb; /* blue */
+}
+.sg .edge.global path,
+.sg .edge.global text {
+    stroke: #0077bb; /* blue */
+}
+
+.sg .node.file-0 .background {
+    fill: #77aadd; /* light blue */
+}
+#sg-legend .file-0 {
+    background-color: #77aadd; /* light blue */
+}
+.sg .node.file-0 .arrow,
+.sg .edge.file-0 text
+{
+    fill: #0e2236; /* light blue (darkened) */
+}
+.sg .node.file-0.reference .background,
+.sg .node.file-0.definition .background,
+.sg .node.file-0.scope.exported .background,
+.sg .edge.file-0 path,
+.sg .edge.file-0 text
+{
+    stroke: #0e2236; /* light blue (darkened) */
+}
+
+.sg .node.file-1 .background,
+.sg .edge.file-1 text
+{
+    fill: #ee8866; /* orange */
+}
+#sg-legend .file-1 {
+    background-color: #ee8866; /* orange */
+}
+.sg .node.file-1 .arrow {
+    fill: #3d1407; /* orange (darkened) */
+}
+.sg .node.file-1.reference .background,
+.sg .node.file-1.definition .background,
+.sg .node.file-1.scope.exported .background,
+.sg .edge.file-1 path,
+.sg .edge.file-1 text
+{
+    stroke: #3d1407; /* orange (darkened) */
+}
+
+.sg .node.file-2 .background,
+.sg .edge.file-2 text
+{
+    fill: #eedd88; /* light yellow */
+}
+#sg-legend .file-2 {
+    background-color: #eedd88; /* light yellow */
+}
+.sg .node.file-2 .arrow {
+    fill: #413809; /* light yellow (darkened) */
+}
+.sg .node.file-2.reference .background,
+.sg .node.file-2.definition .background,
+.sg .node.file-2.scope.exported .background,
+.sg .edge.file-2 path,
+.sg .edge.file-2 text
+{
+    stroke: #413809; /* light yellow (darkened) */
+}
+
+.sg .node.file-3 .background,
+.sg .edge.file-3 text
+{
+    fill: #ffaabb; /* pink */
+}
+#sg-legend .file-3 {
+    background-color: #ffaabb; /* pink */
+}
+.sg .node.file-3 .arrow {
+    fill: #550011; /* pink (darkened) */
+}
+.sg .node.file-3.reference .background,
+.sg .node.file-3.definition .background,
+.sg .node.file-3.scope.exported .background,
+.sg .edge.file-3 path,
+.sg .edge.file-3 text
+{
+    stroke: #550011; /* pink (darkened) */
+}
+
+.sg .node.file-4 .background,
+.sg .edge.file-4 text
+{
+    fill: #99ddff; /* light cyan */
+}
+#sg-legend .file-4 {
+    background-color: #99ddff; /* light cyan */
+}
+.sg .node.file-4 .arrow {
+    fill: #003652; /* light cyan (darkened) */
+}
+.sg .node.file-4.reference .background,
+.sg .node.file-4.definition .background,
+.sg .node.file-4.scope.exported .background,
+.sg .edge.file-4 path,
+.sg .edge.file-4 text
+{
+    stroke: #003652; /* light cyan (darkened) */
+}
+
+.sg .node.file-5 .background,
+.sg .edge.file-5 text
+{
+    fill: #44bb99; /* mint */
+}
+#sg-legend .file-5 {
+    background-color: #44bb99; /* mint */
+}
+.sg .node.file-5 .arrow {
+    fill: #0e251f; /* mint (darkened) */
+}
+.sg .node.file-5.reference .background,
+.sg .node.file-5.definition .background,
+.sg .node.file-5.scope.exported .background,
+.sg .edge.file-5 path,
+.sg .edge.file-5 text
+{
+    stroke: #0e251f; /* mint (darkened) */
+}
+
+.sg .node.file-6 .background,
+.sg .edge.file-6 text
+{
+    fill: #bbcc33; /* pear */
+}
+#sg-legend .file-6 {
+    background-color: #bbcc33; /* pear */
+}
+.sg .node.file-6 .arrow {
+    fill: #25290a; /* pear (darkened) */
+}
+.sg .node.file-6.reference .background,
+.sg .node.file-6.definition .background,
+.sg .node.file-6.scope.exported .background,
+.sg .edge.file-6 path,
+.sg .edge.file-6 text
+{
+    stroke: #25290a; /* pear (darkened) */
+}
+
+.sg .node.file-7 .background,
+.sg .edge.file-7 text
+{
+    fill: #aaaa00; /* olive */
+}
+#sg-legend .file-7 {
+    background-color: #aaaa00; /* olive */
+}
+.sg .node.file-7 .arrow {
+    fill: #222200; /* olive (darkened) */
+}
+.sg .node.file-7.reference .background,
+.sg .node.file-7.definition .background,
+.sg .node.file-7.scope.exported .background,
+.sg .edge.file-7 path,
+.sg .edge.file-7 text
+{
+    stroke: #222200; /* olive (darkened) */
+}
+
+.sg .node.path-node .border,
+.sg .edge.path-edge path,
+.sg .edge.path-edge text
+{
+    stroke: #ee7733;
+}
+
+.sg .edge.path-edge text {
+    fill: #ee7733;
 }

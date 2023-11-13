@@ -252,6 +252,7 @@ inherit .constructor
 inherit .export_statement
 inherit .exports
 inherit .hoist_point
+inherit .closure_point
 inherit .import_statement
 inherit .pkg_pop
 inherit .pkg_push
@@ -280,6 +281,7 @@ inherit .return_or_yield
 (program)@prog {
   node @prog.after_scope
   node @prog.before_scope
+  let @prog.closure_point = @prog.after_scope
 }
 
 ;; ### Program Queries
@@ -346,10 +348,6 @@ inherit .return_or_yield
     attr (prog_exports_pop) pop_symbol = "GUARD:EXPORTS"
     edge module_pop_end -> prog_exports_pop
     edge prog_exports_pop -> @prog.exports
-
-    ; allow direct access from the package to the modules exports
-    ; this is used from package.json
-    edge @prog.pkg_pop -> prog_exports_pop
 
     ;; builtin types
     node @prog.builtins_number
@@ -1268,6 +1266,7 @@ inherit .return_or_yield
   node fun_decl_value_return
   node fun_decl_value_this
   node fun_decl_value_this_guard
+  let @body.closure_point = @body.after_scope
 
   attr (@name.pop) syntax_type = "function"
 
@@ -1282,7 +1281,7 @@ inherit .return_or_yield
   ; function values have drop nodes that handle closures, that points to the
   ; before scope for the function
   attr (fun_decl_value_drop) type = "drop_scopes"
-  edge fun_decl_value_drop -> @fun_decl.before_scope
+  edge fun_decl_value_drop -> @fun_decl.closure_point
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> fun_decl_value_drop
@@ -1352,6 +1351,7 @@ inherit .return_or_yield
   node fun_decl_value_return
   node fun_decl_value_this
   node fun_decl_value_this_guard
+  let @body.closure_point = @body.after_scope
 
   attr (@name.pop) syntax_type = "function"
 
@@ -1366,7 +1366,7 @@ inherit .return_or_yield
   ; function values have drop nodes that handle closures, that points to the
   ; before scope of the declaration
   attr (fun_decl_value_drop) type = "drop_scopes"
-  edge fun_decl_value_drop -> @fun_decl.before_scope
+  edge fun_decl_value_drop -> @fun_decl.closure_point
 
 
   ; the call sig's before scope comes from the drop node then flows into the body
@@ -1438,7 +1438,7 @@ inherit .return_or_yield
   edge @class_decl.class_value -> guard_prototype
   edge guard_prototype -> @class_decl.prototype
 
-  edge @body.before_scope -> @class_decl.before_scope
+  edge @body.before_scope -> @class_decl.closure_point
   edge @class_decl.prototype -> @body.after_scope
   edge @class_decl.after_scope -> @class_decl.before_scope
 }
@@ -2247,6 +2247,16 @@ inherit .return_or_yield
 
 }
 
+[
+  (function body:(_)@body)
+  (arrow_function body:(_)@body)
+  (generator_function body:(_)@body)
+] {
+
+  let @body.closure_point = @body.after_scope
+
+}
+
 ;; ### Expression Queries
 
 
@@ -2714,7 +2724,7 @@ inherit .return_or_yield
   ; function values have drop nodes that handle closures, that points to the
   ; before scope from the function
   attr (fun_value_drop) type = "drop_scopes"
-  edge fun_value_drop -> @fun.before_scope
+  edge fun_value_drop -> @fun.closure_point
 
   ; the call sig's before scope comes from the drop node,
   ; then flows into the body, and includes a variable binding for "this"
@@ -2792,7 +2802,7 @@ inherit .return_or_yield
   ; function values have drop nodes that handle closures, that points to the
   ; before scope from the function
   attr (fun_value_drop) type = "drop_scopes"
-  edge fun_value_drop -> @fun.before_scope
+  edge fun_value_drop -> @fun.closure_point
 
   ; the call sig's before scope comes from the drop node then flows into the body
   edge @call_sig.before_scope -> fun_value_drop
@@ -2901,7 +2911,7 @@ inherit .return_or_yield
   ; function values have drop nodes that handle closures, that points to the
   ; before scope from the function
   attr (fun_value_drop) type = "drop_scopes"
-  edge fun_value_drop -> @fun.before_scope
+  edge fun_value_drop -> @fun.closure_point
 
   ; the call sig's before scope comes from the drop node,
   ; then flows into the body, and includes a variable binding for "this"
@@ -3441,7 +3451,7 @@ inherit .return_or_yield
   node @class.constructor
   attr (guard_prototype) pop_symbol = "GUARD:PROTOTYPE"
 
-  edge @body.before_scope -> @class.before_scope
+  edge @body.before_scope -> @class.closure_point
   edge @class.value -> @class.class_value
   edge @class.class_value -> guard_prototype
   edge guard_prototype -> @class.prototype
@@ -4686,12 +4696,7 @@ inherit .return_or_yield
 
 (assignment_expression
   left: (identifier)@left
-  right: [
-    (function)
-    (generator_function)
-    (arrow_function)
-    (class)
-  ])@assignment_expr {
+  right: (_))@assignment_expr {
 
   attr (@left.pop) definiens_node = @assignment_expr
 
@@ -4703,7 +4708,7 @@ inherit .return_or_yield
       object:(identifier)@_object
       property:(_)@left
     )
-    right:  (_)@right)@assignment_expr
+    right: (_))@assignment_expr
   (#not-eq @_object "module")
   (#not-eq @left "exports")
 ) {
@@ -4713,7 +4718,7 @@ inherit .return_or_yield
 
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
-  attr (left_definiens_hook) definiens_node = @right
+  attr (left_definiens_hook) definiens_node = @assignment_expr
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 }
@@ -4724,7 +4729,7 @@ inherit .return_or_yield
       object:(identifier)@_object
       property:(_)@left
     )
-    right: (_)@right)@assignment_expr
+    right: (_))@assignment_expr
   (#eq @_object "module")
   (#eq @left "exports")
 ) {
@@ -4734,7 +4739,7 @@ inherit .return_or_yield
 
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
-  attr (left_definiens_hook) definiens_node = @right
+  attr (left_definiens_hook) definiens_node = @assignment_expr
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 
@@ -4833,12 +4838,7 @@ inherit .return_or_yield
 
 (pair
   key: (_)@name
-  value: [
-    (function)
-    (generator_function)
-    (arrow_function)
-    (class)
-  ])@pair_expr {
+  value: (_))@pair_expr {
 
   node @name.definiens_hook
   node name_ignore_guard

@@ -41,6 +41,9 @@ use std::collections::VecDeque;
 #[cfg(feature = "copious-debugging")]
 use std::fmt::Display;
 
+use itertools::izip;
+use itertools::Itertools;
+
 use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::HandleSet;
@@ -51,6 +54,7 @@ use crate::arena::SupplementalArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
+use crate::graph::Degree;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -60,6 +64,7 @@ use crate::partial::Cyclicity;
 use crate::partial::PartialPath;
 use crate::partial::PartialPaths;
 use crate::partial::PartialSymbolStack;
+use crate::paths::Extend;
 use crate::paths::PathResolutionError;
 use crate::CancellationError;
 use crate::CancellationFlag;
@@ -198,6 +203,9 @@ where
     where
         R: std::iter::Extend<H>;
 
+    /// Get the number of available candidates that share the given path's end node.
+    fn get_joining_candidate_degree(&self, path: &PartialPath) -> Degree;
+
     /// Get the graph, partial path arena, and database backing this candidates instance.
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Db);
 }
@@ -239,6 +247,10 @@ impl ForwardCandidates<Edge, Edge, GraphEdges, CancellationError> for GraphEdgeC
         }));
     }
 
+    fn get_joining_candidate_degree(&self, path: &PartialPath) -> Degree {
+        self.graph.incoming_edge_degree(path.end_node)
+    }
+
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &GraphEdges) {
         (self.graph, self.partials, &self.edges)
     }
@@ -273,6 +285,7 @@ pub struct Database {
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
     root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
+    incoming_paths: SupplementalArena<Node, Degree>,
 }
 
 impl Database {
@@ -285,6 +298,7 @@ impl Database {
             symbol_stack_key_cache: HashMap::new(),
             paths_by_start_node: SupplementalArena::new(),
             root_paths_by_precondition: SupplementalArena::new(),
+            incoming_paths: SupplementalArena::new(),
         }
     }
 
@@ -298,6 +312,7 @@ impl Database {
         self.symbol_stack_key_cache.clear();
         self.paths_by_start_node.clear();
         self.root_paths_by_precondition.clear();
+        self.incoming_paths.clear();
     }
 
     /// Adds a partial path to this database.  We do not deduplicate partial paths in any way; it's
@@ -309,6 +324,7 @@ impl Database {
         path: PartialPath,
     ) -> Handle<PartialPath> {
         let start_node = path.start_node;
+        let end_node = path.end_node;
         copious_debugging!(
             "    Add {} path to database {}",
             if graph[start_node].is_root() {
@@ -339,6 +355,7 @@ impl Database {
             self.paths_by_start_node[start_node].push(handle);
         }
 
+        self.incoming_paths[end_node] += Degree::One;
         handle
     }
 
@@ -451,6 +468,11 @@ impl Database {
             }
             result.extend(paths.iter().copied());
         }
+    }
+
+    /// Returns the number of paths in this database that share the given end node.
+    pub fn get_incoming_path_degree(&self, end_node: Handle<Node>) -> Degree {
+        self.incoming_paths[end_node]
     }
 
     /// Determines which nodes in the stack graph are “local”, taking into account the partial
@@ -596,6 +618,10 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, CancellationE
             .find_candidate_partial_paths(self.graph, self.partials, path, result);
     }
 
+    fn get_joining_candidate_degree(&self, path: &PartialPath) -> Degree {
+        self.database.get_incoming_path_degree(path.end_node)
+    }
+
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
         (self.graph, self.partials, self.database)
     }
@@ -736,15 +762,21 @@ impl<'a> Display for DisplaySymbolStackKey<'a> {
 /// [`find_all_complete_partial_paths`]: #method.find_all_complete_partial_paths
 pub struct ForwardPartialPathStitcher<H> {
     candidates: Vec<H>,
-    queue: VecDeque<(PartialPath, AppendingCycleDetector<H>)>,
+    extensions: Vec<(PartialPath, AppendingCycleDetector<H>)>,
+    queue: VecDeque<(PartialPath, AppendingCycleDetector<H>, bool)>,
     // tracks the number of initial paths in the queue because we do not want call
     // extend_until on those
     initial_paths: usize,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
-    next_iteration: (VecDeque<PartialPath>, VecDeque<AppendingCycleDetector<H>>),
+    next_iteration: (
+        VecDeque<PartialPath>,
+        VecDeque<AppendingCycleDetector<H>>,
+        VecDeque<bool>,
+    ),
     appended_paths: Appendables<H>,
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
+    check_only_join_nodes: bool,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -763,20 +795,23 @@ impl<H> ForwardPartialPathStitcher<H> {
         I: IntoIterator<Item = PartialPath>,
     {
         let mut appended_paths = Appendables::new();
-        let next_iteration: (VecDeque<_>, VecDeque<_>) = initial_partial_paths
+        let next_iteration: (VecDeque<_>, VecDeque<_>, VecDeque<_>) = initial_partial_paths
             .into_iter()
             .map(|p| {
                 let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
-                (p, c)
+                (p, c, false)
             })
-            .unzip();
+            .multiunzip();
         Self {
             candidates: Vec::new(),
+            extensions: Vec::new(),
             queue: VecDeque::new(),
             initial_paths: next_iteration.0.len(),
             next_iteration,
             appended_paths,
             similar_path_detector: Some(SimilarPathDetector::new()),
+            // By default, all nodes are checked for cycles and (if enabled) similarity
+            check_only_join_nodes: false,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -818,6 +853,14 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         }
     }
 
+    /// Sets whether all nodes are checked for cycles and (if enabled) similar paths, or only nodes with multiple
+    /// incoming candidates. Checking only join nodes is **unsafe** unless the database of candidates is stable
+    /// between all stitching phases. If paths are added to the database from one phase to another, for example if
+    /// paths are dynamically loaded from storage, setting this to true is incorrect and might lead to non-termination!
+    pub fn set_check_only_join_nodes(&mut self, check_only_join_nodes: bool) {
+        self.check_only_join_nodes = check_only_join_nodes;
+    }
+
     /// Sets the maximum amount of work that can be performed during each phase of the algorithm.
     /// By bounding our work this way, you can ensure that it's not possible for our CPU-bound
     /// algorithm to starve any worker threads or processes that you might be using.  If you don't
@@ -835,51 +878,59 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         candidates: &mut C,
         partial_path: &PartialPath,
         cycle_detector: AppendingCycleDetector<H>,
+        has_split: bool,
     ) -> usize
     where
         A: Appendable,
         Db: ToAppendable<H, A>,
         C: ForwardCandidates<H, A, Db, Err>,
     {
+        let check_cycle = !self.check_only_join_nodes
+            || partial_path.start_node == partial_path.end_node
+            || candidates.get_joining_candidate_degree(partial_path) == Degree::Multiple;
+
         let (graph, partials, db) = candidates.get_graph_partials_and_db();
         copious_debugging!("    Extend {}", partial_path.display(graph, partials));
 
-        // check is path is cyclic, in which case we do not extend it
-        let has_precondition_variables = partial_path.symbol_stack_precondition.has_variable()
-            || partial_path.scope_stack_precondition.has_variable();
-        let cycles = cycle_detector
-            .is_cyclic(graph, partials, db, &mut self.appended_paths)
-            .expect("cyclic test failed when stitching partial paths");
-        let cyclic = match has_precondition_variables {
-            // If the precondition has no variables, we allow cycles that strengthen the
-            // precondition, because we know they cannot strengthen the precondition of
-            // the overall path.
-            false => !cycles
-                .into_iter()
-                .all(|c| c == Cyclicity::StrengthensPrecondition),
-            // If the precondition has variables, do not allow any cycles, not even those
-            // that strengthen the precondition. This is more strict than necessary. Better
-            // might be to disallow precondition strengthening cycles only if they would
-            // strengthen the overall path precondition.
-            true => !cycles.is_empty(),
-        };
-        if cyclic {
-            copious_debugging!("      is discontinued: cyclic");
-            return 0;
+        if check_cycle {
+            // Check is path is cyclic, in which case we do not extend it. We only do this if the start and end nodes are the same,
+            // or the current end node has multiple incoming edges. If neither of these hold, the path cannot end in a cycle.
+            let has_precondition_variables = partial_path.symbol_stack_precondition.has_variable()
+                || partial_path.scope_stack_precondition.has_variable();
+            let cycles = cycle_detector
+                .is_cyclic(graph, partials, db, &mut self.appended_paths)
+                .expect("cyclic test failed when stitching partial paths");
+            let cyclic = match has_precondition_variables {
+                // If the precondition has no variables, we allow cycles that strengthen the
+                // precondition, because we know they cannot strengthen the precondition of
+                // the overall path.
+                false => !cycles
+                    .into_iter()
+                    .all(|c| c == Cyclicity::StrengthensPrecondition),
+                // If the precondition has variables, do not allow any cycles, not even those
+                // that strengthen the precondition. This is more strict than necessary. Better
+                // might be to disallow precondition strengthening cycles only if they would
+                // strengthen the overall path precondition.
+                true => !cycles.is_empty(),
+            };
+            if cyclic {
+                copious_debugging!("      is discontinued: cyclic");
+                return 0;
+            }
         }
 
         // find candidates to append
         self.candidates.clear();
         candidates.get_forward_candidates(partial_path, &mut self.candidates);
+        let (graph, partials, db) = candidates.get_graph_partials_and_db();
 
         // try to extend path with candidates
-        let extension_count = self.candidates.len();
-        self.next_iteration.0.reserve(extension_count);
-        self.next_iteration.1.reserve(extension_count);
-        for extension in &self.candidates {
-            let (graph, partials, db) = candidates.get_graph_partials_and_db();
-            let extension_path = db.get_appendable(extension);
-            copious_debugging!("      with {}", extension_path.display(graph, partials));
+        let candidate_count = self.candidates.len();
+        self.extensions.clear();
+        self.extensions.reserve(candidate_count);
+        for candidate in &self.candidates {
+            let appendable = db.get_appendable(candidate);
+            copious_debugging!("      with {}", appendable.display(graph, partials));
 
             let mut new_partial_path = partial_path.clone();
             let mut new_cycle_detector = cycle_detector.clone();
@@ -887,12 +938,28 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             // partial path, just skip the extension — it's not a fatal error.
             #[cfg_attr(not(feature = "copious-debugging"), allow(unused_variables))]
             {
-                if let Err(err) = extension_path.append_to(graph, partials, &mut new_partial_path) {
+                if let Err(err) = appendable.append_to(graph, partials, &mut new_partial_path) {
                     copious_debugging!("        is invalid: {:?}", err);
                     continue;
                 }
-                copious_debugging!("        is {}", new_partial_path.display(graph, partials));
-                new_cycle_detector.append(&mut self.appended_paths, extension.clone());
+            }
+            new_cycle_detector.append(&mut self.appended_paths, candidate.clone());
+            copious_debugging!("        is {}", new_partial_path.display(graph, partials));
+            self.extensions.push((new_partial_path, new_cycle_detector));
+        }
+
+        let extension_count = self.extensions.len();
+        let new_has_split = has_split || self.extensions.len() > 1;
+        self.next_iteration.0.reserve(extension_count);
+        self.next_iteration.1.reserve(extension_count);
+        self.next_iteration.2.reserve(extension_count);
+        for (new_partial_path, new_cycle_detector) in self.extensions.drain(..) {
+            let check_similar_path = new_has_split
+                && (!self.check_only_join_nodes
+                    || candidates.get_joining_candidate_degree(&new_partial_path)
+                        == Degree::Multiple);
+            let (graph, partials, _) = candidates.get_graph_partials_and_db();
+            if check_similar_path {
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {
                     if similar_path_detector.has_similar_path(
                         graph,
@@ -912,16 +979,22 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                             }
                         },
                     ) {
+                        copious_debugging!(
+                            " extension {}",
+                            new_partial_path.display(graph, partials)
+                        );
                         copious_debugging!("        is rejected: too many similar");
                         continue;
                     }
                 }
             }
-            self.next_iteration.0.push_back(new_partial_path);
-            self.next_iteration.1.push_back(new_cycle_detector);
+
+            self.next_iteration.0.push(new_partial_path);
+            self.next_iteration.1.push(new_cycle_detector);
+            self.next_iteration.2.push(new_has_split);
         }
 
-        extension_count
+        candidate_count
     }
 
     /// Returns whether the algorithm has completed.
@@ -949,14 +1022,13 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         E: Fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
     {
         copious_debugging!("==> Start phase {}", self.phase_number);
-        self.queue.extend(
-            self.next_iteration
-                .0
-                .drain(..)
-                .zip(self.next_iteration.1.drain(..)),
-        );
+        self.queue.extend(izip!(
+            self.next_iteration.0.drain(..),
+            self.next_iteration.1.drain(..),
+            self.next_iteration.2.drain(..),
+        ));
         let mut work_performed = 0;
-        while let Some((partial_path, cycle_detector)) = self.queue.pop_front() {
+        while let Some((partial_path, cycle_detector, has_split)) = self.queue.pop_front() {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             copious_debugging!(
                 "--> Candidate partial path {}",
@@ -971,7 +1043,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 );
                 continue;
             }
-            work_performed += self.extend(candidates, &partial_path, cycle_detector);
+            work_performed += self.extend(candidates, &partial_path, cycle_detector, has_split);
             if work_performed >= self.max_work_per_phase {
                 break;
             }
@@ -1031,6 +1103,7 @@ impl ForwardPartialPathStitcher<Edge> {
             .collect::<Vec<_>>();
         let mut stitcher =
             ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
+        stitcher.set_check_only_join_nodes(true);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             stitcher.process_next_phase(
@@ -1086,6 +1159,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 .collect::<Vec<_>>();
             ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths)
         };
+        stitcher.set_check_only_join_nodes(true);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             for path in stitcher.previous_phase_partial_paths() {

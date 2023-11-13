@@ -700,11 +700,11 @@ impl PathLoader {
         graph: &mut StackGraph,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError<'static>> {
-        let source = std::fs::read_to_string(builtins_path.clone())?;
+        let source = std::fs::read_to_string(builtins_path)?;
         let mut config_path = builtins_path.to_path_buf();
         config_path.set_extension("cfg");
         let config = if config_path.exists() {
-            std::fs::read_to_string(builtins_path.clone())?
+            std::fs::read_to_string(builtins_path)?
         } else {
             "".into()
         };
