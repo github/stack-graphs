@@ -25,7 +25,7 @@ fn check_local_nodes(graph: &StackGraph, file: &str, expected_local_nodes: &[&st
         graph,
         &mut partials,
         file,
-        &StitcherConfig::default(),
+        StitcherConfig::default(),
         &NoCancellation,
         |graph, partials, path| {
             database.add_partial_path(graph, partials, path.clone());

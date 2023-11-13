@@ -150,7 +150,7 @@ impl Assertion {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         db: &mut Database,
-        stitcher_config: &StitcherConfig,
+        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
         match self {
@@ -175,7 +175,7 @@ impl Assertion {
         db: &mut Database,
         source: &AssertionSource,
         expected_targets: &Vec<AssertionTarget>,
-        stitcher_config: &StitcherConfig,
+        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), AssertionError> {
         let references = source.iter_references(graph).collect::<Vec<_>>();

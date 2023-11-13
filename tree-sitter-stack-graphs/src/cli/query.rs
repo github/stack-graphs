@@ -186,16 +186,10 @@ impl<'a> Querier<'a> {
             };
 
             let mut reference_paths = Vec::new();
-            // FIXME We use the default stitcher config here, because we currently do not retrieve language
-            //       configurations during querying. A first step to fixing this would be to lookup the language
-            //       corresponding to the file that is queried. However, to solve this properly we would need to
-            //       isolate graphs and paths per language so we don't accidently mix different languages that
-            //       require different stitcher settings.
-            let config = StitcherConfig::default();
             if let Err(err) = ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 self.db,
                 std::iter::once(node),
-                &config,
+                StitcherConfig::default(),
                 &cancellation_flag,
                 |_g, _ps, p| {
                     reference_paths.push(p.clone());

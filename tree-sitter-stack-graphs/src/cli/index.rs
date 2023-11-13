@@ -12,6 +12,7 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
@@ -316,16 +317,6 @@ impl<'a> Indexer<'a> {
             .add_file(&source_path.to_string_lossy())
             .expect("file not present in empty graph");
 
-        // FIXME We use the stitching config of the primary language here, which is not quite right.
-        //       Ideally we'd use the primary language's stitcher config for computing the paths in
-        //       the primary graph, and similarly for the secondary languages. However, that is not
-        //       much use at the moment, since we use paths from all languages when reading from the
-        //       database. Fixing this properly requires more isolation of graph and paths per language.
-        let stitcher_config = lcs
-            .primary
-            .map(|lc| lc.stitcher_config.clone())
-            .unwrap_or_default();
-
         let result = Self::build_stack_graph(
             &mut graph,
             file,
@@ -365,7 +356,7 @@ impl<'a> Indexer<'a> {
             &graph,
             &mut partials,
             file,
-            &stitcher_config,
+            StitcherConfig::default(),
             &(&cancellation_flag as &dyn CancellationFlag),
             |_g, _ps, p| {
                 paths.push(p.clone());

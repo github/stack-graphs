@@ -34,7 +34,7 @@ fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str
 
     let partials = sg_partial_path_arena_new();
     let path_list = sg_partial_path_list_new();
-    let config = sg_stitcher_config {
+    let stitcher_config = sg_stitcher_config {
         detect_similar_paths: false,
     };
     sg_partial_path_arena_find_partial_paths_in_file(
@@ -42,7 +42,7 @@ fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str
         partials,
         file.as_u32(),
         path_list,
-        config,
+        &stitcher_config,
         std::ptr::null(),
     );
 

@@ -1174,20 +1174,21 @@ pub extern "C" fn sg_partial_path_arena_find_partial_paths_in_file(
     partials: *mut sg_partial_path_arena,
     file: sg_file_handle,
     partial_path_list: *mut sg_partial_path_list,
-    config: sg_stitcher_config,
+    stitcher_config: *const sg_stitcher_config,
     cancellation_flag: *const usize,
 ) -> sg_result {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let file = file.into();
     let partial_path_list = unsafe { &mut *partial_path_list };
+    let stitcher_config = unsafe { *stitcher_config };
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
     ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
         graph,
         partials,
         file,
-        &config.into(),
+        stitcher_config.into(),
         &AtomicUsizeCancellationFlag(cancellation_flag),
         |_graph, partials, path| {
             let mut path = path.clone();
@@ -1213,19 +1214,20 @@ pub extern "C" fn sg_partial_path_arena_find_all_complete_paths(
     starting_node_count: usize,
     starting_nodes: *const sg_node_handle,
     path_list: *mut sg_partial_path_list,
-    config: sg_stitcher_config,
+    stitcher_config: *const sg_stitcher_config,
     cancellation_flag: *const usize,
 ) -> sg_result {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
     let starting_nodes = unsafe { std::slice::from_raw_parts(starting_nodes, starting_node_count) };
+    let stitcher_config = unsafe { *stitcher_config };
     let path_list = unsafe { &mut *path_list };
     let cancellation_flag: Option<&AtomicUsize> =
         unsafe { std::mem::transmute(cancellation_flag.as_ref()) };
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
         &mut GraphEdgeCandidates::new(graph, partials, None),
         starting_nodes.iter().copied().map(sg_node_handle::into),
-        &config.into(),
+        stitcher_config.into(),
         &AtomicUsizeCancellationFlag(cancellation_flag),
         |graph, _partials, path| {
             if path.is_complete(graph) {
@@ -1398,6 +1400,7 @@ pub struct sg_forward_partial_path_stitcher {
 
 // Configuration for partial path stitchers.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct sg_stitcher_config {
     /// Enables similar path detection during stiching.
     pub detect_similar_paths: bool,
@@ -1461,7 +1464,6 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
     partials: *mut sg_partial_path_arena,
     count: usize,
     starting_nodes: *const sg_node_handle,
-    config: sg_stitcher_config,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
@@ -1476,12 +1478,7 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_nodes(
             p
         })
         .collect::<Vec<_>>();
-    let stitcher = ForwardPartialPathStitcher::from_partial_paths(
-        graph,
-        partials,
-        initial_paths,
-        &config.into(),
-    );
+    let stitcher = ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,
     ))) as *mut _
@@ -1495,7 +1492,6 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
     partials: *mut sg_partial_path_arena,
     count: usize,
     initial_partial_paths: *const sg_partial_path,
-    config: sg_stitcher_config,
 ) -> *mut sg_forward_partial_path_stitcher {
     let graph = unsafe { &(*graph).inner };
     let partials = unsafe { &mut (*partials).inner };
@@ -1505,7 +1501,6 @@ pub extern "C" fn sg_forward_partial_path_stitcher_from_partial_paths(
         graph,
         partials,
         initial_partial_paths.to_vec(),
-        &config.into(),
     );
     Box::into_raw(Box::new(InternalForwardPartialPathStitcher::new(
         stitcher, partials,

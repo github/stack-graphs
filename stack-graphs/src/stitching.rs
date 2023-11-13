@@ -795,13 +795,6 @@ impl<'a> Display for DisplaySymbolStackKey<'a> {
 //-------------------------------------------------------------------------------------------------
 // Stitching partial paths together
 
-/// Configuration for partial path stitchers.
-#[derive(Clone, Debug, Default)]
-pub struct StitcherConfig {
-    /// Enables similar path detection during path stitching.
-    pub detect_similar_paths: bool,
-}
-
 /// Implements a phased forward partial path stitching algorithm.
 ///
 /// Our overall goal is to start with a set of _seed_ partial paths, and to repeatedly extend each
@@ -858,7 +851,6 @@ impl<H> ForwardPartialPathStitcher<H> {
         _graph: &StackGraph,
         _partials: &mut PartialPaths,
         initial_partial_paths: I,
-        config: &StitcherConfig,
     ) -> Self
     where
         I: IntoIterator<Item = PartialPath>,
@@ -871,16 +863,14 @@ impl<H> ForwardPartialPathStitcher<H> {
                 (p, c, false)
             })
             .multiunzip();
-        let similar_path_detector =
-            Some(SimilarPathDetector::new()).filter(|_| config.detect_similar_paths);
-        ForwardPartialPathStitcher {
+        Self {
             candidates: Vec::new(),
             extensions: Vec::new(),
             queue: VecDeque::new(),
             initial_paths: next_iteration.0.len(),
             next_iteration,
             appended_paths,
-            similar_path_detector,
+            similar_path_detector: Some(SimilarPathDetector::new()),
             // By default, all nodes are checked for cycles and (if enabled) similarity
             check_only_join_nodes: false,
             // By default, there's no artificial bound on the amount of work done per phase
@@ -888,28 +878,6 @@ impl<H> ForwardPartialPathStitcher<H> {
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
         }
-    }
-}
-
-impl<H: Clone> ForwardPartialPathStitcher<H> {
-    /// Returns an iterator of all of the (possibly incomplete) partial paths that were encountered
-    /// during the most recent phase of the algorithm.
-    pub fn previous_phase_partial_paths(&self) -> impl Iterator<Item = &PartialPath> + '_ {
-        self.next_iteration.0.iter()
-    }
-
-    /// Returns a slice of all of the (possibly incomplete) partial paths that were encountered
-    /// during the most recent phase of the algorithm.
-    pub fn previous_phase_partial_paths_slice(&mut self) -> &[PartialPath] {
-        self.next_iteration.0.make_contiguous();
-        self.next_iteration.0.as_slices().0
-    }
-
-    /// Returns a mutable slice of all of the (possibly incomplete) partial paths that were
-    /// encountered during the most recent phase of the algorithm.
-    pub fn previous_phase_partial_paths_slice_mut(&mut self) -> &mut [PartialPath] {
-        self.next_iteration.0.make_contiguous();
-        self.next_iteration.0.as_mut_slices().0
     }
 
     /// Sets whether similar path detection should be enabled during path stitching. Paths are similar
@@ -939,6 +907,28 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     /// paths found in the previous phase, with no additional bound.
     pub fn set_max_work_per_phase(&mut self, max_work_per_phase: usize) {
         self.max_work_per_phase = max_work_per_phase;
+    }
+}
+
+impl<H: Clone> ForwardPartialPathStitcher<H> {
+    /// Returns an iterator of all of the (possibly incomplete) partial paths that were encountered
+    /// during the most recent phase of the algorithm.
+    pub fn previous_phase_partial_paths(&self) -> impl Iterator<Item = &PartialPath> + '_ {
+        self.next_iteration.0.iter()
+    }
+
+    /// Returns a slice of all of the (possibly incomplete) partial paths that were encountered
+    /// during the most recent phase of the algorithm.
+    pub fn previous_phase_partial_paths_slice(&mut self) -> &[PartialPath] {
+        self.next_iteration.0.make_contiguous();
+        self.next_iteration.0.as_slices().0
+    }
+
+    /// Returns a mutable slice of all of the (possibly incomplete) partial paths that were
+    /// encountered during the most recent phase of the algorithm.
+    pub fn previous_phase_partial_paths_slice_mut(&mut self) -> &mut [PartialPath] {
+        self.next_iteration.0.make_contiguous();
+        self.next_iteration.0.as_mut_slices().0
     }
 
     /// Attempts to extend one partial path as part of the algorithm.  When calling this function,
@@ -1155,7 +1145,7 @@ impl ForwardPartialPathStitcher<Edge> {
         graph: &StackGraph,
         partials: &mut PartialPaths,
         file: Handle<File>,
-        config: &StitcherConfig,
+        config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
     ) -> Result<(), CancellationError>
@@ -1174,7 +1164,8 @@ impl ForwardPartialPathStitcher<Edge> {
             .map(|node| PartialPath::from_node(graph, partials, node))
             .collect::<Vec<_>>();
         let mut stitcher =
-            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths, config);
+            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
+        config.apply(&mut stitcher);
         stitcher.set_check_only_join_nodes(true);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
@@ -1207,7 +1198,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     pub fn find_all_complete_partial_paths<I, F, A, Db, C, Err>(
         candidates: &mut C,
         starting_nodes: I,
-        config: &StitcherConfig,
+        config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
     ) -> Result<(), Err>
@@ -1219,19 +1210,19 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
         Err: std::convert::From<CancellationError>,
     {
-        let mut stitcher = {
-            let (graph, partials, _) = candidates.get_graph_partials_and_db();
-            let initial_paths = starting_nodes
-                .into_iter()
-                .filter(|n| graph[*n].is_reference())
-                .map(|n| {
-                    let mut p = PartialPath::from_node(graph, partials, n);
-                    p.eliminate_precondition_stack_variables(partials);
-                    p
-                })
-                .collect::<Vec<_>>();
-            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths, config)
-        };
+        let (graph, partials, _) = candidates.get_graph_partials_and_db();
+        let initial_paths = starting_nodes
+            .into_iter()
+            .filter(|n| graph[*n].is_reference())
+            .map(|n| {
+                let mut p = PartialPath::from_node(graph, partials, n);
+                p.eliminate_precondition_stack_variables(partials);
+                p
+            })
+            .collect::<Vec<_>>();
+        let mut stitcher =
+            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
+        config.apply(&mut stitcher);
         stitcher.set_check_only_join_nodes(true);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
@@ -1247,5 +1238,27 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             }
         }
         Ok(())
+    }
+}
+
+/// Configuration for partial path stitchers.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct StitcherConfig {
+    /// Enables similar path detection during path stitching.
+    pub detect_similar_paths: bool,
+}
+
+impl StitcherConfig {
+    fn apply<H>(&self, stitcher: &mut ForwardPartialPathStitcher<H>) {
+        stitcher.set_similar_path_detection(self.detect_similar_paths);
+    }
+}
+
+impl Default for StitcherConfig {
+    fn default() -> Self {
+        Self {
+            detect_similar_paths: true,
+        }
     }
 }

@@ -738,7 +738,7 @@ enum sg_result sg_partial_path_arena_find_partial_paths_in_file(const struct sg_
                                                                 struct sg_partial_path_arena *partials,
                                                                 sg_file_handle file,
                                                                 struct sg_partial_path_list *partial_path_list,
-                                                                struct sg_stitcher_config config,
+                                                                const struct sg_stitcher_config *stitcher_config,
                                                                 const size_t *cancellation_flag);
 
 // Finds all complete paths reachable from a set of starting nodes, placing the result into the
@@ -754,7 +754,7 @@ enum sg_result sg_partial_path_arena_find_all_complete_paths(const struct sg_sta
                                                              size_t starting_node_count,
                                                              const sg_node_handle *starting_nodes,
                                                              struct sg_partial_path_list *path_list,
-                                                             struct sg_stitcher_config config,
+                                                             const struct sg_stitcher_config *stitcher_config,
                                                              const size_t *cancellation_flag);
 
 // Returns a reference to the array of partial path data in this partial path database.  The
@@ -812,16 +812,14 @@ struct sg_node_handle_set sg_partial_path_database_local_nodes(const struct sg_p
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_nodes(const struct sg_stack_graph *graph,
                                                                                      struct sg_partial_path_arena *partials,
                                                                                      size_t count,
-                                                                                     const sg_node_handle *starting_nodes,
-                                                                                     struct sg_stitcher_config config);
+                                                                                     const sg_node_handle *starting_nodes);
 
 // Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
 // paths.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *graph,
                                                                                              struct sg_partial_path_arena *partials,
                                                                                              size_t count,
-                                                                                             const struct sg_partial_path *initial_partial_paths,
-                                                                                             struct sg_stitcher_config config);
+                                                                                             const struct sg_partial_path *initial_partial_paths);
 
 // Sets whether similar path detection should be enabled during path stitching. Paths are similar
 // if start and end node, and pre- and postconditions are the same. The presence of similar paths

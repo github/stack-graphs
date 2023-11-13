@@ -332,7 +332,7 @@ impl TestArgs {
                 &test.graph,
                 &mut partials,
                 file,
-                &lc.stitcher_config,
+                StitcherConfig::default(),
                 &cancellation_flag.as_ref(),
                 |g, ps, p| {
                     db.add_partial_path(g, ps, p.clone());
@@ -342,7 +342,7 @@ impl TestArgs {
         let result = test.run(
             &mut partials,
             &mut db,
-            &lc.stitcher_config,
+            StitcherConfig::default(),
             cancellation_flag.as_ref(),
         )?;
         let success = result.failure_count() == 0;
@@ -356,7 +356,7 @@ impl TestArgs {
                 &mut db,
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
-                &lc.stitcher_config,
+                StitcherConfig::default(),
                 cancellation_flag.as_ref(),
             )?
         } else {
@@ -405,7 +405,7 @@ impl TestArgs {
         db: &mut Database,
         filter: &dyn Filter,
         success: bool,
-        stitcher_config: &StitcherConfig,
+        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> anyhow::Result<Vec<String>> {
         let mut outputs = Vec::with_capacity(3);
@@ -490,7 +490,7 @@ impl TestArgs {
         partials: &mut PartialPaths,
         db: &mut Database,
         filter: &dyn Filter,
-        stitcher_config: &StitcherConfig,
+        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> anyhow::Result<Database> {
         let references = graph

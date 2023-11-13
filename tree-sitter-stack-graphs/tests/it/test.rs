@@ -114,7 +114,7 @@ fn check_test(
             &test.graph,
             &mut partials,
             fragment.file,
-            &StitcherConfig::default(),
+            StitcherConfig::default(),
             &stack_graphs::NoCancellation,
             |graph, partials, path| {
                 db.add_partial_path(graph, partials, path.clone());
@@ -127,7 +127,7 @@ fn check_test(
         .run(
             &mut partials,
             &mut db,
-            &StitcherConfig::default(),
+            StitcherConfig::default(),
             &NoCancellation,
         )
         .expect("should never be cancelled");

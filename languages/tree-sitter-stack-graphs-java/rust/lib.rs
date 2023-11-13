@@ -1,7 +1,6 @@
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::loader::LoadError;
-use tree_sitter_stack_graphs::loader::StitcherConfig;
 use tree_sitter_stack_graphs::CancellationFlag;
 
 /// The stacks graphs tsg path for this language.
@@ -41,9 +40,6 @@ pub fn try_language_configuration(
         )),
         Some(STACK_GRAPHS_BUILTINS_CONFIG),
         FileAnalyzers::new(),
-        StitcherConfig {
-            detect_similar_paths: true,
-        },
         cancellation_flag,
     )
 }

@@ -984,7 +984,7 @@ fn can_serialize_partial_paths() {
             &graph,
             &mut partials,
             file,
-            &StitcherConfig::default(),
+            StitcherConfig::default(),
             &NoCancellation,
             |g, ps, p| {
                 db.add_partial_path(g, ps, p.clone());

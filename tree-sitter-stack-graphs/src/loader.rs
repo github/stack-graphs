@@ -26,8 +26,6 @@ use tree_sitter_loader::Config as TsConfig;
 use tree_sitter_loader::LanguageConfiguration as TSLanguageConfiguration;
 use tree_sitter_loader::Loader as TsLoader;
 
-pub use stack_graphs::stitching::StitcherConfig;
-
 use crate::CancellationFlag;
 use crate::FileAnalyzer;
 use crate::StackGraphLanguage;
@@ -46,7 +44,6 @@ pub struct LanguageConfiguration {
     pub sgl: StackGraphLanguage,
     pub builtins: StackGraph,
     pub special_files: FileAnalyzers,
-    pub stitcher_config: StitcherConfig,
 }
 
 impl LanguageConfiguration {
@@ -62,7 +59,6 @@ impl LanguageConfiguration {
         builtins_source: Option<(PathBuf, &'a str)>,
         builtins_config: Option<&str>,
         special_files: FileAnalyzers,
-        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Self, LoadError<'a>> {
         let sgl = StackGraphLanguage::from_source(language, tsg_path.clone(), tsg_source).map_err(
@@ -102,7 +98,6 @@ impl LanguageConfiguration {
             sgl,
             builtins,
             special_files,
-            stitcher_config,
         })
     }
 
@@ -573,7 +568,6 @@ impl PathLoader {
                     sgl,
                     builtins,
                     special_files: FileAnalyzers::new(),
-                    stitcher_config: StitcherConfig::default(), // FIXME we do not have a place for this configuration
                 };
                 self.cache.push((language.language, lc));
 

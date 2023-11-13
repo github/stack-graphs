@@ -35,7 +35,7 @@ fn check_root_partial_paths(
         graph,
         &mut partials,
         file,
-        &StitcherConfig::default(),
+        StitcherConfig::default(),
         &NoCancellation,
         |graph, partials, path| {
             db.add_partial_path(graph, partials, path.clone());

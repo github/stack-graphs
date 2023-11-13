@@ -50,7 +50,7 @@ impl StorageLayer {
         let rust_graph = unsafe { &(*graph).inner };
         let path_list = sg_partial_path_list_new();
         for file in rust_graph.iter_files() {
-            let config = sg_stitcher_config {
+            let stitcher_config = sg_stitcher_config {
                 detect_similar_paths: false,
             };
             sg_partial_path_arena_find_partial_paths_in_file(
@@ -58,7 +58,7 @@ impl StorageLayer {
                 partials,
                 file.as_u32(),
                 path_list,
-                config,
+                &stitcher_config,
                 std::ptr::null(),
             );
         }
@@ -134,15 +134,11 @@ fn check_jump_to_definition(graph: &TestGraph, file: &str, expected_partial_path
     });
 
     // Create the forward partial path stitcher.
-    let config = sg_stitcher_config {
-        detect_similar_paths: false,
-    };
     let stitcher = sg_forward_partial_path_stitcher_from_nodes(
         graph.graph,
         partials,
         references.len(),
         references.as_ptr() as *const _,
-        config,
     );
     sg_forward_partial_path_stitcher_set_max_work_per_phase(stitcher, 1);
     let rust_stitcher = unsafe { &mut *stitcher };

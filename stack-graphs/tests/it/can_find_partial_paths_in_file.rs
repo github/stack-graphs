@@ -23,7 +23,7 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
         graph,
         &mut partials,
         file,
-        &StitcherConfig::default(),
+        StitcherConfig::default(),
         &NoCancellation,
         |graph, partials, path| {
             results.insert(path.display(graph, partials).to_string());

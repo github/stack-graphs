@@ -28,7 +28,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
             graph,
             &mut partials,
             file,
-            &StitcherConfig::default(),
+            StitcherConfig::default(),
             &NoCancellation,
             |graph, partials, path| {
                 db.add_partial_path(graph, partials, path.clone());
@@ -44,7 +44,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_partial_paths: &[&str])
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
         &mut DatabaseCandidates::new(graph, &mut partials, &mut db),
         references,
-        &StitcherConfig::default(),
+        StitcherConfig::default(),
         &NoCancellation,
         |_, _, p| {
             complete_partial_paths.push(p.clone());

@@ -29,7 +29,7 @@ fn check_jump_to_definition(graph: &TestGraph, expected_paths: &[&str]) {
         .iter_nodes()
         .filter(|handle| rust_graph[*handle].is_reference())
         .collect::<Vec<_>>();
-    let config = sg_stitcher_config {
+    let stitcher_config = sg_stitcher_config {
         detect_similar_paths: false,
     };
     sg_partial_path_arena_find_all_complete_paths(
@@ -38,7 +38,7 @@ fn check_jump_to_definition(graph: &TestGraph, expected_paths: &[&str]) {
         references.len(),
         references.as_ptr() as *const _,
         path_list,
-        config,
+        &stitcher_config,
         std::ptr::null(),
     );
 

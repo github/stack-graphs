@@ -200,7 +200,7 @@ fn finding_simple_identity_cycle_is_detected() {
             &graph,
             &mut partials,
             file,
-            &StitcherConfig::default(),
+            StitcherConfig::default(),
             &cancellation_flag,
             |_, _, _| path_count += 1,
         );
@@ -294,7 +294,7 @@ fn finding_composite_identity_cycle_is_detected() {
             &graph,
             &mut partials,
             file,
-            &StitcherConfig::default(),
+            StitcherConfig::default(),
             &cancellation_flag,
             |_, _, _| path_count += 1,
         );
@@ -356,7 +356,7 @@ fn appending_eliminating_cycle_terminates() {
             &graph,
             &mut partials,
             file,
-            &StitcherConfig::default(),
+            StitcherConfig::default(),
             &cancellation_flag,
             |_, _, _| path_count += 1,
         );

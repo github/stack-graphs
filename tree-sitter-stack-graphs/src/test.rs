@@ -624,7 +624,7 @@ impl Test {
         &mut self,
         partials: &mut PartialPaths,
         db: &mut Database,
-        stitcher_config: &StitcherConfig,
+        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<TestResult, stack_graphs::CancellationError> {
         let mut result = TestResult::new();

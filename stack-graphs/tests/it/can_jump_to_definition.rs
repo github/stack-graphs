@@ -26,7 +26,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
         &mut GraphEdgeCandidates::new(graph, &mut paths, None),
         references,
-        &StitcherConfig::default(),
+        StitcherConfig::default(),
         &NoCancellation,
         |graph, paths, path| {
             results.insert(path.display(graph, paths).to_string());

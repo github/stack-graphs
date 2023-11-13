@@ -8,7 +8,6 @@
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
-use stack_graphs::stitching::StitcherConfig;
 use std::path::PathBuf;
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
@@ -36,7 +35,6 @@ fn can_load_from_provided_language_configuration() {
         sgl,
         builtins: StackGraph::new(),
         special_files: FileAnalyzers::new(),
-        stitcher_config: StitcherConfig::default(),
     };
     let mut loader =
         Loader::from_language_configurations(vec![lc], None).expect("Expected loader to succeed");
