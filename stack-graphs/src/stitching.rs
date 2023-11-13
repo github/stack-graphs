@@ -469,6 +469,11 @@ impl Database {
         }
     }
 
+    /// Returns the number of paths in this database that share the given end node.
+    pub fn get_incoming_path_count(&self, end_node: Handle<Node>) -> u32 {
+        self.incoming_paths[end_node]
+    }
+
     /// Determines which nodes in the stack graph are “local”, taking into account the partial
     /// paths in this database.
     ///
@@ -613,7 +618,7 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, CancellationE
     }
 
     fn get_joining_candidate_count(&self, path: &PartialPath) -> u32 {
-        self.database.incoming_paths[path.end_node]
+        self.database.get_incoming_path_count(path.end_node)
     }
 
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
@@ -770,6 +775,7 @@ pub struct ForwardPartialPathStitcher<H> {
     ),
     appended_paths: Appendables<H>,
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
+    check_only_join_nodes: bool,
     max_work_per_phase: usize,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
@@ -803,6 +809,8 @@ impl<H> ForwardPartialPathStitcher<H> {
             next_iteration,
             appended_paths,
             similar_path_detector: Some(SimilarPathDetector::new()),
+            // By default, all nodes are checked for cycles and (if enabled) similarity
+            check_only_join_nodes: false,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
@@ -844,6 +852,14 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         }
     }
 
+    /// Sets whether all nodes are checked for cycles and (if enabled) similar paths, or only nodes with multiple
+    /// incoming candidates. Checking only join nodes is **unsafe** unless the database of candidates is stable
+    /// between all stitching phases. If paths are added to the database from one phase to another, for example if
+    /// paths are dynamically loaded from storage, setting this to true is incorrect and might lead to non-termination!
+    pub fn set_check_only_join_nodes(&mut self, check_only_join_nodes: bool) {
+        self.check_only_join_nodes = check_only_join_nodes;
+    }
+
     /// Sets the maximum amount of work that can be performed during each phase of the algorithm.
     /// By bounding our work this way, you can ensure that it's not possible for our CPU-bound
     /// algorithm to starve any worker threads or processes that you might be using.  If you don't
@@ -868,7 +884,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         Db: ToAppendable<H, A>,
         C: ForwardCandidates<H, A, Db, Err>,
     {
-        let check_cycle = partial_path.start_node == partial_path.end_node
+        let check_cycle = !self.check_only_join_nodes
+            || partial_path.start_node == partial_path.end_node
             || candidates.get_joining_candidate_count(partial_path) > 1;
 
         let (graph, partials, db) = candidates.get_graph_partials_and_db();
@@ -936,8 +953,11 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         self.next_iteration.1.reserve(extension_count);
         self.next_iteration.2.reserve(extension_count);
         for (new_partial_path, new_cycle_detector) in self.extensions.drain(..) {
-            let can_converge = graph.incoming_edge_count(new_partial_path.end_node) > 1;
-            if new_has_split && can_converge {
+            let check_similar_path = new_has_split
+                && (!self.check_only_join_nodes
+                    || candidates.get_joining_candidate_count(&new_partial_path) > 1);
+            let (graph, partials, _) = candidates.get_graph_partials_and_db();
+            if check_similar_path {
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {
                     if similar_path_detector.has_similar_path(
                         graph,
@@ -1081,6 +1101,7 @@ impl ForwardPartialPathStitcher<Edge> {
             .collect::<Vec<_>>();
         let mut stitcher =
             ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
+        stitcher.set_check_only_join_nodes(true);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             stitcher.process_next_phase(
@@ -1136,6 +1157,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 .collect::<Vec<_>>();
             ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths)
         };
+        stitcher.set_check_only_join_nodes(true);
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             for path in stitcher.previous_phase_partial_paths() {

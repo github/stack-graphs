@@ -736,8 +736,8 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, StorageError>
             .find_candidate_partial_paths(&self.graph, &mut self.partials, path, result);
     }
 
-    fn get_joining_candidate_count(&self, _path: &PartialPath) -> u32 {
-        u32::MAX // err on the safe side
+    fn get_joining_candidate_count(&self, path: &PartialPath) -> u32 {
+        self.db.get_incoming_path_count(path.end_node)
     }
 
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
