@@ -187,6 +187,7 @@ impl<T> Arena<T> {
     #[inline(always)]
     pub(crate) fn clear(&mut self) {
         self.items.clear();
+        self.items.push(MaybeUninit::uninit());
     }
 
     /// Adds a new instance to this arena, returning a stable handle to it.
@@ -294,6 +295,7 @@ impl<H, T> SupplementalArena<H, T> {
     #[inline(always)]
     pub(crate) fn clear(&mut self) {
         self.items.clear();
+        self.items.push(MaybeUninit::uninit());
     }
 
     /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental

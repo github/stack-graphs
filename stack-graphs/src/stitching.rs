@@ -41,9 +41,6 @@ use std::collections::VecDeque;
 #[cfg(feature = "copious-debugging")]
 use std::fmt::Display;
 
-use itertools::izip;
-use itertools::Itertools;
-
 use crate::arena::Arena;
 use crate::arena::Handle;
 use crate::arena::HandleSet;
@@ -763,17 +760,13 @@ impl<'a> Display for DisplaySymbolStackKey<'a> {
 pub struct ForwardPartialPathStitcher<H> {
     candidates: Vec<H>,
     extensions: Vec<(PartialPath, AppendingCycleDetector<H>)>,
-    queue: VecDeque<(PartialPath, AppendingCycleDetector<H>, bool)>,
+    queue: VecDeque<(PartialPath, PathStitchingState<H>)>,
     // tracks the number of initial paths in the queue because we do not want call
     // extend_until on those
     initial_paths: usize,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
-    next_iteration: (
-        VecDeque<PartialPath>,
-        VecDeque<AppendingCycleDetector<H>>,
-        VecDeque<bool>,
-    ),
+    next_iteration: (VecDeque<PartialPath>, VecDeque<PathStitchingState<H>>),
     appended_paths: Appendables<H>,
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
     check_only_join_nodes: bool,
@@ -782,33 +775,20 @@ pub struct ForwardPartialPathStitcher<H> {
     phase_number: usize,
 }
 
-impl<H> ForwardPartialPathStitcher<H> {
-    /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
-    /// paths. If the sticher is used to find complete paths, it is the responsibility of the caller
-    /// to ensure precondition variables are eliminated by calling [`PartialPath::eliminate_precondition_stack_variables`][].
-    pub fn from_partial_paths<I>(
-        _graph: &StackGraph,
-        _partials: &mut PartialPaths,
-        initial_partial_paths: I,
-    ) -> Self
-    where
-        I: IntoIterator<Item = PartialPath>,
-    {
-        let mut appended_paths = Appendables::new();
-        let next_iteration: (VecDeque<_>, VecDeque<_>, VecDeque<_>) = initial_partial_paths
-            .into_iter()
-            .map(|p| {
-                let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
-                (p, c, false)
-            })
-            .multiunzip();
+struct PathStitchingState<H> {
+    cycle_detector: AppendingCycleDetector<H>,
+    has_split: bool,
+}
+
+impl<H> Default for ForwardPartialPathStitcher<H> {
+    fn default() -> Self {
         Self {
             candidates: Vec::new(),
             extensions: Vec::new(),
             queue: VecDeque::new(),
-            initial_paths: next_iteration.0.len(),
-            next_iteration,
-            appended_paths,
+            initial_paths: 0,
+            next_iteration: (VecDeque::new(), VecDeque::new()),
+            appended_paths: Appendables::new(),
             similar_path_detector: Some(SimilarPathDetector::new()),
             // By default, all nodes are checked for cycles and (if enabled) similarity
             check_only_join_nodes: false,
@@ -816,6 +796,62 @@ impl<H> ForwardPartialPathStitcher<H> {
             max_work_per_phase: usize::MAX,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
+        }
+    }
+}
+
+impl<H> ForwardPartialPathStitcher<H> {
+    /// Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
+    /// paths. If the sticher is used to find complete paths, it is the responsibility of the caller
+    /// to ensure precondition variables are eliminated by calling [`PartialPath::eliminate_precondition_stack_variables`][].
+    pub fn from_partial_paths<I>(
+        graph: &StackGraph,
+        partials: &mut PartialPaths,
+        initial_partial_paths: I,
+    ) -> Self
+    where
+        I: IntoIterator<Item = PartialPath>,
+    {
+        let mut result = Self::default();
+        result.reset(graph, partials, initial_partial_paths);
+        result
+    }
+
+    pub fn reset<I>(
+        &mut self,
+        _graph: &StackGraph,
+        _partials: &mut PartialPaths,
+        initial_partial_paths: I,
+    ) where
+        I: IntoIterator<Item = PartialPath>,
+    {
+        self.appended_paths.clear();
+        self.next_iteration = initial_partial_paths
+            .into_iter()
+            .map(|p| {
+                let cycle_detector =
+                    AppendingCycleDetector::from(&mut self.appended_paths, p.clone().into());
+                (
+                    p,
+                    PathStitchingState {
+                        cycle_detector,
+                        has_split: false,
+                    },
+                )
+            })
+            .unzip();
+        self.initial_paths = self.next_iteration.0.len();
+        self.candidates.clear();
+        self.extensions.clear();
+        self.queue.clear();
+        if let Some(similar_path_detector) = &mut self.similar_path_detector {
+            similar_path_detector.clear();
+        }
+        // keep self.check_only_join_nodes
+        // keep self.max_work_per_phase
+        #[cfg(feature = "copious-debugging")]
+        {
+            self.phase_number = 1;
         }
     }
 }
@@ -952,7 +988,6 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         let new_has_split = has_split || self.extensions.len() > 1;
         self.next_iteration.0.reserve(extension_count);
         self.next_iteration.1.reserve(extension_count);
-        self.next_iteration.2.reserve(extension_count);
         for (new_partial_path, new_cycle_detector) in self.extensions.drain(..) {
             let check_similar_path = new_has_split
                 && (!self.check_only_join_nodes
@@ -990,8 +1025,10 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             }
 
             self.next_iteration.0.push(new_partial_path);
-            self.next_iteration.1.push(new_cycle_detector);
-            self.next_iteration.2.push(new_has_split);
+            self.next_iteration.1.push(PathStitchingState {
+                cycle_detector: new_cycle_detector,
+                has_split: new_has_split,
+            });
         }
 
         candidate_count
@@ -1022,13 +1059,21 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         E: Fn(&StackGraph, &mut PartialPaths, &PartialPath) -> bool,
     {
         copious_debugging!("==> Start phase {}", self.phase_number);
-        self.queue.extend(izip!(
-            self.next_iteration.0.drain(..),
-            self.next_iteration.1.drain(..),
-            self.next_iteration.2.drain(..),
-        ));
+        self.queue.extend(
+            self.next_iteration
+                .0
+                .drain(..)
+                .zip(self.next_iteration.1.drain(..)),
+        );
         let mut work_performed = 0;
-        while let Some((partial_path, cycle_detector, has_split)) = self.queue.pop_front() {
+        while let Some((
+            partial_path,
+            PathStitchingState {
+                cycle_detector,
+                has_split,
+            },
+        )) = self.queue.pop_front()
+        {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             copious_debugging!(
                 "--> Candidate partial path {}",
@@ -1101,18 +1146,22 @@ impl ForwardPartialPathStitcher<Edge> {
             .filter(|node| graph[*node].is_endpoint())
             .map(|node| PartialPath::from_node(graph, partials, node))
             .collect::<Vec<_>>();
-        let mut stitcher =
-            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
+
+        let mut stitcher = ForwardPartialPathStitcher::default();
         stitcher.set_check_only_join_nodes(true);
-        while !stitcher.is_complete() {
-            cancellation_flag.check("finding complete partial paths")?;
-            stitcher.process_next_phase(
-                &mut GraphEdgeCandidates::new(graph, partials, Some(file)),
-                |g, _ps, p| !as_complete_as_necessary(g, p),
-            );
-            for path in stitcher.previous_phase_partial_paths() {
-                if as_complete_as_necessary(graph, path) {
-                    visit(graph, partials, path);
+
+        for initial_path in initial_paths {
+            stitcher.reset(graph, partials, std::iter::once(initial_path));
+            while !stitcher.is_complete() {
+                cancellation_flag.check("finding complete partial paths")?;
+                stitcher.process_next_phase(
+                    &mut GraphEdgeCandidates::new(graph, partials, Some(file)),
+                    |g, _ps, p| !as_complete_as_necessary(g, p),
+                );
+                for path in stitcher.previous_phase_partial_paths() {
+                    if as_complete_as_necessary(graph, path) {
+                        visit(graph, partials, path);
+                    }
                 }
             }
         }
@@ -1146,33 +1195,38 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
         Err: std::convert::From<CancellationError>,
     {
-        let mut stitcher = {
-            let (graph, partials, _) = candidates.get_graph_partials_and_db();
-            let initial_paths = starting_nodes
-                .into_iter()
-                .filter(|n| graph[*n].is_reference())
-                .map(|n| {
-                    let mut p = PartialPath::from_node(graph, partials, n);
-                    p.eliminate_precondition_stack_variables(partials);
-                    p
-                })
-                .collect::<Vec<_>>();
-            ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths)
-        };
+        let (graph, partials, _) = candidates.get_graph_partials_and_db();
+        let initial_paths = starting_nodes
+            .into_iter()
+            .filter(|n| graph[*n].is_reference())
+            .map(|n| {
+                let mut p = PartialPath::from_node(graph, partials, n);
+                p.eliminate_precondition_stack_variables(partials);
+                p
+            })
+            .collect::<Vec<_>>();
+
+        let mut stitcher = ForwardPartialPathStitcher::default();
         stitcher.set_check_only_join_nodes(true);
-        while !stitcher.is_complete() {
-            cancellation_flag.check("finding complete partial paths")?;
-            for path in stitcher.previous_phase_partial_paths() {
-                candidates.load_forward_candidates(path, cancellation_flag)?;
-            }
-            stitcher.process_next_phase(candidates, |_, _, _| true);
+
+        for initial_path in initial_paths {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
-            for path in stitcher.previous_phase_partial_paths() {
-                if path.is_complete(graph) {
-                    visit(graph, partials, path);
+            stitcher.reset(graph, partials, std::iter::once(initial_path));
+            while !stitcher.is_complete() {
+                cancellation_flag.check("finding complete partial paths")?;
+                for path in stitcher.previous_phase_partial_paths() {
+                    candidates.load_forward_candidates(path, cancellation_flag)?;
+                }
+                stitcher.process_next_phase(candidates, |_, _, _| true);
+                let (graph, partials, _) = candidates.get_graph_partials_and_db();
+                for path in stitcher.previous_phase_partial_paths() {
+                    if path.is_complete(graph) {
+                        visit(graph, partials, path);
+                    }
                 }
             }
         }
+
         Ok(())
     }
 }

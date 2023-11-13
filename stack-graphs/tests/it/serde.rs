@@ -1002,55 +1002,6 @@ fn can_serialize_partial_paths() {
                         "precedence" : 0,
                         "source" : {
                             "file" : "test.py",
-                            "local_id" : 3
-                        }
-                    },
-                    {
-                        "precedence" : 0,
-                        "source" : {
-                            "file" : "test.py",
-                            "local_id" : 8
-                        }
-                    }
-                ],
-                "end_node" : {
-                    "file" : "test.py",
-                    "local_id" : 9
-                },
-                "scope_stack_postcondition" : {
-                    "scopes" : [],
-                    "variable" : 1
-                },
-                "scope_stack_precondition" : {
-                    "scopes" : [],
-                    "variable" : 1
-                },
-                "start_node" : {
-                    "file" : "test.py",
-                    "local_id" : 3
-                },
-                "symbol_stack_postcondition" : {
-                    "symbols" : [],
-                    "variable" : 1
-                },
-                "symbol_stack_precondition" : {
-                    "symbols" : [
-                        {
-                            "symbol" : "."
-                        },
-                        {
-                            "symbol" : "x"
-                        }
-                    ],
-                    "variable" : 1
-                }
-            },
-            {
-                "edges" : [
-                    {
-                        "precedence" : 0,
-                        "source" : {
-                            "file" : "test.py",
                             "local_id" : 1
                         }
                     },
@@ -1268,6 +1219,55 @@ fn can_serialize_partial_paths() {
                 },
                 "symbol_stack_precondition" : {
                     "symbols" : [],
+                    "variable" : 1
+                }
+            },
+            {
+                "edges" : [
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 3
+                        }
+                    },
+                    {
+                        "precedence" : 0,
+                        "source" : {
+                            "file" : "test.py",
+                            "local_id" : 8
+                        }
+                    }
+                ],
+                "end_node" : {
+                    "file" : "test.py",
+                    "local_id" : 9
+                },
+                "scope_stack_postcondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "scope_stack_precondition" : {
+                    "scopes" : [],
+                    "variable" : 1
+                },
+                "start_node" : {
+                    "file" : "test.py",
+                    "local_id" : 3
+                },
+                "symbol_stack_postcondition" : {
+                    "symbols" : [],
+                    "variable" : 1
+                },
+                "symbol_stack_precondition" : {
+                    "symbols" : [
+                        {
+                            "symbol" : "."
+                        },
+                        {
+                            "symbol" : "x"
+                        }
+                    ],
                     "variable" : 1
                 }
             }

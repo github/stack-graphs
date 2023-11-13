@@ -52,6 +52,12 @@ pub struct SimilarPathDetector<P> {
     paths: HashMap<PathKey, SmallVec<[P; 4]>>,
 }
 
+impl<P> SimilarPathDetector<P> {
+    pub fn clear(&mut self) {
+        self.paths.clear();
+    }
+}
+
 #[doc(hidden)]
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct PathKey {
@@ -162,6 +168,11 @@ impl<H> Appendables<H> {
             elements: ListArena::new(),
             interned: Arena::new(),
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.elements.clear();
+        self.interned.clear();
     }
 }
 
