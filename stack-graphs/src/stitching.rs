@@ -54,6 +54,7 @@ use crate::arena::SupplementalArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
+use crate::graph::Degree;
 use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
@@ -203,7 +204,7 @@ where
         R: std::iter::Extend<H>;
 
     /// Get the number of available candidates that share the given path's end node.
-    fn get_joining_candidate_count(&self, path: &PartialPath) -> u32;
+    fn get_joining_candidate_degree(&self, path: &PartialPath) -> Degree;
 
     /// Get the graph, partial path arena, and database backing this candidates instance.
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Db);
@@ -246,8 +247,8 @@ impl ForwardCandidates<Edge, Edge, GraphEdges, CancellationError> for GraphEdgeC
         }));
     }
 
-    fn get_joining_candidate_count(&self, path: &PartialPath) -> u32 {
-        self.graph.incoming_edge_count(path.end_node)
+    fn get_joining_candidate_degree(&self, path: &PartialPath) -> Degree {
+        self.graph.incoming_edge_degree(path.end_node)
     }
 
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &GraphEdges) {
@@ -284,7 +285,7 @@ pub struct Database {
     symbol_stack_key_cache: HashMap<SymbolStackCacheKey, SymbolStackKeyHandle>,
     paths_by_start_node: SupplementalArena<Node, Vec<Handle<PartialPath>>>,
     root_paths_by_precondition: SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
-    incoming_paths: SupplementalArena<Node, u32>,
+    incoming_paths: SupplementalArena<Node, Degree>,
 }
 
 impl Database {
@@ -354,7 +355,7 @@ impl Database {
             self.paths_by_start_node[start_node].push(handle);
         }
 
-        self.incoming_paths[end_node] += 1;
+        self.incoming_paths[end_node] += Degree::One;
         handle
     }
 
@@ -470,7 +471,7 @@ impl Database {
     }
 
     /// Returns the number of paths in this database that share the given end node.
-    pub fn get_incoming_path_count(&self, end_node: Handle<Node>) -> u32 {
+    pub fn get_incoming_path_degree(&self, end_node: Handle<Node>) -> Degree {
         self.incoming_paths[end_node]
     }
 
@@ -617,8 +618,8 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, CancellationE
             .find_candidate_partial_paths(self.graph, self.partials, path, result);
     }
 
-    fn get_joining_candidate_count(&self, path: &PartialPath) -> u32 {
-        self.database.get_incoming_path_count(path.end_node)
+    fn get_joining_candidate_degree(&self, path: &PartialPath) -> Degree {
+        self.database.get_incoming_path_degree(path.end_node)
     }
 
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
@@ -886,7 +887,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
     {
         let check_cycle = !self.check_only_join_nodes
             || partial_path.start_node == partial_path.end_node
-            || candidates.get_joining_candidate_count(partial_path) > 1;
+            || candidates.get_joining_candidate_degree(partial_path) == Degree::Multiple;
 
         let (graph, partials, db) = candidates.get_graph_partials_and_db();
         copious_debugging!("    Extend {}", partial_path.display(graph, partials));
@@ -955,7 +956,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         for (new_partial_path, new_cycle_detector) in self.extensions.drain(..) {
             let check_similar_path = new_has_split
                 && (!self.check_only_join_nodes
-                    || candidates.get_joining_candidate_count(&new_partial_path) > 1);
+                    || candidates.get_joining_candidate_degree(&new_partial_path)
+                        == Degree::Multiple);
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             if check_similar_path {
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {

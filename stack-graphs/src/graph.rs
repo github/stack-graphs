@@ -1303,16 +1303,20 @@ impl StackGraph {
         let edges = &mut self.outgoing_edges[source];
         if let Err(index) = edges.binary_search_by_key(&sink, |o| o.sink) {
             edges.insert(index, OutgoingEdge { sink, precedence });
-            self.incoming_edges[sink] += 1;
+            self.incoming_edges[sink] += Degree::One;
         }
     }
 
     /// Removes an edge from the stack graph.
-    pub fn remove_edge(&mut self, source: Handle<Node>, sink: Handle<Node>) {
+    pub fn set_edge_precedence(
+        &mut self,
+        source: Handle<Node>,
+        sink: Handle<Node>,
+        precedence: i32,
+    ) {
         let edges = &mut self.outgoing_edges[source];
         if let Ok(index) = edges.binary_search_by_key(&sink, |o| o.sink) {
-            edges.remove(index);
-            self.incoming_edges[sink] -= 1;
+            edges[index].precedence = precedence;
         }
     }
 
@@ -1329,7 +1333,7 @@ impl StackGraph {
     }
 
     /// Returns the number of edges that end at a particular sink node.
-    pub fn incoming_edge_count(&self, sink: Handle<Node>) -> u32 {
+    pub fn incoming_edge_degree(&self, sink: Handle<Node>) -> Degree {
         self.incoming_edges[sink]
     }
 }
@@ -1437,6 +1441,36 @@ impl StackGraph {
 //-------------------------------------------------------------------------------------------------
 // Stack graphs
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub enum Degree {
+    Zero,
+    One,
+    Multiple,
+}
+
+impl Default for Degree {
+    fn default() -> Self {
+        Self::Zero
+    }
+}
+
+impl std::ops::Add for Degree {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::Zero, result) | (result, Self::Zero) => result,
+            _ => Self::Multiple,
+        }
+    }
+}
+
+impl std::ops::AddAssign for Degree {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 /// Contains all of the nodes and edges that make up a stack graph.
 pub struct StackGraph {
     interned_strings: InternedStringArena,
@@ -1450,7 +1484,7 @@ pub struct StackGraph {
     pub(crate) source_info: SupplementalArena<Node, SourceInfo>,
     node_id_handles: NodeIDHandles,
     outgoing_edges: SupplementalArena<Node, SmallVec<[OutgoingEdge; 4]>>,
-    incoming_edges: SupplementalArena<Node, u32>,
+    incoming_edges: SupplementalArena<Node, Degree>,
     pub(crate) node_debug_info: SupplementalArena<Node, DebugInfo>,
     pub(crate) edge_debug_info: SupplementalArena<Node, SmallVec<[(Handle<Node>, DebugInfo); 4]>>,
 }
