@@ -129,7 +129,7 @@ impl FileAnalyzer for NpmPackageAnalyzer {
                 add_push(graph, file, main_push, EXPORTS_GUARD, "exports_guard_push");
             add_edge(graph, exports_guard_pop, exports_guard_push, 0);
 
-            // reach main exports directly via package name (with precedence)
+            // reach main default directly via package name (with precedence)
             //
             //     [pop pkg_name] -1-> [pop "GUARD:DEFAULT"] -> [push "GUARD:DEFAULT"] -> [push main]* -> [push pkg_internal_name]
             //

@@ -349,6 +349,10 @@ inherit .return_or_yield
     edge module_pop_end -> prog_exports_pop
     edge prog_exports_pop -> @prog.exports
 
+    node prog_default_pop
+    attr (prog_default_pop) pop_symbol = "GUARD:DEFAULT", definiens_node = @prog
+    edge module_pop_end -> prog_default_pop
+
     ;; builtin types
     node @prog.builtins_number
     node @prog.builtins_string
