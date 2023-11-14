@@ -346,7 +346,6 @@ inherit .return_or_yield
     attr (@prog.after_scope) empty_source_span
 
     attr (prog_exports_pop) pop_symbol = "GUARD:EXPORTS"
-    attr (prog_exports_pop) definiens_node = @prog
     edge module_pop_end -> prog_exports_pop
     edge prog_exports_pop -> @prog.exports
 

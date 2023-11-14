@@ -15,6 +15,7 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 
 pub const EXPORTS_GUARD: &str = "GUARD:EXPORTS";
+pub const DEFAULT_GUARD: &str = "GUARD:DEFAULT";
 pub const PKG_GUARD: &str = "GUARD:PKG";
 pub const PKG_INTERNAL_GUARD: &str = "GUARD:PKG_INTERNAL";
 
