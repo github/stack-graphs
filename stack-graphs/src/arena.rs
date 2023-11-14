@@ -183,10 +183,10 @@ impl<T> Arena<T> {
 
     /// Clear the arena, keeping underlying allocated capacity.  After this, all previous handles into
     /// the arena are invalid.
-    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
     #[inline(always)]
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.items.clear();
+        self.items.push(MaybeUninit::uninit());
     }
 
     /// Adds a new instance to this arena, returning a stable handle to it.
@@ -290,10 +290,10 @@ impl<H, T> SupplementalArena<H, T> {
 
     /// Clear the supplemantal arena, keeping underlying allocated capacity.  After this,
     /// all previous handles into the arena are invalid.
-    #[cfg_attr(not(feature = "storage"), allow(dead_code))]
     #[inline(always)]
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.items.clear();
+        self.items.push(MaybeUninit::uninit());
     }
 
     /// Creates a new, empty supplemental arena, preallocating enough space to store supplemental

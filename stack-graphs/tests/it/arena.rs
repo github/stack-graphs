@@ -229,3 +229,28 @@ fn can_compare_deques() {
     deque10.ensure_backwards(&mut arena);
     assert_eq!(deque1.cmp(&mut arena, deque10), Ordering::Less);
 }
+
+#[test]
+fn can_use_arena_after_clear() {
+    let mut a = Arena::new();
+    let h = a.add(12 as u8);
+    assert_eq!(12, *a.get(h));
+
+    a.clear();
+    let h = a.add(7);
+    assert_eq!(7, *a.get(h));
+}
+
+#[test]
+fn can_use_supplemental_arena_after_clear() {
+    let mut a = Arena::new();
+    let h = a.add(());
+
+    let mut x = SupplementalArena::new();
+    x[h] = 12;
+    assert_eq!(Some(12), x.get(h).cloned());
+
+    x.clear();
+    x[h] = 7;
+    assert_eq!(Some(7), x.get(h).cloned());
+}
