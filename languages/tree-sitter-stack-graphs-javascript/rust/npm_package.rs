@@ -128,6 +128,12 @@ impl FileAnalyzer for NpmPackageAnalyzer {
             let exports_guard_push =
                 add_push(graph, file, main_push, EXPORTS_GUARD, "exports_guard_push");
             add_edge(graph, exports_guard_pop, exports_guard_push, 0);
+
+            // reach main directly via package name (with precedence)
+            //
+            //     [pop pkg_name] -1-> [push main]* -> [push pkg_internal_name]
+            //
+            add_edge(graph, pkg_name_pop, main_push, 0);
         }
 
         // reach dependencies via package internal name
