@@ -192,17 +192,13 @@ inherit .parent_module
   edge @stmt.after_scope -> @root_name.def
   attr (@stmt.after_scope -> @root_name.def) precedence = 1
   edge @root_name.ref -> ROOT_NODE
-  attr (@root_name.ref) node_reference = @root_name
-  attr (@root_name.def) node_definition = @root_name
 }
 
 (import_statement
   name: (aliased_import
-    (dotted_name . (identifier) @root_name))) @stmt
+    (dotted_name . (identifier) @root_name)))
 {
-  edge @stmt.after_scope -> @root_name.def
   edge @root_name.ref -> ROOT_NODE
-  attr (@root_name.ref) node_reference = @root_name
 }
 
 (import_from_statement
@@ -221,7 +217,6 @@ inherit .parent_module
       . (identifier) @import_root_name)))
 {
   edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.ref) node_reference = @import_root_name
   attr (@import_root_name.ref_dot) push_symbol = "."
 }
 
@@ -255,7 +250,6 @@ inherit .parent_module
 {
   edge @stmt.after_scope -> @alias.def
   edge @alias.def -> @name.ref
-  attr (@alias.def) node_definition = @alias
 }
 
 [
@@ -289,7 +283,6 @@ inherit .parent_module
   (dotted_name
     . (identifier) @name))
 {
-  attr (@name.ref) node_reference = @name
   attr (@name.ref_dot) push_symbol = "."
   edge @name.ref -> @name.ref_dot
   edge @name.ref_dot -> @prefix.ref
@@ -309,7 +302,6 @@ inherit .parent_module
       (identifier) @child_name))
 ]
 {
-  attr (@child_name.ref) node_reference = @child_name
   attr (@child_name.ref_dot) push_symbol = "."
   edge @child_name.ref -> @child_name.ref_dot
   edge @child_name.ref_dot -> @parent_name.ref
@@ -319,7 +311,6 @@ inherit .parent_module
   module_name: (dotted_name
     . (identifier) @root_name))
 {
-  attr (@root_name.ref) node_reference = @root_name
   edge @root_name.ref -> ROOT_NODE
 }
 
@@ -357,8 +348,6 @@ inherit .parent_module
   edge @child_name.ref_dot -> @parent_name.ref
   edge @parent_name.def -> @parent_name.def_dot
   edge @parent_name.def_dot -> @child_name.def
-  attr (@child_name.def) node_definition = @child_name
-  attr (@child_name.ref) node_reference = @child_name
   attr (@parent_name.def_dot) pop_symbol = "."
   attr (@child_name.ref_dot) push_symbol = "."
 }
@@ -442,6 +431,10 @@ inherit .parent_module
 ; Definitions
 ;-------------
 
+(identifier) @name {
+  attr (@name.def) node_definition = @name
+}
+
 [
   (assignment
     left: (_) @pattern
@@ -469,7 +462,6 @@ inherit .parent_module
   edge @body.before_scope -> @func.drop_scope
   edge @func.drop_scope -> @func.bottom
   attr (@func.drop_scope) type = "drop_scopes"
-  attr (@name.def) node_definition = @name
   attr (@func.call) pop_scoped_symbol = "()"
   edge @params.before_scope -> JUMP_TO_SCOPE_NODE
   attr (@func.return_value) is_exported
@@ -574,7 +566,6 @@ inherit .parent_module
     value: (_) @value) @param
 ]
 {
-  attr (@name.def) node_definition = @name
   attr (@param.param_name) push_node = @name
   edge @name.def -> @param.param_name
   edge @name.def -> @param.param_index
@@ -591,7 +582,6 @@ inherit .parent_module
     (_) @name) @param
 ]
 {
-  attr (@name.def) node_definition = @name
   attr (@param.param_name) push_node = @name
   edge @name.def -> @param.param_name
   edge @name.def -> @param.param_index
@@ -646,7 +636,6 @@ inherit .parent_module
   attr (@class.call_drop) type = "drop_scopes"
   attr (@class.dot) pop_symbol = "."
   attr (@class.self_dot) pop_symbol = "."
-  attr (@name.def) node_definition = @name
   attr (@class.member_attrs) push_symbol = "."
   attr (@class.self_scope) is_exported
 }
@@ -695,6 +684,10 @@ inherit .parent_module
 ;-------------
 ; Expressions
 ;-------------
+
+(identifier) @name {
+  attr (@name.ref) node_reference = @name
+}
 
 (call
   function: (_) @fn
