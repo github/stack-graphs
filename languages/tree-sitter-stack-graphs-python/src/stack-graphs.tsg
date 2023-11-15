@@ -109,9 +109,16 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (primary_expression)
   (pattern)
   (pattern_list)
+  (case_pattern)
   (parameter)
+  (pair)
+  (list_splat)
+  (parenthesized_list_splat)
+  (dictionary_splat)
+  (keyword_argument)
 ] @node {
   node @node.input
+  node @node.new_bindings
   node @node.output
 }
 
@@ -121,31 +128,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @node.def
   node @node.def_dot
   node @node.input
+  node @node.new_bindings
   node @node.output
   node @node.ref
   node @node.ref_dot
-}
-
-(_)@node {
-  node @node.call
-  node @node.call_drop
-  node @node.called
-  node @node.dot
-  node @node.drop_scope
-  node @node.el_index
-  node @node.member_attrs
-  node @node.members
-  node @node.new_bindings
-  node @node.new_bindings_pop
-  node @node.output_args
-  node @node.param_index
-  node @node.param_name
-  node @node.pattern_before_scope
-  node @node.pattern_index
-  node @node.return_value
-  node @node.self_dot
-  node @node.self_scope
-  node @node.super_scope
 }
 
 ;; Inherited Variables
@@ -531,18 +517,22 @@ inherit .parent_module
   parameters: (parameters) @params
   body: (block) @body) @func
 {
+  node call
+  node drop_scope
+  node return_value
+
   attr (@name.def) definiens_node = @func
   edge @func.after_scope -> @name.def
-  edge @name.def -> @func.call
-  edge @func.call -> @func.return_value
+  edge @name.def -> call
+  edge call -> return_value
   edge @body.before_scope -> @params.after_scope
-  edge @body.before_scope -> @func.drop_scope
-  edge @func.drop_scope -> @func.bottom
-  attr (@func.drop_scope) type = "drop_scopes"
-  attr (@func.call) pop_scoped_symbol = "()"
+  edge @body.before_scope -> drop_scope
+  edge drop_scope -> @func.bottom
+  attr (drop_scope) type = "drop_scopes"
+  attr (call) pop_scoped_symbol = "()"
   edge @params.before_scope -> JUMP_TO_SCOPE_NODE
-  attr (@func.return_value) is_exported
-  let @func.function_returns = @func.return_value
+  attr (return_value) is_exported
+  let @func.function_returns = return_value
 
   ; Prevent functions defined inside of method bodies from being treated like methods
   let @body.class_self_scope = #null
@@ -670,19 +660,24 @@ inherit .parent_module
   (tuple_pattern (_) @pattern)
 ] @list
 {
+  node pattern_index
+
   let statement_scope = @list.local_scope
-  let @pattern.local_scope = @pattern.pattern_before_scope
+  node @pattern.local_scope
   edge statement_scope -> @pattern.local_scope
   attr (statement_scope -> @pattern.local_scope) precedence = (plus 1 (named-child-index @pattern))
 
-  edge @pattern.pattern_index -> @list.input
-  edge @pattern.input -> @pattern.pattern_index
-  attr (@pattern.pattern_index) push_symbol = (named-child-index @pattern)
+  edge pattern_index -> @list.input
+  edge @pattern.input -> pattern_index
+  attr (pattern_index) push_symbol = (named-child-index @pattern)
 }
 
 (parameters
   (_) @param) @params
 {
+  node @param.param_index
+  node @param.param_name
+
   attr (@param.param_index) push_symbol = (named-child-index @param)
   edge @param.param_index -> @params.before_scope
   edge @params.after_scope -> @param.input
@@ -694,27 +689,39 @@ inherit .parent_module
   edge @stmt.function_returns -> @expr.output
 }
 
+(class_definition) @class {
+  node @class.call_drop
+  node @class.member_attrs
+  node @class.members
+  node @class.super_scope
+}
+
 (class_definition
   name: (identifier) @name) @class
 {
+  node call
+  node self_dot
+  node self_scope
+  node members_dot
+
   attr (@name.def) definiens_node = @class
   attr (@name.def) syntax_type = "class"
   edge @class.after_scope -> @name.def
-  edge @name.def -> @class.call
-  edge @name.def -> @class.dot
-  edge @class.dot -> @class.members
-  edge @class.call -> @class.call_drop
-  edge @class.call_drop -> @class.self_scope
-  edge @class.self_scope -> @class.super_scope
-  edge @class.self_scope -> @class.self_dot
-  edge @class.self_dot -> @class.members
+  edge @name.def -> call
+  edge @name.def -> members_dot
+  edge members_dot -> @class.members
+  edge call -> @class.call_drop
+  edge @class.call_drop -> self_scope
+  edge self_scope -> @class.super_scope
+  edge self_scope -> self_dot
+  edge self_dot -> @class.members
   edge @class.members -> @class.member_attrs
-  attr (@class.call) pop_scoped_symbol = "()"
+  attr (call) pop_scoped_symbol = "()"
   attr (@class.call_drop) type = "drop_scopes"
-  attr (@class.dot) pop_symbol = "."
-  attr (@class.self_dot) pop_symbol = "."
+  attr (members_dot) pop_symbol = "."
+  attr (self_dot) pop_symbol = "."
   attr (@class.member_attrs) push_symbol = "."
-  attr (@class.self_scope) is_exported
+  attr (self_scope) is_exported
 }
 
 (class_definition
@@ -770,9 +777,11 @@ inherit .parent_module
   function: (_) @fn
   arguments: (argument_list) @args) @call
 {
-  edge @call.output -> @call.output_args
-  edge @call.output_args -> @fn.output
-  attr (@call.output_args) push_scoped_symbol = "()", scope = @args.args
+  node output_args
+
+  edge @call.output -> output_args
+  edge output_args -> @fn.output
+  attr (output_args) push_scoped_symbol = "()", scope = @args.args
 }
 
 (call
@@ -833,9 +842,11 @@ inherit .parent_module
   (expression_list (_) @element)
 ] @tuple
 {
-  edge @tuple.output -> @element.el_index
-  attr (@element.el_index) pop_symbol = (named-child-index @element)
-  edge @element.el_index -> @element.output
+  node el_index
+
+  edge @tuple.output -> el_index
+  attr (el_index) pop_symbol = (named-child-index @element)
+  edge el_index -> @element.output
 
   edge @tuple.new_bindings -> @element.new_bindings
 }
@@ -907,9 +918,11 @@ inherit .parent_module
 
 (list) @list
 {
-  edge @list.output -> @list.called
-  edge @list.called -> @list.global_dot
-  attr (@list.called) push_symbol = "list"
+  node called
+
+  edge @list.output -> called
+  edge called -> @list.global_dot
+  attr (called) push_symbol = "list"
 }
 
 (list (_) @el) @list
