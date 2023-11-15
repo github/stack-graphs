@@ -64,7 +64,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @node.output_dot
   node @node.param_index
   node @node.param_name
-  node @node.parent_scope
   node @node.pattern_before_scope
   node @node.pattern_index
   node @node.ref
@@ -633,8 +632,6 @@ inherit .parent_module
 {
   attr (@name.def) definiens_node = @class
   attr (@name.def) syntax_type = "class"
-  edge @class.parent_scope -> @class.class_parent_scope
-  edge @class.parent_scope -> @class.local_scope
   edge @class.after_scope -> @name.def
   edge @name.def -> @class.call
   edge @name.def -> @class.dot
@@ -652,10 +649,17 @@ inherit .parent_module
   attr (@name.def) node_definition = @name
   attr (@class.member_attrs) push_symbol = "."
   attr (@class.self_scope) is_exported
-  let @class.class_member_attr_scope = @class.member_attrs
-  let @class.class_parent_scope = @class.parent_scope
-  let @class.class_self_scope = @class.call_drop
-  let @class.class_super_scope = @class.super_scope
+}
+
+(class_definition
+  body: (_) @body) @class
+{
+  let @body.class_member_attr_scope = @class.member_attrs
+  node @body.class_parent_scope
+  edge @body.class_parent_scope -> @class.class_parent_scope
+  edge @body.class_parent_scope -> @class.local_scope
+  let @body.class_self_scope = @class.call_drop
+  let @body.class_super_scope = @class.super_scope
 }
 
 (class_definition
@@ -669,7 +673,7 @@ inherit .parent_module
   superclasses: (argument_list
     (_) @superclass)) @class
 {
-  edge @class.class_super_scope -> @superclass.output
+  edge @class.super_scope -> @superclass.output
 }
 
 (decorated_definition
