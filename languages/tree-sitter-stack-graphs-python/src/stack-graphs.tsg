@@ -542,18 +542,18 @@ inherit .parent_module
     . (identifier) @param)
   body: (block) @body)
 {
-  edge @param.input -> @param.class_self_scope
+  edge @param.def -> @param.class_self_scope
   edge @param.class_member_attr_scope -> @param.output
   edge @param.output -> @body.after_scope
   attr (@param.output) push_node = @param
 }
 
-(parameter/identifier) @param
+(parameter/identifier) @param @name
 {
-  attr (@param.input) node_definition = @param
   attr (@param.param_name) push_node = @param
-  edge @param.input -> @param.param_index
-  edge @param.input -> @param.param_name
+  edge @name.def -> @param.param_name
+  edge @name.def -> @param.param_index
+  edge @param.input -> @name.def
 }
 
 [
