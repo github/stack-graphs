@@ -92,6 +92,18 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 [
   (identifier)
+  (import_prefix)
+  (wildcard_import)
+] @node {
+  node @node.def
+  node @node.def_dot
+  node @node.ref
+  node @node.ref_dot
+}
+
+[
+  (identifier)
+  (wildcard_import)
   (expression)
   (expression_list)
   (primary_expression)
@@ -106,34 +118,30 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 (comment) @node {
   node @node.after_scope
   node @node.before_scope
+  node @node.def
+  node @node.def_dot
   node @node.input
   node @node.output
+  node @node.ref
+  node @node.ref_dot
 }
 
 (_)@node {
   node @node.call
   node @node.call_drop
   node @node.called
-  node @node.def
-  node @node.def_dot
   node @node.dot
   node @node.drop_scope
   node @node.el_index
-  node @node.file_def
-  node @node.file_ref
-  node @node.input_dot
   node @node.member_attrs
   node @node.members
   node @node.new_bindings
   node @node.new_bindings_pop
   node @node.output_args
-  node @node.output_dot
   node @node.param_index
   node @node.param_name
   node @node.pattern_before_scope
   node @node.pattern_index
-  node @node.ref
-  node @node.ref_dot
   node @node.return_value
   node @node.self_dot
   node @node.self_scope
@@ -160,12 +168,15 @@ inherit .parent_module
 
 (module) @mod
 {
-  var module_def = @mod.file_def
+  node mod_file_def
+  node mod_file_ref
+
+  var module_def = mod_file_def
 
   node parent_module_def_node
   var parent_module_def = parent_module_def_node
 
-  var module_ref = @mod.file_ref
+  var module_ref = mod_file_ref
 
   node parent_module_ref_node
   var parent_module_ref = parent_module_ref_node
@@ -222,8 +233,8 @@ inherit .parent_module
     }
   }
 
-  edge ROOT_NODE -> @mod.file_def
-  edge @mod.file_ref -> ROOT_NODE
+  edge ROOT_NODE -> mod_file_def
+  edge mod_file_ref -> ROOT_NODE
   edge module_def -> @mod.after_scope
 
   node global
@@ -833,14 +844,17 @@ inherit .parent_module
   object: (_) @object
   attribute: (identifier) @name) @expr
 {
+  node input_dot
+  node output_dot
+
   edge @expr.output -> @name.output
-  edge @name.output -> @expr.output_dot
-  edge @expr.output_dot -> @object.output
-  edge @object.input -> @expr.input_dot
-  edge @expr.input_dot -> @name.input
+  edge @name.output -> output_dot
+  edge output_dot -> @object.output
+  edge @object.input -> input_dot
+  edge input_dot -> @name.input
   edge @name.input -> @expr.input
-  attr (@expr.output_dot) push_symbol = "."
-  attr (@expr.input_dot) pop_symbol = "."
+  attr (output_dot) push_symbol = "."
+  attr (input_dot) pop_symbol = "."
   attr (@name.input) pop_node = @name
   attr (@name.output) push_node = @name
 }
