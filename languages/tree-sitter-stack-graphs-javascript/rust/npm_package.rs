@@ -114,21 +114,6 @@ impl FileAnalyzer for NpmPackageAnalyzer {
             let main_push =
                 add_module_pushes(graph, file, &main, pkg_internal_name_push, "main_push");
 
-            // reach main exports directly via package name (with precedence)
-            //
-            //     [pop pkg_name] -1-> [pop "GUARD:EXPORTS"] -> [push "GUARD:EXPORTS"] -> [push main]* -> [push pkg_internal_name]
-            //
-            let exports_guard_pop = add_pop(
-                graph,
-                file,
-                pkg_name_pop,
-                EXPORTS_GUARD,
-                "exports_guard_pop",
-            );
-            let exports_guard_push =
-                add_push(graph, file, main_push, EXPORTS_GUARD, "exports_guard_push");
-            add_edge(graph, exports_guard_pop, exports_guard_push, 0);
-
             // reach main directly via package name (with precedence)
             //
             //     [pop pkg_name] -1-> [push main]* -> [push pkg_internal_name]
