@@ -854,8 +854,7 @@ inherit .parent_module
 
 (list_splat (_) @splatted) @splat
 {
-attr (@splat.new_bindings_pop) node_definition = @splatted
-edge @splat.new_bindings -> @splat.new_bindings_pop
+  edge @splat.new_bindings -> @splatted.new_bindings
 }
 
 (binary_operator
