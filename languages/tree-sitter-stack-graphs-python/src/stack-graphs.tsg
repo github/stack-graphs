@@ -90,9 +90,24 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @node.before_scope
 }
 
+[
+  (identifier)
+  (expression)
+  (expression_list)
+  (primary_expression)
+  (pattern)
+  (pattern_list)
+  (parameter)
+] @node {
+  node @node.input
+  node @node.output
+}
+
 (comment) @node {
   node @node.after_scope
   node @node.before_scope
+  node @node.input
+  node @node.output
 }
 
 (_)@node {
@@ -106,13 +121,11 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   node @node.el_index
   node @node.file_def
   node @node.file_ref
-  node @node.input
   node @node.input_dot
   node @node.member_attrs
   node @node.members
   node @node.new_bindings
   node @node.new_bindings_pop
-  node @node.output
   node @node.output_args
   node @node.output_dot
   node @node.param_index
