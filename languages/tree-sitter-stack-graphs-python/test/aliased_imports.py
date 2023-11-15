@@ -24,7 +24,7 @@ print A, B.C
 #          ^ defined:
 
 print f.B
-#     ^ defined: 2, 15
+#     ^ defined: 3, 15
 #       ^ defined: 7
 
 print foo

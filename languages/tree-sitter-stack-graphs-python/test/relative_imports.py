@@ -6,7 +6,7 @@ from ..c import see
 from ..c.d import D
 
 print a.A
-#     ^ defined: 3, 24
+#     ^ defined: 3, 25
 #       ^ defined: 26
 
 print B.bee
@@ -52,9 +52,9 @@ G = 1
 
 # module
 from .g import G
-#              ^ defined: 49, 54
+#              ^ defined: 49
 
 from ..c import see
-#               ^ defined: 37, 57
+#               ^ defined: 37
 
 E = 1
