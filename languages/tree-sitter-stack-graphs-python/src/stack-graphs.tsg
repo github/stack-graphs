@@ -39,9 +39,63 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;; Nodes
 ;; ^^^^^
 
-(_)@node {
+(module) @node {
   node @node.after_scope
   node @node.before_scope
+}
+
+[
+  ; _simple_statement
+  (future_import_statement)
+  (import_statement)
+  (import_from_statement)
+  (print_statement)
+  (assert_statement)
+  (expression_statement)
+  (return_statement)
+  (delete_statement)
+  (raise_statement)
+  (pass_statement)
+  (break_statement)
+  (continue_statement)
+  (global_statement)
+  (nonlocal_statement)
+  (exec_statement)
+  ; _compund_statement
+  (if_statement)
+  (for_statement)
+  (while_statement)
+  (try_statement)
+  (with_statement)
+  (function_definition)
+  (class_definition)
+  (decorated_definition)
+  (match_statement)
+  ; block
+  (block)
+  ; statement clauses
+  (elif_clause)
+  (else_clause)
+  (case_clause)
+  (except_clause)
+  (finally_clause)
+  (with_clause)
+] @node {
+  node @node.after_scope
+  node @node.before_scope
+}
+
+(parameters) @node {
+  node @node.after_scope
+  node @node.before_scope
+}
+
+(comment) @node {
+  node @node.after_scope
+  node @node.before_scope
+}
+
+(_)@node {
   node @node.call
   node @node.call_drop
   node @node.called
