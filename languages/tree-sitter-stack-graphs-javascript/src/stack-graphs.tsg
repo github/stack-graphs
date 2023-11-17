@@ -230,7 +230,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;   a connected subgraph that is never the less never traversed.
 ;; - `GUARD:LABEL` - used for the names of labels
 ;; - `GUARD:MEMBER` - used for the members/fields/properties of objects
-;; - `GUARD:MODULE` - used for the final scope of the module
+;; - `GUARD:MODULE` - used for module names
 ;; - `GUARD:RETURN` - used for the AST nodes for values returned by a function
 ;;   in the function body
 ;; - `GUARD:THIS` - used for the implicit `this` argument of a function inside
@@ -289,7 +289,6 @@ inherit .return_or_yield
 (program)@prog {
 
     node prog_module_pop
-    node prog_module_scope
     node prog_exports_pop
     node prog_pkg_pop_guard
     node prog_pkg_push_guard
@@ -309,7 +308,12 @@ inherit .return_or_yield
     edge @prog.pkg_push -> prog_pkg_push_guard
     edge prog_pkg_push_guard -> ROOT_NODE
 
+    node module_guard_pop
+    attr (module_guard_pop) pop_symbol = "GUARD:MODULE"
+    edge @prog.pkg_pop -> module_guard_pop
+
     node prog_module_pop_start
+    edge module_guard_pop -> prog_module_pop_start
     var module_pop_end = prog_module_pop_start
     let module_name = (replace FILE_PATH "\.js$" "")
     scan module_name {
@@ -328,17 +332,12 @@ inherit .return_or_yield
     edge @prog.before_scope -> @prog.pkg_push
     edge @prog.before_scope -> @prog.hoist_point
 
-    attr (prog_module_scope) pop_symbol = "GUARD:MODULE"
-    edge @prog.pkg_pop -> prog_module_pop_start
-    edge module_pop_end -> prog_module_scope
-    edge prog_module_scope -> @prog.after_scope
 
     attr (prog_legacy_qname_guard) push_symbol = "GUARD:LEGACY_QNAME"
     edge @prog.before_scope -> prog_legacy_qname_guard
     edge prog_legacy_qname_guard -> ROOT_NODE
 
     attr (prog_module_pop) empty_source_span
-    attr (prog_module_scope) empty_source_span
     attr (@prog.exports) empty_source_span
     attr (prog_exports_pop) empty_source_span
     attr (@prog.before_scope) empty_source_span
@@ -832,7 +831,12 @@ inherit .return_or_yield
       ; relative import
       let name = (replace (path-normalize (path-join (path-dir FILE_PATH) $1)) "\.js$" "")
 
+      node module_guard_push
+      attr (module_guard_push) push_symbol = "GUARD:MODULE"
+      edge module_guard_push -> @source.pkg_push
+
       node source_push_end
+      edge source_push_end -> module_guard_push
       var push_start = source_push_end
       scan name {
         "([^/]+)/" {
@@ -856,7 +860,6 @@ inherit .return_or_yield
       attr (push_start) is_reference, source_node = @source
 
       edge source_push_guard_exports -> push_start
-      edge source_push_end -> @source.pkg_push
     }
     "^[\"']([^\./].*)[\"']$" {
       ; package import

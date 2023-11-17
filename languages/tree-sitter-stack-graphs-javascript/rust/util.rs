@@ -15,10 +15,14 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 
 pub const EXPORTS_GUARD: &str = "GUARD:EXPORTS";
+pub const MODULE_GUARD: &str = "GUARD:MODULE";
 pub const PKG_GUARD: &str = "GUARD:PKG";
 pub const PKG_INTERNAL_GUARD: &str = "GUARD:PKG_INTERNAL";
 
 pub fn add_debug_name(graph: &mut StackGraph, node: Handle<Node>, name: &str) {
+    if name.is_empty() {
+        return;
+    }
     let key = graph.add_string("name");
     let value = graph.add_string(name);
     graph.node_debug_info_mut(node).add(key, value);
