@@ -111,27 +111,21 @@ impl FileAnalyzer for NpmPackageAnalyzer {
             );
             add_edge(graph, pkg_name_pop, module_guard, 0);
 
-            // reach main exports directly via package name (with precedence)
-            //
-            //     [pop pkg_name] -1-> [pop "GUARD:EXPORTS"] -> [push "GUARD:EXPORTS"] -> [push main]* -> [push "GUARD:MODULE"] -> [push pkg_internal_name]
-            //
-            let exports_guard_pop = add_pop(
-                graph,
-                file,
-                pkg_name_pop,
-                EXPORTS_GUARD,
-                "exports_guard_pop",
-            );
+            // Common main
             let main = Some(npm_pkg.main)
                 .filter(|main| !main.is_empty())
                 .and_then(|main| NormalizedRelativePath::from_str(&main))
                 .map(|p| p.into_path_buf())
                 .unwrap_or(PathBuf::from("index"))
                 .with_extension("");
+
             let main_push = add_module_pushes(graph, file, &main, module_guard, "main_push");
-            let exports_guard_push =
-                add_push(graph, file, main_push, EXPORTS_GUARD, "exports_guard_push");
-            add_edge(graph, exports_guard_pop, exports_guard_push, 0);
+
+            // reach main directly via package name (with precedence)
+            //
+            //     [pop pkg_name] -1-> [push main]* -> [push pkg_internal_name]
+            //
+            add_edge(graph, pkg_name_pop, main_push, 0);
         }
 
         // reach dependencies via package internal name
