@@ -99,13 +99,24 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
 [
   (identifier)
-  (import_prefix)
-  (wildcard_import)
 ] @node {
   node @node.def
   node @node.def_dot
   node @node.ref
   node @node.ref_dot
+}
+
+[
+  (dotted_name)
+  (aliased_import)
+  (relative_import)
+  (wildcard_import)
+  (import_prefix)
+] @node {
+  node @node.after_scope
+  node @node.before_scope
+  node @node.def
+  node @node.ref
 }
 
 [
@@ -349,194 +360,252 @@ inherit .parent_module
 ;;
 ;; Imports
 
-;; import _.X
-(import_statement
-  name: (dotted_name
-    . (identifier) @root_name)) @stmt
-{
-  edge @stmt.after_scope -> @root_name.def
-  attr (@stmt.after_scope -> @root_name.def) precedence = 1
-  edge @root_name.ref -> ROOT_NODE
-}
+;; Import References
+;; ^^^^^^^^^^^^^^^^^
 
-;; import _.X as _
-(import_statement
-  name: (aliased_import
-    (dotted_name . (identifier) @root_name)))
-{
-  edge @root_name.ref -> ROOT_NODE
-}
+;;;; Dotted Names
+;;
+;; (dotted_name).ref              node to connect to to use the reference
+;; (dotted_name).before_scope     node to connect from to ensure the reference resolves
 
-;; from _ import _.X
-(import_from_statement
-  name: (dotted_name
-    . (identifier) @import_root_name)) @stmt
-{
-  edge @stmt.after_scope -> @import_root_name.def
-  attr (@stmt.after_scope -> @import_root_name.def) precedence = 1
-  edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.ref_dot) push_symbol = "."
-}
-
-;; from _ import _.X as _
-(import_from_statement
-  name: (aliased_import
-    (dotted_name
-      . (identifier) @import_root_name)))
-{
-  edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.ref_dot) push_symbol = "."
-}
-
-;; from X._ import _
-;; from ._.X import _
-;; from .._.X import _
-;; from . import _
-;; from .. import _
-(import_from_statement
-  module_name: [
-    (dotted_name (identifier) @prefix_leaf_name .)
-    (relative_import (dotted_name (identifier) @prefix_leaf_name .))
-    (relative_import (import_prefix) @prefix_leaf_name .)
-  ]
-  name: [
-    (dotted_name
-      . (identifier) @import_root_name)
-    (aliased_import
-      (dotted_name
-        . (identifier) @import_root_name))
-  ])
-{
-  edge @import_root_name.ref_dot -> @prefix_leaf_name.ref
-}
-
-;; from _ import _.X as Y
-;; import _.X as Y
+;; all names are references
 [
-  (import_from_statement
-    (aliased_import
-      name: (dotted_name (identifier) @name .)
-      alias: (identifier) @alias))
-  (import_statement
-    (aliased_import
-      name: (dotted_name (identifier) @name .)
-      alias: (identifier) @alias))
-] @stmt
-{
-  edge @stmt.after_scope -> @alias.def
-  edge @alias.def -> @name.ref
+  (import_statement        name:                       (dotted_name (identifier) @name))
+  (future_import_statement name:                       (dotted_name (identifier) @name))
+  (import_from_statement   name:                       (dotted_name (identifier) @name))
+  (import_statement        name: (aliased_import name: (dotted_name (identifier) @name)))
+  (future_import_statement name: (aliased_import name: (dotted_name (identifier) @name)))
+  (import_from_statement   name: (aliased_import name: (dotted_name (identifier) @name)))
+  (import_from_statement module_name:                  (dotted_name (identifier) @name))
+  (import_from_statement module_name: (relative_import (dotted_name (identifier) @name)))
+] {
+  attr (@name.ref) node_reference = @name
 }
 
-;; import _.X
-;; from _ import _.X
+;; references are chained
 [
-  (import_statement
-    name: (dotted_name
-      (identifier) @leaf_name .))
-  (import_from_statement
-    name: (dotted_name
-      (identifier) @leaf_name .))
-]
-{
-  edge @leaf_name.def -> @leaf_name.ref
+  (import_statement        name:                       (dotted_name (identifier) @left . (identifier) @right))
+  (future_import_statement name:                       (dotted_name (identifier) @left . (identifier) @right))
+  (import_from_statement   name:                       (dotted_name (identifier) @left . (identifier) @right))
+  (import_statement        name: (aliased_import name: (dotted_name (identifier) @left . (identifier) @right)))
+  (future_import_statement name: (aliased_import name: (dotted_name (identifier) @left . (identifier) @right)))
+  (import_from_statement   name: (aliased_import name: (dotted_name (identifier) @left . (identifier) @right)))
+  (import_from_statement module_name:                  (dotted_name (identifier) @left . (identifier) @right))
+  (import_from_statement module_name: (relative_import (dotted_name (identifier) @left . (identifier) @right)))
+] {
+  node push_dot
+  attr (push_dot) push_symbol = "."
+
+  edge @right.ref -> push_dot
+  edge push_dot -> @left.ref
 }
 
-;; .
-(relative_import
-  (import_prefix) @prefix
-  (#eq? @prefix ".")) @import
-{
-  edge @prefix.ref -> @import.parent_module
-}
-
-;; ..
-(relative_import
-  (import_prefix) @prefix
-  (#eq? @prefix "..")) @import
-{
-  edge @prefix.ref -> @import.grandparent_module
-}
-
-;; .X
-;; ..X
-(relative_import
-  (import_prefix) @prefix
-  (dotted_name
-    . (identifier) @name))
-{
-  attr (@name.ref_dot) push_symbol = "."
-  edge @name.ref -> @name.ref_dot
-  edge @name.ref_dot -> @prefix.ref
-}
-
-;; from .
+;; lookup first reference
 [
-  (import_from_statement
-    module_name: (relative_import
-      (dotted_name
-        (identifier) @parent_name
-        .
-        (identifier) @child_name)))
-  (import_from_statement
-    module_name: (dotted_name
-      (identifier) @parent_name
-      .
-      (identifier) @child_name))
-]
-{
-  attr (@child_name.ref_dot) push_symbol = "."
-  edge @child_name.ref -> @child_name.ref_dot
-  edge @child_name.ref_dot -> @parent_name.ref
+  (import_statement        name:                       (dotted_name . (identifier) @first) @dotted)
+  (future_import_statement name:                       (dotted_name . (identifier) @first) @dotted)
+  (import_from_statement   name:                       (dotted_name . (identifier) @first) @dotted)
+  (import_statement        name: (aliased_import name: (dotted_name . (identifier) @first) @dotted))
+  (future_import_statement name: (aliased_import name: (dotted_name . (identifier) @first) @dotted))
+  (import_from_statement   name: (aliased_import name: (dotted_name . (identifier) @first) @dotted))
+  (import_from_statement module_name:                  (dotted_name . (identifier) @first) @dotted)
+  (import_from_statement module_name: (relative_import (dotted_name . (identifier) @first) @dotted))
+] {
+  edge @first.ref -> @dotted.before_scope
 }
 
-;; from X._ import _
-(import_from_statement
-  module_name: (dotted_name
-    . (identifier) @root_name))
-{
-  edge @root_name.ref -> ROOT_NODE
-}
-
-;; from _.X import *
-(import_from_statement
-  module_name: (dotted_name
-    (identifier) @leaf_name .)
-  (wildcard_import) @star) @stmt
-{
-  edge @stmt.after_scope -> @star.ref_dot
-  attr (@stmt.after_scope -> @star.ref_dot) precedence = 1
-  edge @star.ref_dot -> @leaf_name.ref
-  attr (@star.ref_dot) push_symbol = "."
-}
-
-;; import _.X.Y._
-;; from _ import _.X.Y._
-;; from _ import _.X.Y._ as _
+;; expose last reference
 [
-  (import_statement
-    name: (dotted_name
-      (identifier) @parent_name
-      .
-      (identifier) @child_name))
-  (import_from_statement
-    name: (dotted_name
-      (identifier) @parent_name
-      .
-      (identifier) @child_name))
-  (import_from_statement
-    name: (aliased_import
-      name: (dotted_name
-        (identifier) @parent_name
-        .
-        (identifier) @child_name)))
-]
-{
-  edge @child_name.ref -> @child_name.ref_dot
-  edge @child_name.ref_dot -> @parent_name.ref
-  edge @parent_name.def -> @parent_name.def_dot
-  edge @parent_name.def_dot -> @child_name.def
-  attr (@parent_name.def_dot) pop_symbol = "."
-  attr (@child_name.ref_dot) push_symbol = "."
+  (import_statement        name:                       (dotted_name (identifier) @last .) @dotted)
+  (future_import_statement name:                       (dotted_name (identifier) @last .) @dotted)
+  (import_from_statement   name:                       (dotted_name (identifier) @last .) @dotted)
+  (import_statement        name: (aliased_import name: (dotted_name (identifier) @last .) @dotted))
+  (future_import_statement name: (aliased_import name: (dotted_name (identifier) @last .) @dotted))
+  (import_from_statement   name: (aliased_import name: (dotted_name (identifier) @last .) @dotted))
+  (import_from_statement module_name:                  (dotted_name (identifier) @last .) @dotted)
+  (import_from_statement module_name: (relative_import (dotted_name (identifier) @last .) @dotted))
+] {
+  edge @dotted.ref -> @last.ref
+}
+
+;;;; Aliased Import
+;;
+;; An aliased import behaves like its wrapped dotted_name as a reference
+;;
+;; (aliased_import).ref              node to connect to, to use the reference
+;; (aliased_import).before_scope     node to connect from to ensure the reference resolves
+
+(aliased_import name: (dotted_name) @dotted) @aliased {
+  edge @aliased.ref -> @dotted.ref
+  edge @dotted.before_scope -> @aliased.before_scope
+}
+
+;;;; Relative Import
+;;
+;; A relative import behaves like its wrapped dotted_name as a reference
+;;
+;; (relative_import).ref              node to connect to, to use the reference
+;; (relative_import).before_scope     node to connect from to ensure the reference resolves
+
+(relative_import (import_prefix) . (dotted_name) @dotted) @relative {
+  edge @relative.ref -> @dotted.ref
+
+  node push_dot
+  attr (push_dot) push_symbol = "."
+
+  edge @dotted.before_scope -> push_dot
+  edge push_dot -> @relative.before_scope
+}
+
+(relative_import (import_prefix) .) @relative {
+  edge @relative.ref -> @relative.before_scope
+}
+
+;;;; Wildcard Import
+;;
+;; A wildcard import simply passes through
+;;
+;; (wildcard_import).ref              node to connect to, to use the reference
+;; (wildcard_import).before_scope     node to connect from to ensure the reference resolves
+
+(wildcard_import) @wildcard {
+  edge @wildcard.ref -> @wildcard.before_scope
+}
+
+;;;; Import from
+;;
+;; The imported references are resolved in the from module
+
+[
+  (import_from_statement module_name: (_) @left name: (_) @right)
+  (import_from_statement module_name: (_) @left (wildcard_import) @right)
+] {
+  node push_dot
+  attr (push_dot) push_symbol = "."
+
+  edge @right.before_scope -> push_dot
+  edge push_dot -> @left.ref
+}
+
+;;;; Non-relative Imports
+;;
+;; Non-relative imports are resolved in the root scope
+
+[
+  (import_statement      name:        (_) @name)
+  (import_from_statement module_name: (dotted_name) @name)
+] {
+  edge @name.before_scope -> ROOT_NODE
+}
+
+;;;; Relative Imports
+;;
+;; Relative imports are resolved in scopes related to the current module
+
+;; . imports resolve in parent module scope
+(import_from_statement module_name: (relative_import (import_prefix) @prefix (#eq? @prefix ".")) @relative) {
+  edge @relative.before_scope -> @prefix.parent_module
+}
+
+;; .. imports resolve in grandparent module scope
+(import_from_statement module_name: (relative_import (import_prefix) @prefix (#eq? @prefix "..")) @relative) {
+  edge @relative.before_scope -> @prefix.grandparent_module
+}
+
+;;;; Future Imports
+;;
+;; We don't know the future, so we cannot connect references of future imports anywhere. Maybe one day?
+
+;; Import Definitions
+;; ^^^^^^^^^^^^^^^^^^
+
+;;;; Dotted Names & Aliased Imports
+;;
+;; (dotted_name).after_scope     node to connect to, to expose the definition
+;; (dotted_name).def             node to connect from, to give definition content
+
+;; unaliased names and aliases are definitions
+[
+  (import_statement        name:           (dotted_name (identifier) @name))
+  (future_import_statement name:           (dotted_name (identifier) @name))
+  (import_from_statement   name:           (dotted_name (identifier) @name))
+  (import_statement        name: (aliased_import alias: (identifier) @name))
+  (future_import_statement name: (aliased_import alias: (identifier) @name))
+  (import_from_statement   name: (aliased_import alias: (identifier) @name))
+] {
+  attr (@name.def) node_definition = @name
+}
+
+;; definitions are chained
+[
+  (import_statement        name: (dotted_name (identifier) @left . (identifier) @right))
+  (future_import_statement name: (dotted_name (identifier) @left . (identifier) @right))
+  (import_from_statement   name: (dotted_name (identifier) @left . (identifier) @right))
+] {
+  node pop_dot
+  attr (pop_dot) pop_symbol = "."
+
+  edge @left.def -> pop_dot
+  edge pop_dot -> @right.def
+}
+
+;; connect last definition
+[
+  (import_statement        name:           (dotted_name (identifier) @last .) @outer)
+  (future_import_statement name:           (dotted_name (identifier) @last .) @outer)
+  (import_from_statement   name:           (dotted_name (identifier) @last .) @outer)
+  (import_statement        name: (aliased_import alias: (identifier) @last  ) @outer)
+  (future_import_statement name: (aliased_import alias: (identifier) @last  ) @outer)
+  (import_from_statement   name: (aliased_import alias: (identifier) @last  ) @outer)
+] {
+  edge @last.def -> @outer.def
+}
+
+;; expose first definition
+[
+  (import_statement        name:           (dotted_name . (identifier) @first) @outer)
+  (future_import_statement name:           (dotted_name . (identifier) @first) @outer)
+  (import_from_statement   name:           (dotted_name . (identifier) @first) @outer)
+  (import_statement        name: (aliased_import alias:   (identifier) @first  ) @outer)
+  (future_import_statement name: (aliased_import alias:   (identifier) @first  ) @outer)
+  (import_from_statement   name: (aliased_import alias:   (identifier) @first  ) @outer)
+] {
+  edge @outer.after_scope -> @first.def
+}
+
+;;;; Wildcard Import
+;;
+;; Wildcard imports simply pass through
+
+(wildcard_import) @wildcard {
+  edge @wildcard.after_scope -> @wildcard.def
+}
+
+;;;; Import Definitions -> References
+;;
+;; The definitions introduced by imports are connected to the corresponding references
+
+[
+  (import_statement        name: (_) @name)
+  (future_import_statement name: (_) @name)
+  (import_from_statement   name: (_) @name)
+  (import_from_statement   (wildcard_import) @name)
+] {
+  edge @name.def -> @name.ref
+}
+
+;;;; Imports
+;;
+;; The definitions introduced by imports are visible after the import statement
+
+[
+  (import_statement        name: (_) @name)
+  (future_import_statement name: (_) @name)
+  (import_from_statement   name: (_) @name)
+  (import_from_statement   (wildcard_import) @name)
+] @stmt {
+  edge @stmt.after_scope -> @name.after_scope
+  attr (@stmt.after_scope -> @name.after_scope) precedence = 1
 }
 
 ;;
