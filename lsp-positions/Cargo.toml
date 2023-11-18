@@ -18,10 +18,12 @@ test = false
 
 [features]
 bincode = ["dep:bincode"]
+lua = ["dep:mlua"]
 tree-sitter = ["dep:tree-sitter"]
 
 [dependencies]
 memchr = "2.4"
+mlua = { version = "0.9", optional = true }
 tree-sitter = { version=">= 0.19", optional=true }
 unicode-segmentation = { version="1.8" }
 serde = { version="1", optional=true, features=["derive"] }

@@ -17,6 +17,31 @@ how to use this library.
 
 Notable changes for each version are documented in the [release notes](https://github.com/github/stack-graphs/blob/main/stack-graphs/CHANGELOG.md).
 
+## Lua bindings
+
+This crate includes optional Lua bindings, allowing you to construct stack
+graphs using Lua code.  Lua support is only enabled if you compile with the `lua`
+feature.  This feature is not enough on its own, because the `mlua` crate
+supports multiple Lua versions, and can either link against a system-installed
+copy of Lua, or build its own copy from vendored Lua source.  These choices are
+all controlled via additional features on the `mlua` crate.
+
+When building and testing this crate, make sure to provide all necessary
+features on the command line:
+
+``` console
+$ cargo test --features lua,mlua/lua54,mlua/vendored
+```
+
+When building a crate that depends on this crate, add a dependency on `mlua` so
+that you can set its feature flags:
+
+``` toml
+[dependencies]
+stack-graphs = { version="0.13", features=["lua"] }
+mlua = { version="0.9", features=["lua54", "vendored"] }
+```
+
 ## Credits
 
 Stack graphs are heavily based on the [_scope graphs_][scope graphs] framework

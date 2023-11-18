@@ -33,6 +33,9 @@ use memchr::memchr;
 
 use unicode_segmentation::UnicodeSegmentation as _;
 
+#[cfg(feature = "lua")]
+mod lua;
+
 fn grapheme_len(string: &str) -> usize {
     string.graphemes(true).count()
 }
