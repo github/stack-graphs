@@ -61,6 +61,278 @@
 //! stack-graphs = { version="0.13", features=["lua"] }
 //! mlua = { version="0.9", features=["lua54", "vendored"] }
 //! ```
+//!
+//! ## Lua API
+//!
+//! ### Stack graphs
+//!
+//! The following Lua methods are available on a stack graph instance:
+//!
+//! #### `file`
+//!
+//! ``` lua
+//! local file = graph:file(name)
+//! ```
+//!
+//! Returns the file in the stack graph with the given name, creating it if necessary.
+//!
+//! #### `jump_to_node`
+//!
+//! ``` lua
+//! local node = graph:jump_to_node()
+//! ```
+//!
+//! Returns the graph's jump-to node.
+//!
+//! #### `nodes`
+//!
+//! ``` lua
+//! for node in graph:nodes() do
+//!   -- whatever
+//! end
+//! ```
+//!
+//! Returns an iterator of every node in the stack graph.
+//!
+//! #### `root_node`
+//!
+//! ``` lua
+//! local node = graph:root_node()
+//! ```
+//!
+//! Returns the graph's root node.
+//!
+//! ### Files
+//!
+//! The following Lua methods are available on a file instance:
+//!
+//! #### `definition_node`
+//!
+//! ``` lua
+//! local node = file:definition_node(symbol)
+//! ```
+//!
+//! Adds a new definition node to this file.  `symbol` must be a string, or an instance that can be
+//! converted to a string via its `tostring` method.
+//!
+//! #### `drop_scopes_node`
+//!
+//! ``` lua
+//! local node = file:drop_scopes_node()
+//! ```
+//!
+//! Adds a new drop scopes node to this file.
+//!
+//! #### `exported_scope_node`
+//!
+//! ``` lua
+//! local node = file:exported_scope_node()
+//! ```
+//!
+//! Adds a new exported scope node to this file.
+//!
+//! #### `internal_scope_node`
+//!
+//! ``` lua
+//! local node = file:internal_scope_node()
+//! ```
+//!
+//! Adds a new internal scope node to this file.
+//!
+//! #### `pop_scoped_symbol_node`
+//!
+//! ``` lua
+//! local node = file:pop_scoped_symbol_node(symbol)
+//! ```
+//!
+//! Adds a new pop scoped symbol node to this file.  `symbol` must be a string, or an instance that
+//! can be converted to a string via its `tostring` method.
+//!
+//! #### `pop_symbol_node`
+//!
+//! ``` lua
+//! local node = file:pop_symbol_node(symbol)
+//! ```
+//!
+//! Adds a new pop symbol node to this file.  `symbol` must be a string, or an instance that can be
+//! converted to a string via its `tostring` method.
+//!
+//! #### `push_scoped_symbol_node`
+//!
+//! ``` lua
+//! local node = file:push_scoped_symbol_node(symbol, scope)
+//! ```
+//!
+//! Adds a new push scoped symbol node to this file.  `symbol` must be a string, or an instance
+//! that can be converted to a string via its `tostring` method.  `scope` must be an exported scope
+//! node.
+//!
+//! #### `push_symbol_node`
+//!
+//! ``` lua
+//! local node = file:push_symbol_node(symbol)
+//! ```
+//!
+//! Adds a new push symbol node to this file.  `symbol` must be a string, or an instance that can
+//! be converted to a string via its `tostring` method.
+//!
+//! #### `reference_node`
+//!
+//! ``` lua
+//! local node = file:reference_node(symbol)
+//! ```
+//!
+//! Adds a new definition node to this file.  `symbol` must be a string, or an instance that can be
+//! converted to a string via its `tostring` method.
+//!
+//! #### `scoped_definition_node`
+//!
+//! ``` lua
+//! local node = file:scoped_definition_node(symbol)
+//! ```
+//!
+//! Adds a new scoped definition node to this file.  `symbol` must be a string, or an instance that
+//! can be converted to a string via its `tostring` method.
+//!
+//! #### `scoped_reference_node`
+//!
+//! ``` lua
+//! local node = file:scoped_reference_node(symbol)
+//! ```
+//!
+//! Adds a new scoped reference node to this file.  `symbol` must be a string, or an instance that
+//! can be converted to a string via its `tostring` method.
+//!
+//! ### Nodes
+//!
+//! The following Lua methods are available on a node instance:
+//!
+//! #### `add_edge_from`
+//!
+//! ``` lua
+//! node:add_edge_from(other, precedence)
+//! ```
+//!
+//! Adds an edge from another node to this node.  `precedence` is optional; it defaults to 0 if not
+//! given.
+//!
+//! #### `add_edge_to`
+//!
+//! ``` lua
+//! node:add_edge_to(other, precedence)
+//! ```
+//!
+//! Adds an edge from this node to another node.  `precedence` is optional; it defaults to 0 if not
+//! given.
+//!
+//! #### `debug_info`
+//!
+//! ``` lua
+//! let info = node:debug_info()
+//! ```
+//!
+//! Returns a Lua table containing all of the debug info added to this node.
+//!
+//! #### `definiens_span`
+//!
+//! ``` lua
+//! let span = node:definiens_span()
+//! ```
+//!
+//! Returns the definiens span of this node.  (See [`set_definiens_span`](#set_definiens_span) for
+//! the structure of a span.)
+//!
+//! #### `local_id`
+//!
+//! ``` lua
+//! let local_id = node:local_id()
+//! ```
+//!
+//! Returns the local ID of this node within its file.
+//!
+//! #### `set_debug_info`
+//!
+//! ``` lua
+//! node:add_debug_info(key, value)
+//! ```
+//!
+//! Adds a new debug info to this node.  `key` and `value` must each be a string, or an instance
+//! that can be converted to a string via its `tostring` method.
+//!
+//! #### `set_definiens_span`
+//!
+//! ``` lua
+//! node:set_definiens_span {
+//!   start = {
+//!     line = 1,
+//!     column = { utf8_offset = 1, utf16_offset = 1, grapheme_offset = 1 },
+//!     -- UTF-8 offsets within the source file of the line containing the span
+//!     containing_line = { start = 1, end = 14 },
+//!     -- UTF-8 offsets within the source file of the line containing the span, with leading and
+//!     -- trailing whitespace removed
+//!     trimmed_line = { start = 2, end = 12 },
+//!   },
+//!   end = {
+//!     line = 2,
+//!     column = { utf8_offset = 12, utf16_offset = 10, grapheme_offset = 8 },
+//!     containing_line = { start = 1, end = 14 },
+//!     trimmed_line = { start = 1, end = 14 },
+//!   },
+//! }
+//! ```
+//!
+//! Sets the definiens span of this node.  All entries in the table are optional, and default to 0
+//! if not provided.
+//!
+//! #### `set_span`
+//!
+//! ``` lua
+//! node:set_span {
+//!   start = {
+//!     line = 1,
+//!     column = { utf8_offset = 1, utf16_offset = 1, grapheme_offset = 1 },
+//!     -- UTF-8 offsets within the source file of the line containing the span
+//!     containing_line = { start = 1, end = 14 },
+//!     -- UTF-8 offsets within the source file of the line containing the span, with leading and
+//!     -- trailing whitespace removed
+//!     trimmed_line = { start = 2, end = 12 },
+//!   },
+//!   end = {
+//!     line = 2,
+//!     column = { utf8_offset = 12, utf16_offset = 10, grapheme_offset = 8 },
+//!     containing_line = { start = 1, end = 14 },
+//!     trimmed_line = { start = 1, end = 14 },
+//!   },
+//! }
+//! ```
+//!
+//! Sets the span of this node.  All entries in the table are optional, and default to 0 if not
+//! provided.
+//!
+//! #### `set_syntax_type`
+//!
+//! ``` lua
+//! node:set_syntax_type(syntax_type)
+//! ```
+//!
+//! Sets the syntax type of this node.  `syntax_type` must be a string, or an instance that can be
+//! converted to a string via its `tostring` method.
+//!
+//! #### `span`
+//!
+//! ``` lua
+//! let span = node:span()
+//! ```
+//!
+//! Returns the span of this node.  (See [`set_span`](#set_span) for the structure of a span.)
+//!
+//! #### `syntax_type`
+//!
+//! ``` lua
+//! let syntax_type = node:syntax_type()
+//! ```
+//!
+//! Returns the syntax type of this node.
 
 // Implementation notes: Stack graphs, files, and nodes can live inside the Lua interpreter as
 // objects.  They are each wrapped in a userdata, with a metatable defining the methods that are
