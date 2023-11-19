@@ -586,7 +586,7 @@ pub struct Builder<'a> {
     graph: Graph<'a>,
     remapped_nodes: HashMap<usize, NodeID>,
     injected_node_count: usize,
-    span_calculator: SpanCalculator<'a>,
+    span_calculator: SpanCalculator,
 }
 
 impl<'a> Builder<'a> {
@@ -596,7 +596,7 @@ impl<'a> Builder<'a> {
         file: Handle<File>,
         source: &'a str,
     ) -> Self {
-        let span_calculator = SpanCalculator::new(source);
+        let span_calculator = SpanCalculator::new();
         Builder {
             sgl,
             stack_graph,
@@ -1153,7 +1153,7 @@ impl<'a> Builder<'a> {
 
         if let Some(source_node) = node.attributes.get(SOURCE_NODE_ATTR) {
             let source_node = &self.graph[source_node.as_syntax_node_ref()?];
-            let mut source_span = self.span_calculator.for_node(source_node);
+            let mut source_span = self.span_calculator.for_node(&self.source, source_node);
             if match node.attributes.get(EMPTY_SOURCE_SPAN_ATTR) {
                 Some(empty_source_span) => empty_source_span.as_boolean()?,
                 None => false,
@@ -1188,7 +1188,7 @@ impl<'a> Builder<'a> {
             Some(definiens_node) => &self.graph[definiens_node.as_syntax_node_ref()?],
             None => return Ok(()),
         };
-        let definiens_span = self.span_calculator.for_node(definiens_node);
+        let definiens_span = self.span_calculator.for_node(&self.source, definiens_node);
         let source_info = self.stack_graph.source_info_mut(node_handle);
         source_info.definiens_span = definiens_span;
         Ok(())

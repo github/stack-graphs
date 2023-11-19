@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.4.0 -- unreleased
+
+### Changed
+
+- `SpanCalculator` no longer holds a reference to the source file that you're
+  calculating positions within.  Instead, you must pass the source text each
+  time you calculate a position.  This allows us to remove the lifetime
+  parameter from the type.
+
 ## v0.3.2 -- 2023-06-08
 
 ### Added

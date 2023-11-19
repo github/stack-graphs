@@ -29,7 +29,7 @@ To use this library, add the following to your `Cargo.toml`:
 
 ``` toml
 [dependencies]
-lsp-positions = "0.3"
+lsp-positions = "0.4"
 ```
 
 Check out our [documentation](https://docs.rs/lsp-positions/) for more details

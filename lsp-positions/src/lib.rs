@@ -211,18 +211,26 @@ impl Offset {
     }
 }
 
-/// A substring and information about where that substring occurs in a larger string.  (Most often,
-/// this is a “line” and information about where that line occurs within a “file”.)
+/// Information about where that substring occurs in a larger string.  (Most often, this is a
+/// “line” and information about where that line occurs within a “file”.)
 #[derive(Clone)]
-pub struct PositionedSubstring<'a> {
-    /// The content of the substring
-    pub content: &'a str,
+pub struct Bounds {
     /// The UTF-8 byte offsets of the beginning and end of the substring within the larger string
     pub utf8_bounds: Range<usize>,
     /// The number of UTF-16 code units in the substring
     pub utf16_length: usize,
     /// The number of graphemes in the substring
     pub grapheme_length: usize,
+}
+
+/// A substring and information about where that substring occurs in a larger string.  (Most often,
+/// this is a “line” and information about where that line occurs within a “file”.)
+#[derive(Clone)]
+pub struct PositionedSubstring<'a> {
+    /// The content of the substring
+    pub content: &'a str,
+    /// The location of the substring within the larger string
+    pub bounds: Bounds,
 }
 
 impl<'a> PositionedSubstring<'a> {
@@ -232,9 +240,11 @@ impl<'a> PositionedSubstring<'a> {
         let substring = &string[utf8_bounds.clone()];
         PositionedSubstring {
             content: substring,
-            utf8_bounds,
-            utf16_length: utf16_len(substring),
-            grapheme_length: grapheme_len(substring),
+            bounds: Bounds {
+                utf8_bounds,
+                utf16_length: utf16_len(substring),
+                grapheme_length: grapheme_len(substring),
+            },
         }
     }
 
@@ -255,12 +265,14 @@ impl<'a> PositionedSubstring<'a> {
         let length = Offset::string_length(line);
         PositionedSubstring {
             content: line,
-            utf8_bounds: Range {
-                start: line_utf8_offset,
-                end: line_utf8_offset + length.utf8_offset,
+            bounds: Bounds {
+                utf8_bounds: Range {
+                    start: line_utf8_offset,
+                    end: line_utf8_offset + length.utf8_offset,
+                },
+                utf16_length: length.utf16_offset,
+                grapheme_length: length.grapheme_offset,
             },
-            utf16_length: length.utf16_offset,
-            grapheme_length: length.grapheme_offset,
         }
     }
 
@@ -272,7 +284,7 @@ impl<'a> PositionedSubstring<'a> {
                 return None;
             }
             let next = PositionedSubstring::from_line(string, next_utf8_offset);
-            next_utf8_offset = next.utf8_bounds.end + 1;
+            next_utf8_offset = next.bounds.utf8_bounds.end + 1;
             Some(next)
         })
     }
@@ -303,20 +315,20 @@ impl<'a> PositionedSubstring<'a> {
         let right_whitespace = &trimmed_left[trailing_whitespace..];
 
         self.content = trimmed;
-        self.utf8_bounds.start += left_whitespace.len();
-        self.utf8_bounds.end -= right_whitespace.len();
-        self.utf16_length -= utf16_len(left_whitespace);
-        self.utf16_length -= utf16_len(right_whitespace);
-        self.grapheme_length -= grapheme_len(left_whitespace);
-        self.grapheme_length -= grapheme_len(right_whitespace);
+        self.bounds.utf8_bounds.start += left_whitespace.len();
+        self.bounds.utf8_bounds.end -= right_whitespace.len();
+        self.bounds.utf16_length -= utf16_len(left_whitespace);
+        self.bounds.utf16_length -= utf16_len(right_whitespace);
+        self.bounds.grapheme_length -= grapheme_len(left_whitespace);
+        self.bounds.grapheme_length -= grapheme_len(right_whitespace);
     }
 }
 
 /// Automates the construction of [`Span`][] instances for content within a string.
-pub struct SpanCalculator<'a> {
-    string: &'a str,
-    containing_line: Option<PositionedSubstring<'a>>,
-    trimmed_line: Option<PositionedSubstring<'a>>,
+pub struct SpanCalculator {
+    line: *const u8,
+    containing_line: Option<Bounds>,
+    trimmed_line: Option<Bounds>,
     columns: Vec<Offset>,
 }
 
@@ -327,27 +339,28 @@ pub struct SpanCalculator<'a> {
 // they're in row order is just as much work as recalculating the UTF16 column offsets if we ever
 // revisit a line!
 
-impl<'a> SpanCalculator<'a> {
-    /// Creates a new span calculator for locations within the given string.
-    pub fn new(string: &'a str) -> SpanCalculator<'a> {
+impl SpanCalculator {
+    /// Creates a new span calculator.
+    pub fn new() -> SpanCalculator {
         SpanCalculator {
-            string,
+            line: std::ptr::null(),
             containing_line: None,
             trimmed_line: None,
             columns: Vec::new(),
         }
     }
 
-    /// Constructs a [`Position`][] instance for a particular line and column in the string.
+    /// Constructs a [`Position`][] instance for a particular line and column in a string.
     /// You must provide the 0-indexed line number, the byte offset of the line within the string,
     /// and the UTF-8 byte offset of the character within the line.
     pub fn for_line_and_column(
         &mut self,
+        string: &str,
         line: usize,
         line_utf8_offset: usize,
         column_utf8_offset: usize,
     ) -> Position {
-        self.replace_current_line(line_utf8_offset);
+        self.replace_current_line(string, line_utf8_offset);
         Position {
             line: line,
             column: *self.for_utf8_offset(column_utf8_offset),
@@ -358,9 +371,9 @@ impl<'a> SpanCalculator<'a> {
 
     /// Constructs a [`Span`][] instance for a tree-sitter node.
     #[cfg(feature = "tree-sitter")]
-    pub fn for_node(&mut self, node: &tree_sitter::Node) -> Span {
-        let start = self.position_for_node(node.start_byte(), node.start_position());
-        let end = self.position_for_node(node.end_byte(), node.end_position());
+    pub fn for_node(&mut self, string: &str, node: &tree_sitter::Node) -> Span {
+        let start = self.position_for_node(string, node.start_byte(), node.start_position());
+        let end = self.position_for_node(string, node.end_byte(), node.end_position());
         Span { start, end }
     }
 
@@ -368,13 +381,14 @@ impl<'a> SpanCalculator<'a> {
     #[cfg(feature = "tree-sitter")]
     pub fn position_for_node(
         &mut self,
+        string: &str,
         byte_offset: usize,
         position: tree_sitter::Point,
     ) -> Position {
         // Since we know the byte offset of the node within the file, and of the node within the
         // line, subtracting gives us the offset of the line within the file.
         let line_utf8_offset = byte_offset - position.column;
-        self.for_line_and_column(position.row, line_utf8_offset, position.column)
+        self.for_line_and_column(string, position.row, line_utf8_offset, position.column)
     }
 
     /// Constructs a [`Position`][] instance for a particular line and column in the string.
@@ -382,11 +396,12 @@ impl<'a> SpanCalculator<'a> {
     /// and the grapheme offset of the character within the line.
     pub fn for_line_and_grapheme(
         &mut self,
+        string: &str,
         line: usize,
         line_utf8_offset: usize,
         column_grapheme_offset: usize,
     ) -> Position {
-        self.replace_current_line(line_utf8_offset);
+        self.replace_current_line(string, line_utf8_offset);
         Position {
             line: line,
             column: *self.for_grapheme_offset(column_grapheme_offset),
@@ -397,19 +412,20 @@ impl<'a> SpanCalculator<'a> {
 
     /// Updates our internal state to represent the information about the line that starts at a
     /// particular byte offset within the file.
-    fn replace_current_line(&mut self, line_utf8_offset: usize) {
+    fn replace_current_line(&mut self, string: &str, line_utf8_offset: usize) {
         if let Some(containing_line) = &self.containing_line {
-            if containing_line.utf8_bounds.start == line_utf8_offset {
+            if self.line == string.as_ptr() && containing_line.utf8_bounds.start == line_utf8_offset
+            {
                 return;
             }
         }
-        let line = PositionedSubstring::from_line(self.string, line_utf8_offset);
+        let line = PositionedSubstring::from_line(string, line_utf8_offset);
         self.columns.clear();
         self.columns.extend(Offset::all_chars(line.content));
         let mut trimmed = line.clone();
         trimmed.trim_whitespace();
-        self.containing_line = Some(line);
-        self.trimmed_line = Some(trimmed);
+        self.containing_line = Some(line.bounds);
+        self.trimmed_line = Some(trimmed.bounds);
     }
 
     /// Returns the offset of the character at a particular UTF-8 offset in the line.

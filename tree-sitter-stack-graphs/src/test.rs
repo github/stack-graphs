@@ -286,7 +286,7 @@ impl Test {
     ///   in the actual content are preserved between the test file source and
     ///   the test source.
     fn push_whitespace_for(line: &PositionedSubstring, into: &mut String) {
-        (0..line.utf8_bounds.end).for_each(|_| into.push_str(" "));
+        (0..line.bounds.utf8_bounds.end).for_each(|_| into.push_str(" "));
     }
 }
 
@@ -298,10 +298,10 @@ impl TestFragment {
     {
         self.assertions.clear();
 
-        let mut current_line_span_calculator = SpanCalculator::new(&self.source);
+        let mut current_line_span_calculator = SpanCalculator::new();
         let mut last_regular_line: Option<PositionedSubstring> = None;
         let mut last_regular_line_number = None;
-        let mut last_regular_line_span_calculator = SpanCalculator::new(&self.source);
+        let mut last_regular_line_span_calculator = SpanCalculator::new();
         for (current_line_number, current_line) in
             PositionedSubstring::lines_iter(&self.source).enumerate()
         {
@@ -319,13 +319,14 @@ impl TestFragment {
                 let column_utf8_offset = carret_match.start();
                 let column_grapheme_offset = current_line_span_calculator
                     .for_line_and_column(
+                        &self.source,
                         current_line_number,
-                        current_line.utf8_bounds.start,
+                        current_line.bounds.utf8_bounds.start,
                         column_utf8_offset,
                     )
                     .column
                     .grapheme_offset;
-                if column_grapheme_offset >= last_regular_line.grapheme_length {
+                if column_grapheme_offset >= last_regular_line.bounds.grapheme_length {
                     return Err(TestError::InvalidColumn(
                         current_line_number,
                         column_grapheme_offset,
@@ -333,8 +334,9 @@ impl TestFragment {
                     ));
                 }
                 let position = last_regular_line_span_calculator.for_line_and_grapheme(
+                    &self.source,
                     last_regular_line_number,
-                    last_regular_line.utf8_bounds.start,
+                    last_regular_line.bounds.utf8_bounds.start,
                     column_grapheme_offset,
                 );
                 let source = AssertionSource {
