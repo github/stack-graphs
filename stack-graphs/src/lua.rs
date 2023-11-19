@@ -31,7 +31,7 @@
 //!
 //! let mut graph = StackGraph::new();
 //! lua.scope(|scope| {
-//!     let graph = scope.create_userdata_ref_mut(&mut graph);
+//!     let graph = graph.lua_ref_mut(&scope)?;
 //!     process_graph.call(graph)
 //! })?;
 //! assert_eq!(graph.iter_nodes().count(), 3);
@@ -401,6 +401,8 @@ use std::num::NonZeroU32;
 use controlled_option::ControlledOption;
 use lsp_positions::Span;
 use mlua::AnyUserData;
+use mlua::Lua;
+use mlua::Scope;
 use mlua::UserData;
 use mlua::UserDataMethods;
 
@@ -409,6 +411,35 @@ use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
+
+impl StackGraph {
+    // Returns a Lua wrapper for this stack graph.  Takes ownership of the stack graph.  If you
+    // want to access the stack graph after your Lua code is done with it, use [`lua_ref_mut`]
+    // instead.
+    pub fn lua_value<'lua>(self, lua: &'lua Lua) -> Result<AnyUserData<'lua>, mlua::Error> {
+        lua.create_userdata(self)
+    }
+
+    // Returns a scoped Lua wrapper for this stack graph.
+    pub fn lua_ref_mut<'lua, 'scope>(
+        &'scope mut self,
+        scope: &Scope<'lua, 'scope>,
+    ) -> Result<AnyUserData<'lua>, mlua::Error> {
+        scope.create_userdata_ref_mut(self)
+    }
+
+    // Returns a scoped Lua wrapper for a file in this stack graph.
+    pub fn file_lua_ref_mut<'lua, 'scope>(
+        &'scope mut self,
+        file: Handle<File>,
+        scope: &Scope<'lua, 'scope>,
+    ) -> Result<AnyUserData<'lua>, mlua::Error> {
+        let graph_ud = self.lua_ref_mut(scope)?;
+        let file_ud = scope.create_userdata(file)?;
+        file_ud.set_user_value(graph_ud)?;
+        Ok(file_ud)
+    }
+}
 
 impl UserData for StackGraph {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {

@@ -16,7 +16,7 @@ trait CheckLua {
 impl CheckLua for mlua::Lua {
     fn check(&self, graph: &mut StackGraph, chunk: &str) -> Result<(), mlua::Error> {
         self.scope(|scope| {
-            let graph = scope.create_userdata_ref_mut(graph);
+            let graph = graph.lua_ref_mut(&scope)?;
             self.load(chunk).set_name("test chunk").call(graph)
         })
     }
