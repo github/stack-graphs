@@ -259,6 +259,8 @@ fn can_create_all_node_types_from_lua() -> Result<(), anyhow::Error> {
               local root = graph:root_node()
               local jump_to = graph:jump_to_node()
               local file = graph:file("test.py")
+              local file_root = file:root_node()
+              local file_jump_to = file:jump_to_node()
               local drop_scopes = file:drop_scopes_node()
               local exported = file:exported_scope_node()
               local internal = file:internal_scope_node()

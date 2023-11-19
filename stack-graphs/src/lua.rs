@@ -139,6 +139,14 @@
 //!
 //! Adds a new internal scope node to this file.
 //!
+//! #### `jump_to_node`
+//!
+//! ``` lua
+//! local node = file:jump_to_node()
+//! ```
+//!
+//! Returns the root node of the graph containing this file.
+//!
 //! #### `pop_scoped_symbol_node`
 //!
 //! ``` lua
@@ -184,6 +192,14 @@
 //!
 //! Adds a new definition node to this file.  `symbol` must be a string, or an instance that can be
 //! converted to a string via its `tostring` method.
+//!
+//! #### `root_node`
+//!
+//! ``` lua
+//! local node = file:root_node()
+//! ```
+//!
+//! Returns the root node of the graph containing this file.
 //!
 //! #### `scoped_definition_node`
 //!
@@ -490,6 +506,14 @@ impl UserData for Handle<File> {
             Ok(node_ud)
         });
 
+        methods.add_function("jump_to_node", |l, file_ud: AnyUserData| {
+            let graph_ud = file_ud.user_value::<AnyUserData>()?;
+            let node = StackGraph::jump_to_node();
+            let node_ud = l.create_userdata(node)?;
+            node_ud.set_user_value(graph_ud)?;
+            Ok(node_ud)
+        });
+
         methods.add_function(
             "pop_scoped_symbol_node",
             |l, (file_ud, symbol): (AnyUserData, String)| {
@@ -594,6 +618,14 @@ impl UserData for Handle<File> {
                 Ok(node_ud)
             },
         );
+
+        methods.add_function("root_node", |l, file_ud: AnyUserData| {
+            let graph_ud = file_ud.user_value::<AnyUserData>()?;
+            let node = StackGraph::root_node();
+            let node_ud = l.create_userdata(node)?;
+            node_ud.set_user_value(graph_ud)?;
+            Ok(node_ud)
+        });
 
         methods.add_function(
             "scoped_definition_node",
