@@ -1408,7 +1408,7 @@ pub struct sg_stitcher_config {
 
 impl Into<StitcherConfig> for sg_stitcher_config {
     fn into(self) -> StitcherConfig {
-        unsafe { std::mem::transmute(self) }
+        StitcherConfig::default().with_detect_similar_paths(self.detect_similar_paths)
     }
 }
 

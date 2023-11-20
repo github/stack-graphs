@@ -1242,7 +1242,6 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 }
 
 /// Configuration for partial path stitchers.
-#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct StitcherConfig {
     /// Enables similar path detection during path stitching.
