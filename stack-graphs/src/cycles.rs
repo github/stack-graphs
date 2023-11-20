@@ -50,12 +50,8 @@ use crate::stitching::ToAppendable;
 
 /// Helps detect similar paths in the path-finding algorithm.
 pub struct SimilarPathDetector<P> {
-    paths: HashMap<PathKey, SmallVec<[SimilarPath<P>; 4]>>,
-}
-
-struct SimilarPath<P> {
-    path: P,
-    count: usize,
+    paths: HashMap<PathKey, SmallVec<[P; 4]>>,
+    counts: Option<HashMap<PathKey, SmallVec<[usize; 4]>>>,
 }
 
 #[doc(hidden)]
@@ -98,13 +94,23 @@ where
     pub fn new() -> SimilarPathDetector<P> {
         SimilarPathDetector {
             paths: HashMap::new(),
+            counts: None,
         }
     }
 
-    /// Determines whether we should process this path during the path-finding algorithm.  If we have seen
-    /// a path with the same start and end node, and the same pre- and postcondition, then we return false.
-    /// Otherwise, we return true.
-    pub fn has_similar_path<Cmp>(
+    /// Set whether to collect statistics for this similar path detector.
+    pub fn set_collect_stats(&mut self, collect_stats: bool) {
+        if !collect_stats {
+            self.counts = None;
+        } else if self.counts.is_none() {
+            self.counts = Some(HashMap::new());
+        }
+    }
+
+    /// Add a apth, and determine whether we should process this path during the path-finding algorithm.
+    /// If we have seen a path with the same start and end node, and the same pre- and postcondition, then
+    /// we return false. Otherwise, we return true.
+    pub fn add_path<Cmp>(
         &mut self,
         _graph: &StackGraph,
         arena: &mut P::Arena,
@@ -119,22 +125,31 @@ where
         // Iterate through the bucket to determine if this paths is better than any already known
         // path. Note that the bucket might be modified during the loop if a path is removed which
         // is shadowed by the new path!
-        let possibly_similar_paths = self.paths.entry(key).or_default();
+        let possibly_similar_paths = self.paths.entry(key.clone()).or_default();
+        let mut possible_similar_counts = self
+            .counts
+            .as_mut()
+            .map(move |cs| cs.entry(key).or_default());
         let mut idx = 0;
         let mut count = 0;
         while idx < possibly_similar_paths.len() {
             let other_path = &mut possibly_similar_paths[idx];
-            match cmp(arena, path, &other_path.path) {
+            match cmp(arena, path, other_path) {
                 Some(Ordering::Less) => {
                     // the new path is better, remove the old one
-                    count += other_path.count;
                     possibly_similar_paths.remove(idx);
+                    if let Some(possible_similar_counts) = possible_similar_counts.as_mut() {
+                        count += possible_similar_counts[idx];
+                        possible_similar_counts.remove(idx);
+                    }
                     // keep `idx` which now points to the next element
                     continue;
                 }
                 Some(_) => {
                     // the new path is equal or worse, and ignored
-                    other_path.count += 1;
+                    if let Some(possible_similar_counts) = possible_similar_counts {
+                        possible_similar_counts[idx] += 1;
+                    }
                     return true;
                 }
                 None => {
@@ -144,10 +159,10 @@ where
         }
 
         // this path is either new or better, keep it
-        possibly_similar_paths.push(SimilarPath {
-            path: path.clone(),
-            count,
-        });
+        possibly_similar_paths.push(path.clone());
+        if let Some(possible_similar_counts) = possible_similar_counts {
+            possible_similar_counts.push(count);
+        }
         false
     }
 
@@ -159,10 +174,12 @@ where
     // Returns the distribution of similar path counts.
     pub fn stats(&self) -> SimilarPathStats {
         let mut stats = SimilarPathStats::default();
-        for bucket in self.paths.values() {
-            stats.similar_path_bucket_size.record(bucket.len());
-            for path in bucket.iter() {
-                stats.similar_path_count.record(path.count);
+        if let Some(counts) = &self.counts {
+            for bucket in counts.values() {
+                stats.similar_path_bucket_size.record(bucket.len());
+                for count in bucket.iter() {
+                    stats.similar_path_count.record(*count);
+                }
             }
         }
         stats

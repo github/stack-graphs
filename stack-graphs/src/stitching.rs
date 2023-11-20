@@ -896,7 +896,9 @@ impl<H> ForwardPartialPathStitcher<H> {
         if !detect_similar_paths {
             self.similar_path_detector = None;
         } else if self.similar_path_detector.is_none() {
-            self.similar_path_detector = Some(SimilarPathDetector::new());
+            let mut similar_path_detector = SimilarPathDetector::new();
+            similar_path_detector.set_collect_stats(self.stats.is_some());
+            self.similar_path_detector = Some(similar_path_detector);
         }
     }
 
@@ -925,6 +927,9 @@ impl<H> ForwardPartialPathStitcher<H> {
             let mut stats = Stats::default();
             stats.initial_paths.record(self.initial_paths);
             self.stats = Some(stats);
+        }
+        if let Some(similar_path_detector) = &mut self.similar_path_detector {
+            similar_path_detector.set_collect_stats(collect_stats);
         }
     }
 
@@ -1050,7 +1055,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             if check_similar_path {
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {
-                    if similar_path_detector.has_similar_path(
+                    if similar_path_detector.add_path(
                         graph,
                         partials,
                         &new_partial_path,
