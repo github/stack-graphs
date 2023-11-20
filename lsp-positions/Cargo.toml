@@ -18,13 +18,19 @@ test = false
 
 [features]
 bincode = ["dep:bincode"]
-lua = ["dep:mlua"]
+lua = ["tree-sitter", "dep:mlua", "dep:mlua-tree-sitter"]
 tree-sitter = ["dep:tree-sitter"]
 
 [dependencies]
 memchr = "2.4"
 mlua = { version = "0.9", optional = true }
+mlua-tree-sitter = { version = "0.1", git="https://github.com/dcreager/mlua-tree-sitter", optional = true }
 tree-sitter = { version=">= 0.19", optional=true }
 unicode-segmentation = { version="1.8" }
 serde = { version="1", optional=true, features=["derive"] }
 bincode = { version="2.0.0-rc.3", optional=true }
+
+[dev-dependencies]
+anyhow = { version = "1.0" }
+lua-helpers = { path = "../lua-helpers" }
+tree-sitter-python = { version = "0.19.1" }

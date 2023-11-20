@@ -9,6 +9,9 @@ use unicode_segmentation::UnicodeSegmentation as _;
 
 use lsp_positions::Offset;
 
+#[cfg(feature = "lua")]
+mod lua;
+
 fn check_offsets(line: &str) {
     let offsets = Offset::all_chars(line).collect::<Vec<_>>();
     assert!(!offsets.is_empty());
