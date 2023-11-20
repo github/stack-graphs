@@ -17,7 +17,6 @@ use stack_graphs::partial::PartialScopedSymbol;
 use stack_graphs::partial::PartialSymbolStack;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
-use stack_graphs::stitching::SymbolStackKey;
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -53,8 +52,12 @@ fn check_root_partial_paths(
     }
 
     let mut results = Vec::<Handle<PartialPath>>::new();
-    let key = SymbolStackKey::from_partial_symbol_stack(&mut partials, &mut db, symbol_stack);
-    db.find_candidate_partial_paths_from_root(graph, &mut partials, Some(key), &mut results);
+    db.find_candidate_partial_paths_from_root(
+        graph,
+        &mut partials,
+        Some(symbol_stack),
+        &mut results,
+    );
 
     let actual_partial_paths = results
         .into_iter()

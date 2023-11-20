@@ -7,6 +7,7 @@
 
 use bincode::error::DecodeError;
 use bincode::error::EncodeError;
+use itertools::Itertools;
 use rusqlite::functions::FunctionFlags;
 use rusqlite::types::ValueRef;
 use rusqlite::Connection;
@@ -33,7 +34,7 @@ use crate::stitching::ForwardCandidates;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
-const VERSION: usize = 5;
+const VERSION: usize = 6;
 
 const SCHEMA: &str = r#"
         CREATE TABLE metadata (
@@ -616,9 +617,12 @@ impl SQLiteReader {
             " * Load extensions from root with symbol stack {}",
             symbol_stack.display(&self.graph, &mut self.partials)
         );
-        let symbol_stack_prefixes =
-            symbol_stack.storage_key_prefixes(&self.graph, &mut self.partials);
-        for symbol_stack in symbol_stack_prefixes {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT file,value from root_paths WHERE symbol_stack LIKE ? ESCAPE ?",
+        )?;
+        let (symbol_stack_patterns, escape) =
+            symbol_stack.storage_key_patterns(&self.graph, &mut self.partials);
+        for symbol_stack in symbol_stack_patterns {
             copious_debugging!(
                 " * Load extensions from root with prefix symbol stack {}",
                 symbol_stack
@@ -627,10 +631,7 @@ impl SQLiteReader {
                 copious_debugging!("   > Already loaded");
                 continue;
             }
-            let mut stmt = self
-                .conn
-                .prepare_cached("SELECT file,value from root_paths WHERE symbol_stack = ?")?;
-            let paths = stmt.query_map([symbol_stack], |row| {
+            let paths = stmt.query_map([symbol_stack, escape.clone()], |row| {
                 let file = row.get::<_, String>(0)?;
                 let value = row.get::<_, Vec<u8>>(1)?;
                 Ok((file, value))
@@ -682,41 +683,59 @@ impl SQLiteReader {
     }
 
     /// Get the stack graph, partial paths arena, and path database for the currently loaded data.
-    pub fn get(&mut self) -> (&StackGraph, &mut PartialPaths, &mut Database) {
-        (&self.graph, &mut self.partials, &mut self.db)
+    pub fn get(&mut self) -> (&mut StackGraph, &mut PartialPaths, &mut Database) {
+        (&mut self.graph, &mut self.partials, &mut self.db)
     }
 }
 
+// Methods for computing keys and patterns for a symbol stack. The format of a storage key is:
+//
+//     has-var GS ( symbol (US symbol)* )?
+//
+// where has-var is "V" if the symbol stack has a variable, "X" otherwise.
 impl PartialSymbolStack {
     /// Returns a string representation of this symbol stack for indexing in the database.
-    fn storage_key(mut self, graph: &StackGraph, partials: &mut PartialPaths) -> String {
+    fn storage_key(self, graph: &StackGraph, partials: &mut PartialPaths) -> String {
         let mut key = String::new();
-        while let Some(symbol) = self.pop_front(partials) {
-            if !key.is_empty() {
-                key += "\u{241F}";
-            }
-            key += &graph[symbol.symbol];
+        match self.has_variable() {
+            true => key += "V\u{241E}",
+            false => key += "X\u{241E}",
         }
+        key += &self
+            .iter(partials)
+            .map(|s| &graph[s.symbol])
+            .join("\u{241F}");
         key
     }
 
     /// Returns string representations for all prefixes of this symbol stack for querying the
     /// index in the database.
-    fn storage_key_prefixes(
+    fn storage_key_patterns(
         mut self,
         graph: &StackGraph,
         partials: &mut PartialPaths,
-    ) -> Vec<String> {
-        let mut key_prefixes = vec![String::new()];
+    ) -> (Vec<String>, String) {
+        let mut key_patterns = Vec::new();
+        let mut symbols = String::new();
         while let Some(symbol) = self.pop_front(partials) {
-            let mut key = key_prefixes.last().unwrap().to_string();
-            if !key.is_empty() {
-                key += "\u{241F}";
+            if !symbols.is_empty() {
+                symbols += "\u{241F}";
             }
-            key += &graph[symbol.symbol];
-            key_prefixes.push(key);
+            let symbol = graph[symbol.symbol]
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+                .to_string();
+            symbols += &symbol;
+            // patterns for paths matching a prefix of this stack
+            key_patterns.push("V\u{241E}".to_string() + &symbols);
         }
-        key_prefixes
+        // pattern for paths matching exactly this stack
+        key_patterns.push("X\u{241E}".to_string() + &symbols);
+        if self.has_variable() {
+            // patterns for paths for which this stack is a prefix
+            key_patterns.push("_\u{241E}".to_string() + &symbols + "\u{241F}%");
+        }
+        (key_patterns, "\\".to_string())
     }
 }
 
