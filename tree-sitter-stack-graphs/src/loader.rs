@@ -743,7 +743,7 @@ impl SupplementedTsLoader {
                 .map_err(LoadError::TreeSitter)?;
             let configurations = self
                 .0
-                .find_language_configurations_at_path(&path)
+                .find_language_configurations_at_path(&path, false)
                 .map_err(LoadError::TreeSitter)?;
             let languages = languages
                 .into_iter()

@@ -13,3 +13,12 @@ default-members = [
   "stack-graphs",
   "tree-sitter-stack-graphs",
 ]
+
+[patch.crates-io]
+# TODO: Revert to regular versioned dependencies once tree-sitter#2773 has been
+# merged.
+tree-sitter = { git="https://github.com/dcreager/tree-sitter", branch="rust-linking" }
+tree-sitter-graph = { git="https://github.com/tree-sitter/tree-sitter-graph", branch="ts-bump" }
+tree-sitter-highlight = { git="https://github.com/dcreager/tree-sitter", branch="rust-linking" }
+tree-sitter-loader = { git="https://github.com/dcreager/tree-sitter", branch="rust-linking" }
+tree-sitter-tags = { git="https://github.com/dcreager/tree-sitter", branch="rust-linking" }
