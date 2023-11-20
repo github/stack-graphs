@@ -65,6 +65,14 @@ const TEST_PRELUDE: &str = r#"
       error("Unexpected "..thing..": "..table.concat(diffs, ", "))
     end
   end
+
+  function iter_tostring(...)
+    local result = {}
+    for element in ... do
+      table.insert(result, tostring(element))
+    end
+    return result
+  end
 "#;
 
 fn new_lua() -> mlua::Lua {
@@ -272,10 +280,7 @@ fn can_create_all_node_types_from_lua() -> Result<(), anyhow::Error> {
               local scoped_reference = file:scoped_reference_node("bar", exported)
               local push_symbol = file:push_symbol_node("foo")
               local reference = file:reference_node("bar")
-              local actual = {}
-              for node in graph:nodes() do
-                table.insert(actual, tostring(node))
-              end
+
               assert_deepeq("nodes", {
                 "[root]",
                 "[jump to scope]",
@@ -290,7 +295,44 @@ fn can_create_all_node_types_from_lua() -> Result<(), anyhow::Error> {
                 "[test.py(8) scoped reference bar test.py(1)]",
                 "[test.py(9) push foo]",
                 "[test.py(10) reference bar]",
-              }, actual)
+              }, iter_tostring(graph:nodes()))
+            "#,
+    )?;
+    Ok(())
+}
+
+#[test]
+fn can_iterate_nodes_in_file() -> Result<(), anyhow::Error> {
+    let l = new_lua();
+    let mut graph = StackGraph::new();
+    l.check(
+        &mut graph,
+        r#"
+              local graph = ...
+              local file1 = graph:file("test1.py")
+              local file2 = graph:file("test2.py")
+              file1:internal_scope_node()
+              file2:internal_scope_node()
+              file1:internal_scope_node()
+              file2:internal_scope_node()
+              file2:internal_scope_node()
+              file1:internal_scope_node()
+              file2:internal_scope_node()
+              file1:internal_scope_node()
+
+              assert_deepeq("nodes", {
+                "[test1.py(0) scope]",
+                "[test1.py(1) scope]",
+                "[test1.py(2) scope]",
+                "[test1.py(3) scope]",
+              }, iter_tostring(file1:nodes()))
+
+              assert_deepeq("nodes", {
+                "[test2.py(0) scope]",
+                "[test2.py(1) scope]",
+                "[test2.py(2) scope]",
+                "[test2.py(3) scope]",
+              }, iter_tostring(file2:nodes()))
             "#,
     )?;
     Ok(())

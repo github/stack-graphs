@@ -514,6 +514,54 @@ impl UserData for Handle<File> {
             Ok(node_ud)
         });
 
+        methods.add_function("nodes", |l, file_ud: AnyUserData| {
+            let iter = l.create_function(
+                |l, (file_ud, prev_node_ud): (AnyUserData, Option<AnyUserData>)| {
+                    // Pull out the node handle from the previous iteration.
+                    let prev_index = match prev_node_ud {
+                        Some(prev_node_ud) => {
+                            let prev_node = prev_node_ud.borrow::<Handle<Node>>()?;
+                            prev_node.as_u32()
+                        }
+                        None => 0,
+                    };
+
+                    // Loop through the next node handles until we find one belonging to the file.
+                    let graph_ud = file_ud.user_value::<AnyUserData>()?;
+                    let node = {
+                        let file = *file_ud.borrow::<Handle<File>>()?;
+                        let graph = graph_ud.borrow::<StackGraph>()?;
+                        let node_count = graph.nodes.len() as u32;
+                        let mut node_index = unsafe { NonZeroU32::new_unchecked(prev_index + 1) };
+                        loop {
+                            let handle = Handle::<Node>::new(node_index);
+
+                            // If we reach the end without finding a matching node, return nil
+                            // to terminate the iterator.
+                            if node_index.get() == node_count {
+                                return Ok(None);
+                            }
+
+                            // If the node belongs to the file, break out of the loop to use this
+                            // node as the next result of the iterator.
+                            if graph[handle].file().map(|f| f == file).unwrap_or(false) {
+                                break handle;
+                            }
+
+                            // Otherwise try the next node.
+                            node_index = node_index.checked_add(1).unwrap();
+                        }
+                    };
+
+                    // Wrap up the node handle that we just found.
+                    let node_ud = l.create_userdata::<Handle<Node>>(node)?;
+                    node_ud.set_user_value(graph_ud)?;
+                    Ok(Some(node_ud))
+                },
+            )?;
+            Ok((iter, file_ud, None::<AnyUserData>))
+        });
+
         methods.add_function(
             "pop_scoped_symbol_node",
             |l, (file_ud, symbol): (AnyUserData, String)| {
