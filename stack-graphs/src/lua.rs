@@ -68,6 +68,14 @@
 //!
 //! The following Lua methods are available on a stack graph instance:
 //!
+//! #### `edges`
+//!
+//! ``` lua
+//! let edges = graph:edges()
+//! ```
+//!
+//! Returns an array containing all of the edges in the graph.
+//!
 //! #### `file`
 //!
 //! ``` lua
@@ -122,6 +130,14 @@
 //! ```
 //!
 //! Adds a new drop scopes node to this file.
+//!
+//! #### `edges`
+//!
+//! ``` lua
+//! let edges = file:edges()
+//! ```
+//!
+//! Returns an array containing all of the edges starting from or leaving a node in this file.
 //!
 //! #### `exported_scope_node`
 //!
@@ -266,6 +282,14 @@
 //!
 //! Returns the local ID of this node within its file.
 //!
+//! #### `outgoing_edges`
+//!
+//! ``` lua
+//! let edges = node:outgoing_edges()
+//! ```
+//!
+//! Returns an array containing all of the edges leaving this node.
+//!
 //! #### `set_debug_info`
 //!
 //! ``` lua
@@ -381,12 +405,26 @@ use mlua::UserData;
 use mlua::UserDataMethods;
 
 use crate::arena::Handle;
+use crate::graph::Edge;
 use crate::graph::File;
 use crate::graph::Node;
 use crate::graph::StackGraph;
 
 impl UserData for StackGraph {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_function("edges", |l, graph_ud: AnyUserData| {
+            let graph = graph_ud.borrow::<StackGraph>()?;
+            let mut edges = Vec::new();
+            for node in graph.iter_nodes() {
+                for edge in graph.outgoing_edges(node) {
+                    let edge_ud = l.create_userdata(edge)?;
+                    edge_ud.set_user_value(graph_ud.clone())?;
+                    edges.push(edge_ud);
+                }
+            }
+            Ok(edges)
+        });
+
         methods.add_function("file", |l, (graph_ud, name): (AnyUserData, String)| {
             let file = {
                 let mut graph = graph_ud.borrow_mut::<StackGraph>()?;
@@ -474,6 +512,39 @@ impl UserData for Handle<File> {
             let node_ud = l.create_userdata(node)?;
             node_ud.set_user_value(graph_ud)?;
             Ok(node_ud)
+        });
+
+        methods.add_function("edges", |l, file_ud: AnyUserData| {
+            let file = *file_ud.borrow::<Handle<File>>()?;
+            let graph_ud = file_ud.user_value::<AnyUserData>()?;
+            let graph = graph_ud.borrow::<StackGraph>()?;
+            let mut edges = Vec::new();
+            // First find any edges from the singleton nodes _to_ a node in this file.
+            for edge in graph.outgoing_edges(StackGraph::root_node()) {
+                if !graph[edge.sink].file().map(|f| f == file).unwrap_or(false) {
+                    continue;
+                }
+                let edge_ud = l.create_userdata(edge)?;
+                edge_ud.set_user_value(graph_ud.clone())?;
+                edges.push(edge_ud);
+            }
+            for edge in graph.outgoing_edges(StackGraph::jump_to_node()) {
+                if !graph[edge.sink].file().map(|f| f == file).unwrap_or(false) {
+                    continue;
+                }
+                let edge_ud = l.create_userdata(edge)?;
+                edge_ud.set_user_value(graph_ud.clone())?;
+                edges.push(edge_ud);
+            }
+            // Then find any edges _starting_ from a node in this file.
+            for node in graph.nodes_for_file(file) {
+                for edge in graph.outgoing_edges(node) {
+                    let edge_ud = l.create_userdata(edge)?;
+                    edge_ud.set_user_value(graph_ud.clone())?;
+                    edges.push(edge_ud);
+                }
+            }
+            Ok(edges)
         });
 
         methods.add_function("exported_scope_node", |l, file_ud: AnyUserData| {
@@ -729,27 +800,45 @@ impl UserData for Handle<Node> {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_function(
             "add_edge_from",
-            |_, (this_ud, from_ud, precedence): (AnyUserData, AnyUserData, Option<i32>)| {
+            |l, (this_ud, from_ud, precedence): (AnyUserData, AnyUserData, Option<i32>)| {
                 let this = *this_ud.borrow::<Handle<Node>>()?;
                 let from = *from_ud.borrow::<Handle<Node>>()?;
                 let graph_ud = this_ud.user_value::<AnyUserData>()?;
-                let mut graph = graph_ud.borrow_mut::<StackGraph>()?;
                 let precedence = precedence.unwrap_or(0);
-                graph.add_edge(from, this, precedence);
-                Ok(())
+                {
+                    let mut graph = graph_ud.borrow_mut::<StackGraph>()?;
+                    graph.add_edge(from, this, precedence);
+                }
+                let edge = Edge {
+                    source: from,
+                    sink: this,
+                    precedence,
+                };
+                let edge_ud = l.create_userdata(edge)?;
+                edge_ud.set_user_value(graph_ud)?;
+                Ok(edge_ud)
             },
         );
 
         methods.add_function(
             "add_edge_to",
-            |_, (this_ud, to_ud, precedence): (AnyUserData, AnyUserData, Option<i32>)| {
+            |l, (this_ud, to_ud, precedence): (AnyUserData, AnyUserData, Option<i32>)| {
                 let this = *this_ud.borrow::<Handle<Node>>()?;
                 let to = *to_ud.borrow::<Handle<Node>>()?;
                 let graph_ud = this_ud.user_value::<AnyUserData>()?;
-                let mut graph = graph_ud.borrow_mut::<StackGraph>()?;
                 let precedence = precedence.unwrap_or(0);
-                graph.add_edge(this, to, precedence);
-                Ok(())
+                {
+                    let mut graph = graph_ud.borrow_mut::<StackGraph>()?;
+                    graph.add_edge(this, to, precedence);
+                }
+                let edge = Edge {
+                    source: this,
+                    sink: to,
+                    precedence,
+                };
+                let edge_ud = l.create_userdata(edge)?;
+                edge_ud.set_user_value(graph_ud)?;
+                Ok(edge_ud)
             },
         );
 
@@ -784,6 +873,19 @@ impl UserData for Handle<Node> {
             let graph_ud = node_ud.user_value::<AnyUserData>()?;
             let graph = graph_ud.borrow::<StackGraph>()?;
             Ok(graph[node].id().local_id())
+        });
+
+        methods.add_function("outgoing_edges", |l, node_ud: AnyUserData| {
+            let node = *node_ud.borrow::<Handle<Node>>()?;
+            let graph_ud = node_ud.user_value::<AnyUserData>()?;
+            let graph = graph_ud.borrow::<StackGraph>()?;
+            let mut edges = Vec::new();
+            for edge in graph.outgoing_edges(node) {
+                let edge_ud = l.create_userdata(edge)?;
+                edge_ud.set_user_value(graph_ud.clone())?;
+                edges.push(edge_ud);
+            }
+            Ok(edges)
         });
 
         methods.add_function(
@@ -890,6 +992,23 @@ impl UserData for Handle<Node> {
                 }
                 display.push(']');
             }
+            Ok(display)
+        });
+    }
+}
+
+impl UserData for Edge {
+    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_meta_function(mlua::MetaMethod::ToString, |_, edge_ud: AnyUserData| {
+            let edge = *edge_ud.borrow::<Edge>()?;
+            let graph_ud = edge_ud.user_value::<AnyUserData>()?;
+            let graph = graph_ud.borrow::<StackGraph>()?;
+            let display = format!(
+                "{} -{}-> {}",
+                edge.source.display(&graph),
+                edge.precedence,
+                edge.sink.display(&graph),
+            );
             Ok(display)
         });
     }

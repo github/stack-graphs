@@ -5,9 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use std::collections::HashSet;
-
-use maplit::hashset;
 use stack_graphs::graph::NodeID;
 use stack_graphs::graph::StackGraph;
 
@@ -64,6 +61,11 @@ const TEST_PRELUDE: &str = r#"
     if not eq then
       error("Unexpected "..thing..": "..table.concat(diffs, ", "))
     end
+  end
+
+  function values(t)
+    local i = 0
+    return function() i = i + 1; return t[i] end
   end
 
   function iter_tostring(...)
@@ -225,34 +227,43 @@ fn can_create_edges_from_lua() -> Result<(), anyhow::Error> {
         &mut graph,
         r#"
           local graph = ...
+          local root = graph:root_node()
           local file = graph:file("test.py")
           local n0 = file:internal_scope_node()
           local n1 = file:internal_scope_node()
-          n0:add_edge_to(n1)
-          n0:add_edge_from(n1, 10)
+          local e0 = n0:add_edge_to(n1)
+          local e1 = n0:add_edge_from(n1, 10)
+          local e2 = n0:add_edge_to(root)
+          local e3 = n0:add_edge_from(root)
+          assert_eq("edge", "[test.py(0) scope] -0-> [test.py(1) scope]", tostring(e0))
+          assert_eq("edge", "[test.py(1) scope] -10-> [test.py(0) scope]", tostring(e1))
+
+          assert_deepeq("node edges", {
+            "[test.py(0) scope] -0-> [root]",
+            "[test.py(0) scope] -0-> [test.py(1) scope]",
+          }, iter_tostring(values(n0:outgoing_edges())))
+          assert_deepeq("node edges", {
+            "[test.py(1) scope] -10-> [test.py(0) scope]",
+          }, iter_tostring(values(n1:outgoing_edges())))
+          assert_deepeq("node edges", {
+            "[root] -0-> [test.py(0) scope]",
+          }, iter_tostring(values(root:outgoing_edges())))
+
+          assert_deepeq("file edges", {
+            "[root] -0-> [test.py(0) scope]",
+            "[test.py(0) scope] -0-> [root]",
+            "[test.py(0) scope] -0-> [test.py(1) scope]",
+            "[test.py(1) scope] -10-> [test.py(0) scope]",
+          }, iter_tostring(values(file:edges())))
+
+          assert_deepeq("graph edges", {
+            "[root] -0-> [test.py(0) scope]",
+            "[test.py(0) scope] -0-> [root]",
+            "[test.py(0) scope] -0-> [test.py(1) scope]",
+            "[test.py(1) scope] -10-> [test.py(0) scope]",
+          }, iter_tostring(values(graph:edges())))
         "#,
     )?;
-
-    let file = graph.get_file("test.py").expect("Cannot find file");
-    let n0 = graph
-        .node_for_id(NodeID::new_in_file(file, 0))
-        .expect("Cannot find node 0");
-    let n1 = graph
-        .node_for_id(NodeID::new_in_file(file, 1))
-        .expect("Cannot find node 1");
-
-    let edges_from_n0 = graph
-        .outgoing_edges(n0)
-        .map(|edge| (edge.sink, edge.precedence))
-        .collect::<HashSet<_>>();
-    assert_eq!(edges_from_n0, hashset! {(n1, 0)});
-
-    let edges_from_n1 = graph
-        .outgoing_edges(n1)
-        .map(|edge| (edge.sink, edge.precedence))
-        .collect::<HashSet<_>>();
-    assert_eq!(edges_from_n1, hashset! {(n0, 10)});
-
     Ok(())
 }
 
