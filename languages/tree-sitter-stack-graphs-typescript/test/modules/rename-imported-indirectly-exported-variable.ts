@@ -1,4 +1,4 @@
-/*--- path: ./ModA.ts ---*/
+/*--- path: ModA.ts ---*/
 
 let a = {
     v: 42
@@ -7,7 +7,7 @@ let a = {
 export { a };
 //       ^ defined: 3
 
-/*--- path: ./ModB.ts ---*/
+/*--- path: ModB.ts ---*/
 
 import { a as b } from "./ModA";
 //       ^ defined: 7, 3

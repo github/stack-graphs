@@ -1,4 +1,4 @@
-/* --- path: ./tsconfig.json --- */
+/* --- path: tsconfig.json --- */
 /* --- global: PROJECT_NAME=a --- */
 {
     "compilerOptions": {
@@ -7,11 +7,11 @@
     }
 }
 
-/* --- path: ./src/foo.ts --- */
+/* --- path: src/foo.ts --- */
 /* --- global: PROJECT_NAME=a --- */
 export const bar = 42;
 
-/* --- path: ./src/index.ts --- */
+/* --- path: src/index.ts --- */
 /* --- global: PROJECT_NAME=a --- */
 import { bar } from "foo";
 //       ^ defined: 12
