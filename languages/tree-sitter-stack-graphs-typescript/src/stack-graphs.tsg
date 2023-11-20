@@ -2649,6 +2649,7 @@ if none @is_async {
   (object)
   (parenthesized_expression)
   (regex)
+  (satisfies_expression)
   (sequence_expression)
   (spread_element)
   (string)
@@ -2959,6 +2960,21 @@ if none @is_def {
 (regex) {
 }
 
+
+
+;; Satisfies Expressions
+
+; { foo: 42 } satisfies { foo: number }
+
+(satisfies_expression (_)@expr . (_)@type)@satisfies {
+  ; propagate lexical scope
+  edge @expr.lexical_scope -> @satisfies.lexical_scope
+  edge @type.lexical_scope -> @satisfies.lexical_scope
+
+  ; type is union of both
+  edge @satisfies.type -> @expr.type
+  edge @satisfies.type -> @type.type
+}
 
 
 ;; Spread Element
