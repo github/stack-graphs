@@ -29,8 +29,10 @@ impl CheckLua for mlua::Lua {
 fn can_build_stack_graph_from_lua() -> Result<(), anyhow::Error> {
     const LUA: &[u8] = br#"
       function process(parsed, file)
-        -- TODO: fill in the definiens span from the parse tree root
+        local sc = lsp_positions.SpanCalculator.new_from_tree(parsed)
+        local module_ast = parsed:root()
         local module = file:internal_scope_node()
+        module:set_definiens_span(sc:for_node(module_ast))
         module:add_edge_from(file:root_node())
       end
     "#;
@@ -52,7 +54,7 @@ fn can_build_stack_graph_from_lua() -> Result<(), anyhow::Error> {
           local graph = ...
           local file = graph:file("test.py")
           assert_deepeq("nodes", {
-            "[test.py(0) scope]",
+            "[test.py(0) scope def 1:6-3:4]",
           }, iter_tostring(file:nodes()))
           assert_deepeq("edges", {
             "[root] -0-> [test.py(0) scope]",

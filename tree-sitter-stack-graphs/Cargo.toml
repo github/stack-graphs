@@ -50,6 +50,8 @@ lsp = [
 lua = [
   "dep:mlua",
   "dep:mlua-tree-sitter",
+  "lsp-positions/lua",
+  "lsp-positions/tree-sitter",
   "stack-graphs/lua",
 ]
 

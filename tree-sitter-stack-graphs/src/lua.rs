@@ -9,8 +9,9 @@
 
 use std::borrow::Cow;
 
+use lsp_positions::lua::Module as _;
 use mlua::Lua;
-use mlua_tree_sitter::Module;
+use mlua_tree_sitter::Module as _;
 use mlua_tree_sitter::WithSource;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::File;
@@ -82,6 +83,7 @@ impl StackGraphLanguageLua {
         // Create a Lua environment and load the language's stack graph rules.
         // TODO: Sandbox the Lua environment
         let lua = Lua::new();
+        lua.open_lsp_positions()?;
         lua.open_ltreesitter()?;
         lua.load(self.lua_source.as_ref())
             .set_name(&self.lua_source_name)
