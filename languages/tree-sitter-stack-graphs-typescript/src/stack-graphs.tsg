@@ -923,8 +923,8 @@ if none @is_default {
 ; )
 
 (export_statement
-  (namespace_export (identifier))
-  source:(_)@name
+  (namespace_export (identifier)@name)
+  source:(_)@from
 )@export_stmt {
   ; namespace definitions are specified together with (module) and (internal_module)
 
@@ -933,8 +933,8 @@ if none @is_default {
   edge @export_stmt.exports -> @name.type_def__ns
 
   ; connect definitions to exports
-  edge @export_stmt.expr_member__ns -> @name.mod_ref
-  edge @export_stmt.type_member__ns -> @name.mod_ref
+  edge @export_stmt.expr_member__ns -> @from.mod_ref
+  edge @export_stmt.type_member__ns -> @from.mod_ref
 }
 
 ; export as namespace NAME
