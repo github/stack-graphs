@@ -870,6 +870,7 @@ impl<H> ForwardPartialPathStitcher<H> {
             initial_paths: next_iteration.0.len(),
             next_iteration,
             appended_paths,
+            // By default, all paths are checked for similarity
             similar_path_detector: Some(SimilarPathDetector::new()),
             // By default, all nodes are checked for cycles and (if enabled) similarity
             check_only_join_nodes: false,

@@ -57,6 +57,6 @@ pub fn try_language_configuration(
     lc.special_files
         .add("tsconfig.json".to_string(), TsConfigAnalyzer {})
         .add("package.json".to_string(), NpmPackageAnalyzer {});
-    lc.has_similar_paths = false;
+    lc.no_similar_paths_in_file = true;
     Ok(lc)
 }

@@ -44,7 +44,11 @@ pub struct LanguageConfiguration {
     pub sgl: StackGraphLanguage,
     pub builtins: StackGraph,
     pub special_files: FileAnalyzers,
-    pub has_similar_paths: bool,
+    /// Can be set to true if the stack graph rules ensure that there can be no similar
+    /// paths in a file, in which case it is safe to turn of similar path detection. If
+    /// incorrectly set to true, performance of path finding suffers from exponential
+    /// blow up.
+    pub no_similar_paths_in_file: bool,
 }
 
 impl LanguageConfiguration {
@@ -98,7 +102,7 @@ impl LanguageConfiguration {
             sgl,
             builtins,
             special_files: FileAnalyzers::new(),
-            has_similar_paths: true,
+            no_similar_paths_in_file: false,
         })
     }
 
@@ -369,18 +373,15 @@ impl FileLanguageConfigurations<'_> {
         self.primary.is_some() || !self.secondary.is_empty()
     }
 
-    pub fn has_similar_paths(&self) -> bool {
+    pub fn no_similar_paths_in_file(&self) -> bool {
+        let mut no_similar_paths_in_file = true;
         if let Some(lc) = &self.primary {
-            if lc.has_similar_paths {
-                return true;
-            }
+            no_similar_paths_in_file &= lc.no_similar_paths_in_file;
         }
         for (lc, _) in &self.secondary {
-            if lc.has_similar_paths {
-                return true;
-            }
+            no_similar_paths_in_file &= lc.no_similar_paths_in_file;
         }
-        return false;
+        return no_similar_paths_in_file;
     }
 }
 
@@ -593,7 +594,7 @@ impl PathLoader {
                     builtins,
                     special_files: FileAnalyzers::new(),
                     // always detect similar paths, we don't know the language configuration when loading from the file system
-                    has_similar_paths: true,
+                    no_similar_paths_in_file: false,
                 };
                 self.cache.push((language.language, lc));
 

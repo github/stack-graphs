@@ -326,7 +326,7 @@ impl TestArgs {
             }
         }
         let stitcher_config =
-            StitcherConfig::default().with_detect_similar_paths(lc.has_similar_paths);
+            StitcherConfig::default().with_detect_similar_paths(!lc.no_similar_paths_in_file);
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
         for file in test.graph.iter_files() {

@@ -281,7 +281,7 @@ impl<'a> Indexer<'a> {
             Err(e) => return Err(IndexError::LoadError(e)),
         };
         let stitcher_config =
-            StitcherConfig::default().with_detect_similar_paths(lcs.has_similar_paths());
+            StitcherConfig::default().with_detect_similar_paths(!lcs.no_similar_paths_in_file());
 
         let source = file_reader.get(source_path)?;
         let tag = sha1(source);
