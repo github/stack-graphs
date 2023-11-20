@@ -3,6 +3,7 @@ resolver = "1"
 members = [
   # library projects
   "lsp-positions",
+  "lua-helpers",
   "stack-graphs",
   "tree-sitter-stack-graphs",
   "languages/*",

@@ -46,6 +46,7 @@ thiserror = { version = "1.0" }
 anyhow = "1.0"
 assert-json-diff = "2"
 itertools = "0.10"
+lua-helpers = { path = "../lua-helpers" }
 maplit = "1.0"
 pretty_assertions = "0.7"
 serde_json = { version = "1.0" }
