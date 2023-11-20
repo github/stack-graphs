@@ -1,4 +1,4 @@
-/* --- path: ./tsconfig.json --- */
+/* --- path: tsconfig.json --- */
 {
     "compilerOptions": {
         "composite": true,
@@ -9,9 +9,9 @@
     }
 }
 
-/* --- path: ./src/util_impl/foo.ts --- */
+/* --- path: src/util_impl/foo.ts --- */
 export const bar = 42;
 
-/* --- path: ./src/index.ts --- */
+/* --- path: src/index.ts --- */
 import { bar } from "util/foo";
 //       ^ defined: 13

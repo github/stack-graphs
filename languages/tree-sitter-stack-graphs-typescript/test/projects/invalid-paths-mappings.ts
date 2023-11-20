@@ -1,4 +1,4 @@
-/* --- path: ./tsconfig.json --- */
+/* --- path: tsconfig.json --- */
 {
     "compilerOptions": {
         "paths": {

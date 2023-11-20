@@ -1,10 +1,10 @@
-/*--- path: ./A/index.ts ---*/
+/*--- path: A/index.ts ---*/
 
 export let a = {
     v: 42
 };
 
-/*--- path: ./B/ModB.ts ---*/
+/*--- path: B/ModB.ts ---*/
 
 import { a } from "../A";
 //       ^ defined: 3

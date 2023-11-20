@@ -1,4 +1,4 @@
-/* --- path: ./my_lib/package.json --- */
+/* --- path: my_lib/package.json --- */
 /* --- global: FILE_PATH=package.json --- */
 /* --- global: PROJECT_NAME=my_lib --- */
 
@@ -6,19 +6,19 @@
     "name": "@my/lib"
 }
 
-/* --- path: ./my_lib/tsconfig.json --- */
+/* --- path: my_lib/tsconfig.json --- */
 /* --- global: FILE_PATH=tsconfig.json --- */
 /* --- global: PROJECT_NAME=my_lib --- */
 
 {}
 
-/* --- path: ./my_lib/src/foo.ts --- */
+/* --- path: my_lib/src/foo.ts --- */
 /* --- global: FILE_PATH=src/foo.ts --- */
 /* --- global: PROJECT_NAME=my_lib --- */
 
 export const bar = 42;
 
-/* --- path: ./my_app/package.json --- */
+/* --- path: my_app/package.json --- */
 /* --- global: FILE_PATH=package.json --- */
 /* --- global: PROJECT_NAME=my_app --- */
 
@@ -26,13 +26,13 @@ export const bar = 42;
     "name": "@my/app"
 }
 
-/* --- path: ./my_app/tsconfig.json --- */
+/* --- path: my_app/tsconfig.json --- */
 /* --- global: FILE_PATH=tsconfig.json --- */
 /* --- global: PROJECT_NAME=my_app --- */
 
 {}
 
-/* --- path: ./my_app/src/index.ts --- */
+/* --- path: my_app/src/index.ts --- */
 /* --- global: FILE_PATH=src/index.ts --- */
 /* --- global: PROJECT_NAME=my_app --- */
 
