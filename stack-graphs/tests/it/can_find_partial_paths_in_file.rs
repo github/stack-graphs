@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
-use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::{ForwardPartialPathStitcher, StitcherConfig};
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -23,6 +23,7 @@ fn check_partial_paths_in_file(graph: &StackGraph, file: &str, expected_paths: &
         graph,
         &mut partials,
         file,
+        StitcherConfig::default(),
         &NoCancellation,
         |graph, partials, path| {
             results.insert(path.display(graph, partials).to_string());

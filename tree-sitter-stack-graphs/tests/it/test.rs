@@ -13,6 +13,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::StitcherConfig;
 use std::path::Path;
 use std::path::PathBuf;
 use tree_sitter_graph::Variables;
@@ -113,6 +114,7 @@ fn check_test(
             &test.graph,
             &mut partials,
             fragment.file,
+            StitcherConfig::default(),
             &stack_graphs::NoCancellation,
             |graph, partials, path| {
                 db.add_partial_path(graph, partials, path.clone());
@@ -122,7 +124,12 @@ fn check_test(
     }
 
     let results = test
-        .run(&mut partials, &mut db, &NoCancellation)
+        .run(
+            &mut partials,
+            &mut db,
+            StitcherConfig::default(),
+            &NoCancellation,
+        )
         .expect("should never be cancelled");
     assert_eq!(
         expected_successes,

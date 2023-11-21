@@ -15,6 +15,7 @@ use stack_graphs::c::sg_partial_path_list_count;
 use stack_graphs::c::sg_partial_path_list_free;
 use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
+use stack_graphs::c::sg_stitcher_config;
 use stack_graphs::partial::PartialPath;
 
 use crate::c::test_graph::TestGraph;
@@ -28,12 +29,16 @@ fn check_jump_to_definition(graph: &TestGraph, expected_paths: &[&str]) {
         .iter_nodes()
         .filter(|handle| rust_graph[*handle].is_reference())
         .collect::<Vec<_>>();
+    let stitcher_config = sg_stitcher_config {
+        detect_similar_paths: false,
+    };
     sg_partial_path_arena_find_all_complete_paths(
         graph.graph,
         paths,
         references.len(),
         references.as_ptr() as *const _,
         path_list,
+        &stitcher_config,
         std::ptr::null(),
     );
 

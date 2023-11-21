@@ -12,6 +12,7 @@ use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::GraphEdgeCandidates;
+use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::NoCancellation;
 
 use crate::test_graphs;
@@ -25,6 +26,7 @@ fn check_jump_to_definition(graph: &StackGraph, expected_paths: &[&str]) {
     ForwardPartialPathStitcher::find_all_complete_partial_paths(
         &mut GraphEdgeCandidates::new(graph, &mut paths, None),
         references,
+        StitcherConfig::default(),
         &NoCancellation,
         |graph, paths, path| {
             results.insert(path.display(graph, paths).to_string());

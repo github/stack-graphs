@@ -28,6 +28,7 @@ use stack_graphs::c::sg_partial_path_list_free;
 use stack_graphs::c::sg_partial_path_list_new;
 use stack_graphs::c::sg_partial_path_list_paths;
 use stack_graphs::c::sg_stack_graph;
+use stack_graphs::c::sg_stitcher_config;
 use stack_graphs::copious_debugging;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPath;
@@ -55,11 +56,15 @@ impl StorageLayer {
         let rust_graph = unsafe { &(*graph).inner };
         let path_list = sg_partial_path_list_new();
         for file in rust_graph.iter_files() {
+            let stitcher_config = sg_stitcher_config {
+                detect_similar_paths: false,
+            };
             sg_partial_path_arena_find_partial_paths_in_file(
                 graph,
                 partials,
                 file.as_u32(),
                 path_list,
+                &stitcher_config,
                 std::ptr::null(),
             );
         }

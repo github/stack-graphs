@@ -16,6 +16,7 @@ use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::GraphEdges;
+use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::CancelAfterDuration;
 use std::time::Duration;
 
@@ -199,6 +200,7 @@ fn finding_simple_identity_cycle_is_detected() {
             &graph,
             &mut partials,
             file,
+            StitcherConfig::default(),
             &cancellation_flag,
             |_, _, _| path_count += 1,
         );
@@ -292,6 +294,7 @@ fn finding_composite_identity_cycle_is_detected() {
             &graph,
             &mut partials,
             file,
+            StitcherConfig::default(),
             &cancellation_flag,
             |_, _, _| path_count += 1,
         );
@@ -353,6 +356,7 @@ fn appending_eliminating_cycle_terminates() {
             &graph,
             &mut partials,
             file,
+            StitcherConfig::default(),
             &cancellation_flag,
             |_, _, _| path_count += 1,
         );

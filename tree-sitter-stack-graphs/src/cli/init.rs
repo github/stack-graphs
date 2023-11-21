@@ -718,7 +718,6 @@ impl ProjectSettings<'_> {
         let mut file = File::create(project_path.join("rust/lib.rs"))?;
         self.write_license_header(&mut file, "// ")?;
         writedoc! {file, r#"
-            use tree_sitter_stack_graphs::loader::FileAnalyzers;
             use tree_sitter_stack_graphs::loader::LanguageConfiguration;
             use tree_sitter_stack_graphs::loader::LoadError;
             use tree_sitter_stack_graphs::CancellationFlag;
@@ -757,7 +756,6 @@ impl ProjectSettings<'_> {
                         STACK_GRAPHS_BUILTINS_SOURCE,
                     )),
                     Some(STACK_GRAPHS_BUILTINS_CONFIG),
-                    FileAnalyzers::new(),
                     cancellation_flag,
                 )
             }}

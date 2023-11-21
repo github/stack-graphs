@@ -18,6 +18,7 @@ use stack_graphs::serde::Filter;
 use stack_graphs::stitching::Database;
 use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::StitcherConfig;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -324,6 +325,8 @@ impl TestArgs {
                 Ok(_) => {}
             }
         }
+        let stitcher_config =
+            StitcherConfig::default().with_detect_similar_paths(!lc.no_similar_paths_in_file);
         let mut partials = PartialPaths::new();
         let mut db = Database::new();
         for file in test.graph.iter_files() {
@@ -331,13 +334,19 @@ impl TestArgs {
                 &test.graph,
                 &mut partials,
                 file,
+                stitcher_config,
                 &cancellation_flag.as_ref(),
                 |g, ps, p| {
                     db.add_partial_path(g, ps, p.clone());
                 },
             )?;
         }
-        let result = test.run(&mut partials, &mut db, cancellation_flag.as_ref())?;
+        let result = test.run(
+            &mut partials,
+            &mut db,
+            stitcher_config,
+            cancellation_flag.as_ref(),
+        )?;
         let success = result.failure_count() == 0;
         let outputs = if self.output_mode.test(!success) {
             let files = test.fragments.iter().map(|f| f.file).collect::<Vec<_>>();
@@ -349,6 +358,7 @@ impl TestArgs {
                 &mut db,
                 &|_: &StackGraph, h: &Handle<File>| files.contains(h),
                 success,
+                stitcher_config,
                 cancellation_flag.as_ref(),
             )?
         } else {
@@ -397,6 +407,7 @@ impl TestArgs {
         db: &mut Database,
         filter: &dyn Filter,
         success: bool,
+        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> anyhow::Result<Vec<String>> {
         let mut outputs = Vec::with_capacity(3);
@@ -425,7 +436,14 @@ impl TestArgs {
         }
 
         let mut db = if save_paths.is_some() || save_visualization.is_some() {
-            self.compute_paths(graph, partials, db, filter, cancellation_flag)?
+            self.compute_paths(
+                graph,
+                partials,
+                db,
+                filter,
+                stitcher_config,
+                cancellation_flag,
+            )?
         } else {
             Database::new()
         };
@@ -474,6 +492,7 @@ impl TestArgs {
         partials: &mut PartialPaths,
         db: &mut Database,
         filter: &dyn Filter,
+        stitcher_config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
     ) -> anyhow::Result<Database> {
         let references = graph
@@ -484,6 +503,7 @@ impl TestArgs {
         ForwardPartialPathStitcher::find_all_complete_partial_paths(
             &mut DatabaseCandidates::new(graph, partials, db),
             references.clone(),
+            stitcher_config,
             &cancellation_flag,
             |_, _, p| {
                 paths.push(p.clone());

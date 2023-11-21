@@ -44,11 +44,16 @@ pub struct LanguageConfiguration {
     pub sgl: StackGraphLanguage,
     pub builtins: StackGraph,
     pub special_files: FileAnalyzers,
+    /// Can be set to true if the stack graph rules ensure that there can be no similar
+    /// paths in a file, in which case it is safe to turn of similar path detection. If
+    /// incorrectly set to true, performance of path finding suffers from exponential
+    /// blow up.
+    pub no_similar_paths_in_file: bool,
 }
 
 impl LanguageConfiguration {
     /// Build a language configuration from tsg and builtins sources. The tsg path
-    /// is kept for informational only, see [`StackGraphLanguage::from_source`][].
+    /// is kept for informational use only, see [`StackGraphLanguage::from_source`][].
     pub fn from_sources<'a>(
         language: Language,
         scope: Option<String>,
@@ -58,7 +63,6 @@ impl LanguageConfiguration {
         tsg_source: &'a str,
         builtins_source: Option<(PathBuf, &'a str)>,
         builtins_config: Option<&str>,
-        special_files: FileAnalyzers,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<Self, LoadError<'a>> {
         let sgl = StackGraphLanguage::from_source(language, tsg_path.clone(), tsg_source).map_err(
@@ -97,7 +101,8 @@ impl LanguageConfiguration {
             file_types,
             sgl,
             builtins,
-            special_files,
+            special_files: FileAnalyzers::new(),
+            no_similar_paths_in_file: false,
         })
     }
 
@@ -143,11 +148,20 @@ impl FileAnalyzers {
         }
     }
 
-    pub fn add(
+    pub fn with(
         mut self,
         file_name: String,
         analyzer: impl FileAnalyzer + Send + Sync + 'static,
     ) -> Self {
+        self.file_analyzers.insert(file_name, Arc::new(analyzer));
+        self
+    }
+
+    pub fn add(
+        &mut self,
+        file_name: String,
+        analyzer: impl FileAnalyzer + Send + Sync + 'static,
+    ) -> &mut Self {
         self.file_analyzers.insert(file_name, Arc::new(analyzer));
         self
     }
@@ -357,6 +371,17 @@ pub struct FileLanguageConfigurations<'a> {
 impl FileLanguageConfigurations<'_> {
     pub fn has_some(&self) -> bool {
         self.primary.is_some() || !self.secondary.is_empty()
+    }
+
+    pub fn no_similar_paths_in_file(&self) -> bool {
+        let mut no_similar_paths_in_file = true;
+        if let Some(lc) = &self.primary {
+            no_similar_paths_in_file &= lc.no_similar_paths_in_file;
+        }
+        for (lc, _) in &self.secondary {
+            no_similar_paths_in_file &= lc.no_similar_paths_in_file;
+        }
+        return no_similar_paths_in_file;
     }
 }
 
@@ -568,6 +593,8 @@ impl PathLoader {
                     sgl,
                     builtins,
                     special_files: FileAnalyzers::new(),
+                    // always detect similar paths, we don't know the language configuration when loading from the file system
+                    no_similar_paths_in_file: false,
                 };
                 self.cache.push((language.language, lc));
 

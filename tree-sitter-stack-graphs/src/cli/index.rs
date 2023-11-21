@@ -12,6 +12,7 @@ use stack_graphs::graph::File;
 use stack_graphs::graph::StackGraph;
 use stack_graphs::partial::PartialPaths;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteWriter;
 use std::collections::HashMap;
@@ -279,6 +280,8 @@ impl<'a> Indexer<'a> {
             }
             Err(e) => return Err(IndexError::LoadError(e)),
         };
+        let stitcher_config =
+            StitcherConfig::default().with_detect_similar_paths(!lcs.no_similar_paths_in_file());
 
         let source = file_reader.get(source_path)?;
         let tag = sha1(source);
@@ -355,6 +358,7 @@ impl<'a> Indexer<'a> {
             &graph,
             &mut partials,
             file,
+            stitcher_config,
             &(&cancellation_flag as &dyn CancellationFlag),
             |_g, _ps, p| {
                 paths.push(p.clone());

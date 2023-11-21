@@ -5,7 +5,6 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
-use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::loader::LoadError;
 use tree_sitter_stack_graphs::CancellationFlag;
@@ -41,7 +40,7 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
 pub fn try_language_configuration(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
-    LanguageConfiguration::from_sources(
+    let mut lc = LanguageConfiguration::from_sources(
         tree_sitter_typescript::language_typescript(),
         Some(String::from("source.ts")),
         None,
@@ -53,9 +52,11 @@ pub fn try_language_configuration(
             STACK_GRAPHS_BUILTINS_SOURCE,
         )),
         Some(STACK_GRAPHS_BUILTINS_CONFIG),
-        FileAnalyzers::new()
-            .add("tsconfig.json".to_string(), TsConfigAnalyzer {})
-            .add("package.json".to_string(), NpmPackageAnalyzer {}),
         cancellation_flag,
-    )
+    )?;
+    lc.special_files
+        .add("tsconfig.json".to_string(), TsConfigAnalyzer {})
+        .add("package.json".to_string(), NpmPackageAnalyzer {});
+    lc.no_similar_paths_in_file = true;
+    Ok(lc)
 }

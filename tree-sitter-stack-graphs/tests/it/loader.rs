@@ -35,6 +35,7 @@ fn can_load_from_provided_language_configuration() {
         sgl,
         builtins: StackGraph::new(),
         special_files: FileAnalyzers::new(),
+        no_similar_paths_in_file: false,
     };
     let mut loader =
         Loader::from_language_configurations(vec![lc], None).expect("Expected loader to succeed");
