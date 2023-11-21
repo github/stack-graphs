@@ -107,7 +107,7 @@ where
         }
     }
 
-    /// Add a apth, and determine whether we should process this path during the path-finding algorithm.
+    /// Add a path, and determine whether we should process this path during the path-finding algorithm.
     /// If we have seen a path with the same start and end node, and the same pre- and postcondition, then
     /// we return false. Otherwise, we return true.
     pub fn add_path<Cmp>(
