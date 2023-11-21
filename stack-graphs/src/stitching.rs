@@ -54,6 +54,7 @@ use crate::arena::SupplementalArena;
 use crate::cycles::Appendables;
 use crate::cycles::AppendingCycleDetector;
 use crate::cycles::SimilarPathDetector;
+use crate::cycles::SimilarPathStats;
 use crate::graph::Degree;
 use crate::graph::Edge;
 use crate::graph::File;
@@ -66,6 +67,7 @@ use crate::partial::PartialPaths;
 use crate::partial::PartialSymbolStack;
 use crate::paths::Extend;
 use crate::paths::PathResolutionError;
+use crate::stats::FrequencyDistribution;
 use crate::CancellationError;
 use crate::CancellationFlag;
 
@@ -827,7 +829,7 @@ pub struct ForwardPartialPathStitcher<H> {
     queue: VecDeque<(PartialPath, AppendingCycleDetector<H>, bool)>,
     // tracks the number of initial paths in the queue because we do not want call
     // extend_until on those
-    initial_paths: usize,
+    initial_paths_in_queue: usize,
     // next_iteration is a tuple of queues instead of an queue of tuples so that the path queue
     // can be cheaply exposed through the C API as a continuous memory block
     next_iteration: (
@@ -839,6 +841,8 @@ pub struct ForwardPartialPathStitcher<H> {
     similar_path_detector: Option<SimilarPathDetector<PartialPath>>,
     check_only_join_nodes: bool,
     max_work_per_phase: usize,
+    initial_paths: usize,
+    stats: Option<Stats>,
     #[cfg(feature = "copious-debugging")]
     phase_number: usize,
 }
@@ -863,11 +867,12 @@ impl<H> ForwardPartialPathStitcher<H> {
                 (p, c, false)
             })
             .multiunzip();
+        let initial_paths = next_iteration.0.len();
         Self {
             candidates: Vec::new(),
             extensions: Vec::new(),
             queue: VecDeque::new(),
-            initial_paths: next_iteration.0.len(),
+            initial_paths_in_queue: initial_paths,
             next_iteration,
             appended_paths,
             // By default, all paths are checked for similarity
@@ -876,6 +881,8 @@ impl<H> ForwardPartialPathStitcher<H> {
             check_only_join_nodes: false,
             // By default, there's no artificial bound on the amount of work done per phase
             max_work_per_phase: usize::MAX,
+            initial_paths,
+            stats: None,
             #[cfg(feature = "copious-debugging")]
             phase_number: 1,
         }
@@ -889,7 +896,9 @@ impl<H> ForwardPartialPathStitcher<H> {
         if !detect_similar_paths {
             self.similar_path_detector = None;
         } else if self.similar_path_detector.is_none() {
-            self.similar_path_detector = Some(SimilarPathDetector::new());
+            let mut similar_path_detector = SimilarPathDetector::new();
+            similar_path_detector.set_collect_stats(self.stats.is_some());
+            self.similar_path_detector = Some(similar_path_detector);
         }
     }
 
@@ -908,6 +917,29 @@ impl<H> ForwardPartialPathStitcher<H> {
     /// paths found in the previous phase, with no additional bound.
     pub fn set_max_work_per_phase(&mut self, max_work_per_phase: usize) {
         self.max_work_per_phase = max_work_per_phase;
+    }
+
+    /// Sets whether to collect statistics during stitching.
+    pub fn set_collect_stats(&mut self, collect_stats: bool) {
+        if !collect_stats {
+            self.stats = None;
+        } else if self.stats.is_none() {
+            let mut stats = Stats::default();
+            stats.initial_paths.record(self.initial_paths);
+            self.stats = Some(stats);
+        }
+        if let Some(similar_path_detector) = &mut self.similar_path_detector {
+            similar_path_detector.set_collect_stats(collect_stats);
+        }
+    }
+
+    pub fn into_stats(mut self) -> Stats {
+        if let (Some(stats), Some(similar_path_detector)) =
+            (&mut self.stats, self.similar_path_detector)
+        {
+            stats.similar_paths_stats = similar_path_detector.stats();
+        }
+        self.stats.unwrap_or_default()
     }
 }
 
@@ -1023,7 +1055,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             if check_similar_path {
                 if let Some(similar_path_detector) = &mut self.similar_path_detector {
-                    if similar_path_detector.has_similar_path(
+                    if similar_path_detector.add_path(
                         graph,
                         partials,
                         &new_partial_path,
@@ -1056,6 +1088,22 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             self.next_iteration.2.push(new_has_split);
         }
 
+        if let Some(stats) = &mut self.stats {
+            let (graph, _, _) = candidates.get_graph_partials_and_db();
+            let end_node = &graph[partial_path.end_node];
+            if end_node.is_root() {
+                stats.candidates_per_root_path.record(candidate_count);
+                stats.extensions_per_root_path.record(extension_count);
+                stats.root_visits += 1;
+            } else {
+                stats.candidates_per_node_path.record(candidate_count);
+                stats.extensions_per_node_path.record(extension_count);
+                stats.node_visits.record(end_node.id());
+            }
+            if extension_count == 0 {
+                stats.terminal_path_lengh.record(partial_path.edges.len());
+            }
+        }
         candidate_count
     }
 
@@ -1089,6 +1137,9 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             self.next_iteration.1.drain(..),
             self.next_iteration.2.drain(..),
         ));
+        if let Some(stats) = &mut self.stats {
+            stats.queued_paths_per_phase.record(self.queue.len());
+        }
         let mut work_performed = 0;
         while let Some((partial_path, cycle_detector, has_split)) = self.queue.pop_front() {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
@@ -1096,8 +1147,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                 "--> Candidate partial path {}",
                 partial_path.display(graph, partials)
             );
-            if self.initial_paths > 0 {
-                self.initial_paths -= 1;
+            if self.initial_paths_in_queue > 0 {
+                self.initial_paths_in_queue -= 1;
             } else if !extend_while(graph, partials, &partial_path) {
                 copious_debugging!(
                     "    Do not extend {}",
@@ -1109,6 +1160,9 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             if work_performed >= self.max_work_per_phase {
                 break;
             }
+        }
+        if let Some(stats) = &mut self.stats {
+            stats.processed_paths_per_phase.record(work_performed);
         }
 
         #[cfg(feature = "copious-debugging")]
@@ -1149,13 +1203,13 @@ impl ForwardPartialPathStitcher<Edge> {
         config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
-    ) -> Result<(), CancellationError>
+    ) -> Result<Stats, CancellationError>
     where
         F: FnMut(&StackGraph, &mut PartialPaths, &PartialPath),
     {
         fn as_complete_as_necessary(graph: &StackGraph, path: &PartialPath) -> bool {
             path.starts_at_endpoint(graph)
-                && (path.ends_at_endpoint(graph) || graph[path.end_node].is_jump_to())
+                && (path.ends_at_endpoint(graph) || path.ends_in_jump(graph))
         }
 
         let initial_paths = graph
@@ -1168,6 +1222,8 @@ impl ForwardPartialPathStitcher<Edge> {
             ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
         config.apply(&mut stitcher);
         stitcher.set_check_only_join_nodes(true);
+
+        let mut accepted_path_length = FrequencyDistribution::default();
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             stitcher.process_next_phase(
@@ -1176,11 +1232,16 @@ impl ForwardPartialPathStitcher<Edge> {
             );
             for path in stitcher.previous_phase_partial_paths() {
                 if as_complete_as_necessary(graph, path) {
+                    accepted_path_length.record(path.edges.len());
                     visit(graph, partials, path);
                 }
             }
         }
-        Ok(())
+
+        Ok(Stats {
+            accepted_path_length,
+            ..stitcher.into_stats()
+        })
     }
 }
 
@@ -1202,7 +1263,7 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
         config: StitcherConfig,
         cancellation_flag: &dyn CancellationFlag,
         mut visit: F,
-    ) -> Result<(), Err>
+    ) -> Result<Stats, Err>
     where
         I: IntoIterator<Item = Handle<Node>>,
         A: Appendable,
@@ -1225,6 +1286,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             ForwardPartialPathStitcher::from_partial_paths(graph, partials, initial_paths);
         config.apply(&mut stitcher);
         stitcher.set_check_only_join_nodes(true);
+
+        let mut accepted_path_length = FrequencyDistribution::default();
         while !stitcher.is_complete() {
             cancellation_flag.check("finding complete partial paths")?;
             for path in stitcher.previous_phase_partial_paths() {
@@ -1234,11 +1297,77 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
             let (graph, partials, _) = candidates.get_graph_partials_and_db();
             for path in stitcher.previous_phase_partial_paths() {
                 if path.is_complete(graph) {
+                    accepted_path_length.record(path.edges.len());
                     visit(graph, partials, path);
                 }
             }
         }
-        Ok(())
+
+        Ok(Stats {
+            accepted_path_length,
+            ..stitcher.into_stats()
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Stats {
+    /// The distribution of the number of initial paths
+    pub initial_paths: FrequencyDistribution<usize>,
+    /// The distribution of the number of queued paths per stitching phase
+    pub queued_paths_per_phase: FrequencyDistribution<usize>,
+    /// The distribution of the number of processed paths per stitching phase
+    pub processed_paths_per_phase: FrequencyDistribution<usize>,
+    /// The distribution of the length of accepted paths
+    pub accepted_path_length: FrequencyDistribution<usize>,
+    /// The distribution of the maximal length of paths (when they cannot be extended more)
+    pub terminal_path_lengh: FrequencyDistribution<usize>,
+    /// The distribution of the number of candidates for paths ending in a regular node
+    pub candidates_per_node_path: FrequencyDistribution<usize>,
+    /// The distribution of the number of candidates for paths ending in the root node
+    pub candidates_per_root_path: FrequencyDistribution<usize>,
+    /// The distribution of the number of extensions (accepted candidates) for paths ending in a regular node
+    pub extensions_per_node_path: FrequencyDistribution<usize>,
+    /// The distribution of the number of extensions (accepted candidates) for paths ending in the root node
+    pub extensions_per_root_path: FrequencyDistribution<usize>,
+    /// The number of times the root node is visited
+    pub root_visits: usize,
+    /// The distribution of the number of times a regular node is visited
+    pub node_visits: FrequencyDistribution<crate::graph::NodeID>,
+    /// The distribution of the number of similar paths between node pairs.
+    pub similar_paths_stats: SimilarPathStats,
+}
+
+impl std::ops::AddAssign<Self> for Stats {
+    fn add_assign(&mut self, rhs: Self) {
+        self.initial_paths += rhs.initial_paths;
+        self.queued_paths_per_phase += rhs.queued_paths_per_phase;
+        self.processed_paths_per_phase += rhs.processed_paths_per_phase;
+        self.accepted_path_length += rhs.accepted_path_length;
+        self.terminal_path_lengh += rhs.terminal_path_lengh;
+        self.candidates_per_node_path += rhs.candidates_per_node_path;
+        self.candidates_per_root_path += rhs.candidates_per_root_path;
+        self.extensions_per_node_path += rhs.extensions_per_node_path;
+        self.extensions_per_root_path += rhs.extensions_per_root_path;
+        self.root_visits += rhs.root_visits;
+        self.node_visits += rhs.node_visits;
+        self.similar_paths_stats += rhs.similar_paths_stats;
+    }
+}
+
+impl std::ops::AddAssign<&Self> for Stats {
+    fn add_assign(&mut self, rhs: &Self) {
+        self.initial_paths += &rhs.initial_paths;
+        self.processed_paths_per_phase += &rhs.processed_paths_per_phase;
+        self.accepted_path_length += &rhs.accepted_path_length;
+        self.terminal_path_lengh += &rhs.terminal_path_lengh;
+        self.candidates_per_node_path += &rhs.candidates_per_node_path;
+        self.candidates_per_root_path += &rhs.candidates_per_root_path;
+        self.extensions_per_node_path += &rhs.extensions_per_node_path;
+        self.extensions_per_root_path += &rhs.extensions_per_root_path;
+        self.root_visits += rhs.root_visits;
+        self.node_visits += &rhs.node_visits;
+        self.similar_paths_stats += &rhs.similar_paths_stats;
     }
 }
 
@@ -1247,6 +1376,8 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
 pub struct StitcherConfig {
     /// Enables similar path detection during path stitching.
     detect_similar_paths: bool,
+    /// Collect statistics about path stitching.
+    collect_stats: bool,
 }
 
 impl StitcherConfig {
@@ -1258,11 +1389,21 @@ impl StitcherConfig {
         self.detect_similar_paths = detect_similar_paths;
         self
     }
+
+    pub fn collect_stats(&self) -> bool {
+        self.collect_stats
+    }
+
+    pub fn with_collect_stats(mut self, collect_stats: bool) -> Self {
+        self.collect_stats = collect_stats;
+        self
+    }
 }
 
 impl StitcherConfig {
     fn apply<H>(&self, stitcher: &mut ForwardPartialPathStitcher<H>) {
         stitcher.set_similar_path_detection(self.detect_similar_paths);
+        stitcher.set_collect_stats(self.collect_stats);
     }
 }
 
@@ -1270,6 +1411,7 @@ impl Default for StitcherConfig {
     fn default() -> Self {
         Self {
             detect_similar_paths: true,
+            collect_stats: false,
         }
     }
 }

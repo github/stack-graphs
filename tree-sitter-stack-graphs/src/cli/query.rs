@@ -5,19 +5,23 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use std::path::Path;
+use std::path::PathBuf;
+
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueHint;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
+use stack_graphs::stitching::Stats as StitchingStats;
 use stack_graphs::stitching::StitcherConfig;
 use stack_graphs::storage::FileStatus;
 use stack_graphs::storage::SQLiteReader;
-use std::path::Path;
-use std::path::PathBuf;
 use thiserror::Error;
 use tree_sitter_graph::parse_error::Excerpt;
 
+use crate::cli::util::print_database_stats;
+use crate::cli::util::print_stitching_stats;
 use crate::cli::util::reporter::ConsoleReporter;
 use crate::cli::util::reporter::Reporter;
 use crate::cli::util::sha1;
@@ -34,6 +38,9 @@ pub struct QueryArgs {
     #[clap(long)]
     pub wait_at_start: bool,
 
+    #[clap(long)]
+    pub stats: bool,
+
     #[clap(subcommand)]
     target: Target,
 }
@@ -44,7 +51,14 @@ impl QueryArgs {
             wait_for_input()?;
         }
         let mut db = SQLiteReader::open(&db_path)?;
-        self.target.run(&mut db)
+        let stitching_stats = self.target.run(&mut db, self.stats)?;
+        if self.stats {
+            println!();
+            print_stitching_stats(stitching_stats);
+            println!();
+            print_database_stats(db.stats());
+        }
+        Ok(())
     }
 }
 
@@ -54,12 +68,14 @@ pub enum Target {
 }
 
 impl Target {
-    pub fn run(self, db: &mut SQLiteReader) -> anyhow::Result<()> {
+    fn run(self, db: &mut SQLiteReader, collect_stats: bool) -> anyhow::Result<StitchingStats> {
         let reporter = ConsoleReporter::details();
         let mut querier = Querier::new(db, &reporter);
+        querier.set_collect_stats(collect_stats);
         match self {
-            Self::Definition(cmd) => cmd.run(&mut querier),
+            Self::Definition(cmd) => cmd.run(&mut querier)?,
         }
+        Ok(querier.into_stats())
     }
 }
 
@@ -117,7 +133,7 @@ impl Definition {
                     n => println!("{}has {} definitions", " ".repeat(indent), n),
                 }
                 for definition in definitions.into_iter() {
-                    println!(
+                    print!(
                         "{}",
                         Excerpt::from_source(
                             &definition.path,
@@ -137,11 +153,24 @@ impl Definition {
 pub struct Querier<'a> {
     db: &'a mut SQLiteReader,
     reporter: &'a dyn Reporter,
+    stats: Option<StitchingStats>,
 }
 
 impl<'a> Querier<'a> {
     pub fn new(db: &'a mut SQLiteReader, reporter: &'a dyn Reporter) -> Self {
-        Self { db, reporter }
+        Self {
+            db,
+            reporter,
+            stats: None,
+        }
+    }
+
+    pub fn set_collect_stats(&mut self, collect_stats: bool) {
+        if !collect_stats {
+            self.stats = None;
+        } else if self.stats.is_none() {
+            self.stats = Some(StitchingStats::default());
+        }
     }
 
     pub fn definitions(
@@ -161,7 +190,7 @@ impl<'a> Querier<'a> {
             _ => {
                 self.reporter.started(&log_path);
                 self.reporter.failed(&log_path, "file not indexed", None);
-                return Ok(Vec::default());
+                return Ok(Default::default());
             }
         }
 
@@ -175,7 +204,7 @@ impl<'a> Querier<'a> {
         if starting_nodes.is_empty() {
             self.reporter
                 .cancelled(&log_path, "no references at location", None);
-            return Ok(Vec::default());
+            return Ok(Default::default());
         }
 
         let mut result = Vec::new();
@@ -188,8 +217,9 @@ impl<'a> Querier<'a> {
             let mut reference_paths = Vec::new();
             let stitcher_config = StitcherConfig::default()
                 // always detect similar paths, we don't know the language configurations for the data in the database
-                .with_detect_similar_paths(true);
-            if let Err(err) = ForwardPartialPathStitcher::find_all_complete_partial_paths(
+                .with_detect_similar_paths(true)
+                .with_collect_stats(self.stats.is_some());
+            let ref_result = ForwardPartialPathStitcher::find_all_complete_partial_paths(
                 self.db,
                 std::iter::once(node),
                 stitcher_config,
@@ -197,9 +227,17 @@ impl<'a> Querier<'a> {
                 |_g, _ps, p| {
                     reference_paths.push(p.clone());
                 },
-            ) {
-                self.reporter.failed(&log_path, "query timed out", None);
-                return Err(err.into());
+            );
+            match ref_result {
+                Ok(ref_stats) => {
+                    if let Some(stats) = &mut self.stats {
+                        *stats += ref_stats
+                    }
+                }
+                Err(err) => {
+                    self.reporter.failed(&log_path, "query timed out", None);
+                    return Err(err.into());
+                }
             }
 
             let (graph, partials, _) = self.db.get();
@@ -250,6 +288,10 @@ impl<'a> Querier<'a> {
         );
 
         Ok(result)
+    }
+
+    pub fn into_stats(self) -> StitchingStats {
+        self.stats.unwrap_or_default()
     }
 }
 

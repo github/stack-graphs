@@ -419,6 +419,7 @@ impl SQLiteWriter {
             graph: StackGraph::new(),
             partials: PartialPaths::new(),
             db: Database::new(),
+            stats: Stats::default(),
         }
     }
 }
@@ -432,6 +433,7 @@ pub struct SQLiteReader {
     graph: StackGraph,
     partials: PartialPaths,
     db: Database,
+    stats: Stats,
 }
 
 impl SQLiteReader {
@@ -454,6 +456,7 @@ impl SQLiteReader {
             graph: StackGraph::new(),
             partials: PartialPaths::new(),
             db: Database::new(),
+            stats: Stats::default(),
         })
     }
 
@@ -467,6 +470,8 @@ impl SQLiteReader {
         self.loaded_root_paths.clear();
         self.partials.clear();
         self.db.clear();
+
+        self.stats.clear();
     }
 
     /// Clear path data that has been loaded into this reader instance.
@@ -477,6 +482,8 @@ impl SQLiteReader {
         self.loaded_root_paths.clear();
         self.partials.clear();
         self.db.clear();
+
+        self.stats.clear_paths();
     }
 
     /// Get the file's status in the database. If a tag is provided, it must match or the file
@@ -518,7 +525,13 @@ impl SQLiteReader {
 
     /// Ensure the graph for the given file is loaded.
     pub fn load_graph_for_file(&mut self, file: &str) -> Result<Handle<File>> {
-        Self::load_graph_for_file_inner(file, &mut self.graph, &mut self.loaded_graphs, &self.conn)
+        Self::load_graph_for_file_inner(
+            file,
+            &mut self.graph,
+            &mut self.loaded_graphs,
+            &self.conn,
+            &mut self.stats,
+        )
     }
 
     fn load_graph_for_file_inner(
@@ -526,13 +539,16 @@ impl SQLiteReader {
         graph: &mut StackGraph,
         loaded_graphs: &mut HashSet<String>,
         conn: &Connection,
+        stats: &mut Stats,
     ) -> Result<Handle<File>> {
         copious_debugging!("--> Load graph for {}", file);
         if !loaded_graphs.insert(file.to_string()) {
             copious_debugging!(" * Already loaded");
+            stats.file_cached += 1;
             return Ok(graph.get_file(file).expect("loaded file to exist"));
         }
         copious_debugging!(" * Load from database");
+        stats.file_loads += 1;
         let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
         let (file_graph, _): (serde::StackGraph, usize) =
@@ -554,6 +570,7 @@ impl SQLiteReader {
                 &mut self.graph,
                 &mut self.loaded_graphs,
                 &self.conn,
+                &mut self.stats,
             )?;
         }
         Ok(())
@@ -568,8 +585,10 @@ impl SQLiteReader {
         copious_debugging!(" * Load extensions from node {}", node.display(&self.graph));
         if !self.loaded_node_paths.insert(node) {
             copious_debugging!("   > Already loaded");
+            self.stats.node_path_cached += 1;
             return Ok(());
         }
+        self.stats.node_path_loads += 1;
         let id = self.graph[node].id();
         let file = id.file().expect("file node required");
         let file = self.graph[file].name();
@@ -591,6 +610,7 @@ impl SQLiteReader {
                 &mut self.graph,
                 &mut self.loaded_graphs,
                 &self.conn,
+                &mut self.stats,
             )?;
             let (path, _): (serde::PartialPath, usize) =
                 bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
@@ -629,8 +649,10 @@ impl SQLiteReader {
             );
             if !self.loaded_root_paths.insert(symbol_stack.clone()) {
                 copious_debugging!("   > Already loaded");
+                self.stats.root_path_cached += 1;
                 continue;
             }
+            self.stats.root_path_loads += 1;
             let paths = stmt.query_map([symbol_stack, escape.clone()], |row| {
                 let file = row.get::<_, String>(0)?;
                 let value = row.get::<_, Vec<u8>>(1)?;
@@ -646,6 +668,7 @@ impl SQLiteReader {
                     &mut self.graph,
                     &mut self.loaded_graphs,
                     &self.conn,
+                    &mut self.stats,
                 )?;
                 let (path, _): (serde::PartialPath, usize) =
                     bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
@@ -685,6 +708,11 @@ impl SQLiteReader {
     /// Get the stack graph, partial paths arena, and path database for the currently loaded data.
     pub fn get(&mut self) -> (&mut StackGraph, &mut PartialPaths, &mut Database) {
         (&mut self.graph, &mut self.partials, &mut self.db)
+    }
+
+    /// Return stats about this database reader.
+    pub fn stats(&self) -> Stats {
+        self.stats.clone()
     }
 }
 
@@ -762,6 +790,30 @@ impl ForwardCandidates<Handle<PartialPath>, PartialPath, Database, StorageError>
 
     fn get_graph_partials_and_db(&mut self) -> (&StackGraph, &mut PartialPaths, &Database) {
         (&self.graph, &mut self.partials, &self.db)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Stats {
+    pub file_loads: usize,
+    pub file_cached: usize,
+    pub root_path_loads: usize,
+    pub root_path_cached: usize,
+    pub node_path_loads: usize,
+    pub node_path_cached: usize,
+}
+
+impl Stats {
+    fn clear(&mut self) {
+        *self = Stats::default();
+    }
+
+    fn clear_paths(&mut self) {
+        *self = Stats {
+            file_loads: self.file_loads,
+            file_cached: self.file_cached,
+            ..Stats::default()
+        }
     }
 }
 

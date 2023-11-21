@@ -18,8 +18,13 @@ use sha1::Sha1;
 use stack_graphs::arena::Handle;
 use stack_graphs::graph::Node;
 use stack_graphs::graph::StackGraph;
+use stack_graphs::stats::FrequencyDistribution;
+use stack_graphs::stitching::Stats as StitchingStats;
+use stack_graphs::storage::Stats as StorageStats;
 use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::fmt::Display;
+use std::hash::Hash;
 use std::io::Write;
 use std::ops::Range;
 use std::path::Path;
@@ -27,7 +32,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use walkdir::WalkDir;
 
-use self::reporter::Reporter;
+use crate::cli::index::IndexingStats;
+use crate::cli::util::reporter::Reporter;
 
 pub mod reporter;
 
@@ -494,4 +500,95 @@ impl std::fmt::Display for DisplayBuildErrorPretty<'_> {
             )
         )
     }
+}
+
+pub(super) fn print_indexing_stats(stats: IndexingStats) {
+    print_quartiles_header("graph stats");
+    print_quartiles_row("total graph nodes", stats.total_graph_nodes);
+    print_quartiles_row("total graph edges", stats.total_graph_edges);
+    print_quartiles_row("node out degrees", stats.node_out_degrees);
+    print_value_row("root out degree", stats.root_out_degree);
+    println!();
+    print_stitching_stats(stats.stitching_stats);
+}
+
+pub(super) fn print_stitching_stats(stats: StitchingStats) {
+    print_quartiles_header("stitching stats");
+    print_quartiles_row("initial paths", stats.initial_paths);
+    print_quartiles_row("queued paths per phase", stats.queued_paths_per_phase);
+    print_quartiles_row("processed paths per phase", stats.processed_paths_per_phase);
+    print_quartiles_row("accepted path length", stats.accepted_path_length);
+    print_quartiles_row("terminal path length", stats.terminal_path_lengh);
+    print_quartiles_row("node path candidates", stats.candidates_per_node_path);
+    print_quartiles_row("node path extensions", stats.extensions_per_node_path);
+    print_quartiles_row("root path candidates", stats.candidates_per_root_path);
+    print_quartiles_row("root path extensions", stats.extensions_per_root_path);
+    print_quartiles_row("node visits", stats.node_visits.frequencies());
+    print_value_row("root visits", stats.root_visits);
+    print_quartiles_row(
+        "similar path counts",
+        stats.similar_paths_stats.similar_path_count,
+    );
+    print_quartiles_row(
+        "similar path bucket sizes",
+        stats.similar_paths_stats.similar_path_bucket_size,
+    );
+}
+
+pub(super) fn print_database_stats(stats: StorageStats) {
+    println!(
+        "| {:^29} | {:^9} | {:^9} |",
+        "database stats", "loads", "cached",
+    );
+    println!("|-------------------------------|-----------|-----------|");
+    println!(
+        "| {:>29} | {:>9} | {:>9} |",
+        "files", stats.file_loads, stats.file_cached
+    );
+    println!(
+        "| {:>29} | {:>9} | {:>9} |",
+        "node paths", stats.node_path_loads, stats.node_path_cached
+    );
+    println!(
+        "| {:>29} | {:>9} | {:>9} |",
+        "rootpaths", stats.root_path_loads, stats.root_path_cached
+    );
+}
+
+fn print_quartiles_header(title: &str) {
+    println!(
+        "| {:^29} | {:^9} | {:^9} | {:^9} | {:^9} | {:^9} | {:^9} |",
+        title, "min", "p25", "p50", "p75", "max", "count",
+    );
+    println!(
+        "|-------------------------------|-----------|-----------|-----------|-----------|-----------|-----------|"
+    );
+}
+
+fn print_quartiles_row<X: Display + Eq + Hash + Ord>(title: &str, hist: FrequencyDistribution<X>) {
+    let qs = hist.quantiles(4);
+    if qs.is_empty() {
+        println!(
+            "| {:>29} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} |",
+            title, "-", "-", "-", "-", "-", 0
+        );
+    } else {
+        println!(
+            "| {:>29} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} |",
+            title,
+            qs[0],
+            qs[1],
+            qs[2],
+            qs[3],
+            qs[4],
+            hist.count(),
+        );
+    }
+}
+
+fn print_value_row<X: Display>(title: &str, value: X) {
+    println!(
+        "| {:>29} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} | {:>9} |",
+        title, "-", "-", "-", "-", "-", value
+    );
 }

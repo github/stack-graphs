@@ -69,6 +69,7 @@ pub mod graph;
 pub mod partial;
 pub mod paths;
 pub mod serde;
+pub mod stats;
 pub mod stitching;
 #[cfg(feature = "storage")]
 pub mod storage;
