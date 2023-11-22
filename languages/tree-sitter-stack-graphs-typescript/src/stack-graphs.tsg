@@ -4118,6 +4118,7 @@ if none @is_async {
   (this)
   (member_expression)
   (subscript_expression)
+  (undefined)
 ]@pat {
   node @pat.defs
 }
