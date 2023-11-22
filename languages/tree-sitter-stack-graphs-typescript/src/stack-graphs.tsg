@@ -923,18 +923,38 @@ if none @is_default {
 ; )
 
 (export_statement
-  (namespace_export (identifier))
-  source:(_)@name
+  (namespace_export (identifier)@name)
+  source:(_)@from
 )@export_stmt {
   ; namespace definitions are specified together with (module) and (internal_module)
 
-  ; export definitions
-  edge @export_stmt.exports -> @name.expr_def__ns
-  edge @export_stmt.exports -> @name.type_def__ns
+  ; export expression definition
+  node expr_ns_pop
+  attr (expr_ns_pop) pop_symbol = "%E"
+  ;
+  edge @export_stmt.exports -> expr_ns_pop
+  edge expr_ns_pop -> @name.expr_def
 
-  ; connect definitions to exports
-  edge @export_stmt.expr_member__ns -> @name.mod_ref
-  edge @export_stmt.type_member__ns -> @name.mod_ref
+  ; export type definition
+  node type_ns_pop
+  attr (type_ns_pop) pop_symbol = "%T"
+  ;
+  edge @export_stmt.exports -> type_ns_pop
+  edge type_ns_pop -> @name.type_def
+
+  ; connect expression definition to exports
+  node expr_ns_push
+  attr (expr_ns_push) push_symbol = "%E"
+  ;
+  edge @name.expr_def_member -> expr_ns_push
+  edge expr_ns_push -> @from.mod_ref
+
+  ; connect type definition to exports
+  node type_ns_push
+  attr (type_ns_push) push_symbol = "%T"
+  ;
+  edge @name.type_def_member -> type_ns_push
+  edge type_ns_push -> @from.mod_ref
 }
 
 ; export as namespace NAME
@@ -947,16 +967,36 @@ if none @is_default {
 
 (program (export_statement
   "as" "namespace" . (_)@name
-)@export_stmt)@prog {
+))@prog {
   ; namespace definitions are specified together with (module) and (internal_module)
 
-  ; make definitions global
-  edge @prog.globals -> @name.expr_def__ns
-  edge @prog.globals -> @name.type_def__ns
+  ; make expression definition global
+  node expr_ns_pop
+  attr (expr_ns_pop) pop_symbol = "%E"
+  ;
+  edge @prog.globals -> expr_ns_pop
+  edge expr_ns_pop -> @name.expr_def
 
-  ; connect definitions to exports
-  edge @export_stmt.expr_member__ns -> @prog.exports
-  edge @export_stmt.type_member__ns -> @prog.exports
+  ; make type definition global
+  node type_ns_pop
+  attr (type_ns_pop) pop_symbol = "%T"
+  ;
+  edge @prog.globals -> type_ns_pop
+  edge type_ns_pop -> @name.type_def
+
+  ; connect expression definition to exports
+  node expr_ns_push
+  attr (expr_ns_push) push_symbol = "%E"
+  ;
+  edge @name.expr_def_member -> expr_ns_push
+  edge expr_ns_push -> @prog.exports
+
+  ; connect type definition to exports
+  node type_ns_push
+  attr (type_ns_push) push_symbol = "%T"
+  ;
+  edge @name.type_def_member -> type_ns_push
+  edge type_ns_push -> @prog.exports
 }
 
 ;; Imports
@@ -1085,14 +1125,38 @@ if none @is_type {
 
 (import_statement
   "type"?
-  (import_clause (namespace_import (identifier)))
+  (import_clause (namespace_import (identifier)@name))
   source:(_)@from
 )@import_stmt {
   ; namespace definitions are specified together with (module) and (internal_module)
 
-  ; connect definitions to import
-  edge @import_stmt.expr_member__ns -> @from.mod_ref
-  edge @import_stmt.type_member__ns -> @from.mod_ref
+  ; expose expression definition
+  node expr_ns_pop
+  attr (expr_ns_pop) pop_symbol = "%E"
+  ;
+  edge @import_stmt.lexical_defs -> expr_ns_pop
+  edge expr_ns_pop -> @name.expr_def
+
+  ; expose type definition
+  node type_ns_pop
+  attr (type_ns_pop) pop_symbol = "%T"
+  ;
+  edge @import_stmt.lexical_defs -> type_ns_pop
+  edge type_ns_pop -> @name.type_def
+
+  ; connect expression definition to import
+  node expr_ns_push
+  attr (expr_ns_push) push_symbol = "%E"
+  ;
+  edge @name.expr_def_member -> expr_ns_push
+  edge expr_ns_push -> @from.mod_ref
+
+  ; connect type definition to import
+  node type_ns_push
+  attr (type_ns_push) push_symbol = "%T"
+  ;
+  edge @name.type_def_member -> type_ns_push
+  edge type_ns_push -> @from.mod_ref
 }
 
 ;; Import Alias
@@ -2262,147 +2326,89 @@ if none @is_async {
 
 [
   ; X
-  (module                                       name:(identifier)@name  @mod)
-  (internal_module                              name:(identifier)@name  @mod)
-  (export_statement "as" "namespace" .               (identifier)@name) @mod
-  (export_statement (namespace_export                (identifier)@name))@mod
-  (import_statement (import_clause (namespace_import (identifier)@name)))@mod
-  (ambient_declaration (module                      name:(string)@name      @mod))
+  (module                                       name:(identifier)@name)
+  (internal_module                              name:(identifier)@name)
+  (export_statement "as" "namespace" .               (identifier)@name)
+  (export_statement (namespace_export                (identifier)@name))
+  (import_statement (import_clause (namespace_import (identifier)@name)))
+  (ambient_declaration (module                  name:(string)    @name))
   ; X._
-  (module                                name:(nested_identifier . (identifier)@name @mod))
-  (internal_module                       name:(nested_identifier . (identifier)@name @mod))
-  ; X._._
-  (module                                name:(nested_identifier . (nested_identifier . (identifier)@name @mod)))
-  (internal_module                       name:(nested_identifier . (nested_identifier . (identifier)@name @mod)))
-  ; X._._._
-  (module                                name:(nested_identifier . (nested_identifier . (nested_identifier . (identifier)@name @mod))))
-  (internal_module                       name:(nested_identifier . (nested_identifier . (nested_identifier . (identifier)@name @mod))))
-  ; X._._._._
-  (module                                name:(nested_identifier . (nested_identifier . (nested_identifier . (nested_identifier . (identifier)@name @mod)))))
-  (internal_module                       name:(nested_identifier . (nested_identifier . (nested_identifier . (nested_identifier . (identifier)@name @mod)))))
-]@mod_decl {
-  node @name.expr_def
-  node @name.expr_def__ns
-  node @name.expr_def__typeof
-  node @mod.expr_member
-  node @mod.expr_member__ns
-  node @name.type_def
-  node @name.type_def__ns
-  node @mod.type_member
-  node @mod.type_member__ns
-
-  ; expose expression definition
-  edge @mod_decl.lexical_defs -> @name.expr_def__ns
-
-  ; expression definition
-  attr (@name.expr_def__ns) pop_symbol = "%E"
-  edge @name.expr_def__ns -> @name.expr_def
-  ;
-  attr (@name.expr_def) node_definition = @name, syntax_type = "module"
-
-  ; namespaces mimic objects with members to access exported expressions
-  edge @name.expr_def -> @name.expr_def__typeof
-  ;
-  attr (@name.expr_def__typeof) pop_symbol = ":"
-  edge @name.expr_def__typeof -> @mod.expr_member
-  ;
-  attr (@mod.expr_member) pop_symbol = "."
-  edge @mod.expr_member -> @mod.expr_member__ns
-  ;
-  attr (@mod.expr_member__ns) push_symbol = "%E"
-
-  ; expose type definition
-  edge @mod_decl.lexical_defs -> @name.type_def__ns
-
-  ; type definition
-  attr (@name.type_def__ns) pop_symbol = "%T"
-  edge @name.type_def__ns -> @name.type_def
-  ;
-  attr (@name.type_def) node_definition = @name, syntax_type = "module"
-
-  ; namespaces mimic types with member types to access exported expressions
-  edge @name.type_def -> @mod.type_member
-  ;
-  attr (@mod.type_member) pop_symbol = "."
-  edge @mod.type_member -> @mod.type_member__ns
-  ;
-  attr (@mod.type_member__ns) push_symbol = "%T"
-}
-
-[
-  ; _.X
-  (module                                name:(nested_identifier . (_)@basemod . (identifier)@name)@mod)
-  (internal_module                       name:(nested_identifier . (_)@basemod . (identifier)@name)@mod)
-  ; _._.X
-  (module                                name:(nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name)@mod))
-  (internal_module                       name:(nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name)@mod))
-  ; _._._.X
-  (module                                name:(nested_identifier . (nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name)@mod)))
-  (internal_module                       name:(nested_identifier . (nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name)@mod)))
-  ; _._._._.X
-  (module                                name:(nested_identifier . (nested_identifier . (nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name)@mod))))
-  (internal_module                       name:(nested_identifier . (nested_identifier . (nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name)@mod))))
+  (nested_identifier                                 (identifier)@name)
 ] {
   node @name.expr_def
-  node @name.expr_def__ns
-  node @name.expr_def__typeof
-  node @mod.expr_member
-  node @mod.expr_member__ns
+  node expr_def_typeof
+  node @name.expr_def_member
   node @name.type_def
-  node @name.type_def__ns
-  node @mod.type_member
-  node @mod.type_member__ns
-
-  ; expose expression definition
-  edge @basemod.expr_member__ns -> @name.expr_def__ns
+  node @name.type_def_member
 
   ; expression definition
-  attr (@name.expr_def__ns) pop_symbol = "%E"
-  edge @name.expr_def__ns -> @name.expr_def
-  ;
   attr (@name.expr_def) node_definition = @name, syntax_type = "module"
-
-  ; namespaces mimic objects with members to access exported expressions
-  edge @name.expr_def -> @name.expr_def__typeof
+  attr (expr_def_typeof) pop_symbol = ":"
+  attr (@name.expr_def_member) pop_symbol = "."
   ;
-  attr (@name.expr_def__typeof) pop_symbol = ":"
-  edge @name.expr_def__typeof -> @mod.expr_member
-  ;
-  attr (@mod.expr_member) pop_symbol = "."
-  edge @mod.expr_member -> @mod.expr_member__ns
-  ;
-  attr (@mod.expr_member__ns) push_symbol = "%E"
-
-  ; expose type definition
-  edge @basemod.type_member__ns -> @name.type_def__ns
+  edge @name.expr_def -> expr_def_typeof
+  edge expr_def_typeof -> @name.expr_def_member
 
   ; type definition
-  attr (@name.type_def__ns) pop_symbol = "%T"
-  edge @name.type_def__ns -> @name.type_def
-  ;
   attr (@name.type_def) node_definition = @name, syntax_type = "module"
+  attr (@name.type_def_member) pop_symbol = "."
+  ;
+  edge @name.type_def -> @name.type_def_member
+}
 
-  ; namespaces mimic types with member types to access exported expressions
-  edge @name.type_def -> @mod.type_member
-  ;
-  attr (@mod.type_member) pop_symbol = "."
-  edge @mod.type_member -> @mod.type_member__ns
-  ;
-  attr (@mod.type_member__ns) push_symbol = "%T"
+(nested_identifier . (_) @mod) @nested {
+  node @nested.expr_def
+  node @nested.type_def
+
+  edge @nested.expr_def -> @mod.expr_def
+  edge @nested.type_def -> @mod.type_def
+}
+
+(nested_identifier . (_) @mod . (_) @name .) {
+  edge @mod.expr_def_member -> @name.expr_def
+  edge @mod.type_def_member -> @name.type_def
+}
+
+(nested_identifier (_) @name .) @nested {
+  node @nested.expr_def_member
+  node @nested.type_def_member
+
+  edge @name.expr_def_member -> @nested.expr_def_member
+  edge @name.type_def_member -> @nested.type_def_member
 }
 
 [
-  (module                                name:(_)@mod body:(_)@body)
-  (internal_module                       name:(_)@mod body:(_)@body)
+  (module          name:(_)@mod body:(_)@body)
+  (internal_module name:(_)@mod body:(_)@body)
 ]@mod_decl {
   ; propagate lexical scope
   edge @body.lexical_scope -> @mod_decl.lexical_scope
 
-  ; connect object to exports
-  edge @mod.expr_member__ns -> @body.exports
+  ; expose expression definition
+  node expr_ns_pop
+  attr (expr_ns_pop) pop_symbol = "%E"
+  ;
+  edge @mod_decl.lexical_defs -> expr_ns_pop
+  edge expr_ns_pop -> @mod.expr_def
 
-  ; connect type to exports
-  edge @mod.type_member__ns -> @body.exports
+  ; expose type definition
+  node type_ns_pop
+  attr (type_ns_pop) pop_symbol = "%T"
+  ;
+  edge @mod_decl.lexical_defs -> type_ns_pop
+  edge type_ns_pop -> @mod.type_def
+
+  ; connect expression definition to exports
+  node expr_ns_push
+  attr (expr_ns_push) push_symbol = "%E"
+  edge @mod.expr_def_member -> expr_ns_push
+  edge expr_ns_push -> @body.exports
+
+  ; connect type definition to exports
+  node type_ns_push
+  attr (type_ns_push) push_symbol = "%T"
+  edge @mod.type_def_member -> type_ns_push
+  edge type_ns_push -> @body.exports
 }
 
 ; NOTE internal_module is also an expression in the grammar, not only a statement.
@@ -2649,6 +2655,7 @@ if none @is_async {
   (object)
   (parenthesized_expression)
   (regex)
+  (satisfies_expression)
   (sequence_expression)
   (spread_element)
   (string)
@@ -2959,6 +2966,21 @@ if none @is_def {
 (regex) {
 }
 
+
+
+;; Satisfies Expressions
+
+; { foo: 42 } satisfies { foo: number }
+
+(satisfies_expression (_)@expr . (_)@type)@satisfies {
+  ; propagate lexical scope
+  edge @expr.lexical_scope -> @satisfies.lexical_scope
+  edge @type.lexical_scope -> @satisfies.lexical_scope
+
+  ; type is union of both
+  edge @satisfies.type -> @expr.type
+  edge @satisfies.type -> @type.type
+}
 
 
 ;; Spread Element
@@ -4096,6 +4118,7 @@ if none @is_async {
   (this)
   (member_expression)
   (subscript_expression)
+  (undefined)
 ]@pat {
   node @pat.defs
 }
@@ -4104,7 +4127,7 @@ if none @is_async {
   (for_in_statement ["var" "let" "const"] left:(identifier)@name)
   (variable_declarator name:(identifier)@name)
   (pattern/identifier)@name
-  (rest_pattern (_)@name)
+  (rest_pattern (identifier)@name)
 ] {
   node @name.cotype
   node @name.lexical_scope
@@ -4114,7 +4137,7 @@ if none @is_async {
   (for_in_statement ["var" "let" "const"] left:(identifier)@name)
   (variable_declarator name:(identifier)@name)
   (pattern/identifier)@name
-  (rest_pattern (_)@name)
+  (rest_pattern (identifier)@name)
 ] {
   node @name.defs
   node @name.expr_def
@@ -4325,6 +4348,7 @@ if none @is_async {
 [
   (abstract_method_signature)
   (call_signature)
+  (class_static_block)
   (construct_signature)
   (decorator) ; not strictly a member, but appears in same positions
   (index_signature)
@@ -4344,6 +4368,14 @@ if none @is_async {
 
 (decorator (_)@expr)@dec {
   edge @expr.lexical_scope -> @dec.lexical_scope
+}
+
+
+
+;; Static Block
+
+(class_static_block body:(_)@body)@static {
+  edge @body.lexical_scope -> @static.lexical_scope
 }
 
 
@@ -5525,70 +5557,44 @@ if none @is_acc {
 
 [
   ; X
-  (nested_type_identifier module:(identifier)@name @mod)
-  ; X._
-  (nested_type_identifier module:(nested_identifier . (identifier)@name @mod))
-  ; X._._
-  (nested_type_identifier module:(nested_identifier . (nested_identifier . (identifier)@name @mod)))
-  ; X._._._
-  (nested_type_identifier module:(nested_identifier . (nested_identifier . (nested_identifier . (identifier)@name @mod))))
-  ; X._._._._
-  (nested_type_identifier module:(nested_identifier . (nested_identifier . (nested_identifier . (nested_identifier . (identifier)@name @mod)))))
-]@nested_type_id {
-  node @name.type_ref
-  node @name.type_ref__ns
-  node @mod.type
-
-  ; type reference to namespace name
-  edge @mod.type -> @name.type_ref
-  ;
-  attr (@name.type_ref) node_reference = @name
-  edge @name.type_ref -> @name.type_ref__ns
-  ;
-  attr (@name.type_ref__ns) push_symbol = "%T"
-  edge @name.type_ref__ns -> @nested_type_id.lexical_scope
-}
-
-[
-  ; _.X
-  (nested_type_identifier module:(nested_identifier . (_)@basemod . (identifier)@name .)@mod)
-  ; _._.X
-  (nested_type_identifier module:(nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name .)@mod))
-  ; _._._.X
-  (nested_type_identifier module:(nested_identifier . (nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name .)@mod)))
-  ; _._._._.X
-  (nested_type_identifier module:(nested_identifier . (nested_identifier . (nested_identifier . (nested_identifier . (_)@basemod . (identifier)@name .)@mod))))
+  (nested_type_identifier module:(identifier)@name)
+  ; X._, _.X._
+  (nested_identifier (identifier)@name)
 ] {
   node @name.type_ref
-  node @name.type_ref__ns
-  node @mod.member
-  node @mod.type
-
-  ; type reference to namespace name
-  edge @mod.type -> @name.type_ref
-  ;
   attr (@name.type_ref) node_reference = @name
-  edge @name.type_ref -> @mod.member
-  ;
-  attr (@mod.member) push_symbol = "."
-  edge @mod.member -> @basemod.type
+
+  node @name.type_ref_member
+  attr (@name.type_ref_member) push_symbol = "."
+
+  edge @name.type_ref_member -> @name.type_ref
 }
 
-(nested_type_identifier
-  module:(_)@mod
-  name:(_)@name
-)@nested_type_id {
-  node @name.nested_type_ref ; FIXME non-standard name because the general (type_identifier) rule is also applied to @name
-  node @nested_type_id.member
+(nested_identifier . (_)@mod) @nested {
+  node @nested.type_ref
+  edge @mod.type_ref -> @nested.type_ref
+}
 
-  ; type reference into namespace type
-  edge @nested_type_id.type -> @name.nested_type_ref
-  ;
-  attr (@name.nested_type_ref) node_reference = @name
-  edge @name.nested_type_ref -> @nested_type_id.member
-  ;
-  attr (@nested_type_id.member) push_symbol = "."
-  edge @nested_type_id.member -> @mod.type
+(nested_identifier . (_)@mod . (_)@name .) {
+  edge @name.type_ref -> @mod.type_ref_member
+}
+
+(nested_identifier (_)@name .) @nested {
+  node @nested.type_ref_member
+  edge @nested.type_ref_member -> @name.type_ref_member
+}
+
+(nested_type_identifier module:(_)@mod)@nested_type_id {
+  node type_ns
+  attr (type_ns) push_symbol = "%T"
+
+  edge @mod.type_ref -> type_ns
+  edge type_ns -> @nested_type_id.lexical_scope
+}
+
+(nested_type_identifier module:(_)@mod name:(_)@name)@nested_type_id {
+  edge @nested_type_id.type -> @name.type_ref
+  edge @name.type_ref -> @mod.type_ref_member
 }
 
 
