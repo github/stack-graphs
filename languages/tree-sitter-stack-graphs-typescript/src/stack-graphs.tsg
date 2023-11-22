@@ -4127,7 +4127,7 @@ if none @is_async {
   (for_in_statement ["var" "let" "const"] left:(identifier)@name)
   (variable_declarator name:(identifier)@name)
   (pattern/identifier)@name
-  (rest_pattern (_)@name)
+  (rest_pattern (identifier)@name)
 ] {
   node @name.cotype
   node @name.lexical_scope
@@ -4137,7 +4137,7 @@ if none @is_async {
   (for_in_statement ["var" "let" "const"] left:(identifier)@name)
   (variable_declarator name:(identifier)@name)
   (pattern/identifier)@name
-  (rest_pattern (_)@name)
+  (rest_pattern (identifier)@name)
 ] {
   node @name.defs
   node @name.expr_def
