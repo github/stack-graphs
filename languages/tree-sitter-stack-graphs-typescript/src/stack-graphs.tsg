@@ -4348,6 +4348,7 @@ if none @is_async {
 [
   (abstract_method_signature)
   (call_signature)
+  (class_static_block)
   (construct_signature)
   (decorator) ; not strictly a member, but appears in same positions
   (index_signature)
@@ -4367,6 +4368,14 @@ if none @is_async {
 
 (decorator (_)@expr)@dec {
   edge @expr.lexical_scope -> @dec.lexical_scope
+}
+
+
+
+;; Static Block
+
+(class_static_block body:(_)@body)@static {
+  edge @body.lexical_scope -> @static.lexical_scope
 }
 
 
