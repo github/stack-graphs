@@ -1163,20 +1163,28 @@ inherit .parent_module
 ;;
 ;; Patterns
 
-(pattern/identifier) @name {
+
+[
+  (pattern/identifier) @name @pattern
+  ; identifiers in patterns
+  (as_pattern (identifier) @name .) @pattern
+  (keyword_pattern (identifier) @name) @pattern
+  (splat_pattern (identifier) @name) @pattern
+  ; every context where _simple_pattern is used, because matching
+  ; pattern/dotted_name does not work
+  (case_pattern (dotted_name . (_) @name .) @pattern)
+  (keyword_pattern (dotted_name . (_) @name .) @pattern)
+  (union_pattern (dotted_name . (_) @name .) @pattern)
+] {
   attr (@name.def) node_definition = @name
-}
+  edge @pattern.output -> @pattern.local_scope
+  edge @pattern.output -> @pattern.class_parent_scope
+  edge @pattern.local_scope -> @pattern.input
+  attr (@pattern.local_scope -> @pattern.input) precedence = 1
+  attr (@pattern.input) node_definition = @name
+  attr (@pattern.output) push_node = @name
 
-(pattern/identifier) @name
-{
-  edge @name.output -> @name.local_scope
-  edge @name.output -> @name.class_parent_scope
-  edge @name.local_scope -> @name.input
-  attr (@name.local_scope -> @name.input) precedence = 1
-  attr (@name.input) node_definition = @name
-  attr (@name.output) push_node = @name
-
-  edge @name.new_bindings -> @name.def
+  edge @pattern.new_bindings -> @name.def
 }
 
 (pattern/subscript) {}
@@ -1188,7 +1196,9 @@ inherit .parent_module
 }
 
 
-(list_splat_pattern) {}
+(list_splat_pattern (_) @pattern) @list {
+  edge @list.new_bindings -> @pattern.new_bindings
+}
 
 [
   (pattern_list (_) @pattern)
@@ -1208,19 +1218,27 @@ inherit .parent_module
   attr (pattern_index) push_symbol = (named-child-index @pattern)
 }
 
-(class_pattern) {}
+(class_pattern (case_pattern) @pattern) @class {
+  edge @class.new_bindings -> @pattern.new_bindings
+}
 
-(splat_pattern) {}
+(splat_pattern (_) @pattern) @splat {
+  edge @splat.new_bindings -> @pattern.new_bindings
+}
 
-(union_pattern) {}
+(union_pattern (_) @pattern) @union {
+  edge @union.new_bindings -> @pattern.new_bindings
+}
 
-(dict_pattern) {}
+(dict_pattern (_) @pattern) @dict {
+  edge @dict.new_bindings -> @pattern.new_bindings
+}
 
 (complex_pattern) {}
 
 (as_pattern
   (expression) @value
-  alias: (as_pattern_target (primary_expression/identifier) @name)) @as_pattern
+  alias: (as_pattern_target (identifier) @name)) @as_pattern
 {
   attr (@name.local_scope -> @name.input) precedence = 1
   attr (@name.input) is_definition
@@ -1231,9 +1249,9 @@ inherit .parent_module
 
 (keyword_pattern) {}
 
-(case_pattern (_) @expr) @pat
+(case_pattern (_) @pattern) @case
 {
-  edge @pat.new_bindings -> @expr.new_bindings
+  edge @case.new_bindings -> @pattern.new_bindings
 }
 
 [
