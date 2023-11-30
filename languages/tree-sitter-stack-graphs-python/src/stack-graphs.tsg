@@ -813,12 +813,10 @@ inherit .parent_module
   edge @param.param_name -> @params.before_scope
 }
 
-(parameter/identifier) @name {
-  attr (@name.def) node_definition = @name
-}
 
 (parameter/identifier) @param @name
 {
+  attr (@name.def) node_definition = @name
   attr (@param.param_name) push_node = @param
   edge @name.def -> @param.param_name
   edge @name.def -> @param.param_index
@@ -827,13 +825,13 @@ inherit .parent_module
 
 [
   (parameter/default_parameter
-    name: (identifier) @name
+    name: (_) @name
     value: (_) @value) @param
   (parameter/typed_default_parameter
     name: (_) @name
     value: (_) @value) @param
-]
-{
+] {
+  attr (@name.def) node_definition = @name
   attr (@param.param_name) push_node = @name
   edge @name.def -> @param.param_name
   edge @name.def -> @param.param_index
@@ -848,8 +846,8 @@ inherit .parent_module
     (_) @name) @param
   (parameter/dictionary_splat_pattern
     (_) @name) @param
-]
-{
+] {
+  attr (@name.def) node_definition = @name
   attr (@param.param_name) push_node = @name
   edge @name.def -> @param.param_name
   edge @name.def -> @param.param_index
