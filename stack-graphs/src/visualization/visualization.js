@@ -742,7 +742,9 @@ class StackGraph {
             tooltip.add_row("exported?", node.is_exported ? "yes" : "no");
         }
         if (this.node_has_source_info(node)) {
-            tooltip.add_row("location", this.source_info_to_str(node.source_info));
+            if (!this.span_is_empty(node.source_info.span)) {
+                tooltip.add_row("location", this.location_to_str(node.source_info.span.start));
+            }
         }
         if (node.paths.length > 0) {
             tooltip.add_row("outgoing paths", `${node.paths.length}`);
@@ -964,20 +966,23 @@ class StackGraph {
 
     node_has_source_info(node) {
         return node.hasOwnProperty("source_info")
-            && !this.source_info_is_empty(node.source_info);
     }
 
-    source_info_to_str(source_info) {
-        const line = source_info.span.start.line;
-        const column = source_info.span.start.column.grapheme_offset;
-        return `line ${line + 1} column ${column + 1}`;
+    span_to_str(span) {
+        return `${this.location_to_str(span.start)}–${this.location_to_str(span.end)}`;
     }
 
-    source_info_is_empty(source_info) {
-        return source_info.span.start.line === 0
-            && source_info.span.start.column.utf8_offset === 0
-            && source_info.span.end.line === 0
-            && source_info.span.end.column.utf8_offset === 0;
+    location_to_str(loc) {
+        return `${loc.line + 1}:${loc.column.grapheme_offset + 1}`;
+    }
+
+    span_is_empty(span) {
+        return !span
+            || (    span.start.line === 0
+                 && span.start.column.utf8_offset === 0
+                 && span.end.line === 0
+                 && span.end.column.utf8_offset === 0
+               );
     }
 
     // ------------------------------------------------------------------------------------------------

@@ -330,6 +330,10 @@ impl Node {
 )]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct SourceInfo {
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "span_is_empty")
+    )]
     pub span: lsp_positions::Span,
     pub syntax_type: Option<String>,
 }
@@ -596,4 +600,9 @@ impl crate::graph::StackGraph {
                     .collect(),
             })
     }
+}
+
+#[cfg(feature = "serde")]
+fn span_is_empty(span: &lsp_positions::Span) -> bool {
+    *span == lsp_positions::Span::default()
 }

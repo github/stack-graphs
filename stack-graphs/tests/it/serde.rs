@@ -6,6 +6,8 @@
 // ------------------------------------------------------------------------------------------------
 
 use assert_json_diff::assert_json_eq;
+use pretty_assertions::assert_eq;
+
 use serde_json;
 use serde_json::json;
 use stack_graphs::graph;
@@ -44,15 +46,15 @@ fn serde_json_stack_graph() {
                         end: lsp_positions::Position {
                             line: 0,
                             column: lsp_positions::Offset {
-                                utf8_offset: 0,
+                                utf8_offset: 5,
                                 utf16_offset: 0,
-                                grapheme_offset: 0,
+                                grapheme_offset: 5,
                             },
                             containing_line: 0..0,
                             trimmed_line: 0..0,
                         },
                     },
-                    syntax_type: None,
+                    syntax_type: Some("function".to_string()),
                 }),
                 debug_info: Some(serde::DebugInfo { data: vec![] }),
             }],
@@ -102,18 +104,18 @@ fn serde_json_stack_graph() {
                         "span" : {
                             "end" : {
                                 "column" : {
-                                    "grapheme_offset" : 0,
+                                    "grapheme_offset" : 5,
                                     "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
+                                    "utf8_offset" : 5
                                 },
                                 "line" : 0,
+                                "containing_line" : {
+                                    "start" : 0,
+                                    "end" : 0
+                                },
                                 "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
+                                    "start" : 0,
+                                    "end" : 0
                                 }
                             },
                             "start" : {
@@ -122,17 +124,18 @@ fn serde_json_stack_graph() {
                                     "utf16_offset" : 0,
                                     "utf8_offset" : 0
                                 },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                },
                                 "line" : 0,
+                                "containing_line" : {
+                                    "start" : 0,
+                                    "end" : 0
+                                },
                                 "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
+                                    "start" : 0,
+                                    "end" : 0
                                 }
                             }
-                        }
+                        },
+                        "syntax_type" : "function"
                     },
                     "type" : "root"
                 }
@@ -171,84 +174,12 @@ fn can_load_serialized_stack_graph() {
                     "id" : {
                         "local_id" : 1
                     },
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                },
-                                "line" : 0,
-                                "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                },
-                                "line" : 0,
-                                "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                }
-                            }
-                        }
-                    },
                     "type" : "root"
                 },
                 {
                     "debug_info" : [],
                     "id" : {
                         "local_id" : 2
-                    },
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                },
-                                "line" : 0,
-                                "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                },
-                                "line" : 0,
-                                "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                }
-                            }
-                        }
                     },
                     "type" : "jump_to_scope"
                 },
@@ -268,42 +199,6 @@ fn can_load_serialized_stack_graph() {
                         "local_id" : 0
                     },
                     "is_exported" : false,
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                },
-                                "line" : 0,
-                                "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "containing_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                },
-                                "line" : 0,
-                                "trimmed_line" : {
-                                    "end" : 0,
-                                    "start" : 0
-                                }
-                            }
-                        }
-                    },
                     "type" : "scope"
                 }
             ]
@@ -321,7 +216,7 @@ fn can_load_serialized_stack_graph() {
         .iter_nodes()
         .find(|handle| matches!(sg[*handle], graph::Node::Scope(..)))
         .unwrap();
-    assert!(sg.source_info(handle).is_some());
+    assert!(!sg.source_info(handle).is_some());
     assert!(sg.node_debug_info(handle).is_some());
 }
 
@@ -457,42 +352,7 @@ fn can_serialize_graph() {
                     "id" : {
                         "local_id" : 1
                     },
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "type" : "root"
                 },
                 {
@@ -500,42 +360,7 @@ fn can_serialize_graph() {
                     "id" : {
                         "local_id" : 2
                     },
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "type" : "jump_to_scope"
                 },
                 {
@@ -592,42 +417,7 @@ fn can_serialize_graph() {
                         "local_id" : 2
                     },
                     "is_reference" : false,
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "symbol" : ".",
                     "type" : "push_symbol"
                 },
@@ -647,42 +437,7 @@ fn can_serialize_graph() {
                         "local_id" : 3
                     },
                     "is_exported" : true,
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "type" : "scope"
                 },
                 {
@@ -696,42 +451,7 @@ fn can_serialize_graph() {
                         "file" : "test.py",
                         "local_id" : 3
                     },
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "symbol" : "()",
                     "type" : "push_scoped_symbol"
                 },
@@ -751,42 +471,7 @@ fn can_serialize_graph() {
                         "local_id" : 5
                     },
                     "is_exported" : false,
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "type" : "scope"
                 },
                 {
@@ -795,42 +480,7 @@ fn can_serialize_graph() {
                         "local_id" : 6
                     },
                     "is_definition" : false,
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "symbol" : "()",
                     "type" : "pop_scoped_symbol"
                 },
@@ -839,42 +489,7 @@ fn can_serialize_graph() {
                         "file" : "test.py",
                         "local_id" : 7
                     },
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "type" : "drop_scopes"
                 },
                 {
@@ -883,42 +498,7 @@ fn can_serialize_graph() {
                         "local_id" : 8
                     },
                     "is_definition" : false,
-                    "source_info" : {
-                        "span" : {
-                            "end" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            },
-                            "start" : {
-                                "column" : {
-                                    "grapheme_offset" : 0,
-                                    "utf16_offset" : 0,
-                                    "utf8_offset" : 0
-                                },
-                                "line" : 0,
-                                "containing_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                },
-                                "trimmed_line" : {
-                                    "start" : 0,
-                                    "end" : 0
-                                }
-                            }
-                        }
-                    },
+                    "source_info": {},
                     "symbol" : ".",
                     "type" : "pop_symbol"
                 },
