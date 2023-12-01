@@ -55,6 +55,7 @@ fn serde_json_stack_graph() {
                         },
                     },
                     syntax_type: Some("function".to_string()),
+                    definiens_span: lsp_positions::Span::default(),
                 }),
                 debug_info: Some(serde::DebugInfo { data: vec![] }),
             }],

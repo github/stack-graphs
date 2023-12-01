@@ -748,6 +748,9 @@ class StackGraph {
             if (node.source_info.syntax_type) {
                 tooltip.add_row("syntax type", node.source_info.syntax_type);
             }
+            if (!this.span_is_empty(node.source_info.definiens_span)) {
+                tooltip.add_row("definiens span", this.span_to_str(node.source_info.definiens_span));
+            }
         }
         if (node.paths.length > 0) {
             tooltip.add_row("outgoing paths", `${node.paths.length}`);
