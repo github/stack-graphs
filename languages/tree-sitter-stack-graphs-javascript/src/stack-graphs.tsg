@@ -3184,9 +3184,6 @@ inherit .return_or_yield
   edge @new_expr.value -> new_expr_guard_this
   edge new_expr_guard_this -> new_expr_call
 
-  ; value coming from the field decls in the class
-  edge @new_expr.value -> @constructor.value
-
   ; value also coming from the prototype
   node guard_prototype
   attr (guard_prototype) push_symbol = "GUARD:PROTOTYPE"
