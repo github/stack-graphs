@@ -4476,7 +4476,7 @@ inherit .return_or_yield
   edge pop_default_guard -> @right.value
 
   ;; For ES6 interoperability, expose members as named exports
-  attr (pop_dot) pop_symbol = "GAURD:MEMBER"
+  attr (pop_dot) pop_symbol = "GUARD:MEMBER"
   edge @assignment_expr.exports -> pop_dot
   edge pop_dot -> @right.value
 
