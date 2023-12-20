@@ -193,7 +193,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 ;;
 ;;   edge @prog.number_prototype -> @prog.number_prototype_toString_method_value
 ;;   edge @prog.number_prototype_toString_method_value -> @prog.number_prototype_toString_method_value_return
-;;   attr (@prog.number_prototype_toString_method_value_return) symbol_definition = "GUARD:RETURN"
+;;   attr (@prog.number_prototype_toString_method_value_return) pop_symbol = "GUARD:RETURN"
 ;;   edge @prog.number_prototype_toString_method_value_return -> @prog.string_prototype
 ;;
 ;;   ...
@@ -1306,7 +1306,7 @@ inherit .return_or_yield
   edge fun_decl_function_value -> fun_decl_value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (fun_decl_value_return) symbol_definition = "GUARD:RETURN"
+  attr (fun_decl_value_return) pop_symbol = "GUARD:RETURN"
   edge fun_decl_value_call -> fun_decl_value_return
   let @body.return_or_yield = fun_decl_value_return
 
@@ -1391,7 +1391,7 @@ inherit .return_or_yield
   edge fun_decl_function_value -> fun_decl_value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (fun_decl_value_return) symbol_definition = "GUARD:RETURN"
+  attr (fun_decl_value_return) pop_symbol = "GUARD:RETURN"
   edge fun_decl_value_call -> fun_decl_value_return
   let @body.return_or_yield = fun_decl_value_return
 
@@ -1569,7 +1569,7 @@ inherit .return_or_yield
   edge @method_def.method_value -> method_def_method_value_call
 
   ; method values have return nodes which need to be visible for returns
-  attr (method_def_method_value_return) symbol_definition = "GUARD:RETURN"
+  attr (method_def_method_value_return) pop_symbol = "GUARD:RETURN"
   edge method_def_method_value_call -> method_def_method_value_return
   let @body.return_or_yield = method_def_method_value_return
 
@@ -2143,7 +2143,16 @@ inherit .return_or_yield
   edge @return_stmt.after_scope -> @returned_expr.after_scope
 
   ; return statements hook up to the call node of the function value
-  edge @return_stmt.return_or_yield -> @returned_expr.value
+  ;; edge @return_stmt.return_or_yield -> @returned_expr.value
+
+  ; definition detours
+  node detour_push
+  node detour_pop
+  attr (detour_push) push_symbol = "GUARD:RETURN_DEF_DETOUR"
+  attr (detour_pop) symbol_definition = "GUARD:RETURN_DEF_DETOUR", source_node = @return_stmt, definiens_node = @return_stmt
+  edge @return_stmt.return_or_yield -> detour_push
+  edge detour_push -> detour_pop
+  edge detour_pop ->@returned_expr.value
 }
 
 
@@ -2749,7 +2758,7 @@ inherit .return_or_yield
   edge @fun.value -> fun_value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (fun_value_return) symbol_definition = "GUARD:RETURN"
+  attr (fun_value_return) pop_symbol = "GUARD:RETURN"
   edge fun_value_call -> fun_value_return
   let @body.return_or_yield = fun_value_return
 
@@ -2816,7 +2825,7 @@ inherit .return_or_yield
   edge @fun.value -> fun_value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (fun_value_return) symbol_definition = "GUARD:RETURN"
+  attr (fun_value_return) pop_symbol = "GUARD:RETURN"
   edge fun_value_call -> fun_value_return
   let @body.return_or_yield = fun_value_return
 
@@ -2936,7 +2945,7 @@ inherit .return_or_yield
   edge @fun.value -> fun_value_call
 
   ; function values have return nodes which need to be visible for returns
-  attr (fun_value_return) symbol_definition = "GUARD:RETURN"
+  attr (fun_value_return) pop_symbol = "GUARD:RETURN"
   edge fun_value_call -> fun_value_return
   let @body.return_or_yield = fun_value_return
 
