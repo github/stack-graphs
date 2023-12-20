@@ -2148,7 +2148,7 @@ inherit .return_or_yield
   ; definition detours
   node detour_push
   node detour_pop
-  attr (detour_push) push_symbol = "GUARD:RETURN_DEF_DETOUR"
+  attr (detour_push) symbol_reference = "GUARD:RETURN_DEF_DETOUR"
   attr (detour_pop) symbol_definition = "GUARD:RETURN_DEF_DETOUR", source_node = @return_stmt, definiens_node = @return_stmt
   edge @return_stmt.return_or_yield -> detour_push
   edge detour_push -> detour_pop
