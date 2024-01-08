@@ -498,7 +498,7 @@ pub enum IndexError {
     LoadError(#[source] crate::loader::LoadError<'static>),
     #[error("failed to read file")]
     ReadError(#[from] std::io::Error),
-    #[error("failed to build stank graph")]
+    #[error("failed to build stack graph")]
     StackGraph,
     #[error(transparent)]
     StorageError(#[from] stack_graphs::storage::StorageError),
