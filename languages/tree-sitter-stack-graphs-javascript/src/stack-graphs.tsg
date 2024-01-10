@@ -4629,7 +4629,7 @@ inherit .return_or_yield
   name:(_)@name
   body:(_)@_body)@class_decl {
 
-  attr (@name.pop) definiens_node = @class_decl
+  ;; attr (@name.pop) definiens_node = @class_decl
 
 }
 
@@ -4680,7 +4680,7 @@ inherit .return_or_yield
   name:(_)@name
   body:(_)@_body)@class {
   
-  attr (@name.pop) definiens_node = @class
+  ;; attr (@name.pop) definiens_node = @class
 
 }
 
