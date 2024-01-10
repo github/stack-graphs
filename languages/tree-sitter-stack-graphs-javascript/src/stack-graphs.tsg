@@ -4625,13 +4625,13 @@ inherit .return_or_yield
 ;; These rules are all about declarations and terms that have the names
 ;; directly in them.
 
-(class_declaration
-  name:(_)@name
-  body:(_)@_body)@class_decl {
+;; (class_declaration
+;;   name:(_)@name
+;;   body:(_)@_body)@class_decl {
 
-  ;; attr (@name.pop) definiens_node = @class_decl
+;;   attr (@name.pop) definiens_node = @class_decl
 
-}
+;; }
 
 (function_declaration
   name:(_)@name
@@ -4676,13 +4676,13 @@ inherit .return_or_yield
 
 }
 
-(class
-  name:(_)@name
-  body:(_)@_body)@class {
+;; (class
+;;   name:(_)@name
+;;   body:(_)@_body)@class {
   
-  ;; attr (@name.pop) definiens_node = @class
+;;   attr (@name.pop) definiens_node = @class
 
-}
+;; }
 
 ;; ### Assignment-like Rules
 
