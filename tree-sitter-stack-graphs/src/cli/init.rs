@@ -455,33 +455,79 @@ impl ProjectSettings<'_> {
     fn generate_readme(&self, project_path: &Path) -> anyhow::Result<()> {
         let mut file = File::create(project_path.join("README.md"))?;
         writedoc! {file, r####"
-            # tree-sitter-stack-graphs definition for {}
+            # tree-sitter-stack-graphs definition for {language_name}
 
-            This project defines tree-sitter-stack-graphs rules for {} using the [{}][] grammar.
+            This project defines tree-sitter-stack-graphs rules for {language_name} using the [{grammar_crate_name}][] grammar.
 
-            [{}]: https://crates.io/crates/{}
+            [{grammar_crate_name}]: https://crates.io/crates/{grammar_crate_name}
 
-            ## Usage
+            - [API documentation](https://docs.rs/{crate_name}/)
+            - [Release notes](https://github.com/github/stack-graphs/blob/main/languages/{crate_name}/CHANGELOG.md)
+
+            ## Using the API
 
             To use this library, add the following to your `Cargo.toml`:
 
-            ``` toml
+            ```toml
             [dependencies]
-            {} = "{}"
+            {crate_name} = "{crate_version}"
             ```
 
-            Check out our [documentation](https://docs.rs/{}/*/) for more details on how to use this library.
+            Check out our [documentation](https://docs.rs/{crate_name}/*/) for more details on how to use this library.
 
-            ## Command-line Program
+            ## Using the Command-line Program
 
-            The command-line program for `{}` lets you do stack graph based analysis and lookup from the command line.
+            The command-line program for `{crate_name}` lets you do stack graph based analysis and lookup from the command line.
 
-            Install the program using `cargo install` as follows:
+            The CLI can be run as follows:
 
-            ``` sh
-            $ cargo install --features cli {}
-            $ {} --help
-            ```
+            1. _(Installed)_ Install the CLI using Cargo as follows:
+
+               ```sh
+               cargo install --features cli {crate_name}
+               ```
+
+               After this, the CLI should be available as `{crate_name}`.
+
+            2. _(From source)_ Instead of installing the CLI, it can also be run directly from the crate directory, as a replacement for a `{crate_name}` invocation, as follows:
+
+               ```sh
+               cargo run --features cli --
+               ```
+
+            The basic CLI workflow for the command-line program is to index source code and issue queries against the resulting database:
+
+            1. Index a source folder as follows:
+
+               ```sh
+               {crate_name} index SOURCE_DIR
+               ```
+
+               _Indexing will skip any files that have already be indexed. To force a re-index, add the `-f` flag._
+
+               To check the status if a source folder, run:
+
+               ```sh
+               {crate_name} status SOURCE_DIR
+               ```
+
+               To clean the database and start with a clean slate, run:
+
+               ```sh
+               {crate_name} clean
+               ```
+
+               _Pass the `--delete` flag to not just empty the database, but also delete it. This is useful to resolve `unsupported database version` errors that may occur after a version update._
+
+            2. Run a query to find the definition(s) for a reference on a given line and column, run:
+
+               ```sh
+               {crate_name} query definition SOURCE_PATH:LINE:COLUMN
+               ```
+
+               Resulting definitions are printed, including a source line if the source file is available.
+
+            Discover all available commands and flags by passing the `-h` flag to the CLI directly, or to any of the subcommands.
 
             ## Development
 
@@ -492,35 +538,29 @@ impl ProjectSettings<'_> {
             The project is organized as follows:
 
             - The stack graph rules are defined in `src/stack-graphs.tsg`.
-            - Builtins sources and configuration are defined in `src/builtins.{}` and `builtins.cfg` respectively.
+            - Builtins sources and configuration are defined in `src/builtins.{language_file_extension}` and `builtins.cfg` respectively.
             - Tests are put into the `test` directory.
 
-            ### Building and Running Tests
-
-            Build the project by running:
-
-            ``` sh
-            $ cargo build
-            ```
+            ### Running Tests
 
             Run the tests as follows:
 
-            ``` sh
-            $ cargo test
+            ```sh
+            cargo test
             ```
 
             The project consists of a library and a CLI. By default, running `cargo` only applies to the library. To run `cargo` commands on the CLI as well, add `--features cli` or `--all-features`.
 
             Run the CLI from source as follows:
 
-            ``` sh
-            $ cargo run --features cli -- ARGS
+            ```sh
+            cargo run --features cli -- ARGS
             ```
 
             Sources are formatted using the standard Rust formatted, which is applied by running:
 
-            ``` sh
-            $ cargo fmt
+            ```sh
+            cargo fmt
             ```
 
             ### Writing TSG
@@ -535,34 +575,30 @@ impl ProjectSettings<'_> {
 
             Parse and test a single file by executing the following commands:
 
-            ``` sh
-            $ cargo run --features cli -- parse FILES...
-            $ cargo run --features cli -- test TESTFILES...
+            ```sh
+            cargo run --features cli -- parse FILES...
+            cargo run --features cli -- test TESTFILES...
             ```
 
             Generate a visualization to debug failing tests by passing the `-V` flag:
 
-            ``` sh
-            $ cargo run --features cli -- test -V TESTFILES...
+            ```sh
+            cargo run --features cli -- test -V TESTFILES...
             ```
 
             To generate the visualization regardless of test outcome, execute:
 
-            ``` sh
-            $ cargo run --features cli -- test -V --output-mode=always TESTFILES...
+            ```sh
+            cargo run --features cli -- test -V --output-mode=always TESTFILES...
             ```
 
-            Go to https://crates.io/crates/tree-sitter-stack-graphs for links to examples and documentation.
+            Go to <https://crates.io/crates/tree-sitter-stack-graphs> for links to examples and documentation.
             "####,
-            self.language_name,
-            self.language_name, self.grammar_crate_name(),
-            self.grammar_crate_name(), self.grammar_crate_name(),
-            self.crate_name(), self.crate_version(),
-            self.crate_name(),
-            self.crate_name(),
-            self.crate_name(),
-            self.crate_name(),
-            self.language_file_extension,
+            language_name=self.language_name,
+            grammar_crate_name=self.grammar_crate_name(),
+            crate_name=self.crate_name(),
+            crate_version=self.crate_version(),
+            language_file_extension=self.language_file_extension,
         }?;
         Ok(())
     }

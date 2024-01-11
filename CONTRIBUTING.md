@@ -32,8 +32,8 @@ Here are a few things you can do that will increase the likelihood of your pull 
 If you are one of the maintainers of this package, bump the version numbers in [`Cargo.toml`](Cargo.toml) and [`README.md`](README.md), then follow the typical instructions to publish a new version to [crates.io][]:
 
 ```
-$ cargo package
-$ cargo publish
+cargo package
+cargo publish
 ```
 
 [crates.io]: https://crates.io/stack-graphs/
@@ -43,4 +43,3 @@ $ cargo publish
 - [How to Contribute to Open Source](https://opensource.guide/how-to-contribute/)
 - [Using Pull Requests](https://help.github.com/articles/about-pull-requests/)
 - [GitHub Help](https://help.github.com)
-

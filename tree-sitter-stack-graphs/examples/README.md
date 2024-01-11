@@ -7,19 +7,19 @@ Each directory contains a `stack-graphs.tsg` file that describes at the top what
 Running the examples requires the Python grammar to be available. This can be installed (in this directory) by executing:
 
 ```bash
-$ ./bootstrap
+./bootstrap
 ```
 
 Run the tests for an example by executing:
 
 ```bash
-$ ./run EXAMPLE_DIR
+./run EXAMPLE_DIR
 ```
 
 or, from within the example's directory:
 
 ```bash
-$ ../run
+../run
 ```
 
 To render HTML visualizations of the stack graphs for the tests in an example, add the `-V` flag to run.
@@ -27,7 +27,7 @@ To render HTML visualizations of the stack graphs for the tests in an example, a
 Print the parse tree of an example file by executing:
 
 ```bash
-$ ./parse EXAMPLE_FILE
+./parse EXAMPLE_FILE
 ```
 
 The following examples are available:
