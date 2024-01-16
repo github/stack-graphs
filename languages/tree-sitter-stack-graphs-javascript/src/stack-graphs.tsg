@@ -1714,7 +1714,7 @@ inherit .return_or_yield
 }
 
 (else_clause
-  (_)@inner)@else_clause {
+  . (_)@inner)@else_clause {
 
     let @else_clause.hoist_point = @inner.before_scope
 
