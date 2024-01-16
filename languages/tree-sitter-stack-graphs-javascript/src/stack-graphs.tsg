@@ -1708,6 +1708,11 @@ inherit .return_or_yield
     edge @if_stmt.after_scope -> @alternative.after_scope
 }
 
+(else_clause)@else_clause {
+    node @else_clause.after_scope
+    node @else_clause.before_scope
+}
+
 (else_clause
   (_)@inner)@else_clause {
 
@@ -1716,8 +1721,6 @@ inherit .return_or_yield
 }
 
 (else_clause (_)@inner)@else_clause {
-    node @else_clause.after_scope
-    node @else_clause.before_scope
     ; scopes flow in and right back out
     edge @inner.before_scope -> @else_clause.before_scope
     edge @else_clause.after_scope -> @inner.after_scope
