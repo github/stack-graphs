@@ -46,6 +46,7 @@ undefined;
 [1, 2, 3];
 function () { return; };
 () => { };
+() => () => { };
 function* () { yield 1; };
 foo();
 foo(bar);
