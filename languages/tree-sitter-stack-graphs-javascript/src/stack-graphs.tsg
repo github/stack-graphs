@@ -2818,7 +2818,7 @@ inherit .return_or_yield
   ; function values have return nodes which need to be visible for returns
   attr (fun_value_return) pop_symbol = "GUARD:RETURN"
   edge fun_value_call -> fun_value_return
-  let @body.return_or_yield = fun_value_return
+  edge fun_value_return -> @fun.return_or_yield
 
   ; function values have this nodes which need to be visible for method calls
   attr (fun_value_this) push_symbol = "this"
