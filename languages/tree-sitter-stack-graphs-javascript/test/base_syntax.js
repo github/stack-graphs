@@ -45,6 +45,7 @@ undefined;
 [];
 [1, 2, 3];
 function () { return; };
+function () { return function () { }; };
 () => { };
 () => () => { };
 function* () { yield 1; };
