@@ -48,6 +48,8 @@ function () { return; };
 () => { };
 function* () { yield 1; };
 function (/**/) { };
+function (x /**/) { };
+function (/**/ x) { };
 foo();
 foo(bar);
 foo.bar;
