@@ -47,6 +47,7 @@ undefined;
 function () { return; };
 () => { };
 function* () { yield 1; };
+function (/**/) { };
 foo();
 foo(bar);
 foo.bar;
