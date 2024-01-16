@@ -12,6 +12,11 @@ function* foo() { }
 class Foo { }
 { }
 if (true) { }
+if (true) { } else { }
+if (/**/ true) /**/ { } else /**/ { }
+if (true) return;
+if (true) return; else return;
+if (/**/ true) /**/ return; else /**/ return;
 switch (x) { }
 for (x; y; z) { }
 for (x in xs) { }
