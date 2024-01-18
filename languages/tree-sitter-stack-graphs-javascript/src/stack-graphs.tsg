@@ -4633,7 +4633,7 @@ inherit .return_or_yield
   (class_declaration
     name:(_)@name
     body:(class_body
-      (method_definition
+      member:(method_definition
         name:(_)@name)@constructor
     )
   )
@@ -4692,7 +4692,7 @@ inherit .return_or_yield
   (class
     name:(_)@name
     body:(class_body
-      (method_definition
+      member:(method_definition
         name:(_)@name)@constructor
     )
   )
