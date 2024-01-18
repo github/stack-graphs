@@ -4634,11 +4634,11 @@ inherit .return_or_yield
     name:(_)@name
     body:(class_body
       member:(method_definition
-        name:(_)@name)@constructor
+        name:(_)@_method_name)@constructor
     )
   )
 
-  (#eq? @name "constructor")
+  (#eq? @_method_name "constructor")
 ) {
 
   attr (@name.pop) definiens_node = @constructor
@@ -4693,11 +4693,11 @@ inherit .return_or_yield
     name:(_)@name
     body:(class_body
       member:(method_definition
-        name:(_)@name)@constructor
+        name:(_)@_method_name)@constructor
     )
   )
   
-  (#eq? @name "constructor")
+  (#eq? @_method_name "constructor")
 ) {
 
   attr (@name.pop) definiens_node = @constructor
