@@ -4642,6 +4642,8 @@ inherit .return_or_yield
 ) {
 
   attr (@name.pop) definiens_node = @constructor
+  edge @name.pop -> @constructor.method_value
+
 
 }
 
@@ -4695,12 +4697,13 @@ inherit .return_or_yield
       member:(method_definition
         name:(_)@_method_name)@constructor
     )
-  )
+  )@class
   
   (#eq? @_method_name "constructor")
 ) {
 
   attr (@name.pop) definiens_node = @constructor
+  edge @class.value -> @constructor.method_value
 
 }
 
