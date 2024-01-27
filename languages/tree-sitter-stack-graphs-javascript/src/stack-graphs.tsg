@@ -257,6 +257,7 @@ inherit .import_statement
 inherit .pkg_pop
 inherit .pkg_push
 inherit .return_or_yield
+inherit .containing_class_value
 
 
 
@@ -357,6 +358,10 @@ inherit .return_or_yield
     node @prog.builtins_Regex_prototype
     node @prog.builtins_arguments_prototype
     node @prog.builtins_empty_object
+    ; !!!! HACK
+    ; stack graphs currently make it impossible to test if an inherited variable
+    ; like this is defined or not
+    let @prog.containing_class_value = @prog.builtins_null
 
 }
 
@@ -1429,6 +1434,7 @@ inherit .return_or_yield
 
   node @name.pop
   node @class_decl.class_value
+  let @class_decl.containing_class_value = @class_decl.class_value
   node guard_prototype
   node @class_decl.prototype
   node @class_decl.constructor
@@ -2382,6 +2388,14 @@ inherit .return_or_yield
   ; this is a lookup, ie a push
   attr (@this.value) symbol_reference = "this", source_node = @this
   edge @this.value -> @this.before_scope
+
+  node pop_this
+  attr (pop_this) symbol_definition = "this"
+  node guard_prototype
+  attr (guard_prototype) push_symbol = "GUARD:PROTOTYPE"
+  edge @this.value -> pop_this
+  edge pop_this -> guard_prototype
+  edge guard_prototype -> @this.containing_class_value
 }
 
 
