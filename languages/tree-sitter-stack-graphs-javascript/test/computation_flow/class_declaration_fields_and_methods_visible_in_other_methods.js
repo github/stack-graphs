@@ -6,6 +6,6 @@ class Foo {
         //   ^ defined: 2
 
         this.baz();
-        //   ^ defined: 2
+        //   ^ defined: 3
     }
 }
