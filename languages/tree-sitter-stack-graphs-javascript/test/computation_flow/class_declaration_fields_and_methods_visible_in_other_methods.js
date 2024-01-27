@@ -9,3 +9,15 @@ class Foo {
         //   ^ defined: 3
     }
 }
+
+(class {
+    bar = 1;
+    baz() { }
+    quux() {
+        this.bar;
+        //   ^ defined: 14
+
+        this.baz();
+        //   ^ defined: 15
+    }
+});

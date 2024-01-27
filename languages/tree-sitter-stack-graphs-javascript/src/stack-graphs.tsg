@@ -3464,6 +3464,7 @@ inherit .containing_class_value
   body:(_)@body)@class {
 
   node @class.class_value
+  let @class.containing_class_value = @class.class_value
   node guard_prototype
   node @class.prototype
   node @class.constructor
