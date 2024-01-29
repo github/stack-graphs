@@ -8,6 +8,7 @@ debugger;
 var x;
 let x;
 function foo() { }
+function foo(a) { }
 function* foo() { }
 class Foo { }
 { }
