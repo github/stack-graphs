@@ -8,6 +8,8 @@ debugger;
 var x;
 let x;
 function foo() { }
+function foo(a) { }
+function foo(undefined) { }
 function* foo() { }
 class Foo { }
 { }
@@ -71,6 +73,8 @@ x++;
 (x = 1);
 (x[i] = 1);
 ([x] = 1);
+({ x: y } = 1);
+({/**/x: y } = 1);
 x += 1;
 (1, 2);
 1 ? 2 : 3;

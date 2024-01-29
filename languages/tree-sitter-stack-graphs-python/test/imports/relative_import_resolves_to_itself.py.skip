@@ -1,0 +1,14 @@
+# --- path: foo/__init__.py ---
+from . import bar
+#             ^ defined: 6
+
+# --- path: foo/bar/__init__.py ---
+BAR = 'b'
+
+# --- path: main.py ---
+from foo import bar
+#               ^ defined: 6
+
+bar.BAR
+# ^ defined: 9, 6
+#     ^ defined: 6
