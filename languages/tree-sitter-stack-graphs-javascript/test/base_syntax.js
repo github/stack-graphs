@@ -8,6 +8,8 @@ debugger;
 var x;
 let x;
 function foo() { }
+function foo(a) { }
+function foo(undefined) { }
 function* foo() { }
 class Foo { }
 { }
@@ -69,6 +71,10 @@ x++;
 1 + 1;
 -2;
 (x = 1);
+(x[i] = 1);
+([x] = 1);
+({ x: y } = 1);
+({/**/x: y } = 1);
 ({x:y.z} = 1);
 x += 1;
 (1, 2);
@@ -78,4 +84,6 @@ class { };
     <quux0.quux1.quux2 />
     <>doo</>
     {garply}
+    { }
+    {/**/x}
 </foo>

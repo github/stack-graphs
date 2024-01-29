@@ -1,0 +1,18 @@
+# --- path: foo/__init__.py ---
+
+FOO = 42
+
+# --- path: foo/bar.py ---
+
+BAR = 42
+
+# --- path: test.py ---
+
+import foo
+
+foo.FOO
+# ^ defined: 11, 3
+#     ^ defined: 3
+
+foo.bar
+#   ^ defined:

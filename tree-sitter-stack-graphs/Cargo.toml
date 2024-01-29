@@ -82,4 +82,4 @@ walkdir = { version = "2.3", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "0.7"
-tree-sitter-python = "0.19.1"
+tree-sitter-python = "=0.19.1"

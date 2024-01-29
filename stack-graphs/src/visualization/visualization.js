@@ -24,6 +24,7 @@ class StackGraph {
 
         this.graph = graph;
         this.paths = paths;
+        this.cleanup_data();
         this.compute_data();
 
         this.current_node = null;
@@ -31,6 +32,19 @@ class StackGraph {
         this.current_orient = { y: "south", x: "east" };
         this.paths_lock = null;
         this.render();
+    }
+
+    cleanup_data() {
+        let idx = 0;
+        while (idx < this.graph.edges.length) {
+            let edge = this.graph.edges[idx];
+            if (edge.source.file === edge.sink.file && edge.source.local_id === edge.sink.local_id) {
+                console.log("ignoring self loop", edge);
+                this.graph.edges.splice(idx, 1);
+            } else {
+                idx += 1;
+            }
+        }
     }
 
     compute_data() {
@@ -47,7 +61,6 @@ class StackGraph {
             const file = graph.files[i];
             this.F[file] = i;
         }
-        console.log(this.F);
     }
 
     compute_node_data() {

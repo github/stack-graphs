@@ -257,6 +257,7 @@ inherit .import_statement
 inherit .pkg_pop
 inherit .pkg_push
 inherit .return_or_yield
+inherit .containing_class_value
 
 
 
@@ -357,6 +358,10 @@ inherit .return_or_yield
     node @prog.builtins_Regex_prototype
     node @prog.builtins_arguments_prototype
     node @prog.builtins_empty_object
+    ; !!!! HACK
+    ; stack graphs currently make it impossible to test if an inherited variable
+    ; like this is defined or not
+    let @prog.containing_class_value = @prog.builtins_null
 
 }
 
@@ -399,6 +404,7 @@ inherit .return_or_yield
   node @comment.before_scope
   node @comment.value
   node @comment.covalue
+  node @comment.new_bindings ; for object patterns
   edge @comment.after_scope -> @comment.before_scope
 }
 
@@ -1429,6 +1435,7 @@ inherit .return_or_yield
 
   node @name.pop
   node @class_decl.class_value
+  let @class_decl.containing_class_value = @class_decl.class_value
   node guard_prototype
   node @class_decl.prototype
   node @class_decl.constructor
@@ -2382,6 +2389,14 @@ inherit .return_or_yield
   ; this is a lookup, ie a push
   attr (@this.value) symbol_reference = "this", source_node = @this
   edge @this.value -> @this.before_scope
+
+  node pop_this
+  attr (pop_this) symbol_definition = "this"
+  node guard_prototype
+  attr (guard_prototype) push_symbol = "GUARD:PROTOTYPE"
+  edge @this.value -> pop_this
+  edge pop_this -> guard_prototype
+  edge guard_prototype -> @this.containing_class_value
 }
 
 
@@ -2412,6 +2427,9 @@ inherit .return_or_yield
 
   ; the value of undefined is the undefined primitive
   edge @undefined.value -> @undefined.builtins_undefined
+
+  ; !!!! HACK: `undefined` is a perfectly cromulent name for a parameter, but the parser thinks it means this node instead. For the moment, work around the problem this causes by giving all `undefined` nodes covalues like parameters enjoy.
+  node @undefined.covalue
 }
 
 
@@ -3135,6 +3153,9 @@ inherit .return_or_yield
   edge @subscript_expr.value -> @subscript_expr.index_push
   edge @subscript_expr.index_push -> subscript_expr_push_dot
 
+  ; subscript expressions can appear in array patterns, on the left, and thus require a covalue & bindings
+  node @subscript_expr.covalue
+  node @subscript_expr.new_bindings
 }
 
 (subscript_expression
@@ -3453,6 +3474,7 @@ inherit .return_or_yield
   body:(_)@body)@class {
 
   node @class.class_value
+  let @class.containing_class_value = @class.class_value
   node guard_prototype
   node @class.prototype
   node @class.constructor
@@ -3678,10 +3700,14 @@ inherit .return_or_yield
 
 }
 
-(jsx_expression (_)?@child)@jsx_expression {
+(jsx_expression)@jsx_expression {
 
   node @jsx_expression.before_scope
   node @jsx_expression.after_scope
+
+}
+
+(jsx_expression (_)?@child)@jsx_expression {
 
   if none @child {
     edge @jsx_expression.after_scope -> @jsx_expression.before_scope
