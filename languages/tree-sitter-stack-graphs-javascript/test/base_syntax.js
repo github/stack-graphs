@@ -9,6 +9,7 @@ var x;
 let x;
 function foo() { }
 function foo(a) { }
+function foo(undefined) { }
 function* foo() { }
 class Foo { }
 { }
