@@ -399,6 +399,7 @@ inherit .return_or_yield
   node @comment.before_scope
   node @comment.value
   node @comment.covalue
+  node @comment.new_bindings ; for object patterns
   edge @comment.after_scope -> @comment.before_scope
 }
 
