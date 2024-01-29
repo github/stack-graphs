@@ -2412,6 +2412,9 @@ inherit .return_or_yield
 
   ; the value of undefined is the undefined primitive
   edge @undefined.value -> @undefined.builtins_undefined
+
+  ; HACK: `undefined` is a perfectly cromulent name for a parameter, but the parser thinks it means this node instead. For the moment, work around the problem this causes by giving all `undefined` nodes covalues like parameters enjoy.
+  node @undefined.covalue
 }
 
 
