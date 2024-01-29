@@ -3108,6 +3108,8 @@ inherit .return_or_yield
     edge @member_expr.value -> property_push
     edge member_push -> @object.value
 
+  ; (member_expression) nodes can occur in patterns
+  node @member_expr.covalue
 }
 
 ;; ##### Subscript Expressions
