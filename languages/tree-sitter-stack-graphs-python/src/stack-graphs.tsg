@@ -45,6 +45,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 [
+  ; _statement
   ; _simple_statement
   (future_import_statement)
   (import_statement)
@@ -61,7 +62,8 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (global_statement)
   (nonlocal_statement)
   (exec_statement)
-  ; _compund_statement
+  (type_alias_statement)
+  ; _compound_statement
   (if_statement)
   (for_statement)
   (while_statement)
@@ -74,26 +76,29 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; block
   (block)
   ; statement clauses
+  (if_clause)
   (elif_clause)
   (else_clause)
-  (case_clause)
+  (except_group_clause)
   (except_clause)
   (finally_clause)
   (with_clause)
+  (case_clause)
 ] @node {
   node @node.after_scope
   node @node.before_scope
 }
 
-(parameters) @node {
+[
+  (parameters)
+  (lambda_parameters)
+] @node {
   node @node.after_scope
   node @node.before_scope
 }
 
 [
   (identifier)
-  (import_prefix)
-  (wildcard_import)
 ] @node {
   node @node.def
   node @node.def_dot
@@ -102,20 +107,108 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 }
 
 [
-  (identifier)
+  (dotted_name)
+  (aliased_import)
+  (relative_import)
   (wildcard_import)
-  (expression)
-  (expression_list)
-  (primary_expression)
-  (pattern)
-  (pattern_list)
-  (case_pattern)
-  (parameter)
-  (pair)
+  (import_prefix)
+] @node {
+  node @node.after_scope
+  node @node.before_scope
+  node @node.def
+  node @node.ref
+}
+
+[
+  ; expressions
+  (comparison_operator)
+  (not_operator)
+  (boolean_operator)
+  (lambda)
+  ;(primary_expression) ; unfolded below
+  (conditional_expression)
+  (named_expression)
+  (as_pattern)
+  ; primary_expression
+  (await)
+  (binary_operator)
+  (identifier)
+  ;(keyword_identifier) ; invalid query pattern?
+  (string)
+  (concatenated_string)
+  (integer)
+  (float)
+  (true)
+  (false)
+  (none)
+  (unary_operator)
+  (attribute)
+  (subscript)
+  (call)
+  (list)
+  (list_comprehension)
+  (dictionary)
+  (dictionary_comprehension)
+  (set)
+  (set_comprehension)
+  (tuple)
+  (parenthesized_expression)
+  (generator_expression)
+  (ellipsis)
   (list_splat)
-  (parenthesized_list_splat)
-  (dictionary_splat)
-  (keyword_argument)
+
+  ; expression list
+  (expression_list)
+
+  ; pattern
+  (pattern/identifier)
+  ;(keyword_identifier) ; invalid query pattern?
+  ;(subscript)
+  ;(attribute)
+  (list_splat_pattern)
+  (tuple_pattern)
+  (list_pattern)
+  ; _simple_patterns
+  (class_pattern)
+  (splat_pattern)
+  (union_pattern)
+  ;(list_pattern) ; already in pattern
+  ;(tuple_pattern) ; already in pattern
+  (dict_pattern)
+  ;(string) ; already in primary_expression
+  ;(concatenated_string) ; already in primary_expression
+  ;(true) ; already in primary_expression
+  ;(false) ; already in primary_expression
+  ;(none) ; already in primary_expression
+  ;(integer) ; already in primary_expression
+  ;(float) ; already in primary_expression
+  (complex_pattern)
+  (dotted_name)
+  ; _as_attern
+  (as_pattern)
+  ; keyword pattern
+  (keyword_pattern)
+  ; case pattern
+  (case_pattern)
+  ; with item
+  (with_item)
+
+  ; pattern list
+  (pattern_list)
+
+  ; parameter
+  ;(identifier) ; already in expressions
+  (typed_parameter)
+  (default_parameter)
+  (typed_default_parameter)
+  ;(list_splat_pattern) ; already in patterns
+  ;(tuple_pattern) ; already in patterns
+  (keyword_separator)
+  (positional_separator)
+  (dictionary_splat_pattern)
+
+  ; parameters
+  (parameters)
 ] @node {
   node @node.input
   node @node.new_bindings
@@ -149,8 +242,16 @@ inherit .grandparent_module
 inherit .local_scope
 inherit .parent_module
 
-; Modules and Imports
-;---------------------
+;;
+;; #     #
+;; ##   ##  ####  #####  #    # #      ######  ####
+;; # # # # #    # #    # #    # #      #      #
+;; #  #  # #    # #    # #    # #      #####   ####
+;; #     # #    # #    # #    # #      #           #
+;; #     # #    # #    # #    # #      #      #    #
+;; #     #  ####  #####   ####  ###### ######  ####
+;;
+;; Modules
 
 (module) @mod
 {
@@ -248,176 +349,275 @@ inherit .parent_module
   node @mod.local_scope
 }
 
-(import_statement
-  name: (dotted_name
-    . (identifier) @root_name)) @stmt
-{
-  edge @stmt.after_scope -> @root_name.def
-  attr (@stmt.after_scope -> @root_name.def) precedence = 1
-  edge @root_name.ref -> ROOT_NODE
+;;
+;; ###
+;;  #  #    # #####   ####  #####  #####  ####
+;;  #  ##  ## #    # #    # #    #   #   #
+;;  #  # ## # #    # #    # #    #   #    ####
+;;  #  #    # #####  #    # #####    #        #
+;;  #  #    # #      #    # #   #    #   #    #
+;; ### #    # #       ####  #    #   #    ####
+;;
+;; Imports
+
+;; Import References
+;; ^^^^^^^^^^^^^^^^^
+
+;;;; Dotted Names
+;;
+;; (dotted_name).ref              node to connect to to use the reference
+;; (dotted_name).before_scope     node to connect from to ensure the reference resolves
+
+;; all names are references
+[
+  (import_statement        name:                       (dotted_name (identifier) @name))
+  (future_import_statement name:                       (dotted_name (identifier) @name))
+  (import_from_statement   name:                       (dotted_name (identifier) @name))
+  (import_statement        name: (aliased_import name: (dotted_name (identifier) @name)))
+  (future_import_statement name: (aliased_import name: (dotted_name (identifier) @name)))
+  (import_from_statement   name: (aliased_import name: (dotted_name (identifier) @name)))
+  (import_from_statement module_name:                  (dotted_name (identifier) @name))
+  (import_from_statement module_name: (relative_import (dotted_name (identifier) @name)))
+] {
+  attr (@name.ref) node_reference = @name
 }
 
-(import_statement
-  name: (aliased_import
-    (dotted_name . (identifier) @root_name)))
-{
-  edge @root_name.ref -> ROOT_NODE
+;; references are chained
+[
+  (import_statement        name:                       (dotted_name (identifier) @left . (identifier) @right))
+  (future_import_statement name:                       (dotted_name (identifier) @left . (identifier) @right))
+  (import_from_statement   name:                       (dotted_name (identifier) @left . (identifier) @right))
+  (import_statement        name: (aliased_import name: (dotted_name (identifier) @left . (identifier) @right)))
+  (future_import_statement name: (aliased_import name: (dotted_name (identifier) @left . (identifier) @right)))
+  (import_from_statement   name: (aliased_import name: (dotted_name (identifier) @left . (identifier) @right)))
+  (import_from_statement module_name:                  (dotted_name (identifier) @left . (identifier) @right))
+  (import_from_statement module_name: (relative_import (dotted_name (identifier) @left . (identifier) @right)))
+] {
+  node push_dot
+  attr (push_dot) push_symbol = "."
+
+  edge @right.ref -> push_dot
+  edge push_dot -> @left.ref
 }
 
-(import_from_statement
-  name: (dotted_name
-    . (identifier) @import_root_name)) @stmt
-{
-  edge @stmt.after_scope -> @import_root_name.def
-  attr (@stmt.after_scope -> @import_root_name.def) precedence = 1
-  edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.ref_dot) push_symbol = "."
+;; lookup first reference
+[
+  (import_statement        name:                       (dotted_name . (identifier) @first) @dotted)
+  (future_import_statement name:                       (dotted_name . (identifier) @first) @dotted)
+  (import_from_statement   name:                       (dotted_name . (identifier) @first) @dotted)
+  (import_statement        name: (aliased_import name: (dotted_name . (identifier) @first) @dotted))
+  (future_import_statement name: (aliased_import name: (dotted_name . (identifier) @first) @dotted))
+  (import_from_statement   name: (aliased_import name: (dotted_name . (identifier) @first) @dotted))
+  (import_from_statement module_name:                  (dotted_name . (identifier) @first) @dotted)
+  (import_from_statement module_name: (relative_import (dotted_name . (identifier) @first) @dotted))
+] {
+  edge @first.ref -> @dotted.before_scope
 }
 
-(import_from_statement
-  name: (aliased_import
-    (dotted_name
-      . (identifier) @import_root_name)))
-{
-  edge @import_root_name.ref -> @import_root_name.ref_dot
-  attr (@import_root_name.ref_dot) push_symbol = "."
+;; expose last reference
+[
+  (import_statement        name:                       (dotted_name (identifier) @last .) @dotted)
+  (future_import_statement name:                       (dotted_name (identifier) @last .) @dotted)
+  (import_from_statement   name:                       (dotted_name (identifier) @last .) @dotted)
+  (import_statement        name: (aliased_import name: (dotted_name (identifier) @last .) @dotted))
+  (future_import_statement name: (aliased_import name: (dotted_name (identifier) @last .) @dotted))
+  (import_from_statement   name: (aliased_import name: (dotted_name (identifier) @last .) @dotted))
+  (import_from_statement module_name:                  (dotted_name (identifier) @last .) @dotted)
+  (import_from_statement module_name: (relative_import (dotted_name (identifier) @last .) @dotted))
+] {
+  edge @dotted.ref -> @last.ref
 }
 
-(import_from_statement
-  module_name: [
-    (dotted_name (identifier) @prefix_leaf_name .)
-    (relative_import (dotted_name (identifier) @prefix_leaf_name .))
-    (relative_import (import_prefix) @prefix_leaf_name .)
-  ]
-  name: [
-    (dotted_name
-      . (identifier) @import_root_name)
-    (aliased_import
-      (dotted_name
-        . (identifier) @import_root_name))
-  ])
-{
-  edge @import_root_name.ref_dot -> @prefix_leaf_name.ref
+;;;; Aliased Import
+;;
+;; An aliased import behaves like its wrapped dotted_name as a reference
+;;
+;; (aliased_import).ref              node to connect to, to use the reference
+;; (aliased_import).before_scope     node to connect from to ensure the reference resolves
+
+(aliased_import name: (dotted_name) @dotted) @aliased {
+  edge @aliased.ref -> @dotted.ref
+  edge @dotted.before_scope -> @aliased.before_scope
 }
+
+;;;; Relative Import
+;;
+;; A relative import behaves like its wrapped dotted_name as a reference
+;;
+;; (relative_import).ref              node to connect to, to use the reference
+;; (relative_import).before_scope     node to connect from to ensure the reference resolves
+
+(relative_import (import_prefix) . (dotted_name) @dotted) @relative {
+  edge @relative.ref -> @dotted.ref
+
+  node push_dot
+  attr (push_dot) push_symbol = "."
+
+  edge @dotted.before_scope -> push_dot
+  edge push_dot -> @relative.before_scope
+}
+
+(relative_import (import_prefix) .) @relative {
+  edge @relative.ref -> @relative.before_scope
+}
+
+;;;; Wildcard Import
+;;
+;; A wildcard import simply passes through
+;;
+;; (wildcard_import).ref              node to connect to, to use the reference
+;; (wildcard_import).before_scope     node to connect from to ensure the reference resolves
+
+(wildcard_import) @wildcard {
+  edge @wildcard.ref -> @wildcard.before_scope
+}
+
+;;;; Import from
+;;
+;; The imported references are resolved in the from module
 
 [
-  (import_from_statement
-    (aliased_import
-      name: (dotted_name (identifier) @name .)
-      alias: (identifier) @alias))
-  (import_statement
-    (aliased_import
-      name: (dotted_name (identifier) @name .)
-      alias: (identifier) @alias))
-] @stmt
-{
-  edge @stmt.after_scope -> @alias.def
-  edge @alias.def -> @name.ref
+  (import_from_statement module_name: (_) @left name: (_) @right)
+  (import_from_statement module_name: (_) @left (wildcard_import) @right)
+] {
+  node push_dot
+  attr (push_dot) push_symbol = "."
+
+  edge @right.before_scope -> push_dot
+  edge push_dot -> @left.ref
 }
+
+;;;; Non-relative Imports
+;;
+;; Non-relative imports are resolved in the root scope
 
 [
-  (import_statement
-    name: (dotted_name
-      (identifier) @leaf_name .))
-  (import_from_statement
-    name: (dotted_name
-      (identifier) @leaf_name .))
-]
-{
-  edge @leaf_name.def -> @leaf_name.ref
+  (import_statement      name:        (_) @name)
+  (import_from_statement module_name: (dotted_name) @name)
+] {
+  edge @name.before_scope -> ROOT_NODE
 }
 
-(relative_import
-  (import_prefix) @prefix
-  (#eq? @prefix ".")) @import
-{
-  edge @prefix.ref -> @import.parent_module
+;;;; Relative Imports
+;;
+;; Relative imports are resolved in scopes related to the current module
+
+;; . imports resolve in parent module scope
+(import_from_statement module_name: (relative_import (import_prefix) @prefix (#eq? @prefix ".")) @relative) {
+  edge @relative.before_scope -> @prefix.parent_module
 }
 
-(relative_import
-  (import_prefix) @prefix
-  (#eq? @prefix "..")) @import
-{
-  edge @prefix.ref -> @import.grandparent_module
+;; .. imports resolve in grandparent module scope
+(import_from_statement module_name: (relative_import (import_prefix) @prefix (#eq? @prefix "..")) @relative) {
+  edge @relative.before_scope -> @prefix.grandparent_module
 }
 
-(relative_import
-  (import_prefix) @prefix
-  (dotted_name
-    . (identifier) @name))
-{
-  attr (@name.ref_dot) push_symbol = "."
-  edge @name.ref -> @name.ref_dot
-  edge @name.ref_dot -> @prefix.ref
+;;;; Future Imports
+;;
+;; We don't know the future, so we cannot connect references of future imports anywhere. Maybe one day?
+
+;; Import Definitions
+;; ^^^^^^^^^^^^^^^^^^
+
+;;;; Dotted Names & Aliased Imports
+;;
+;; (dotted_name).after_scope     node to connect to, to expose the definition
+;; (dotted_name).def             node to connect from, to give definition content
+
+;; unaliased names and aliases are definitions
+[
+  (import_statement        name:           (dotted_name (identifier) @name))
+  (future_import_statement name:           (dotted_name (identifier) @name))
+  (import_from_statement   name:           (dotted_name (identifier) @name))
+  (import_statement        name: (aliased_import alias: (identifier) @name))
+  (future_import_statement name: (aliased_import alias: (identifier) @name))
+  (import_from_statement   name: (aliased_import alias: (identifier) @name))
+] {
+  attr (@name.def) node_definition = @name
 }
+
+;; definitions are chained
+[
+  (import_statement        name: (dotted_name (identifier) @left . (identifier) @right))
+  (future_import_statement name: (dotted_name (identifier) @left . (identifier) @right))
+  (import_from_statement   name: (dotted_name (identifier) @left . (identifier) @right))
+] {
+  node pop_dot
+  attr (pop_dot) pop_symbol = "."
+
+  edge @left.def -> pop_dot
+  edge pop_dot -> @right.def
+}
+
+;; connect last definition
+[
+  (import_statement        name:           (dotted_name (identifier) @last .) @outer)
+  (future_import_statement name:           (dotted_name (identifier) @last .) @outer)
+  (import_from_statement   name:           (dotted_name (identifier) @last .) @outer)
+  (import_statement        name: (aliased_import alias: (identifier) @last  ) @outer)
+  (future_import_statement name: (aliased_import alias: (identifier) @last  ) @outer)
+  (import_from_statement   name: (aliased_import alias: (identifier) @last  ) @outer)
+] {
+  edge @last.def -> @outer.def
+}
+
+;; expose first definition
+[
+  (import_statement        name:           (dotted_name . (identifier) @first) @outer)
+  (future_import_statement name:           (dotted_name . (identifier) @first) @outer)
+  (import_from_statement   name:           (dotted_name . (identifier) @first) @outer)
+  (import_statement        name: (aliased_import alias:   (identifier) @first  ) @outer)
+  (future_import_statement name: (aliased_import alias:   (identifier) @first  ) @outer)
+  (import_from_statement   name: (aliased_import alias:   (identifier) @first  ) @outer)
+] {
+  edge @outer.after_scope -> @first.def
+}
+
+;;;; Wildcard Import
+;;
+;; Wildcard imports simply pass through
+
+(wildcard_import) @wildcard {
+  edge @wildcard.after_scope -> @wildcard.def
+}
+
+;;;; Import Definitions -> References
+;;
+;; The definitions introduced by imports are connected to the corresponding references
 
 [
-  (import_from_statement
-    module_name: (relative_import
-      (dotted_name
-        (identifier) @parent_name
-        .
-        (identifier) @child_name)))
-  (import_from_statement
-    module_name: (dotted_name
-      (identifier) @parent_name
-      .
-      (identifier) @child_name))
-]
-{
-  attr (@child_name.ref_dot) push_symbol = "."
-  edge @child_name.ref -> @child_name.ref_dot
-  edge @child_name.ref_dot -> @parent_name.ref
+  (import_statement        name: (_) @name)
+  (future_import_statement name: (_) @name)
+  (import_from_statement   name: (_) @name)
+  (import_from_statement   (wildcard_import) @name)
+] {
+  edge @name.def -> @name.ref
 }
 
-(import_from_statement
-  module_name: (dotted_name
-    . (identifier) @root_name))
-{
-  edge @root_name.ref -> ROOT_NODE
-}
-
-(import_from_statement
-  module_name: (dotted_name
-    (identifier) @leaf_name .)
-  (wildcard_import) @star) @stmt
-{
-  edge @stmt.after_scope -> @star.ref_dot
-  attr (@stmt.after_scope -> @star.ref_dot) precedence = 1
-  edge @star.ref_dot -> @leaf_name.ref
-  attr (@star.ref_dot) push_symbol = "."
-}
+;;;; Imports
+;;
+;; The definitions introduced by imports are visible after the import statement
 
 [
-  (import_statement
-    name: (dotted_name
-      (identifier) @parent_name
-      .
-      (identifier) @child_name))
-  (import_from_statement
-    name: (dotted_name
-      (identifier) @parent_name
-      .
-      (identifier) @child_name))
-  (import_from_statement
-    name: (aliased_import
-      name: (dotted_name
-        (identifier) @parent_name
-        .
-        (identifier) @child_name)))
-]
-{
-  edge @child_name.ref -> @child_name.ref_dot
-  edge @child_name.ref_dot -> @parent_name.ref
-  edge @parent_name.def -> @parent_name.def_dot
-  edge @parent_name.def_dot -> @child_name.def
-  attr (@parent_name.def_dot) pop_symbol = "."
-  attr (@child_name.ref_dot) push_symbol = "."
+  (import_statement        name: (_) @name)
+  (future_import_statement name: (_) @name)
+  (import_from_statement   name: (_) @name)
+  (import_from_statement   (wildcard_import) @name)
+] @stmt {
+  edge @stmt.after_scope -> @name.after_scope
+  attr (@stmt.after_scope -> @name.after_scope) precedence = 1
 }
 
-;--------
-; Scopes
-;--------
+;;
+;; ######
+;; #     # #       ####   ####  #    #  ####
+;; #     # #      #    # #    # #   #  #
+;; ######  #      #    # #      ####    ####
+;; #     # #      #    # #      #  #        #
+;; #     # #      #    # #    # #   #  #    #
+;; ######  ######  ####   ####  #    #  ####
+;;
+;; Blocks
 
 [
   (module (_) @last_stmt .)
@@ -475,7 +675,7 @@ inherit .parent_module
   edge @stmt.after_scope -> @block.after_scope
 }
 
-(match_statement (case_clause) @block) @stmt
+(match_statement body: (_) @block) @stmt
 {
   let @block.local_scope = @block.before_scope
   edge @block.before_scope -> @stmt.before_scope
@@ -490,26 +690,77 @@ inherit .parent_module
   edge @stmt.before_scope -> @stmt.after_scope
 }
 
-;-------------
-; Definitions
-;-------------
+;;
+;;  #####
+;; #     # #####   ##   ##### ###### #    # ###### #    # #####  ####
+;; #         #    #  #    #   #      ##  ## #      ##   #   #   #
+;;  #####    #   #    #   #   #####  # ## # #####  # #  #   #    ####
+;;       #   #   ######   #   #      #    # #      #  # #   #        #
+;; #     #   #   #    #   #   #      #    # #      #   ##   #   #    #
+;;  #####    #   #    #   #   ###### #    # ###### #    #   #    ####
+;;
+;; Statements
 
-(identifier) @name {
-  attr (@name.def) node_definition = @name
+;;;; Simple Statements
+
+(print_statement) {}
+
+(assert_statement) {}
+
+(expression_statement) {}
+
+(return_statement (_) @expr) @stmt
+{
+  edge @stmt.function_returns -> @expr.output
 }
 
-[
-  (assignment
-    left: (_) @pattern
-    right: (_) @value)
-  (with_item
-    value:
-      (as_pattern
-        (_) @value
-        alias: (as_pattern_target (_) @pattern)))
-]
-{
-  edge @pattern.input -> @value.output
+(delete_statement) {}
+
+(raise_statement) {}
+
+(pass_statement) {}
+
+(break_statement) {}
+
+(continue_statement) {}
+
+(global_statement) {}
+
+(nonlocal_statement) {}
+
+(exec_statement) {}
+
+(type_alias_statement) {}
+
+;;;; Compound Statements
+
+(if_statement) {}
+
+(if_clause) {}
+
+(elif_clause) {}
+
+(else_clause) {}
+
+(for_statement) {}
+
+(while_statement) {}
+
+(try_statement) {}
+
+(except_group_clause) {}
+
+(except_clause) {}
+
+(finally_clause) {}
+
+(with_statement) {}
+
+(with_clause) {}
+
+(function_definition
+  name: (identifier) @name) {
+  attr (@name.def) node_definition = @name
 }
 
 (function_definition
@@ -538,6 +789,495 @@ inherit .parent_module
   let @body.class_self_scope = #null
   let @body.class_member_attr_scope = #null
 }
+
+(function_definition
+  parameters: (parameters
+    . (identifier) @param)
+  body: (block) @body)
+{
+  edge @param.def -> @param.class_self_scope
+  edge @param.class_member_attr_scope -> @param.output
+  edge @param.output -> @body.after_scope
+  attr (@param.output) push_node = @param
+}
+
+(parameters
+  (_) @param) @params
+{
+  node @param.param_index
+  node @param.param_name
+
+  attr (@param.param_index) push_symbol = (named-child-index @param)
+  edge @param.param_index -> @params.before_scope
+  edge @params.after_scope -> @param.input
+  edge @param.param_name -> @params.before_scope
+}
+
+
+(parameter/identifier) @param @name
+{
+  attr (@name.def) node_definition = @name
+  attr (@param.param_name) push_node = @param
+  edge @name.def -> @param.param_name
+  edge @name.def -> @param.param_index
+  edge @param.input -> @name.def
+}
+
+[
+  (parameter/default_parameter
+    name: (_) @name
+    value: (_) @value) @param
+  (parameter/typed_default_parameter
+    name: (_) @name
+    value: (_) @value) @param
+] {
+  attr (@name.def) node_definition = @name
+  attr (@param.param_name) push_node = @name
+  edge @name.def -> @param.param_name
+  edge @name.def -> @param.param_index
+  edge @param.input -> @name.def
+  edge @name.def -> @value.output
+}
+
+[
+  (parameter/typed_parameter
+    . (_) @name) @param
+  (parameter/list_splat_pattern
+    (_) @name) @param
+  (parameter/dictionary_splat_pattern
+    (_) @name) @param
+] {
+  attr (@name.def) node_definition = @name
+  attr (@param.param_name) push_node = @name
+  edge @name.def -> @param.param_name
+  edge @name.def -> @param.param_index
+  edge @param.input -> @name.def
+}
+
+(class_definition) @class {
+  node @class.call_drop
+  node @class.member_attrs
+  node @class.members
+  node @class.super_scope
+}
+
+(class_definition
+  name: (identifier) @name) {
+  attr (@name.def) node_definition = @name
+}
+
+(class_definition
+  name: (identifier) @name) @class
+{
+  node call
+  node self_dot
+  node self_scope
+  node members_dot
+
+  attr (@name.def) definiens_node = @class
+  attr (@name.def) syntax_type = "class"
+  edge @class.after_scope -> @name.def
+  edge @name.def -> call
+  edge @name.def -> members_dot
+  edge members_dot -> @class.members
+  edge call -> @class.call_drop
+  edge @class.call_drop -> self_scope
+  edge self_scope -> @class.super_scope
+  edge self_scope -> self_dot
+  edge self_dot -> @class.members
+  edge @class.members -> @class.member_attrs
+  attr (call) pop_scoped_symbol = "()"
+  attr (@class.call_drop) type = "drop_scopes"
+  attr (members_dot) pop_symbol = "."
+  attr (self_dot) pop_symbol = "."
+  attr (@class.member_attrs) push_symbol = "."
+  attr (self_scope) is_exported
+}
+
+(class_definition
+  body: (_) @body) @class
+{
+  let @body.class_member_attr_scope = @class.member_attrs
+  node @body.class_parent_scope
+  edge @body.class_parent_scope -> @class.class_parent_scope
+  edge @body.class_parent_scope -> @class.local_scope
+  let @body.class_self_scope = @class.call_drop
+  let @body.class_super_scope = @class.super_scope
+}
+
+(class_definition
+  body: (block
+    (_) @last_stmt .)) @class
+{
+  edge @class.members -> @last_stmt.after_scope
+}
+
+(class_definition
+  superclasses: (argument_list
+    (_) @superclass)) @class
+{
+  edge @class.super_scope -> @superclass.output
+}
+
+(decorated_definition
+  definition: (_) @def) @stmt
+{
+  edge @def.before_scope -> @stmt.before_scope
+  edge @stmt.after_scope -> @def.after_scope
+}
+
+(match_statement) {}
+
+(case_clause
+  (case_pattern) @pattern
+  consequence: (_) @consequence)
+{
+  edge @consequence.before_scope -> @pattern.new_bindings
+}
+
+(case_clause
+  consequence: (_) @consequence) @clause
+{
+  edge @consequence.before_scope -> @clause.before_scope
+  edge @clause.after_scope -> @consequence.after_scope
+}
+
+;;
+;; #######
+;; #       #    # #####  #####  ######  ####   ####  #  ####  #    #  ####
+;; #        #  #  #    # #    # #      #      #      # #    # ##   # #
+;; #####     ##   #    # #    # #####   ####   ####  # #    # # #  #  ####
+;; #         ##   #####  #####  #           #      # # #    # #  # #      #
+;; #        #  #  #      #   #  #      #    # #    # # #    # #   ## #    #
+;; ####### #    # #      #    # ######  ####   ####  #  ####  #    #  ####
+;;
+;; Expressions
+
+(conditional_expression) {}
+
+(named_expression) {}
+
+(as_pattern) {}
+
+(await) {}
+
+(binary_operator
+  (_) @left
+  (_) @right) @binop
+{
+  edge @binop.new_bindings -> @left.new_bindings
+  edge @binop.new_bindings -> @right.new_bindings
+}
+
+(primary_expression/identifier) @name {
+  attr (@name.ref) node_reference = @name
+}
+
+(primary_expression/identifier) @name
+{
+  edge @name.output -> @name.local_scope
+  edge @name.output -> @name.class_parent_scope
+  edge @name.local_scope -> @name.input
+  attr (@name.input) pop_node = @name
+  attr (@name.output) node_reference = @name
+
+  edge @name.new_bindings -> @name.def
+}
+
+(string) {}
+
+(concatenated_string) {}
+
+(integer) {}
+
+(float) {}
+
+(true) {}
+
+(false) {}
+
+(none) {}
+
+(unary_operator) {}
+
+(attribute
+  object: (_) @object
+  attribute: (identifier) @name) @expr
+{
+  node input_dot
+  node output_dot
+
+  edge @expr.output -> @name.output
+  edge @name.output -> output_dot
+  edge output_dot -> @object.output
+  edge @object.input -> input_dot
+  edge input_dot -> @name.input
+  edge @name.input -> @expr.input
+  attr (output_dot) push_symbol = "."
+  attr (input_dot) pop_symbol = "."
+  attr (@name.input) pop_node = @name
+  attr (@name.output) push_node = @name
+}
+
+(primary_expression/attribute
+  attribute: (identifier) @name)
+{
+  attr (@name.output) is_reference
+}
+
+(subscript) {}
+
+(call
+  function: (_) @fn
+  arguments: (argument_list) @args) @call
+{
+  node output_args
+
+  edge @call.output -> output_args
+  edge output_args -> @fn.output
+  attr (output_args) push_scoped_symbol = "()", scope = @args.args
+}
+
+(call
+  function: (attribute
+    object: (_) @receiver)
+  arguments: (argument_list
+    (expression) @arg) @args)
+{
+  node receiver_arg_index
+  attr (receiver_arg_index) pop_symbol = "0"
+  edge @args.args -> receiver_arg_index
+  edge receiver_arg_index -> @receiver.output
+
+  ;; FIXME the arguments will also exist with their unshifted indices because of the general
+  ;;       rule below!
+  node arg_index
+  attr (arg_index) pop_symbol = (plus 1 (named-child-index @arg))
+  edge arg_index -> @arg.output
+}
+
+(call
+  arguments: (argument_list
+    (keyword_argument
+      name: (identifier) @name
+      value: (_) @val)) @args)
+{
+  node arg_name
+  edge @args.args -> arg_name
+  attr (arg_name) pop_node = @name
+  edge arg_name -> @val.output
+}
+
+(argument_list) @args {
+  node @args.args
+  attr (@args.args) is_exported
+}
+
+(argument_list
+  (expression) @arg) @args
+{
+  node arg_index
+  edge @args.args -> arg_index
+  attr (arg_index) pop_symbol = (named-child-index @arg)
+  edge arg_index -> @arg.output
+}
+
+(
+  (call
+    function: (identifier) @_fn_name) @call
+  (#eq? @_fn_name "super")
+)
+{
+  edge @call.output -> @call.class_super_scope
+}
+
+(list) @list
+{
+  node called
+
+  edge @list.output -> called
+  edge called -> @list.global_dot
+  attr (called) push_symbol = "list"
+}
+
+(list (_) @el) @list
+{
+  edge @list.new_bindings -> @el.new_bindings
+}
+
+(list_comprehension) {}
+
+(dictionary (pair) @pair) @dict
+{
+  edge @dict.new_bindings -> @pair.new_bindings
+}
+
+(pair
+  value: (_) @value) @pair
+{
+  edge @pair.new_bindings -> @value.new_bindings
+}
+
+(dictionary_comprehension) {}
+
+(set (_) @el) @set
+{
+  edge @set.new_bindings -> @el.new_bindings
+}
+
+(set_comprehension) {}
+
+[
+  (tuple (_) @element)
+  (expression_list (_) @element)
+] @tuple
+{
+  node el_index
+
+  edge @tuple.output -> el_index
+  attr (el_index) pop_symbol = (named-child-index @element)
+  edge el_index -> @element.output
+
+  edge @tuple.new_bindings -> @element.new_bindings
+}
+
+(parenthesized_expression) {}
+
+(generator_expression) {}
+
+(ellipsis) {}
+
+(list_splat (_) @splatted) @splat
+{
+  edge @splat.new_bindings -> @splatted.new_bindings
+}
+
+;;
+;; ######
+;; #     #   ##   ##### ##### ###### #####  #    #  ####
+;; #     #  #  #    #     #   #      #    # ##   # #
+;; ######  #    #   #     #   #####  #    # # #  #  ####
+;; #       ######   #     #   #      #####  #  # #      #
+;; #       #    #   #     #   #      #   #  #   ## #    #
+;; #       #    #   #     #   ###### #    # #    #  ####
+;;
+;; Patterns
+
+
+[
+  (pattern/identifier) @name @pattern
+  ; identifiers in patterns
+  (as_pattern (identifier) @name .) @pattern
+  (keyword_pattern (identifier) @name) @pattern
+  (splat_pattern (identifier) @name) @pattern
+  ; every context where _simple_pattern is used, because matching
+  ; pattern/dotted_name does not work
+  (case_pattern (dotted_name . (_) @name .) @pattern)
+  (keyword_pattern (dotted_name . (_) @name .) @pattern)
+  (union_pattern (dotted_name . (_) @name .) @pattern)
+] {
+  attr (@name.def) node_definition = @name
+  edge @pattern.output -> @pattern.local_scope
+  edge @pattern.output -> @pattern.class_parent_scope
+  edge @pattern.local_scope -> @pattern.input
+  attr (@pattern.local_scope -> @pattern.input) precedence = 1
+  attr (@pattern.input) node_definition = @name
+  attr (@pattern.output) push_node = @name
+
+  edge @pattern.new_bindings -> @name.def
+}
+
+(pattern/subscript) {}
+
+(pattern/attribute
+  attribute: (identifier) @name)
+{
+  attr (@name.input) is_definition
+}
+
+
+(list_splat_pattern (_) @pattern) @list {
+  edge @list.new_bindings -> @pattern.new_bindings
+}
+
+[
+  (pattern_list (_) @pattern)
+  (tuple_pattern (_) @pattern)
+  (list_pattern (_) @pattern)
+] @list
+{
+  node pattern_index
+
+  let statement_scope = @list.local_scope
+  node @pattern.local_scope
+  edge statement_scope -> @pattern.local_scope
+  attr (statement_scope -> @pattern.local_scope) precedence = (plus 1 (named-child-index @pattern))
+
+  edge pattern_index -> @list.input
+  edge @pattern.input -> pattern_index
+  attr (pattern_index) push_symbol = (named-child-index @pattern)
+}
+
+(class_pattern (case_pattern) @pattern) @class {
+  edge @class.new_bindings -> @pattern.new_bindings
+}
+
+(splat_pattern (_) @pattern) @splat {
+  edge @splat.new_bindings -> @pattern.new_bindings
+}
+
+(union_pattern (_) @pattern) @union {
+  edge @union.new_bindings -> @pattern.new_bindings
+}
+
+(dict_pattern (_) @pattern) @dict {
+  edge @dict.new_bindings -> @pattern.new_bindings
+}
+
+(complex_pattern) {}
+
+(as_pattern
+  (expression) @value
+  alias: (as_pattern_target (identifier) @name)) @as_pattern
+{
+  attr (@name.local_scope -> @name.input) precedence = 1
+  attr (@name.input) is_definition
+
+  edge @as_pattern.new_bindings -> @value.new_bindings
+  edge @as_pattern.new_bindings -> @name.new_bindings
+}
+
+(keyword_pattern) {}
+
+(case_pattern (_) @pattern) @case
+{
+  edge @case.new_bindings -> @pattern.new_bindings
+}
+
+[
+  (assignment
+    left: (_) @pattern
+    right: (_) @value)
+  (with_item
+    value:
+      (as_pattern
+        (_) @value
+        alias: (as_pattern_target (_) @pattern)))
+]
+{
+  edge @pattern.input -> @value.output
+}
+
+;;
+;;  #####                                      #######
+;; #     # #   # #    # #####   ##   #    #       #    #   # #####  ######  ####
+;; #        # #  ##   #   #    #  #   #  #        #     # #  #    # #      #
+;;  #####    #   # #  #   #   #    #   ##         #      #   #    # #####   ####
+;;       #   #   #  # #   #   ######   ##         #      #   #####  #           #
+;; #     #   #   #   ##   #   #    #  #  #        #      #   #      #      #    #
+;;  #####    #   #    #   #   #    # #    #       #      #   #      ######  ####
+;;
+;; Syntax Types
 
 ;;
 ;; BEGIN BIG GNARLY DISJUNCTION
@@ -604,362 +1344,3 @@ inherit .parent_module
 ;;
 ;; END BIG GNARLY DISJUNCTION
 ;;
-
-(function_definition
-  parameters: (parameters
-    . (identifier) @param)
-  body: (block) @body)
-{
-  edge @param.def -> @param.class_self_scope
-  edge @param.class_member_attr_scope -> @param.output
-  edge @param.output -> @body.after_scope
-  attr (@param.output) push_node = @param
-}
-
-(parameter/identifier) @param @name
-{
-  attr (@param.param_name) push_node = @param
-  edge @name.def -> @param.param_name
-  edge @name.def -> @param.param_index
-  edge @param.input -> @name.def
-}
-
-[
-  (parameter/default_parameter
-    name: (identifier) @name
-    value: (_) @value) @param
-  (parameter/typed_default_parameter
-    name: (_) @name
-    value: (_) @value) @param
-]
-{
-  attr (@param.param_name) push_node = @name
-  edge @name.def -> @param.param_name
-  edge @name.def -> @param.param_index
-  edge @param.input -> @name.def
-  edge @name.def -> @value.output
-}
-
-[
-  (parameter/typed_parameter
-    . (_) @name) @param
-  (parameter/list_splat_pattern
-    (_) @name) @param
-  (parameter/dictionary_splat_pattern
-    (_) @name) @param
-]
-{
-  attr (@param.param_name) push_node = @name
-  edge @name.def -> @param.param_name
-  edge @name.def -> @param.param_index
-  edge @param.input -> @name.def
-}
-
-[
-  (pattern_list (_) @pattern)
-  (tuple_pattern (_) @pattern)
-] @list
-{
-  node pattern_index
-
-  let statement_scope = @list.local_scope
-  node @pattern.local_scope
-  edge statement_scope -> @pattern.local_scope
-  attr (statement_scope -> @pattern.local_scope) precedence = (plus 1 (named-child-index @pattern))
-
-  edge pattern_index -> @list.input
-  edge @pattern.input -> pattern_index
-  attr (pattern_index) push_symbol = (named-child-index @pattern)
-}
-
-(parameters
-  (_) @param) @params
-{
-  node @param.param_index
-  node @param.param_name
-
-  attr (@param.param_index) push_symbol = (named-child-index @param)
-  edge @param.param_index -> @params.before_scope
-  edge @params.after_scope -> @param.input
-  edge @param.param_name -> @params.before_scope
-}
-
-(return_statement (_) @expr) @stmt
-{
-  edge @stmt.function_returns -> @expr.output
-}
-
-(class_definition) @class {
-  node @class.call_drop
-  node @class.member_attrs
-  node @class.members
-  node @class.super_scope
-}
-
-(class_definition
-  name: (identifier) @name) @class
-{
-  node call
-  node self_dot
-  node self_scope
-  node members_dot
-
-  attr (@name.def) definiens_node = @class
-  attr (@name.def) syntax_type = "class"
-  edge @class.after_scope -> @name.def
-  edge @name.def -> call
-  edge @name.def -> members_dot
-  edge members_dot -> @class.members
-  edge call -> @class.call_drop
-  edge @class.call_drop -> self_scope
-  edge self_scope -> @class.super_scope
-  edge self_scope -> self_dot
-  edge self_dot -> @class.members
-  edge @class.members -> @class.member_attrs
-  attr (call) pop_scoped_symbol = "()"
-  attr (@class.call_drop) type = "drop_scopes"
-  attr (members_dot) pop_symbol = "."
-  attr (self_dot) pop_symbol = "."
-  attr (@class.member_attrs) push_symbol = "."
-  attr (self_scope) is_exported
-}
-
-(class_definition
-  body: (_) @body) @class
-{
-  let @body.class_member_attr_scope = @class.member_attrs
-  node @body.class_parent_scope
-  edge @body.class_parent_scope -> @class.class_parent_scope
-  edge @body.class_parent_scope -> @class.local_scope
-  let @body.class_self_scope = @class.call_drop
-  let @body.class_super_scope = @class.super_scope
-}
-
-(class_definition
-  body: (block
-    (_) @last_stmt .)) @class
-{
-  edge @class.members -> @last_stmt.after_scope
-}
-
-(class_definition
-  superclasses: (argument_list
-    (_) @superclass)) @class
-{
-  edge @class.super_scope -> @superclass.output
-}
-
-(decorated_definition
-  definition: (_) @def) @stmt
-{
-  edge @def.before_scope -> @stmt.before_scope
-  edge @stmt.after_scope -> @def.after_scope
-}
-
-(case_clause
-  pattern: (_) @pattern
-  consequence: (_) @consequence) @clause
-{
-  edge @consequence.before_scope -> @pattern.new_bindings
-  edge @consequence.before_scope -> @clause.before_scope
-  edge @clause.after_scope -> @consequence.after_scope
-}
-
-;-------------
-; Expressions
-;-------------
-
-(identifier) @name {
-  attr (@name.ref) node_reference = @name
-}
-
-(call
-  function: (_) @fn
-  arguments: (argument_list) @args) @call
-{
-  node output_args
-
-  edge @call.output -> output_args
-  edge output_args -> @fn.output
-  attr (output_args) push_scoped_symbol = "()", scope = @args.args
-}
-
-(call
-  function: (attribute
-    object: (_) @receiver)
-  arguments: (argument_list
-    (expression) @arg) @args)
-{
-  node receiver_arg_index
-  attr (receiver_arg_index) pop_symbol = "0"
-  edge @args.args -> receiver_arg_index
-  edge receiver_arg_index -> @receiver.output
-
-  ;; FIXME the arguments will also exist with their unshifted indices because of the general
-  ;;       rule below!
-  node arg_index
-  attr (arg_index) pop_symbol = (plus 1 (named-child-index @arg))
-  edge arg_index -> @arg.output
-}
-
-(call
-  arguments: (argument_list
-    (keyword_argument
-      name: (identifier) @name
-      value: (_) @val)) @args)
-{
-  node arg_name
-  edge @args.args -> arg_name
-  attr (arg_name) pop_node = @name
-  edge arg_name -> @val.output
-}
-
-(argument_list) @args {
-  node @args.args
-  attr (@args.args) is_exported
-}
-
-(argument_list
-  (expression) @arg) @args
-{
-  node arg_index
-  edge @args.args -> arg_index
-  attr (arg_index) pop_symbol = (named-child-index @arg)
-  edge arg_index -> @arg.output
-}
-
-(
-  (call
-    function: (identifier) @_fn_name) @call
-  (#eq? @_fn_name "super")
-)
-{
-  edge @call.output -> @call.class_super_scope
-}
-
-[
-  (tuple (_) @element)
-  (expression_list (_) @element)
-] @tuple
-{
-  node el_index
-
-  edge @tuple.output -> el_index
-  attr (el_index) pop_symbol = (named-child-index @element)
-  edge el_index -> @element.output
-
-  edge @tuple.new_bindings -> @element.new_bindings
-}
-
-(attribute
-  object: (_) @object
-  attribute: (identifier) @name) @expr
-{
-  node input_dot
-  node output_dot
-
-  edge @expr.output -> @name.output
-  edge @name.output -> output_dot
-  edge output_dot -> @object.output
-  edge @object.input -> input_dot
-  edge input_dot -> @name.input
-  edge @name.input -> @expr.input
-  attr (output_dot) push_symbol = "."
-  attr (input_dot) pop_symbol = "."
-  attr (@name.input) pop_node = @name
-  attr (@name.output) push_node = @name
-}
-
-(pattern/attribute
-  attribute: (identifier) @name)
-{
-  attr (@name.input) is_definition
-}
-
-(primary_expression/attribute
-  attribute: (identifier) @name)
-{
-  attr (@name.output) is_reference
-}
-
-(primary_expression/identifier) @id
-{
-  edge @id.output -> @id.local_scope
-  edge @id.output -> @id.class_parent_scope
-  edge @id.local_scope -> @id.input
-  attr (@id.input) pop_node = @id
-  attr (@id.output) node_reference = @id
-
-  edge @id.new_bindings -> @id.def
-}
-
-(pattern/identifier) @id
-{
-  edge @id.output -> @id.local_scope
-  edge @id.output -> @id.class_parent_scope
-  edge @id.local_scope -> @id.input
-  attr (@id.local_scope -> @id.input) precedence = 1
-  attr (@id.input) node_definition = @id
-  attr (@id.output) push_node = @id
-
-  edge @id.new_bindings -> @id.def
-}
-
-(as_pattern
-  (expression) @value
-  alias: (as_pattern_target (primary_expression/identifier) @id)) @as_pattern
-{
-  attr (@id.local_scope -> @id.input) precedence = 1
-  attr (@id.input) is_definition
-
-  edge @as_pattern.new_bindings -> @value.new_bindings
-  edge @as_pattern.new_bindings -> @id.new_bindings
-}
-
-(list) @list
-{
-  node called
-
-  edge @list.output -> called
-  edge called -> @list.global_dot
-  attr (called) push_symbol = "list"
-}
-
-(list (_) @el) @list
-{
-  edge @list.new_bindings -> @el.new_bindings
-}
-
-(dictionary (pair) @pair) @dict
-{
-  edge @dict.new_bindings -> @pair.new_bindings
-}
-
-(pair
-  value: (_) @value) @pair
-{
-  edge @pair.new_bindings -> @value.new_bindings
-}
-
-(set (_) @el) @set
-{
-  edge @set.new_bindings -> @el.new_bindings
-}
-
-(list_splat (_) @splatted) @splat
-{
-  edge @splat.new_bindings -> @splatted.new_bindings
-}
-
-(binary_operator
-  (_) @left
-  (_) @right) @binop
-{
-  edge @binop.new_bindings -> @left.new_bindings
-  edge @binop.new_bindings -> @right.new_bindings
-}
-
-(case_pattern (_) @expr) @pat
-{
-  edge @pat.new_bindings -> @expr.new_bindings
-}

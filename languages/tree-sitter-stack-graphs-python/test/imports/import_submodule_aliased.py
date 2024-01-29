@@ -7,7 +7,7 @@ BAR = 42
 import foo.bar as qux
 
 qux.BAR
-# ^ defined: 7
+# ^ defined: 7, 3
 #     ^ defined: 3
 
 foo

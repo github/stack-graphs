@@ -21,11 +21,11 @@ match command.split():
     case { "foo": foo }:
         print(foo)
         #      ^ defined: 21
-    case {bar,quux}:
+    case {"bar": bar, "quux": quux}:
         print(bar,quux)
         #      ^ defined: 24
         #           ^ defined: 24
-    case ["grab", { "key": {garply}}]:
+    case ["grab", { "key": {"garply": garply}}]:
         print(garply)
         #       ^ defined: 28
     case ["drop", *objs]:
@@ -37,3 +37,6 @@ match command.split():
     case ["go", ("north" | "south" | "east" | "west") as direction2]:
         current_room = current_room.neighbor(direction2)
         #                                       ^ defined: 37
+    case (foo, "bar"):
+        print(foo)
+        #     ^ defined: 40
