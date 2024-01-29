@@ -83,4 +83,6 @@ class { };
     <quux0.quux1.quux2 />
     <>doo</>
     {garply}
+    { }
+    {/**/x}
 </foo>
