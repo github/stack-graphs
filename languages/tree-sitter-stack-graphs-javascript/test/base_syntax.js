@@ -27,6 +27,7 @@ with (x) { }
 break;
 continue;
 return;
+return x;
 ;
 foo: x;
 
