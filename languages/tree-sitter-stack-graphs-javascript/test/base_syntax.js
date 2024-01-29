@@ -78,4 +78,5 @@ class { };
     <>doo</>
     {garply}
     { }
+    {/**/x}
 </foo>
