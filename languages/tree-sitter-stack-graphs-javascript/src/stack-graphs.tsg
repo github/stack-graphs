@@ -282,6 +282,9 @@ inherit .return_or_yield
   node @prog.after_scope
   node @prog.before_scope
   let @prog.closure_point = @prog.after_scope
+
+  ; apparently it's perfectly cromulent to `return` from the top level scope (because control flow happens there too), so we make a top-level return node.
+  node @prog.return_or_yield
 }
 
 ;; ### Program Queries
