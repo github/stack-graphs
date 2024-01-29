@@ -3126,6 +3126,9 @@ inherit .containing_class_value
     edge @member_expr.value -> property_push
     edge member_push -> @object.value
 
+  ; (member_expression) nodes can occur in patterns
+  node @member_expr.covalue
+  node @member_expr.new_bindings
 }
 
 ;; ##### Subscript Expressions
