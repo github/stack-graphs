@@ -3132,6 +3132,8 @@ inherit .return_or_yield
   edge @subscript_expr.value -> @subscript_expr.index_push
   edge @subscript_expr.index_push -> subscript_expr_push_dot
 
+  ; subscript expressions can appear in array patterns, on the left, and thus require a covalue
+  node @subscript_expr.covalue
 }
 
 (subscript_expression
