@@ -3675,10 +3675,14 @@ inherit .return_or_yield
 
 }
 
-(jsx_expression (_)?@child)@jsx_expression {
+(jsx_expression)@jsx_expression {
 
   node @jsx_expression.before_scope
   node @jsx_expression.after_scope
+
+}
+
+(jsx_expression (_)?@child)@jsx_expression {
 
   if none @child {
     edge @jsx_expression.after_scope -> @jsx_expression.before_scope
