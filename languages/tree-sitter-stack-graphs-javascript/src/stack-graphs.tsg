@@ -513,7 +513,7 @@ inherit .containing_class_value
   (declaration)@decl)@export_stmt {
 
   node pop_guard_default
-  attr (pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @decl, definiens_node = @export_stmt.export_statement
+  attr (pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @decl, definiens_node = @export_stmt
   edge @export_stmt.exports -> pop_guard_default
   ;; edge export_stmt_pop_guard_default -> @decl.value ;; FIXME declarations have no .value
 
@@ -561,7 +561,7 @@ inherit .containing_class_value
   value:(_)@value)@export_stmt {
 
   node @export_stmt.pop_guard_default
-  attr (@export_stmt.pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @value, definiens_node = @export_stmt.export_statement
+  attr (@export_stmt.pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @value, definiens_node = @export_stmt
   edge @export_stmt.exports -> @export_stmt.pop_guard_default
   edge @export_stmt.pop_guard_default -> @value.value
 
