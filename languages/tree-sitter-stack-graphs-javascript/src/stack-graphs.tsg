@@ -4792,7 +4792,6 @@ inherit .containing_class_value
   attr (left_ignore_guard) pop_symbol = "GUARD:GANDALF"
   attr (left_definiens_hook) node_definition = @left
   attr (left_definiens_hook) definiens_node = @assignment_expr
-  attr (left_definiens_hook) syntax_type = "function"
   edge @assignment_expr.pkg_pop -> left_ignore_guard
   edge left_ignore_guard -> left_definiens_hook
 
