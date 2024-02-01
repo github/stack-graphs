@@ -557,6 +557,54 @@ inherit .containing_class_value
 
 }
 
+(export_statement "default"
+  value:(_)@value)@export_stmt {
+
+  node @export_stmt.pop_guard_default
+  attr (@export_stmt.pop_guard_default) symbol_definition = "GUARD:DEFAULT", source_node = @value, definiens_node = @export_stmt.export_statement
+  edge @export_stmt.exports -> @export_stmt.pop_guard_default
+  edge @export_stmt.pop_guard_default -> @value.value
+
+  ; !!!! HACK These detour nodes are a massive hack to allow find all refs land on defs
+  ; for the default values of modules that have useful names like the module name or
+  ; package name
+
+  node detour_push
+  node @export_stmt.detour_pop
+
+  scan FILE_PATH {
+
+    "^(.+/)?([^/]+)/index\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (@export_stmt.detour_pop) symbol_definition = module_name, source_node = @value, definiens_node = @export_stmt
+      edge @export_stmt.pop_guard_default -> detour_push
+      edge detour_push -> @export_stmt.detour_pop
+      edge @export_stmt.detour_pop -> @value.value
+    }
+
+    "^(.+/)?([^/]+)\.js$" {
+      let module_name = $2
+      attr (detour_push) push_symbol = module_name
+      attr (@export_stmt.detour_pop) symbol_definition = module_name, source_node = @value, definiens_node = @export_stmt
+      edge @export_stmt.pop_guard_default -> detour_push
+      edge detour_push -> @export_stmt.detour_pop
+      edge @export_stmt.detour_pop -> @value.value
+    }
+
+  }
+
+  node default_detour_push
+  node @export_stmt.default_detour_pop
+
+  attr (default_detour_push) push_symbol = "default"
+  attr (@export_stmt.default_detour_pop) symbol_definition = "default", source_node = @value, definiens_node = @value
+  edge @export_stmt.pop_guard_default -> default_detour_push
+  edge default_detour_push -> @export_stmt.default_detour_pop
+  edge @export_stmt.default_detour_pop -> @value.value
+
+}
+
 (export_statement
   declaration: [
     (function_declaration name:(identifier)@name)
@@ -4438,7 +4486,7 @@ inherit .containing_class_value
 
   node pop_default_guard
   node pop_dot
-  node pop_name
+  node @assignment_expr.pop_name
 
   attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
   edge @assignment_expr.exports -> pop_default_guard
@@ -4446,47 +4494,47 @@ inherit .containing_class_value
   attr (pop_dot) pop_symbol = "GUARD:MEMBER"
   edge pop_default_guard -> pop_dot
 
-  attr (pop_name) node_definition = @property
-  attr (pop_name) definiens_node = @assignment_expr
-  edge pop_dot -> pop_name
-  edge pop_name -> @right.value
+  attr (@assignment_expr.pop_name) node_definition = @property
+  attr (@assignment_expr.pop_name) definiens_node = @assignment_expr
+  edge pop_dot -> @assignment_expr.pop_name
+  edge @assignment_expr.pop_name -> @right.value
 
   ;; For ES6 interoperability, expose members as named exports
-  edge @assignment_expr.exports -> pop_name
+  edge @assignment_expr.exports -> @assignment_expr.pop_name
 
   node detour_push
-  node detour_pop
+  node @assignment_expr.detour_pop
 
   scan FILE_PATH {
 
     "^(.+/)?([^/]+)/index\.js$" {
       let module_name = $2
       attr (detour_push) push_symbol = module_name
-      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      attr (@assignment_expr.detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
       edge pop_default_guard -> detour_push
-      edge detour_push -> detour_pop
-      edge detour_pop -> @right.value
+      edge detour_push -> @assignment_expr.detour_pop
+      edge @assignment_expr.detour_pop -> @right.value
     }
 
     "^(.+/)?([^/]+)\.js$" {
       let module_name = $2
       attr (detour_push) push_symbol = module_name
-      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      attr (@assignment_expr.detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
       edge pop_default_guard -> detour_push
-      edge detour_push -> detour_pop
-      edge detour_pop -> @right.value
+      edge detour_push -> @assignment_expr.detour_pop
+      edge @assignment_expr.detour_pop -> @right.value
     }
 
   }
 
   node default_detour_push
-  node default_detour_pop
+  node @assignment_expr.default_detour_pop
 
   attr (default_detour_push) push_symbol = "default"
-  attr (default_detour_pop) symbol_definition = "default", source_node = @assignment_expr, definiens_node = @assignment_expr
+  attr (@assignment_expr.default_detour_pop) symbol_definition = "default", source_node = @assignment_expr, definiens_node = @assignment_expr
   edge pop_default_guard -> default_detour_push
-  edge default_detour_push -> default_detour_pop
-  edge default_detour_pop -> @right.value
+  edge default_detour_push -> @assignment_expr.default_detour_pop
+  edge @assignment_expr.default_detour_pop -> @right.value
 
 }
 
@@ -4500,13 +4548,13 @@ inherit .containing_class_value
   (#eq? @exports "exports")
 ) {
 
-  node pop_default_guard
+  node @assignment_expr.pop_default_guard
   node pop_dot
 
-  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
-  attr (pop_default_guard) definiens_node = @assignment_expr
-  edge @assignment_expr.exports -> pop_default_guard
-  edge pop_default_guard -> @right.value
+  attr (@assignment_expr.pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @exports
+  attr (@assignment_expr.pop_default_guard) definiens_node = @assignment_expr
+  edge @assignment_expr.exports -> @assignment_expr.pop_default_guard
+  edge @assignment_expr.pop_default_guard -> @right.value
 
   ;; For ES6 interoperability, expose members as named exports
   attr (pop_dot) pop_symbol = "GUARD:MEMBER"
@@ -4514,38 +4562,38 @@ inherit .containing_class_value
   edge pop_dot -> @right.value
 
   node detour_push
-  node detour_pop
+  node @assignment_expr.detour_pop
 
   scan FILE_PATH {
 
     "^(.+/)?([^/]+)/index\.js$" {
       let module_name = $2
       attr (detour_push) push_symbol = module_name
-      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
-      edge pop_default_guard -> detour_push
-      edge detour_push -> detour_pop
-      edge detour_pop -> @right.value
+      attr (@assignment_expr.detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      edge @assignment_expr.pop_default_guard -> detour_push
+      edge detour_push -> @assignment_expr.detour_pop
+      edge @assignment_expr.detour_pop -> @right.value
     }
 
     "^(.+/)?([^/]+)\.js$" {
       let module_name = $2
       attr (detour_push) push_symbol = module_name
-      attr (detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
-      edge pop_default_guard -> detour_push
-      edge detour_push -> detour_pop
-      edge detour_pop -> @right.value
+      attr (@assignment_expr.detour_pop) symbol_definition = module_name, source_node = @assignment_expr, definiens_node = @assignment_expr
+      edge @assignment_expr.pop_default_guard -> detour_push
+      edge detour_push -> @assignment_expr.detour_pop
+      edge @assignment_expr.detour_pop -> @right.value
     }
 
   }
 
   node default_detour_push
-  node default_detour_pop
+  node @assignment_expr.default_detour_pop
 
   attr (default_detour_push) push_symbol = "default"
-  attr (default_detour_pop) symbol_definition = "default", source_node = @assignment_expr, definiens_node = @assignment_expr
-  edge pop_default_guard -> default_detour_push
-  edge default_detour_push -> default_detour_pop
-  edge default_detour_pop -> @right.value
+  attr (@assignment_expr.default_detour_pop) symbol_definition = "default", source_node = @assignment_expr, definiens_node = @assignment_expr
+  edge @assignment_expr.pop_default_guard -> default_detour_push
+  edge default_detour_push -> @assignment_expr.default_detour_pop
+  edge @assignment_expr.default_detour_pop -> @right.value
 
 }
 
@@ -4846,6 +4894,72 @@ inherit .containing_class_value
 
 }
 
+(
+  (assignment_expression
+    left: [
+      ( ; exports.foo = ...
+        (member_expression
+          object:(_)@_exports
+          property:(_)@_property)
+        (#eq? @_exports "exports")
+      )
+      ( ; module.exports.foo = ...
+        (member_expression
+          object:(member_expression
+            object:(_)@_module
+            property:(_)@_exports)
+          property:(_)@_property)
+        (#eq? @_module "module")
+        (#eq? @_exports "exports")
+      )
+    ]
+    right: [
+      (function)
+      (generator_function)
+      (arrow_function)
+    ])@assignment_expr
+
+) {
+
+  attr (@assignment_expr.pop_name) syntax_type = "function"
+  attr (@assignment_expr.detour_pop) syntax_type = "function"
+  attr (@assignment_expr.default_detour_pop) syntax_type = "function"
+
+}
+
+(
+  (assignment_expression
+    left: (member_expression
+      object:(_)@_module
+      property:(_)@_exports)
+    right: [
+      (function)
+      (generator_function)
+      (arrow_function)
+    ])@assignment_expr
+  (#eq? @_module "module")
+  (#eq? @_exports "exports")
+) {
+
+  attr (@assignment_expr.pop_default_guard) syntax_type = "function"
+  attr (@assignment_expr.detour_pop) syntax_type = "function"
+  attr (@assignment_expr.default_detour_pop) syntax_type = "function"
+
+}
+
+(export_statement "default"
+  value:[
+      (function)
+      (generator_function)
+      (arrow_function)
+    ])@export_stmt {
+
+  attr (@export_stmt.pop_guard_default) syntax_type = "function"
+  attr (@export_stmt.detour_pop) syntax_type = "function"
+  attr (@export_stmt.default_detour_pop) syntax_type = "function"
+
+}
+
 (pair
   key: (_)@name
   value: [
@@ -4877,6 +4991,60 @@ inherit .containing_class_value
 ] {
 
   attr (@name.pop) syntax_type = "class"
+
+}
+
+(
+  (assignment_expression
+    left: [
+      ( ; exports.foo = ...
+        (member_expression
+          object:(_)@_exports
+          property:(_)@_property)
+        (#eq? @_exports "exports")
+      )
+      ( ; module.exports.foo = ...
+        (member_expression
+          object:(member_expression
+            object:(_)@_module
+            property:(_)@_exports)
+          property:(_)@_property)
+        (#eq? @_module "module")
+        (#eq? @_exports "exports")
+      )
+    ]
+    right: (class))@assignment_expr
+
+) {
+
+  attr (@assignment_expr.pop_name) syntax_type = "class"
+  attr (@assignment_expr.detour_pop) syntax_type = "class"
+  attr (@assignment_expr.default_detour_pop) syntax_type = "class"
+
+}
+
+(
+  (assignment_expression
+    left: (member_expression
+      object:(_)@_module
+      property:(_)@_exports)
+    right: (class))@assignment_expr
+  (#eq? @_module "module")
+  (#eq? @_exports "exports")
+) {
+
+  attr (@assignment_expr.pop_default_guard) syntax_type = "class"
+  attr (@assignment_expr.detour_pop) syntax_type = "class"
+  attr (@assignment_expr.default_detour_pop) syntax_type = "class"
+
+}
+
+(export_statement "default"
+  value:(class))@export_stmt {
+
+  attr (@export_stmt.pop_guard_default) syntax_type = "class"
+  attr (@export_stmt.detour_pop) syntax_type = "class"
+  attr (@export_stmt.default_detour_pop) syntax_type = "class"
 
 }
 
