@@ -790,13 +790,8 @@ inherit .containing_class_value
 (export_statement
   value:(_)@default_expr)@export_stmt {
 
-  node pop_default_guard
-
-  attr (pop_default_guard) symbol_definition = "GUARD:DEFAULT", source_node = @export_stmt, definiens_node = @export_stmt.export_statement
   edge @default_expr.before_scope -> @export_stmt.before_scope
   edge @export_stmt.after_scope -> @default_expr.after_scope
-  edge @export_stmt.exports -> pop_default_guard
-  edge pop_default_guard -> @default_expr.value
 
 }
 
