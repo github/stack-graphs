@@ -15,6 +15,7 @@ class Foo { }
 @Foo class Bar { }
 @Foo.Quux class Bar { }
 @Foo() class Bar { }
+@Foo.Quux() class Bar { }
 { }
 if (true) { }
 if (true) { } else { }
