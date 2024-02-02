@@ -12,6 +12,7 @@ function foo(a) { }
 function foo(undefined) { }
 function* foo() { }
 class Foo { }
+@Foo class Bar { }
 { }
 if (true) { }
 if (true) { } else { }
