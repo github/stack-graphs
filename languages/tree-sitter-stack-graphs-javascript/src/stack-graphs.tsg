@@ -411,6 +411,15 @@ inherit .containing_class_value
   edge @comment.after_scope -> @comment.before_scope
 }
 
+(identifier) @identifier {
+  node @identifier.before_scope
+  node @identifier.after_scope
+  node @identifier.value
+  node @identifier.covalue
+  node @identifier.new_bindings
+  edge @identifier.after_scope -> @identifier.before_scope
+}
+
 
 
 
@@ -2226,7 +2235,6 @@ inherit .containing_class_value
   (member_expression)
   (parenthesized_expression)
   (undefined)
-  (primary_expression/identifier)
   (this)
   (super)
   (number)
@@ -2355,9 +2363,6 @@ inherit .containing_class_value
 ;; #### Variables
 
 (primary_expression/identifier)@variable {
-  ; scopes don't change
-  edge @variable.after_scope -> @variable.before_scope
-
   ; value is a lookup, ie a push
   attr (@variable.value) node_reference = @variable
   edge @variable.value -> @variable.before_scope
@@ -2864,15 +2869,8 @@ inherit .containing_class_value
 
 (arrow_function
   parameter:(_)@param)@fun {
-
-  node @param.after_scope
   node param_arg_index
-  node @param.before_scope
-  node @param.covalue
   node param_pop
-
-  ; scope flows from the param right back out
-  edge @param.after_scope -> @param.before_scope
 
   ; but augmented with a pop, b/c it's not a pattern
   attr (param_pop) node_definition = @param
@@ -3742,12 +3740,6 @@ inherit .containing_class_value
     name:(identifier)@element_name)
 ]
 {
-
-  node @element_name.before_scope
-  node @element_name.after_scope
-  
-  edge @element_name.after_scope -> @element_name.before_scope
-
   scan (source-text @element_name) {
     ; standard HTML elements
     "^(a|abbr|acronym|address|applet|area|article|aside|audio|b|base|basefont|bdi|bdo|big|blockquote|body|br|button|canvas|caption|center|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|dir|div|dl|dt|em|embed|fieldset|figcaption|figure|font|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noframes|noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|search|section|select|small|source|span|strike|strong|style|sub|summary|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|tt|u|ul|var|video|wbr)$" {
@@ -3776,8 +3768,6 @@ inherit .containing_class_value
   (identifier)@first_part
   (identifier)@second_part)@nested_identifier
 {
-  node @first_part.value
-  node @second_part.value
   node guard_member
 
   attr (@first_part.value) node_reference = @first_part
@@ -3794,7 +3784,6 @@ inherit .containing_class_value
   (nested_identifier)@first_part
   (identifier)@second_part)@nested_identifier
 {
-  node @second_part.value
   node guard_member
 
   attr (@second_part.value) node_reference = @second_part
@@ -4086,13 +4075,11 @@ inherit .containing_class_value
 ;; ### Attributes Defined on Patterns
 ;; TODO
 [
-  (assignment_expression left:(identifier)@pattern)
   (assignment_pattern)@pattern
   (object_pattern)@pattern
   (array_pattern)@pattern
   (rest_pattern)@pattern
   (pair_pattern)@pattern
-  (pattern/identifier)@pattern
   (pattern/property_identifier)@pattern
   (object_assignment_pattern)@pattern
   (shorthand_property_identifier_pattern)@pattern
@@ -4117,7 +4104,6 @@ inherit .containing_class_value
   ; scope flows through, binding via a pop edge that goes to an unknown value
   attr (ident_pat_pop) node_definition = @ident_pat
   edge ident_pat_pop -> @ident_pat.covalue
-  edge @ident_pat.after_scope -> @ident_pat.before_scope
   edge @ident_pat.after_scope -> ident_pat_pop
 
   edge @ident_pat.new_bindings -> ident_pat_pop
