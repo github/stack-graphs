@@ -13,6 +13,7 @@ function foo(undefined) { }
 function* foo() { }
 class Foo { }
 @Foo class Bar { }
+@Foo() class Bar { }
 { }
 if (true) { }
 if (true) { } else { }
