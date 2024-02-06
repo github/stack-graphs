@@ -1667,7 +1667,7 @@ inherit .containing_class_value
 }
 
 (field_definition
-  property:(property_identifier)@property)@field_def {
+  property:(_)@property)@field_def {
 
   node @property.pop
   node property_pop_dot
