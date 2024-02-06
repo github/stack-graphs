@@ -11,7 +11,9 @@ function foo() { }
 function foo(a) { }
 function foo(undefined) { }
 function* foo() { }
-class Foo { }
+class Foo {
+    #x = null;
+}
 @Foo class Bar { }
 @Foo.Quux class Bar { }
 @Foo() class Bar { }

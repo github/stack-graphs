@@ -1661,11 +1661,14 @@ inherit .containing_class_value
 
 
 
-(field_definition
-  property:(property_identifier)@property)@field_def {
-
+(field_definition)@field_def {
   node @field_def.after_scope
   node @field_def.before_scope
+}
+
+(field_definition
+  property:(_)@property)@field_def {
+
   node @property.pop
   node property_pop_dot
   
