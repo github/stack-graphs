@@ -1435,7 +1435,6 @@ inherit .containing_class_value
 
   node @name.pop
   node @class_decl.class_value
-  let @class_decl.containing_class_value = @class_decl.class_value
   node guard_prototype
   node @class_decl.prototype
   node @class_decl.constructor
