@@ -409,6 +409,7 @@ inherit .containing_class_value
   node @comment.covalue
   node @comment.new_bindings ; for object patterns
   edge @comment.after_scope -> @comment.before_scope
+  node @comment.source ; for export clauses with multiple exports
 }
 
 (identifier) @identifier {
