@@ -3,6 +3,10 @@
 // foo
 
 export let x = 1;
+export {
+    // x
+    A
+};
 import "foo";
 debugger;
 var x;
