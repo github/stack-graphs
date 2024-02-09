@@ -13,6 +13,7 @@ function foo(undefined) { }
 function* foo() { }
 class Foo {
     #x = null;
+    get [/**/ foo]() {}
     static {}
 }
 @Foo class Bar { }

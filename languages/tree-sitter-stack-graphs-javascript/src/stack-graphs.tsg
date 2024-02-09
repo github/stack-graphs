@@ -2591,10 +2591,13 @@ inherit .containing_class_value
 
 ; pairs
 
-(computed_property_name (_)@expr)@computed_property_name {
-
+(computed_property_name)@computed_property_name {
     node @computed_property_name.after_scope
     node @computed_property_name.before_scope
+}
+
+(computed_property_name (_)@expr)@computed_property_name {
+
     edge @expr.before_scope -> @computed_property_name.before_scope
     edge @computed_property_name.after_scope -> @expr.after_scope
 
