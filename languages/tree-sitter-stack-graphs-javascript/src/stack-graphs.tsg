@@ -3698,6 +3698,11 @@ inherit .containing_class_value
 
 }
 
+(jsx_namespace_name (_) @lhs (_) @rhs)@name {
+  node @name.before_scope
+  node @name.after_scope
+}
+
 (jsx_self_closing_element
   name:(_)@element_name)@jsx_self_closing_element {
 
