@@ -13,6 +13,7 @@ function foo(undefined) { }
 function* foo() { }
 class Foo {
     #x = null;
+    static {}
 }
 @Foo class Bar { }
 @Foo.Quux class Bar { }
