@@ -3704,6 +3704,7 @@ inherit .containing_class_value
 
   edge @lhs.before_scope -> @name.before_scope
   edge @rhs.before_scope -> @lhs.after_scope
+  edge @name.after_scope -> @name.before_scope
 }
 
 (jsx_self_closing_element
