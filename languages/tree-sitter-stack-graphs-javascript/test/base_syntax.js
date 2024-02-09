@@ -11,6 +11,9 @@ import "foo";
 debugger;
 var x;
 let x;
+let x = {
+    get constructor() {}
+};
 function foo() { }
 function foo(a) { }
 function foo(undefined) { }
