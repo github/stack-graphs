@@ -99,4 +99,6 @@ class { };
     {garply}
     { }
     {/**/x}
-</foo>
+</foo>;
+<Foo:Bar />;
+<Foo:Bar></Foo:Bar>;
