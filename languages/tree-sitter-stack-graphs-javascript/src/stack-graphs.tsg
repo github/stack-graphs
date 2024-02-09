@@ -1693,6 +1693,15 @@ inherit .containing_class_value
   edge @property.pop -> @value.value
 }
 
+(class_static_block body: (_) @body) @static_block {
+  node @static_block.before_scope
+  node @static_block.after_scope
+
+  edge @body.before_scope -> @static_block.before_scope
+
+  edge @static_block.after_scope -> @static_block.before_scope
+}
+
 
 
 ;; #### Statement Block
