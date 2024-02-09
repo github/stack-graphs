@@ -2525,6 +2525,9 @@ inherit .containing_class_value
     attr (@object.member_pop) pop_symbol = "GUARD:MEMBER"
     edge @object.value -> @object.member_pop
 
+    node @object.class_value
+    node @object.constructor
+
 }
 
 ; empty objects
