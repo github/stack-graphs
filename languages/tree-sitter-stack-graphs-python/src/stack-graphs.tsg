@@ -152,6 +152,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (set)
   (set_comprehension)
   (tuple)
+  (pair)
   (parenthesized_expression)
   (generator_expression)
   (ellipsis)
