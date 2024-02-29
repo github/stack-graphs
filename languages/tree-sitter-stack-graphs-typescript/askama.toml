@@ -1,0 +1,9 @@
+[general]
+# Directories to search for templates, relative to the crate root.
+dirs = ["src"]
+# Unless you add a `-` in a block, whitespace characters won't be trimmed.
+whitespace = "preserve"
+
+[[escaper]]
+path = "::askama::Text"
+extensions = ["tsg"]
