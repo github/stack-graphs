@@ -1,0 +1,7 @@
+[package]
+name = "lua-helpers"
+version = "0.0.0"
+description = "Unpublished helper methods for our Lua test cases"
+
+[dependencies]
+mlua = { version = "0.9" }

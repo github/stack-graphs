@@ -19,6 +19,9 @@ mod loader;
 mod nodes;
 mod test;
 
+#[cfg(feature = "lua")]
+mod lua;
+
 pub(self) fn build_stack_graph(
     python_source: &str,
     tsg_source: &str,

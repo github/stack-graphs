@@ -357,6 +357,7 @@ use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
 use tree_sitter::Parser;
+use tree_sitter::Tree;
 use tree_sitter_graph::functions::Functions;
 use tree_sitter_graph::graph::Edge;
 use tree_sitter_graph::graph::Graph;
@@ -375,6 +376,8 @@ pub mod ci;
 pub mod cli;
 pub mod functions;
 pub mod loader;
+#[cfg(feature = "lua")]
+pub mod lua;
 pub mod test;
 mod util;
 
@@ -578,6 +581,29 @@ impl StackGraphLanguage {
     }
 }
 
+pub(crate) fn parse_file(
+    language: tree_sitter::Language,
+    source: &str,
+    cancellation_flag: &dyn CancellationFlag,
+) -> Result<Tree, BuildError> {
+    let tree = {
+        let mut parser = Parser::new();
+        parser.set_language(language)?;
+        let ts_cancellation_flag = TreeSitterCancellationFlag::from(cancellation_flag);
+        // The parser.set_cancellation_flag` is unsafe, because it does not tie the
+        // lifetime of the parser to the lifetime of the cancellation flag in any way.
+        // To make it more obvious that the parser does not outlive the cancellation flag,
+        // it is put into its own block here, instead of extending to the end of the method.
+        unsafe { parser.set_cancellation_flag(Some(ts_cancellation_flag.as_ref())) };
+        parser.parse(source, None).ok_or(BuildError::ParseError)?
+    };
+    let parse_errors = ParseError::into_all(tree);
+    if parse_errors.errors().len() > 0 {
+        return Err(BuildError::ParseErrors(parse_errors));
+    }
+    Ok(parse_errors.into_tree())
+}
+
 pub struct Builder<'a> {
     sgl: &'a StackGraphLanguage,
     stack_graph: &'a mut StackGraph,
@@ -615,24 +641,7 @@ impl<'a> Builder<'a> {
         globals: &'a Variables<'a>,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), BuildError> {
-        let tree = {
-            let mut parser = Parser::new();
-            parser.set_language(self.sgl.language)?;
-            let ts_cancellation_flag = TreeSitterCancellationFlag::from(cancellation_flag);
-            // The parser.set_cancellation_flag` is unsafe, because it does not tie the
-            // lifetime of the parser to the lifetime of the cancellation flag in any way.
-            // To make it more obvious that the parser does not outlive the cancellation flag,
-            // it is put into its own block here, instead of extending to the end of the method.
-            unsafe { parser.set_cancellation_flag(Some(ts_cancellation_flag.as_ref())) };
-            parser
-                .parse(self.source, None)
-                .ok_or(BuildError::ParseError)?
-        };
-        let parse_errors = ParseError::into_all(tree);
-        if parse_errors.errors().len() > 0 {
-            return Err(BuildError::ParseErrors(parse_errors));
-        }
-        let tree = parse_errors.into_tree();
+        let tree = parse_file(self.sgl.language, self.source, cancellation_flag)?;
 
         let mut globals = Variables::nested(globals);
         if globals.get(&ROOT_NODE_VAR.into()).is_none() {
@@ -826,6 +835,9 @@ pub enum BuildError {
     LanguageError(#[from] tree_sitter::LanguageError),
     #[error("Expected exported symbol scope in {0}, got {1}")]
     SymbolScopeError(String, String),
+    #[cfg(feature = "lua")]
+    #[error(transparent)]
+    LuaError(#[from] mlua::Error),
 }
 
 impl From<stack_graphs::CancellationError> for BuildError {

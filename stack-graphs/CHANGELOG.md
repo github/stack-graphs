@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.13.0 -- Unreleased
+
+### Added
+
+- Added Lua bindings for constructing stack graphs.  These bindings are optional, and will only be built when the `lua` feature flag is enabled.
+
 ## v0.12.0 -- 2023-07-27
 
 ### Added

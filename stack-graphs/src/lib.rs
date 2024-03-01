@@ -66,6 +66,8 @@ pub mod cycles;
 #[macro_use]
 mod debugging;
 pub mod graph;
+#[cfg(feature = "lua")]
+pub mod lua;
 pub mod partial;
 pub mod paths;
 pub mod serde;
