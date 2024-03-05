@@ -23,6 +23,7 @@ keywords = ["tree-sitter", "stack-graphs", "java"]
 [[bin]]
 name = "tree-sitter-stack-graphs-java"
 path = "rust/bin.rs"
+required-features = ["cli"]
 
 [lib]
 path = "rust/lib.rs"
@@ -33,8 +34,15 @@ name = "test"
 path = "rust/test.rs"
 harness = false # need to provide own main function to handle running tests
 
+[features]
+cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
+
 [dependencies]
-anyhow = "1.0"
-clap = { version = "4", features = ["derive"] }
-tree-sitter-stack-graphs = { version = "0.7", path = "../../tree-sitter-stack-graphs", features=["cli"] }
+anyhow = { version = "1.0", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
 tree-sitter-java = { version = "=0.20.0" }
+tree-sitter-stack-graphs = { version = "0.7", path = "../../tree-sitter-stack-graphs" }
+
+[dev-dependencies]
+anyhow = { version = "1.0" }
+tree-sitter-stack-graphs = { version = "0.7", path = "../../tree-sitter-stack-graphs", features = ["cli"] }
