@@ -17,12 +17,17 @@ jobs:
     strategy:
       matrix:
         rust: [stable]
+    env:
+      # cargo hack does not use the default-members in Cargo.toml, so we restrict to those explicitly
+      CARGO_HACK: cargo hack -p lsp-positions -p stack-graphs -p tree-sitter-stack-graphs --feature-powerset --exclude-features copious-debugging
 
     steps:
       - name: Install Rust environment
         uses: hecrj/setup-rust-action@v1
         with:
           rust-version: ${{ matrix.rust }}
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Check formatting
@@ -36,28 +41,24 @@ jobs:
           key: ${{ runner.OS }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.OS }}-cargo-
+      - name: Build library (all feature combinations)
+        run: ${{ env.CARGO_HACK }} --no-dev-deps build
+      - name: Run test suite (all feature combinations)
+        run: ${{ env.CARGO_HACK }} test
+      - name: Run test suite with all optimizations (default features)
+        run: cargo test --release
       - name: Install cargo-valgrind
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
           cargo install cargo-valgrind
-      - name: Build library
-        run: cargo build
+      - name: Run test suite under valgrind (default features)
+        # We only need to use valgrind to test the crates that have C bindings.
+        run: cargo valgrind test -p stack-graphs
       - name: Ensure C headers are up to date
         run: |
           script/cbindgen
           test -z "$(git status --porcelain)"
-      - name: Run test suite
-        run: cargo test
-      - name: Run test suite under valgrind
-        # We only need to use valgrind to test the crates that have C bindings.
-        run: cargo valgrind test -p stack-graphs
-      - name: Run lsp-positions tests without tree-sitter
-        run: cargo test -p lsp-positions --no-default-features
-      - name: Run test suite with all features enabled
-        run: cargo test --all-features
-      - name: Run test suite with all optimizations
-        run: cargo test --release
 
   test-init:
     needs: [test-rust]
@@ -112,6 +113,8 @@ jobs:
         uses: hecrj/setup-rust-action@v1
         with:
           rust-version: ${{ matrix.rust }}
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
       - name: Cache dependencies
         uses: actions/cache@v3
         with:
@@ -123,10 +126,10 @@ jobs:
             ${{ runner.OS }}-cargo-
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Build
-        run: cargo build -p ${{ matrix.language }}
-      - name: Test
-        run: cargo test -p ${{ matrix.language }}
+      - name: Build (all feature combinations)
+        run: cargo hack -p ${{ matrix.language }} --feature-powerset build
+      - name: Test (all features)
+        run: cargo test -p ${{ matrix.language }} --all-features
 
   test-cli:
     runs-on: ubuntu-latest
