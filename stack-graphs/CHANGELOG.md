@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.13.0 -- 2024-03-06
+
+### Added
+
+- New type `StitcherConfig` to specify configuration flags that control stitching.
+- Path stiching statistics can now be collected during stitching for debugging purposes. Disabled by default and can be enabled with `StitcherConfig`.
+- A method `StackGraph::set_edge_precedence` that allows changing the precendence of an existing edge in a stack graph.
+- A method `StackGraph::incoming_edge_degree` that returns the number of edges ending in a given node.
+- A method `Database::get_incoming_path_degree` that returns the number of partial paths in the database ending in a given node.
+- Cycle detection improved by using incoming path or edge degrees to reduce the amount of data to keep in memory.
+- Visualization uses different colors for nodes of different files, which makes understanding multi-file graphs easier.
+
+### Changed
+
+- Methods and types that do stitching in their implementation now require a `StitcherConfig` value. These include `Assertion::run`, `ForwardPartialPathStitcher::find_*`, and `Test::run`.
+- The SQLite storage data encoding and queries changed to improve performance.
+
+### Removed
+
+- Method `StackGraph::remove_edge` has been removed.
+
+### Fixed
+
+- A panic when using an arena after `Arena::clear` or `SupplementalArena::clear` was called.
+- Missing candidates when looking up root paths in a `Database`.
+
 ## v0.12.0 -- 2023-07-27
 
 ### Added
