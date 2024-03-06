@@ -1307,7 +1307,7 @@ impl StackGraph {
         }
     }
 
-    /// Removes an edge from the stack graph.
+    /// Sets edge precedence of the given edge.
     pub fn set_edge_precedence(
         &mut self,
         source: Handle<Node>,

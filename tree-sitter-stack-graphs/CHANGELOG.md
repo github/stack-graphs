@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.8.1 -- 2024-03-06
+
+The `stack-graphs` dependency was updated to `v0.13` to fix the build problems of the `v0.8.0` release.
+
 ## v0.8.0 -- 2024-03-05
 
 The `tree-sitter` dependency version was updated to fix install problems.
