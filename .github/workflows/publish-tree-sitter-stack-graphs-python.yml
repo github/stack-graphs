@@ -1,0 +1,45 @@
+name: Publish tree-sitter-stack-graphs-python release
+
+on:
+  push:
+    tags:
+      - tree-sitter-stack-graphs-python-v*
+
+jobs:
+  publish-crate:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: 0
+      CRATE_DIR: './languages/tree-sitter-stack-graphs-python'
+    steps:
+      - name: Install Rust environment
+        uses: hecrj/setup-rust-action@v1
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      # TODO Verify the crate version matches the tag
+      - name: Test crate
+        run: cargo test --all-features
+        working-directory: ${{ env.CRATE_DIR }}
+      - name: Verify publish crate
+        run: cargo publish --dry-run
+        working-directory: ${{ env.CRATE_DIR }}
+      - name: Publish crate
+        run: cargo publish
+        working-directory: ${{ env.CRATE_DIR }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  create-release:
+    needs: publish-crate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          body: |
+            Find more info on all releases at https://crates.io/crates/tree-sitter-stack-graphs-python.
+          token: ${{ secrets.GITHUB_TOKEN }}
