@@ -1564,7 +1564,7 @@ inherit .containing_class_value
   node @method_def.after_scope
   node @method_def.before_scope
   node @method_def.method_value
-  
+
 }
 
 (
@@ -1572,7 +1572,7 @@ inherit .containing_class_value
     name:(_)@name)@method_def
   (#eq? @name "constructor")
 ) {
-  
+
   ; augmentation for the constructor
   attr (@name.pop) symbol_definition = "GUARD:CONSTRUCTOR", source_node = @name
   edge @method_def.class_value -> @name.pop
@@ -1672,7 +1672,7 @@ inherit .containing_class_value
 
   node @property.pop
   node property_pop_dot
-  
+
   attr (@property.pop) node_definition = @property
   attr (property_pop_dot) pop_symbol = "GUARD:MEMBER"
   edge @field_def.after_scope -> property_pop_dot
@@ -2296,6 +2296,9 @@ inherit .containing_class_value
   (number)
   (string)
   (template_string)
+  (template_substitution)
+  (string_fragment)
+  (escape_sequence)
   (regex)
   (true)
   (false)
@@ -2304,7 +2307,7 @@ inherit .containing_class_value
   (import)
   (object)
   (array)
-  (function)
+  (function_expression)
   (arrow_function)
   (generator_function)
   (class)
@@ -2321,7 +2324,7 @@ inherit .containing_class_value
   (yield_expression)
   (spread_element)
 ]@expr {
-  
+
   node @expr.after_scope
   node @expr.before_scope
   node @expr.value
@@ -2329,7 +2332,7 @@ inherit .containing_class_value
 }
 
 [
-  (function body:(_)@body)
+  (function_expression body:(_)@body)
   (arrow_function body:(_)@body)
   (generator_function body:(_)@body)
 ] {
@@ -2367,8 +2370,8 @@ inherit .containing_class_value
 ;; #### Template Strings
 
 ; template_strings w/ no substitutions
-(template_string (_)* @substs)@template_string {
-  if (is-empty @substs) {
+(template_string (_)* @parts)@template_string {
+  if (is-empty @parts) {
     edge @template_string.after_scope -> @template_string.before_scope
   }
 }
@@ -2376,33 +2379,45 @@ inherit .containing_class_value
 ; nonempty template string, value
 ; LATER-TODO this isn't really right, but it gets flows through the template string
 ; which may be useful
-(template_string (template_substitution (_)@inner_expr))@template_string {
+(template_string (_)@part)@template_string {
   ; the value of a template string is a template string value built from the values of its substitutions
   ; attr (@template_string.value) "template_string_value"
-  edge @template_string.value -> @inner_expr.value
+  edge @template_string.value -> @part.value
 }
 
 ; nonempty template string, first substitution
-(template_string . (template_substitution (_)@first_inner_expr))@template_string {
+(template_string . (_)@first)@template_string {
   ; scopes propagate into the first subtitution of the template string
-  edge @first_inner_expr.before_scope -> @template_string.before_scope
+  edge @first.before_scope -> @template_string.before_scope
 }
 
 ; nonempty template string, between substitutions
 (template_string
-  (template_substitution (_)@left_inner_expr)
+  (_) @left
   .
-  (template_substitution (_)@right_inner_expr))@_template_string {
+  (_) @right) {
   ; scopes propagate from left substitutions to right substitutions
-  edge @right_inner_expr.before_scope -> @left_inner_expr.after_scope
+  edge @right.before_scope -> @left.after_scope
 }
 
 ; nonempty template string, last substitution
-(template_string . (template_substitution (_)@last_inner_expr))@template_string {
+(template_string (_) @last .)@template_string {
   ; scopes propagate out of the last substitution to the template string
-  edge @template_string.after_scope -> @last_inner_expr.after_scope
+  edge @template_string.after_scope -> @last.after_scope
 }
 
+[
+  (string_fragment)
+  (escape_sequence)
+]@part {
+  edge @part.after_scope -> @part.before_scope
+}
+
+(template_substitution (_)@expr)@subst {
+  edge @expr.before_scope -> @subst.before_scope
+  edge @subst.after_scope -> @expr.after_scope
+  edge @subst.value -> @expr.value
+}
 
 
 ;; #### Numbers
@@ -2418,7 +2433,10 @@ inherit .containing_class_value
 
 ;; #### Variables
 
-(primary_expression/identifier)@variable {
+[
+  (primary_expression/identifier)@variable
+  (member_expression . (identifier)@variable)
+] {
   ; value is a lookup, ie a push
   attr (@variable.value) node_reference = @variable
   edge @variable.value -> @variable.before_scope
@@ -2565,7 +2583,7 @@ inherit .containing_class_value
 
 ; shorthand property identifier
 (shorthand_property_identifier)@shorthand_property_identifier {
-  
+
   node @shorthand_property_identifier.after_scope
   node @shorthand_property_identifier.before_scope
 
@@ -2616,7 +2634,7 @@ inherit .containing_class_value
 
     ; This is done differently depending on what the key is. See next rules.
     ; attr @key.pop "pop" = @key, "definition"
-    
+
     node @pair.key_pop
     edge @pair.key_pop -> @value.value
     edge @object.member_pop -> @pair.key_pop
@@ -2782,7 +2800,7 @@ inherit .containing_class_value
 ;; #### Function Literals
 
 ; functions with names
-(function
+(function_expression
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
@@ -2797,7 +2815,7 @@ inherit .containing_class_value
 
 
 ; function
-(function
+(function_expression
   parameters:(_)@call_sig
   body:(_)@body)@fun {
 
@@ -2856,7 +2874,7 @@ inherit .containing_class_value
   edge @fun.value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
-(function
+(function_expression
   parameters:
     (formal_parameters (_)@param))@fun {
 
@@ -3171,8 +3189,7 @@ inherit .containing_class_value
 ;; ##### Member Expressions
 
 (member_expression
-  object: (_)@object
-  property: (_)@property)@member_expr
+  (_)@object . (_)@property)@member_expr
 {
 
     node member_push
@@ -3483,18 +3500,25 @@ inherit .containing_class_value
 
 ;; #### Comma Operator / Sequence Expressions
 
-(sequence_expression
-  left: (_)@left
-  right: (_)@right)@sequence_expr {
-
-  ; scopes propagate left to right
-  edge @left.before_scope -> @sequence_expr.before_scope
-  edge @right.before_scope -> @left.after_scope
-  edge @sequence_expr.after_scope -> @right.after_scope
-
-  ; the value is just the value of the right
-  edge @sequence_expr.value -> @right.value
+(sequence_expression (_)* @elems)@sequence_expr {
+  if (is-empty @elems) {
+    edge @sequence_expr.after_scope -> @sequence_expr.before_scope
+  }
 }
+
+(sequence_expression . (_)@first)@sequence_expr {
+  edge @first.before_scope -> @sequence_expr.before_scope
+}
+
+(sequence_expression (_)@left . (_)@right) {
+  edge @right.before_scope -> @left.after_scope
+}
+
+(sequence_expression (_)@last .)@sequence_expr {
+  edge @sequence_expr.after_scope -> @last.after_scope
+  edge @sequence_expr.value -> @last.value
+}
+
 
 
 ;; #### Ternary Expression
@@ -3555,7 +3579,7 @@ inherit .containing_class_value
 (class
   name:(_)@name
   body:(_)@body)@class {
-  
+
   node @name.pop
   attr (@name.pop) syntax_type = "class"
 
@@ -3604,7 +3628,6 @@ inherit .containing_class_value
     (jsx_text)
     (jsx_element)
     (jsx_self_closing_element)
-    (jsx_fragment)
     (jsx_expression)
   ]@first_child
 ) {
@@ -3616,7 +3639,6 @@ inherit .containing_class_value
     (jsx_text)
     (jsx_element)
     (jsx_self_closing_element)
-    (jsx_fragment)
     (jsx_expression)
   ]@left_child
   .
@@ -3624,7 +3646,6 @@ inherit .containing_class_value
     (jsx_text)
     (jsx_element)
     (jsx_self_closing_element)
-    (jsx_fragment)
     (jsx_expression)
   ]@right_child
 ) {
@@ -3636,7 +3657,6 @@ inherit .containing_class_value
     (jsx_text)
     (jsx_element)
     (jsx_self_closing_element)
-    (jsx_fragment)
     (jsx_expression)
   ]@last_child
   .
@@ -3648,17 +3668,29 @@ inherit .containing_class_value
 (jsx_text)@jsx_text {
   node @jsx_text.before_scope
   node @jsx_text.after_scope
-  
+
   edge @jsx_text.after_scope -> @jsx_text.before_scope
+}
+
+(jsx_opening_element)@jsx_opening_element {
+
+  node @jsx_opening_element.before_scope
+  node @jsx_opening_element.after_scope
+
 }
 
 (jsx_opening_element
   name:(_)@element_name)@jsx_opening_element {
 
-  node @jsx_opening_element.before_scope
-  node @jsx_opening_element.after_scope
-
   edge @element_name.before_scope -> @jsx_opening_element.before_scope
+
+}
+
+(jsx_opening_element
+  !name)@jsx_opening_element
+{
+
+  edge @jsx_opening_element.after_scope -> @jsx_opening_element.before_scope
 
 }
 
@@ -3666,7 +3698,7 @@ inherit .containing_class_value
   name:(_)@element_name
   !attribute)@jsx_opening_element
 {
-  
+
   edge @jsx_opening_element.after_scope -> @element_name.after_scope
 
 }
@@ -3735,10 +3767,19 @@ inherit .containing_class_value
 }
 
 (jsx_self_closing_element
+  !name
+  !attribute)@jsx_self_closing_element
+{
+
+  edge @jsx_self_closing_element.after_scope -> @jsx_self_closing_element.before_scope
+
+}
+
+(jsx_self_closing_element
   name:(_)@element_name
   !attribute)@jsx_self_closing_element
 {
-  
+
   edge @jsx_self_closing_element.after_scope -> @element_name.after_scope
 
 }
@@ -3790,13 +3831,26 @@ inherit .containing_class_value
 
 }
 
-(jsx_closing_element
-  name:(_)@element_name)@jsx_closing_element
+(jsx_closing_element)@jsx_closing_element
 {
 
   node @jsx_closing_element.before_scope
   node @jsx_closing_element.after_scope
-  
+
+}
+
+(jsx_closing_element
+  !name)@jsx_closing_element
+{
+
+  edge @jsx_closing_element.after_scope -> @jsx_closing_element.before_scope
+
+}
+
+(jsx_closing_element
+  name:(_)@element_name)@jsx_closing_element
+{
+
   edge @element_name.before_scope -> @jsx_closing_element.before_scope
   edge @jsx_closing_element.after_scope -> @element_name.after_scope
 
@@ -3826,83 +3880,6 @@ inherit .containing_class_value
   }
 
 }
-
-(nested_identifier)@nested_identifier {
-  node @nested_identifier.before_scope
-  node @nested_identifier.after_scope
-  node @nested_identifier.value
-
-  edge @nested_identifier.after_scope -> @nested_identifier.before_scope
-}
-
-(nested_identifier
-  (identifier)@first_part
-  (identifier)@second_part)@nested_identifier
-{
-  node guard_member
-
-  attr (@first_part.value) node_reference = @first_part
-  attr (@second_part.value) node_reference = @second_part
-  attr (guard_member) symbol_reference = "GUARD:MEMBER"
-
-  edge @first_part.value -> @nested_identifier.before_scope
-  edge guard_member -> @first_part.value
-  edge @second_part.value -> guard_member
-  edge @nested_identifier.value -> @second_part.value
-}
-
-(nested_identifier
-  (nested_identifier)@first_part
-  (identifier)@second_part)@nested_identifier
-{
-  node guard_member
-
-  attr (@second_part.value) node_reference = @second_part
-  attr (guard_member) symbol_reference = "GUARD:MEMBER"
-
-  edge @first_part.before_scope -> @nested_identifier.before_scope
-  edge guard_member -> @first_part.value
-  edge @second_part.value -> guard_member
-  edge @nested_identifier.value -> @second_part.value
-}
-
-(jsx_fragment (_)*@children)@jsx_fragment {
-  node @jsx_fragment.before_scope
-  node @jsx_fragment.after_scope
-  node @jsx_fragment.value
-
-  if (is-empty @children) {
-    edge @jsx_fragment.after_scope -> @jsx_fragment.before_scope
-  }
-}
-
-(jsx_fragment
-  .
-  (_)@first_child)@jsx_fragment
-{
-  edge @first_child.before_scope -> @jsx_fragment.before_scope
-}
-
-(jsx_fragment
-  (_)@left_child
-  .
-  (_)@right_child)
-{
-  edge @right_child.before_scope -> @left_child.after_scope
-}
-
-(jsx_fragment
-  (_)@last_child
-  .)@jsx_fragment
-{
-  edge @jsx_fragment.after_scope -> @last_child.after_scope
-}
-
-
-
-
-
-
 
 
 
@@ -4761,7 +4738,7 @@ inherit .containing_class_value
 
 }
 
-(function
+(function_expression
   name:(_)@name
   parameters:(_)@_call_sig)@fun {
 
@@ -4785,7 +4762,7 @@ inherit .containing_class_value
         name:(_)@_method_name)@constructor
     )
   )
-  
+
   (#eq? @_method_name "constructor")
 ) {
 
@@ -4875,7 +4852,7 @@ inherit .containing_class_value
     (variable_declarator
       name:(identifier)@name
       value: [
-        (function)
+        (function_expression)
         (generator_function)
         (arrow_function)
       ]))
@@ -4883,7 +4860,7 @@ inherit .containing_class_value
     (variable_declarator
       name:(identifier)@name
       value: [
-        (function)
+        (function_expression)
         (generator_function)
         (arrow_function)
       ]))
@@ -4893,7 +4870,7 @@ inherit .containing_class_value
     ; (member_expression property:(_)@name) ; FIXME member expressions are references and have no .pop
     ]
     right: [
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])
@@ -4923,7 +4900,7 @@ inherit .containing_class_value
       )
     ]
     right: [
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])@assignment_expr
@@ -4942,7 +4919,7 @@ inherit .containing_class_value
       object:(_)@_module
       property:(_)@_exports)
     right: [
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])@assignment_expr
@@ -4958,7 +4935,7 @@ inherit .containing_class_value
 
 (export_statement "default"
   value:[
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])@export_stmt {
@@ -4972,7 +4949,7 @@ inherit .containing_class_value
 (pair
   key: (_)@name
   value: [
-    (function)
+    (function_expression)
     (generator_function)
     (arrow_function)
   ]) {
