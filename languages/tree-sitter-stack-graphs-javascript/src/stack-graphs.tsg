@@ -2296,6 +2296,9 @@ inherit .containing_class_value
   (number)
   (string)
   (template_string)
+  (template_substitution)
+  (string_fragment)
+  (escape_sequence)
   (regex)
   (true)
   (false)
@@ -2304,7 +2307,7 @@ inherit .containing_class_value
   (import)
   (object)
   (array)
-  (function)
+  (function_expression)
   (arrow_function)
   (generator_function)
   (class)
@@ -2329,7 +2332,7 @@ inherit .containing_class_value
 }
 
 [
-  (function body:(_)@body)
+  (function_expression body:(_)@body)
   (arrow_function body:(_)@body)
   (generator_function body:(_)@body)
 ] {
@@ -2367,8 +2370,8 @@ inherit .containing_class_value
 ;; #### Template Strings
 
 ; template_strings w/ no substitutions
-(template_string (_)* @substs)@template_string {
-  if (is-empty @substs) {
+(template_string (_)* @parts)@template_string {
+  if (is-empty @parts) {
     edge @template_string.after_scope -> @template_string.before_scope
   }
 }
@@ -2376,33 +2379,45 @@ inherit .containing_class_value
 ; nonempty template string, value
 ; LATER-TODO this isn't really right, but it gets flows through the template string
 ; which may be useful
-(template_string (template_substitution (_)@inner_expr))@template_string {
+(template_string (_)@part)@template_string {
   ; the value of a template string is a template string value built from the values of its substitutions
   ; attr (@template_string.value) "template_string_value"
-  edge @template_string.value -> @inner_expr.value
+  edge @template_string.value -> @part.value
 }
 
 ; nonempty template string, first substitution
-(template_string . (template_substitution (_)@first_inner_expr))@template_string {
+(template_string . (_)@first)@template_string {
   ; scopes propagate into the first subtitution of the template string
-  edge @first_inner_expr.before_scope -> @template_string.before_scope
+  edge @first.before_scope -> @template_string.before_scope
 }
 
 ; nonempty template string, between substitutions
 (template_string
-  (template_substitution (_)@left_inner_expr)
+  (_) @left
   .
-  (template_substitution (_)@right_inner_expr))@_template_string {
+  (_) @right) {
   ; scopes propagate from left substitutions to right substitutions
-  edge @right_inner_expr.before_scope -> @left_inner_expr.after_scope
+  edge @right.before_scope -> @left.after_scope
 }
 
 ; nonempty template string, last substitution
-(template_string . (template_substitution (_)@last_inner_expr))@template_string {
+(template_string (_) @last .)@template_string {
   ; scopes propagate out of the last substitution to the template string
-  edge @template_string.after_scope -> @last_inner_expr.after_scope
+  edge @template_string.after_scope -> @last.after_scope
 }
 
+[
+  (string_fragment)
+  (escape_sequence)
+]@part {
+  edge @part.after_scope -> @part.before_scope
+}
+
+(template_substitution (_)@expr)@subst {
+  edge @expr.before_scope -> @subst.before_scope
+  edge @subst.after_scope -> @expr.after_scope
+  edge @subst.value -> @expr.value
+}
 
 
 ;; #### Numbers
@@ -2785,7 +2800,7 @@ inherit .containing_class_value
 ;; #### Function Literals
 
 ; functions with names
-(function
+(function_expression
   name:(_)@name
   parameters:(_)@call_sig)@fun {
 
@@ -2800,7 +2815,7 @@ inherit .containing_class_value
 
 
 ; function
-(function
+(function_expression
   parameters:(_)@call_sig
   body:(_)@body)@fun {
 
@@ -2859,7 +2874,7 @@ inherit .containing_class_value
   edge @fun.value_arg_scope -> JUMP_TO_SCOPE_NODE
 }
 
-(function
+(function_expression
   parameters:
     (formal_parameters (_)@param))@fun {
 
@@ -3485,18 +3500,25 @@ inherit .containing_class_value
 
 ;; #### Comma Operator / Sequence Expressions
 
-(sequence_expression
-  left: (_)@left
-  right: (_)@right)@sequence_expr {
-
-  ; scopes propagate left to right
-  edge @left.before_scope -> @sequence_expr.before_scope
-  edge @right.before_scope -> @left.after_scope
-  edge @sequence_expr.after_scope -> @right.after_scope
-
-  ; the value is just the value of the right
-  edge @sequence_expr.value -> @right.value
+(sequence_expression (_)* @elems)@sequence_expr {
+  if (is-empty @elems) {
+    edge @sequence_expr.after_scope -> @sequence_expr.before_scope
+  }
 }
+
+(sequence_expression . (_)@first)@sequence_expr {
+  edge @first.before_scope -> @sequence_expr.before_scope
+}
+
+(sequence_expression (_)@left . (_)@right) {
+  edge @right.before_scope -> @left.after_scope
+}
+
+(sequence_expression (_)@last .)@sequence_expr {
+  edge @sequence_expr.after_scope -> @last.after_scope
+  edge @sequence_expr.value -> @last.value
+}
+
 
 
 ;; #### Ternary Expression
@@ -4716,7 +4738,7 @@ inherit .containing_class_value
 
 }
 
-(function
+(function_expression
   name:(_)@name
   parameters:(_)@_call_sig)@fun {
 
@@ -4830,7 +4852,7 @@ inherit .containing_class_value
     (variable_declarator
       name:(identifier)@name
       value: [
-        (function)
+        (function_expression)
         (generator_function)
         (arrow_function)
       ]))
@@ -4838,7 +4860,7 @@ inherit .containing_class_value
     (variable_declarator
       name:(identifier)@name
       value: [
-        (function)
+        (function_expression)
         (generator_function)
         (arrow_function)
       ]))
@@ -4848,7 +4870,7 @@ inherit .containing_class_value
     ; (member_expression property:(_)@name) ; FIXME member expressions are references and have no .pop
     ]
     right: [
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])
@@ -4878,7 +4900,7 @@ inherit .containing_class_value
       )
     ]
     right: [
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])@assignment_expr
@@ -4897,7 +4919,7 @@ inherit .containing_class_value
       object:(_)@_module
       property:(_)@_exports)
     right: [
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])@assignment_expr
@@ -4913,7 +4935,7 @@ inherit .containing_class_value
 
 (export_statement "default"
   value:[
-      (function)
+      (function_expression)
       (generator_function)
       (arrow_function)
     ])@export_stmt {
@@ -4927,7 +4949,7 @@ inherit .containing_class_value
 (pair
   key: (_)@name
   value: [
-    (function)
+    (function_expression)
     (generator_function)
     (arrow_function)
   ]) {
