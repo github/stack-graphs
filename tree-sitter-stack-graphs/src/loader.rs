@@ -423,12 +423,6 @@ pub enum LoadError<'a> {
     },
     #[error(transparent)]
     TreeSitter(anyhow::Error),
-    #[error("Preprocessor error: {inner}")]
-    PreprocessorError {
-        inner: String,
-        tsg_path: PathBuf,
-        tsg: Cow<'a, str>,
-    }
 }
 
 impl LoadError<'_> {
