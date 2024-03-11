@@ -11,7 +11,7 @@ use tree_sitter_stack_graphs::ci::Tester;
 use tree_sitter_stack_graphs::NoCancellation;
 
 fn main() -> anyhow::Result<()> {
-    let lc = match tree_sitter_stack_graphs_typescript::try_language_configuration(&NoCancellation)
+    let lc = match tree_sitter_stack_graphs_typescript::try_language_configuration_typescript(&NoCancellation)
     {
         Ok(lc) => lc,
         Err(err) => {

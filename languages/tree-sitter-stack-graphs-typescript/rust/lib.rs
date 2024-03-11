@@ -17,8 +17,7 @@ pub mod tsconfig;
 pub mod util;
 
 /// The stacks graphs tsg path for this language.
-pub const STACK_GRAPHS_TSG_TS_PATH: &str = concat!(env!("OUT_DIR"), "/stack-graphs-typescript.tsg");
-pub const STACK_GRAPHS_TSG_TSX_PATH: &str = concat!(env!("OUT_DIR"), "/stack-graphs-tsx.tsg");
+pub const STACK_GRAPHS_TSG_PATH: &str = "./stack-graphs.tsg";
 /// The stack graphs tsg source for this language
 pub const STACK_GRAPHS_TSG_TS_SOURCE: &str = include_str!(concat!(env!("OUT_DIR"), "/stack-graphs-typescript.tsg"));
 pub const STACK_GRAPHS_TSG_TSX_SOURCE: &str = include_str!(concat!(env!("OUT_DIR"), "/stack-graphs-tsx.tsg"));
@@ -35,11 +34,11 @@ pub const FILE_PATH_VAR: &str = "FILE_PATH";
 /// The name of the project name global variable
 pub const PROJECT_NAME_VAR: &str = "PROJECT_NAME";
 
-pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {
-    try_language_configuration(cancellation_flag).unwrap_or_else(|err| panic!("{}", err))
+pub fn language_configuration_typescript(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {
+    try_language_configuration_typescript(cancellation_flag).unwrap_or_else(|err| panic!("{}", err))
 }
 
-pub fn try_language_configuration(
+pub fn try_language_configuration_typescript(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
     let mut lc = LanguageConfiguration::from_sources(
@@ -47,7 +46,7 @@ pub fn try_language_configuration(
         Some(String::from("source.ts")),
         None,
         vec![String::from("ts")],
-        STACK_GRAPHS_TSG_TS_PATH.into(),
+        STACK_GRAPHS_TSG_PATH.into(),
         STACK_GRAPHS_TSG_TS_SOURCE,
         Some((
             STACK_GRAPHS_BUILTINS_PATH.into(),
@@ -75,7 +74,7 @@ pub fn try_language_configuration_tsx(
         Some(String::from("source.tsx")),
         None,
         vec![String::from("tsx")],
-        STACK_GRAPHS_TSG_TSX_PATH.into(),
+        STACK_GRAPHS_TSG_PATH.into(),
         STACK_GRAPHS_TSG_TSX_SOURCE,
         Some((
             STACK_GRAPHS_BUILTINS_PATH.into(),
