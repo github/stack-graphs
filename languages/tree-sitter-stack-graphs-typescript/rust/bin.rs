@@ -12,17 +12,16 @@ use tree_sitter_stack_graphs::cli::provided_languages::Subcommands;
 use tree_sitter_stack_graphs::loader::{LanguageConfiguration, LoadError};
 use tree_sitter_stack_graphs::NoCancellation;
 
- /// Flag to select the dialect of the language
- #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
- pub enum Dialect {
-     Typescript,
-     TSX,
- }
+/// Flag to select the dialect of the language
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum Dialect {
+    Typescript,
+    TSX,
+}
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let lc = match language_configuration(cli.dialect)
-    {
+    let lc = match language_configuration(cli.dialect) {
         Ok(lc) => lc,
         Err(err) => {
             eprintln!("{}", err.display_pretty());
@@ -35,8 +34,14 @@ fn main() -> anyhow::Result<()> {
 
 fn language_configuration<'a>(dialect: Dialect) -> Result<LanguageConfiguration, LoadError<'a>> {
     match dialect {
-        Dialect::Typescript => tree_sitter_stack_graphs_typescript::try_language_configuration_typescript(&NoCancellation),
-        Dialect::TSX => tree_sitter_stack_graphs_typescript::try_language_configuration_tsx(&NoCancellation),
+        Dialect::Typescript => {
+            tree_sitter_stack_graphs_typescript::try_language_configuration_typescript(
+                &NoCancellation,
+            )
+        }
+        Dialect::TSX => {
+            tree_sitter_stack_graphs_typescript::try_language_configuration_tsx(&NoCancellation)
+        }
     }
 }
 
