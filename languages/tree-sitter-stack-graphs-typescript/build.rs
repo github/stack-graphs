@@ -25,6 +25,8 @@ fn preprocess(
     // Matches:   ; #end
     let directive_end = Regex::new(r";\s*#end").unwrap();
 
+    let no_code = Regex::new(r"^[\s;]+").unwrap();
+
     let input = std::io::read_to_string(input)?;
 
     // If the filter is None or Some(true), the lines are written to the output
@@ -35,20 +37,26 @@ fn preprocess(
         line_no += 1;
 
         if let Some(captures) = directive_start.captures(line) {
+            if !no_code.is_match(line) {
+                bail!("Line {line_no}: unexpected code before directive");
+            }
+
             let directive = captures.get(1).unwrap().as_str();
             if !DIALECTS.contains(&directive) {
                 bail!("Line {line_no}: unknown dialect: {directive}");
             }
 
             filter = Some(dialect == directive);
-            output.write_all(line.as_bytes())?;
         } else if directive_end.is_match(line) {
+            if !no_code.is_match(line) {
+                bail!("Line {line_no}: unexpected code before directive end");
+            }
+
             if filter.is_none() {
                 bail!("Line {line_no}: unmatched directive end");
             }
 
             filter = None;
-            output.write_all(line.as_bytes())?;
         } else if filter.unwrap_or(true) {
             output.write_all(line.as_bytes())?;
         }

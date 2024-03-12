@@ -19,9 +19,9 @@ pub mod util;
 /// The stacks graphs tsg path for this language.
 pub const STACK_GRAPHS_TSG_PATH: &str = "src/stack-graphs.tsg";
 /// The stack graphs tsg source for this language
-const STACK_GRAPHS_TSG_TS_SOURCE: &str =
+pub const STACK_GRAPHS_TSG_TS_SOURCE: &str =
     include_str!(concat!(env!("OUT_DIR"), "/stack-graphs-typescript.tsg"));
-const STACK_GRAPHS_TSG_TSX_SOURCE: &str =
+pub const STACK_GRAPHS_TSG_TSX_SOURCE: &str =
     include_str!(concat!(env!("OUT_DIR"), "/stack-graphs-tsx.tsg"));
 
 /// The stack graphs builtins configuration for this language
