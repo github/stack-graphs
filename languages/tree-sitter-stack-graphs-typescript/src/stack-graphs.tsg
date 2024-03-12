@@ -2665,7 +2665,9 @@ if none @is_async {
   (ternary_expression)
   (this)
   (true)
+; #dialect typescript
   (type_assertion)
+; #end
   (unary_expression)
   (undefined)
   (update_expression)
@@ -4040,7 +4042,7 @@ if none @is_async {
 }
 
 
-
+; #dialect typescript
 ;; Type Assertion
 
 ; (type_assertion
@@ -4055,7 +4057,7 @@ if none @is_async {
   ; propagate lexical scope
   edge @expr.lexical_scope -> @type_assert.lexical_scope
 }
-
+; #end
 
 
 ;; As Expression

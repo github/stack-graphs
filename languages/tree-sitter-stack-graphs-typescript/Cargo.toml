@@ -40,3 +40,7 @@ tsconfig = "0.1.0"
 [dev-dependencies]
 anyhow = { version = "1.0" }
 tree-sitter-stack-graphs = { version = "0.8", path = "../../tree-sitter-stack-graphs", features = ["cli"] }
+
+[build-dependencies]
+anyhow = { version = "1.0" }
+regex = "1.10.3"
