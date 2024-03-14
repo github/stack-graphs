@@ -11,15 +11,18 @@ use tree_sitter_stack_graphs::ci::Tester;
 use tree_sitter_stack_graphs::NoCancellation;
 
 fn main() -> anyhow::Result<()> {
-    let lc = match tree_sitter_stack_graphs_typescript::try_language_configuration_typescript(
-        &NoCancellation,
-    ) {
-        Ok(lc) => lc,
-        Err(err) => {
-            eprintln!("{}", err.display_pretty());
-            return Err(anyhow!("Language configuration error"));
-        }
-    };
+    let lc_factories = [
+        tree_sitter_stack_graphs_typescript::try_language_configuration_typescript,
+        tree_sitter_stack_graphs_typescript::try_language_configuration_tsx,
+    ];
+
+    let lcs = lc_factories
+        .iter()
+        .map(|lc_factory| lc_factory(&NoCancellation))
+        .collect::<Result<Vec<_>, _>>()
+        .inspect_err(|err| eprintln!("{}", err.display_pretty()))
+        .map_err(|_| anyhow!("Language configuration error"))?;
+
     let test_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test");
-    Tester::new(vec![lc], vec![test_path]).run()
+    Tester::new(lcs, vec![test_path]).run()
 }

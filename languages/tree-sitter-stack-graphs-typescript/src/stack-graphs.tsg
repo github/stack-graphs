@@ -2668,6 +2668,13 @@ if none @is_async {
 ; #dialect typescript
   (type_assertion)
 ; #end
+; #dialect tsx
+  (jsx_element)
+  (jsx_self_closing_element)
+  (jsx_opening_element)
+  (jsx_closing_element)
+  (jsx_expression)
+; #end
   (unary_expression)
   (undefined)
   (update_expression)
@@ -2805,6 +2812,15 @@ if none @is_async {
   (decorator (call_expression function:(member_expression object:(identifier)@name)))
   (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
   (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+; #dialect tsx
+  (nested_identifier (identifier)@name)
+  (nested_identifier (nested_identifier)@name)
+  (nested_type_identifier module:(nested_identifier)@name)
+  (internal_module name:(_)@name)
+  (jsx_opening_element name: (_)@name)
+  (jsx_closing_element name: (_)@name)
+  (jsx_self_closing_element name: (_)@name)
+; #end
 ] {
 if none @is_def {
   node @name.cotype
@@ -2852,6 +2868,12 @@ if none @is_def {
   (decorator (call_expression function:(member_expression object:(identifier)@name)))
   (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
   (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+; #dialect tsx
+  (nested_identifier (identifier)@name (identifier)) ; to pick up foo in JSX: <foo.bar.baz />
+  (jsx_opening_element name: (identifier)@name)
+  (jsx_closing_element name: (identifier)@name)
+  (jsx_self_closing_element name: (identifier)@name)
+; #end
 ] {
 if none @is_def {
   node @name.expr_ref
@@ -3524,10 +3546,22 @@ if none @is_async {
 ; (member_expression (identifier) (property_identifier))
 ; (subscript_expression (identifier) (string))
 
-(member_expression
-  object: (_)@object
-  property: (_)@prop
-)@member_expr {
+[
+  (member_expression
+    object: (_)@object
+    property: (_)@prop
+  )@member_expr
+; #dialect tsx
+  (nested_identifier
+    (nested_identifier)@object
+    (identifier)@prop
+  )@member_expr
+  (nested_identifier
+    (identifier)@object
+    (identifier)@prop
+  )@member_expr
+; #end
+ ] {
   node @member_expr.member
   node @prop.expr_ref
   node @prop.expr_ref__typeof
@@ -6160,3 +6194,137 @@ if none @is_acc {
   attr (@async.async_type__promise_ref__ns) push_symbol = "%T"
   edge @async.async_type__promise_ref__ns -> @async.lexical_scope
 }
+
+;
+;       #  #####  #     #
+;       # #     #  #   #
+;       # #         # #
+;       #  #####     #
+; #     #       #   # #
+; #     # #     #  #   #
+;  #####   #####  #     #
+;
+; ;;;;;;;;;;;;;;;;;;;;
+; #dialect tsx
+; ;;;;;;;;;;;;;;;;;;;;
+
+(jsx_element
+  open_tag:(_)@open_tag
+  close_tag:(_)@close_tag)@jsx_element {
+
+  edge @open_tag.lexical_scope -> @jsx_element.lexical_scope
+  edge @close_tag.lexical_scope -> @jsx_element.lexical_scope
+}
+
+(jsx_element
+  [
+    (jsx_text)
+    (jsx_element)
+    (jsx_fragment)
+    (jsx_self_closing_element)
+    (jsx_expression)
+  ]@child
+)@parent {
+  edge @child.lexical_scope -> @parent.lexical_scope
+}
+
+(jsx_fragment)@fragment {
+  node @fragment.lexical_scope
+  node @fragment.value
+  node @fragment.type
+}
+
+(jsx_fragment
+  [
+    (jsx_text)
+    (jsx_element)
+    (jsx_fragment)
+    (jsx_self_closing_element)
+    (jsx_expression)
+  ]@child
+) @parent {
+  edge @child.lexical_scope -> @parent.lexical_scope
+}
+
+(jsx_text)@jsx_text {
+  node @jsx_text.lexical_scope
+}
+
+[
+  (jsx_opening_element name: (_)@name)@element
+  (jsx_closing_element name: (_)@name)@element
+  (jsx_self_closing_element name: (_)@name)@element
+] {
+  edge @name.lexical_scope -> @element.lexical_scope
+}
+
+(jsx_opening_element
+  name:(_)@element_name
+  attribute:(_)@attr
+) {
+  edge @attr.lexical_scope -> @element_name.lexical_scope
+}
+
+(jsx_attribute (_) . (_)?@attr_value)@jsx_attribute {
+  node @jsx_attribute.lexical_scope
+
+  if some @attr_value {
+    edge @attr_value.lexical_scope -> @jsx_attribute.lexical_scope
+  }
+}
+
+(jsx_namespace_name (_) @lhs (_) @rhs)@name {
+  node @name.lexical_scope
+
+  edge @lhs.lexical_scope -> @name.lexical_scope
+  edge @rhs.lexical_scope -> @name.lexical_scope
+}
+
+(jsx_self_closing_element
+  name:(_)@element_name)@element {
+  edge @element_name.lexical_scope -> @element.lexical_scope
+}
+
+(jsx_self_closing_element
+  name:(_)@element_name
+  attribute:(_)@attr
+) {
+  edge @attr.lexical_scope -> @element_name.lexical_scope
+}
+
+(jsx_expression (_)@child)@expr {
+  edge @child.lexical_scope -> @expr.lexical_scope
+}
+
+(jsx_closing_element
+  name:(_)@element_name)@element
+{
+  edge @element_name.lexical_scope -> @element.lexical_scope
+}
+
+[
+  (jsx_opening_element
+    name:(identifier)@element_name)
+  (jsx_self_closing_element
+    name:(identifier)@element_name)
+  (jsx_closing_element
+    name:(identifier)@element_name)
+] {
+  scan (source-text @element_name) {
+    ; standard HTML elements
+    "^(a|abbr|acronym|address|applet|area|article|aside|audio|b|base|basefont|bdi|bdo|big|blockquote|body|br|button|canvas|caption|center|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|dir|div|dl|dt|em|embed|fieldset|figcaption|figure|font|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|input|ins|kbd|label|legend|li|link|main|map|mark|menu|meta|meter|nav|noframes|noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|search|section|select|small|source|span|strike|strong|style|sub|summary|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|tt|u|ul|var|video|wbr)$" {
+      ; do nothing!
+    }
+
+    ; everything else
+    "^.+$" {
+      node element_name_pop
+      attr (element_name_pop) node_reference = @element_name
+      edge element_name_pop -> @element_name.lexical_scope
+    }
+  }
+}
+
+; ;;;;;;;;;;;;;;;;;;;;
+; #end
+; ;;;;;;;;;;;;;;;;;;;;
