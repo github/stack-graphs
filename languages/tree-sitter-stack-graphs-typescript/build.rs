@@ -41,6 +41,10 @@ fn preprocess(
                 bail!("Line {line_no}: unexpected code before directive");
             }
 
+            if filter.is_some() {
+                bail!("Line {line_no}: dialect directive cannot be nested");
+            }
+
             let directive = captures.get(1).unwrap().as_str();
             if !DIALECTS.contains(&directive) {
                 bail!("Line {line_no}: unknown dialect: {directive}");
@@ -62,6 +66,10 @@ fn preprocess(
         }
         // a new line is always written so that removed lines are padded to preserve line numbers
         output.write(b"\n")?;
+    }
+
+    if filter.is_some() {
+        bail!("Unmatched directive end at the end of the file");
     }
 
     Ok(())
