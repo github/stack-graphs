@@ -355,23 +355,15 @@ impl<'a> Indexer<'a> {
         if let Err(err) = result {
             match err.inner {
                 BuildError::Cancelled(_) => {
-                    file_status.warning("parsing timed out", None);
+                    file_status.warning("timed out", None);
                     self.db
-                        .store_error_for_file(source_path, &tag, "parsing timed out")?;
-                    return Ok(());
-                }
-                BuildError::ParseErrors { .. } => {
-                    file_status.failure("parsing failed", Some(&err.display_pretty()));
-                    self.db.store_error_for_file(
-                        source_path,
-                        &tag,
-                        &format!("parsing failed: {}", err.inner),
-                    )?;
+                        .store_error_for_file(source_path, &tag, "timed out")?;
                     return Ok(());
                 }
                 _ => {
-                    file_status.failure("failed to build stack graph", Some(&err.display_pretty()));
-                    return Err(IndexError::StackGraph);
+                    file_status.failure("failed", Some(&err.display_pretty()));
+                    self.db.store_error_for_file(source_path, &tag, "failed")?;
+                    return Ok(());
                 }
             }
         };
