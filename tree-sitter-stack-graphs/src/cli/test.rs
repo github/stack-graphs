@@ -19,9 +19,13 @@ use stack_graphs::stitching::Database;
 use stack_graphs::stitching::DatabaseCandidates;
 use stack_graphs::stitching::ForwardPartialPathStitcher;
 use stack_graphs::stitching::StitcherConfig;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use tree_sitter::Language;
 use tree_sitter_graph::Variables;
 
 use crate::cli::util::duration_from_seconds_str;
@@ -176,10 +180,16 @@ impl TestArgs {
     pub fn run(self, mut loader: Loader) -> anyhow::Result<()> {
         let reporter = self.get_reporter();
         let mut total_result = TestResult::new();
+        let mut cache = HashMap::new();
         for (test_root, test_path, _) in iter_files_and_directories(self.test_paths.clone()) {
             let mut file_status = CLIFileReporter::new(&reporter, &test_path);
-            let test_result =
-                self.run_test(&test_root, &test_path, &mut loader, &mut file_status)?;
+            let test_result = self.run_test(
+                &test_root,
+                &test_path,
+                &mut loader,
+                &mut file_status,
+                &mut cache,
+            )?;
             file_status.assert_reported();
             total_result.absorb(test_result);
         }
@@ -211,14 +221,15 @@ impl TestArgs {
     }
 
     /// Run test file. Takes care of the output when an error is returned.
-    fn run_test(
+    fn run_test<'a>(
         &self,
         test_root: &Path,
         test_path: &Path,
-        loader: &mut Loader,
+        loader: &'a mut Loader,
         file_status: &mut CLIFileReporter,
+        cache: &mut HashMap<Language, stack_graphs::serde::Database>,
     ) -> anyhow::Result<TestResult> {
-        match self.run_test_inner(test_root, test_path, loader, file_status) {
+        match self.run_test_inner(test_root, test_path, loader, file_status, cache) {
             ok @ Ok(_) => ok,
             err @ Err(_) => {
                 file_status.failure_if_processing("error", None);
@@ -227,12 +238,13 @@ impl TestArgs {
         }
     }
 
-    fn run_test_inner(
+    fn run_test_inner<'a>(
         &self,
         test_root: &Path,
         test_path: &Path,
-        loader: &mut Loader,
+        loader: &'a mut Loader,
         file_status: &mut CLIFileReporter,
+        cache: &mut HashMap<Language, stack_graphs::serde::Database>,
     ) -> anyhow::Result<TestResult> {
         let cancellation_flag = CancelAfterDuration::from_option(self.max_test_time);
 
@@ -263,11 +275,24 @@ impl TestArgs {
 
         file_status.processing();
 
+        let stitcher_config =
+            StitcherConfig::default().with_detect_similar_paths(!lc.no_similar_paths_in_file);
+        let mut partials = PartialPaths::new();
+        let mut db = Database::new();
+
         let source = file_reader.get(test_path)?;
         let default_fragment_path = test_path.strip_prefix(test_root).unwrap();
         let mut test = Test::from_source(test_path, source, default_fragment_path)?;
         if !self.no_builtins {
-            self.load_builtins_into(&lc, &mut test.graph)?;
+            self.load_builtins_into(
+                &lc,
+                &mut test.graph,
+                &mut partials,
+                &mut db,
+                stitcher_config,
+                cancellation_flag.as_ref(),
+                cache,
+            )?;
         }
         let mut globals = Variables::new();
         for test_fragment in &test.fragments {
@@ -325,15 +350,11 @@ impl TestArgs {
                 Ok(_) => {}
             }
         }
-        let stitcher_config =
-            StitcherConfig::default().with_detect_similar_paths(!lc.no_similar_paths_in_file);
-        let mut partials = PartialPaths::new();
-        let mut db = Database::new();
-        for file in test.graph.iter_files() {
+        for fragment in &test.fragments {
             ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
                 &test.graph,
                 &mut partials,
-                file,
+                fragment.file,
                 stitcher_config,
                 &cancellation_flag.as_ref(),
                 |g, ps, p| {
@@ -387,14 +408,45 @@ impl TestArgs {
         Ok(result)
     }
 
-    fn load_builtins_into(
+    fn load_builtins_into<'a>(
         &self,
-        lc: &LanguageConfiguration,
+        lc: &'a LanguageConfiguration,
         graph: &mut StackGraph,
+        partials: &mut PartialPaths,
+        db: &mut Database,
+        stitcher_config: StitcherConfig,
+        cancellation_flag: &dyn CancellationFlag,
+        cache: &mut HashMap<Language, stack_graphs::serde::Database>,
     ) -> anyhow::Result<()> {
-        if let Err(h) = graph.add_from_graph(&lc.builtins) {
-            return Err(anyhow!("Duplicate builtin file {}", &graph[h]));
-        }
+        let files = graph
+            .add_from_graph(&lc.builtins)
+            .map_err(|h| anyhow!("Duplicate builtin file {}", &graph[h]))?;
+        let files = files.into_iter().collect::<HashSet<_>>();
+        match cache.entry(lc.language) {
+            Entry::Occupied(o) => {
+                o.get().load_into(graph, partials, db)?;
+            }
+            Entry::Vacant(v) => {
+                for file in &files {
+                    ForwardPartialPathStitcher::find_minimal_partial_path_set_in_file(
+                        graph,
+                        partials,
+                        *file,
+                        stitcher_config,
+                        &cancellation_flag,
+                        |g, ps, p| {
+                            db.add_partial_path(g, ps, p.clone());
+                        },
+                    )?;
+                }
+                v.insert(db.to_serializable_filter(
+                    graph,
+                    partials,
+                    &|_: &StackGraph, f: &Handle<File>| files.contains(f),
+                ));
+            }
+        };
+
         Ok(())
     }
 

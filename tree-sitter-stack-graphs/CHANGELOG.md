@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### CLI
 
+#### Added
+
+- Tests run faster for languages with builtins sources by caching the partial paths for the builtins.
+
 #### Changed
 
 - Failure to index a file will not abort indexing anymore, but simply mark the file as failed, as we already do for files with parse errors.
