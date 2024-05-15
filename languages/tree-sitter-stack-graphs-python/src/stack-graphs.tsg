@@ -759,32 +759,39 @@ inherit .parent_module
 
 (with_clause) {}
 
-(function_definition
-  name: (identifier) @name) {
-  attr (@name.def) node_definition = @name
-}
-
-(function_definition
-  name: (identifier) @name
-  parameters: (parameters) @params
-  body: (block) @body) @func
-{
-  node call
-  node drop_scope
+[
+  (function_definition
+    parameters: (_) @params
+    body: (_) @body
+  ) @func
+  (lambda
+    parameters: (_) @params
+    body: (_) @body
+  )@func
+] {
+  node @func.call
   node return_value
+  node drop_scope
 
-  attr (@name.def) definiens_node = @func
-  edge @func.after_scope -> @name.def
-  edge @name.def -> call
-  edge call -> return_value
+  edge @func.call -> return_value
   edge @body.before_scope -> @params.after_scope
   edge @body.before_scope -> drop_scope
   edge drop_scope -> @func.bottom
   attr (drop_scope) type = "drop_scopes"
-  attr (call) pop_scoped_symbol = "()"
+  attr (@func.call) pop_scoped_symbol = "()"
   edge @params.before_scope -> JUMP_TO_SCOPE_NODE
   attr (return_value) is_exported
   let @func.function_returns = return_value
+}
+
+(function_definition
+  name: (identifier) @name
+  body: (_) @body
+) @func {
+  attr (@name.def) node_definition = @name
+  attr (@name.def) definiens_node = @func
+  edge @func.after_scope -> @name.def
+  edge @name.def -> @func.call
 
   ; Prevent functions defined inside of method bodies from being treated like methods
   let @body.class_self_scope = #null
@@ -802,8 +809,10 @@ inherit .parent_module
   attr (@param.output) push_node = @param
 }
 
-(parameters
-  (_) @param) @params
+[
+  (parameters        (_) @param) @params
+  (lambda_parameters (_) @param) @params
+]
 {
   node @param.param_index
   node @param.param_name
@@ -953,6 +962,18 @@ inherit .parent_module
 ;; ####### #    # #      #    # ######  ####   ####  #  ####  #    #  ####
 ;;
 ;; Expressions
+
+(lambda
+  body: (_) @body
+)@lam {
+  ;; TODO Unify .before_scope, .local_scope, and .input to simplify
+  ;;      uniform treatment of lambdas and function definitions.
+  node @body.before_scope
+  let @body.local_scope = @body.before_scope
+  edge @body.input -> @body.before_scope
+
+  edge @lam.output -> @lam.call
+}
 
 (conditional_expression) {}
 
