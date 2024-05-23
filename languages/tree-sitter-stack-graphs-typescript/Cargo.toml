@@ -1,9 +1,9 @@
 [package]
 name = "tree-sitter-stack-graphs-typescript"
-version = "0.2.0"
-description = "Stack graphs definition for TypeScript using tree-sitter-typescript"
+version = "0.3.0"
+description = "Stack graphs definition for TypeScript & TSX using tree-sitter-typescript"
 readme = "README.md"
-keywords = ["tree-sitter", "stack-graphs", "typescript"]
+keywords = ["tree-sitter", "stack-graphs", "typescript", "tsx"]
 authors = ["Hendrik van Antwerpen <hendrikvanantwerpen@github.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2018"

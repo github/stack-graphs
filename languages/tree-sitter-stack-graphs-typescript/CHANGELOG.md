@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.3.0 -- unreleased
+
+### Added
+
+- Support for TSX. A new language configuration for TSX is available, and TSX is enabled in the CLI next to TypeScript.
+
 ## v0.2.0 -- 2024-03-06
 
 The `tree-sitter-stack-graphs` is updated to `v0.8`.
