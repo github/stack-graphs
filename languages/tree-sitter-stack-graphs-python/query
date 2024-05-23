@@ -1,0 +1,12 @@
+(class_definition
+    body: (
+        block
+            (function_definition
+                parameters: 
+                    (parameters
+                    . (identifier) @first_param
+                    )
+                body: (block) @method_body
+            )
+         )
+)
