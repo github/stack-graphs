@@ -260,7 +260,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; expose globals
   edge proj_scope -> @prog.globals
-  
+
   var mod_scope = proj_scope
   if (not (is-empty @imexs)) {
     ; module definition
@@ -540,10 +540,9 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
 
   ; module reference
   var mod_scope = mod_ref__ns
-  scan (path-normalize mod_path) {
-    ; ignore .js and .ts extensions on imports, as ts allows this
-    ; this might lead to false positives
-    "([^/|(\.j|ts)]+)/?" {
+  ; normalize path and remove the extension as we want to match 'foo', 'foo.js', 'foo.ts', etc.
+  scan (path-remove-ext (path-normalize mod_path)) {
+    "([^/]+)/?" {
       node mod_ref
       attr (mod_ref) push_symbol = $1
       edge mod_ref -> mod_scope
