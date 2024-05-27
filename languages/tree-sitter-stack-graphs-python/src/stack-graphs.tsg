@@ -794,7 +794,6 @@ inherit .parent_module
   edge @name.def -> @func.call
 
   ; Prevent functions defined inside of method bodies from being treated like methods
-  ; There might be a bug here as calling .self_scope after this, will not fallback to the larger scope
   let @body.class_self_scope = #null
   let @body.class_member_attr_scope = #null
 }
