@@ -798,15 +798,21 @@ inherit .parent_module
   let @body.class_member_attr_scope = #null
 }
 
-(function_definition
-  parameters: (parameters
-    . (identifier) @param)
-  body: (block) @body)
+; method definition
+(class_definition
+    body: (block
+            (function_definition
+                parameters: 
+                    (parameters . (identifier) @first_param)
+                body: (block) @method_body
+            )
+         )
+) 
 {
-  edge @param.def -> @param.class_self_scope
-  edge @param.class_member_attr_scope -> @param.output
-  edge @param.output -> @body.after_scope
-  attr (@param.output) push_node = @param
+  edge @first_param.def -> @first_param.class_self_scope
+  edge @first_param.class_member_attr_scope -> @first_param.output
+  edge @first_param.output -> @method_body.after_scope
+  attr (@first_param.output) push_node = @first_param
 }
 
 [
