@@ -801,13 +801,10 @@ inherit .parent_module
 
 ; method definition
 (class_definition
-    body: (
-        block
+    body: (block
             (function_definition
                 parameters: 
-                    (parameters
-                    . (identifier) @first_param
-                    )
+                    (parameters . (identifier) @first_param)
                 body: (block) @method_body
             )
          )
