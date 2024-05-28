@@ -157,6 +157,7 @@ pub struct Test {
 pub struct TestFragment {
     pub file: Handle<File>,
     pub path: PathBuf,
+    pub root_path: PathBuf,
     pub source: String,
     pub assertions: Vec<Assertion>,
     pub globals: HashMap<String, String>,
@@ -180,6 +181,7 @@ impl Test {
         let mut prev_source = String::new();
         let mut line_files = Vec::new();
         let mut line_count = 0;
+        let default_root_path = PathBuf::from("");
         for (current_line_number, current_line) in
             PositionedSubstring::lines_iter(source).enumerate()
         {
@@ -202,6 +204,7 @@ impl Test {
                     fragments.push(TestFragment {
                         file,
                         path: current_path,
+                        root_path: default_root_path.clone(),
                         source: current_source,
                         assertions: Vec::new(),
                         globals: current_globals,
@@ -254,6 +257,7 @@ impl Test {
             fragments.push(TestFragment {
                 file,
                 path: current_path,
+                root_path: default_root_path.clone(),
                 source: current_source,
                 assertions: Vec::new(),
                 globals: current_globals,

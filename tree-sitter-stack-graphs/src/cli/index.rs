@@ -428,10 +428,19 @@ impl<'a> Indexer<'a> {
         cancellation_flag: &dyn CancellationFlag,
     ) -> std::result::Result<(), BuildErrorWithSource<'b>> {
         let relative_source_path = source_path.strip_prefix(source_root).unwrap();
+        // here the file should also have stripped the source_root from its path
         if let Some(lc) = lcs.primary {
             let globals = Variables::new();
             lc.sgl
-                .build_stack_graph_into(graph, file, source, &globals, cancellation_flag)
+                .build_stack_graph_into(
+                    graph,
+                    file,
+                    source,
+                    source_path,
+                    source_root,
+                    &globals,
+                    cancellation_flag,
+                )
                 .map_err(|inner| BuildErrorWithSource {
                     inner,
                     source_path: source_path.to_path_buf(),

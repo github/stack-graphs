@@ -79,10 +79,14 @@ impl LanguageConfiguration {
                 Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
             }
             let file = builtins.add_file("<builtins>").unwrap();
+            let builtins_path_var = Path::new("<builtins>");
+            let builtins_root = Path::new("");
             sgl.build_stack_graph_into(
                 &mut builtins,
                 file,
                 builtins_source,
+                builtins_path_var,
+                builtins_root,
                 &builtins_globals,
                 cancellation_flag,
             )
@@ -325,17 +329,28 @@ impl Loader {
         graph: &mut StackGraph,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError<'a>> {
-        let file = graph.add_file(&path.to_string_lossy()).unwrap();
+        let file_name = path.to_string_lossy();
+        let file: stack_graphs::arena::Handle<stack_graphs::graph::File> =
+            graph.add_file(&file_name).unwrap();
+        let builtins_root = Path::new("");
         let mut globals = Variables::new();
         Self::load_globals_from_config_str(&config, &mut globals)?;
-        sgl.build_stack_graph_into(graph, file, &source, &globals, cancellation_flag)
-            .map_err(|err| LoadError::Builtins {
-                inner: err,
-                source_path: path.to_path_buf(),
-                source,
-                tsg_path: sgl.tsg_path.to_path_buf(),
-                tsg: sgl.tsg_source.clone(),
-            })?;
+        sgl.build_stack_graph_into(
+            graph,
+            file,
+            &source,
+            path,
+            builtins_root,
+            &globals,
+            cancellation_flag,
+        )
+        .map_err(|err| LoadError::Builtins {
+            inner: err,
+            source_path: path.to_path_buf(),
+            source,
+            tsg_path: sgl.tsg_path.to_path_buf(),
+            tsg: sgl.tsg_source.clone(),
+        })?;
         return Ok(());
     }
 

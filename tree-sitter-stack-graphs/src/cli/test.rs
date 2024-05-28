@@ -321,6 +321,8 @@ impl TestArgs {
                     &mut test.graph,
                     test_fragment.file,
                     &test_fragment.source,
+                    &test_fragment.path,
+                    &test_fragment.root_path,
                     &globals,
                     cancellation_flag.as_ref(),
                 )

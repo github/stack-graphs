@@ -68,12 +68,22 @@ fn build_stack_graph_into(
     graph: &mut StackGraph,
     file: Handle<File>,
     python_source: &str,
+    source_path: &Path,
+    source_root: &Path,
     tsg_source: &str,
     globals: &Variables,
 ) -> Result<(), BuildError> {
     let language =
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
-    language.build_stack_graph_into(graph, file, python_source, globals, &NoCancellation)?;
+    language.build_stack_graph_into(
+        graph,
+        file,
+        python_source,
+        source_path,
+        source_root,
+        globals,
+        &NoCancellation,
+    )?;
     Ok(())
 }
 
@@ -102,6 +112,8 @@ fn check_test(
             &mut test.graph,
             fragments.file,
             &fragments.source,
+            &fragments.path,
+            &fragments.root_path,
             tsg_source,
             &globals,
         )
