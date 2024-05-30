@@ -43,10 +43,6 @@ pub mod path {
             path_fn(|p| normalize(p).map(|p| p.as_os_str().to_os_string())),
         );
         functions.add("path-split".into(), PathSplit);
-        functions.add(
-            "path-remove-ext".into(),
-            path_fn(|p| remove_extension(p).map(|p| p.as_os_str().to_os_string())),
-        );
     }
 
     pub fn path_fn<F>(f: F) -> impl Function
@@ -162,38 +158,5 @@ pub mod path {
             }
         }
         Some(ret)
-    }
-
-    /// Removes the extension from a path.
-    /// eg. `foo/bar.rs` -> `foo/bar`
-    /// eg. `foo/bar` -> `foo/bar`
-    /// eg. `foo/bar.rs.bak` -> `foo/bar.rs`
-    pub fn remove_extension(path: &Path) -> Option<PathBuf> {
-        path.extension()
-            .map_or(Some(path.into()), |_| path.with_extension("").into())
-    }
-
-    #[test]
-    fn test_remove_extension() {
-        assert_eq!(
-            remove_extension(Path::new("foo/bar.rs")),
-            Some(PathBuf::from("foo/bar"))
-        );
-        assert_eq!(
-            remove_extension(Path::new("foo/bar")),
-            Some(PathBuf::from("foo/bar"))
-        );
-        assert_eq!(
-            remove_extension(Path::new("foo/bar.rs.bak")),
-            Some(PathBuf::from("foo/bar.rs"))
-        );
-        assert_eq!(
-            remove_extension(Path::new("foo")),
-            Some(PathBuf::from("foo"))
-        );
-        assert_eq!(
-            remove_extension(Path::new("foo.rs")),
-            Some(PathBuf::from("foo"))
-        );
     }
 }

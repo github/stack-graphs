@@ -541,7 +541,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   ; module reference
   var mod_scope = mod_ref__ns
   ; normalize path and remove the extension as we want to match 'foo', 'foo.js', 'foo.ts', etc.
-  scan (path-remove-ext (path-normalize mod_path)) {
+  scan (path-normalize (replace mod_path "\.(js|ts|jsx|tsx)$" "")) {
     "([^/]+)/?" {
       node mod_ref
       attr (mod_ref) push_symbol = $1
