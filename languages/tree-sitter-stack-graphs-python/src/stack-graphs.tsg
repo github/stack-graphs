@@ -13,7 +13,7 @@
 ;; ^^^^^^^^^^^^^^^^
 
 global FILE_PATH
-global ROOT_PATH
+global ROOT_PATH = ""
 global ROOT_NODE
 global JUMP_TO_SCOPE_NODE
 

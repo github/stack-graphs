@@ -29,6 +29,7 @@ use tree_sitter_loader::Loader as TsLoader;
 use crate::CancellationFlag;
 use crate::FileAnalyzer;
 use crate::StackGraphLanguage;
+use crate::FILE_PATH_VAR;
 
 pub static DEFAULT_TSG_PATHS: Lazy<Vec<LoadPath>> =
     Lazy::new(|| vec![LoadPath::Grammar("queries/stack-graphs".into())]);
@@ -75,18 +76,23 @@ impl LanguageConfiguration {
         let mut builtins = StackGraph::new();
         if let Some((builtins_path, builtins_source)) = builtins_source {
             let mut builtins_globals = Variables::new();
+
+            let builtins_path_var = Path::new("<builtins>");
+            builtins_globals
+                .add(
+                    FILE_PATH_VAR.into(),
+                    builtins_path_var.to_str().unwrap().into(),
+                )
+                .expect("failed to add file path variable");
+
             if let Some(builtins_config) = builtins_config {
                 Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
             }
             let file = builtins.add_file("<builtins>").unwrap();
-            let builtins_path_var = Path::new("<builtins>");
-            let builtins_root = Path::new("");
             sgl.build_stack_graph_into(
                 &mut builtins,
                 file,
                 builtins_source,
-                builtins_path_var,
-                builtins_root,
                 &builtins_globals,
                 cancellation_flag,
             )
@@ -332,25 +338,21 @@ impl Loader {
         let file_name = path.to_string_lossy();
         let file: stack_graphs::arena::Handle<stack_graphs::graph::File> =
             graph.add_file(&file_name).unwrap();
-        let builtins_root = Path::new("");
         let mut globals = Variables::new();
+
+        globals
+            .add(FILE_PATH_VAR.into(), path.to_str().unwrap().into())
+            .expect("failed to add file path variable");
+
         Self::load_globals_from_config_str(&config, &mut globals)?;
-        sgl.build_stack_graph_into(
-            graph,
-            file,
-            &source,
-            path,
-            builtins_root,
-            &globals,
-            cancellation_flag,
-        )
-        .map_err(|err| LoadError::Builtins {
-            inner: err,
-            source_path: path.to_path_buf(),
-            source,
-            tsg_path: sgl.tsg_path.to_path_buf(),
-            tsg: sgl.tsg_source.clone(),
-        })?;
+        sgl.build_stack_graph_into(graph, file, &source, &globals, cancellation_flag)
+            .map_err(|err| LoadError::Builtins {
+                inner: err,
+                source_path: path.to_path_buf(),
+                source,
+                tsg_path: sgl.tsg_path.to_path_buf(),
+                tsg: sgl.tsg_source.clone(),
+            })?;
         return Ok(());
     }
 

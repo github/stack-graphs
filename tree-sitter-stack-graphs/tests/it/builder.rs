@@ -36,15 +36,7 @@ fn can_support_preexisting_nodes() {
     let globals = Variables::new();
     let language = StackGraphLanguage::from_str(tree_sitter_python::language(), tsg).unwrap();
     language
-        .build_stack_graph_into(
-            &mut graph,
-            file,
-            python,
-            source_path,
-            source_root,
-            &globals,
-            &NoCancellation,
-        )
+        .build_stack_graph_into(&mut graph, file, python, &globals, &NoCancellation)
         .expect("Failed to build graph");
 }
 
@@ -69,8 +61,7 @@ fn can_support_injected_nodes() {
     let _preexisting_node = graph.add_scope_node(node_id, true).unwrap();
 
     let language = StackGraphLanguage::from_str(tree_sitter_python::language(), tsg).unwrap();
-    let mut builder =
-        language.builder_into_stack_graph(&mut graph, file, python, source_path, source_root);
+    let mut builder = language.builder_into_stack_graph(&mut graph, file, python);
 
     let mut globals = Variables::new();
     globals

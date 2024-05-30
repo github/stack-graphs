@@ -558,12 +558,10 @@ impl StackGraphLanguage {
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
         source: &'a str,
-        source_path: &Path,
-        source_root: &Path,
         globals: &'a Variables<'a>,
         cancellation_flag: &'a dyn CancellationFlag,
     ) -> Result<(), BuildError> {
-        self.builder_into_stack_graph(stack_graph, file, source, source_path, source_root)
+        self.builder_into_stack_graph(stack_graph, file, source)
             .build(globals, cancellation_flag)
     }
 
@@ -576,10 +574,8 @@ impl StackGraphLanguage {
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
         source: &'a str,
-        source_path: &'a Path,
-        source_root: &'a Path,
     ) -> Builder<'a> {
-        Builder::new(self, stack_graph, file, source, source_path, source_root)
+        Builder::new(self, stack_graph, file, source)
     }
 }
 
@@ -588,8 +584,6 @@ pub struct Builder<'a> {
     stack_graph: &'a mut StackGraph,
     file: Handle<File>,
     source: &'a str,
-    source_path: &'a Path,
-    source_root: &'a Path,
     graph: Graph<'a>,
     remapped_nodes: HashMap<usize, NodeID>,
     injected_node_count: usize,
@@ -602,8 +596,6 @@ impl<'a> Builder<'a> {
         stack_graph: &'a mut StackGraph,
         file: Handle<File>,
         source: &'a str,
-        source_path: &'a Path,
-        source_root: &'a Path,
     ) -> Self {
         let span_calculator = SpanCalculator::new(source);
         Builder {
@@ -611,8 +603,6 @@ impl<'a> Builder<'a> {
             stack_graph,
             file,
             source,
-            source_path,
-            source_root,
             graph: Graph::new(),
             remapped_nodes: HashMap::new(),
             injected_node_count: 0,
@@ -659,19 +649,10 @@ impl<'a> Builder<'a> {
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
             .expect("Failed to set JUMP_TO_SCOPE_NODE");
 
-        if globals.get(&FILE_PATH_VAR.into()).is_none() {
-            let file_name = self.source_path.to_str().unwrap().to_string();
-            globals
-                .add(FILE_PATH_VAR.into(), file_name.into())
-                .expect("Failed to set FILE_PATH");
-        }
-
-        if globals.get(&ROOT_PATH_VAR.into()).is_none() {
-            let root_path = self.source_root.to_str().unwrap().to_string();
-            globals
-                .add(ROOT_PATH_VAR.into(), root_path.into())
-                .expect("Failed to set ROOT_PATH");
-        }
+        // FILE_PATH is mandatory
+        globals
+            .get(&FILE_PATH_VAR.into())
+            .expect("FILE_PATH not set");
 
         let mut config = ExecutionConfig::new(&self.sgl.functions, &globals)
             .lazy(true)

@@ -15,6 +15,8 @@ use tree_sitter_stack_graphs::BuildError;
 use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
 
+static FILE_PATH_VAR: &'static str = "FILE_PATH";
+
 mod builder;
 mod edges;
 mod loader;
@@ -26,21 +28,18 @@ pub(self) fn build_stack_graph(
     tsg_source: &str,
 ) -> Result<(StackGraph, Handle<File>), BuildError> {
     let file_name = "test.py";
-    let source_path = Path::new(file_name);
-    let source_root = Path::new("");
     let language =
         StackGraphLanguage::from_str(tree_sitter_python::language(), tsg_source).unwrap();
     let mut graph = StackGraph::new();
     let file = graph.get_or_create_file(file_name);
-    let globals = Variables::new();
-    language.build_stack_graph_into(
-        &mut graph,
-        file,
-        python_source,
-        source_path,
-        source_root,
-        &globals,
-        &NoCancellation,
-    )?;
+    let mut globals = Variables::new();
+    let source_path = Path::new(file_name);
+
+    // The FILE_PATH_VAR is not accessible here
+    globals
+        .add(FILE_PATH_VAR.into(), source_path.to_str().unwrap().into())
+        .expect("failed to add file path variable");
+
+    language.build_stack_graph_into(&mut graph, file, python_source, &globals, &NoCancellation)?;
     Ok((graph, file))
 }
