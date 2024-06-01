@@ -79,13 +79,16 @@ impl LanguageConfiguration {
         if let Some((builtins_path, builtins_source)) = builtins_source {
             let mut builtins_globals = Variables::new();
 
-            builtins_globals
-                .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
-                .expect("failed to add file path variable");
-
             if let Some(builtins_config) = builtins_config {
                 Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
             }
+
+            if builtins_globals.get(&FILE_PATH_VAR.into()).is_some() {
+                builtins_globals
+                    .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
+                    .expect("failed to add file path variable");
+            }
+
             let file = builtins.add_file(BUILTINS_FILENAME).unwrap();
             sgl.build_stack_graph_into(
                 &mut builtins,
@@ -337,11 +340,14 @@ impl Loader {
         let file = graph.add_file(&file_name).unwrap();
         let mut globals = Variables::new();
 
-        globals
-            .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
-            .expect("failed to add file path variable");
-
         Self::load_globals_from_config_str(&config, &mut globals)?;
+
+        if globals.get(&FILE_PATH_VAR.into()).is_some() {
+            globals
+                .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
+                .expect("failed to add file path variable");
+        }
+
         sgl.build_stack_graph_into(graph, file, &source, &globals, cancellation_flag)
             .map_err(|err| LoadError::Builtins {
                 inner: err,
