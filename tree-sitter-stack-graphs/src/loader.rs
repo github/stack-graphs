@@ -334,8 +334,7 @@ impl Loader {
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError<'a>> {
         let file_name = path.to_string_lossy();
-        let file: stack_graphs::arena::Handle<stack_graphs::graph::File> =
-            graph.add_file(&file_name).unwrap();
+        let file = graph.add_file(&file_name).unwrap();
         let mut globals = Variables::new();
 
         globals
