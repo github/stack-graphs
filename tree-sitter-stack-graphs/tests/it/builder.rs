@@ -4,17 +4,14 @@
 // Licensed under either of Apache License, Version 2.0, or MIT license, at your option.
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
-
-use std::path::Path;
-
 use stack_graphs::graph::StackGraph;
 use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
+use tree_sitter_stack_graphs::FILE_PATH_VAR;
 
 use crate::edges::check_stack_graph_edges;
 use crate::nodes::check_stack_graph_nodes;
-use crate::FILE_PATH_VAR;
 
 #[test]
 fn can_support_preexisting_nodes() {

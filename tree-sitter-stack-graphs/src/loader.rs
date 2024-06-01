@@ -31,6 +31,8 @@ use crate::FileAnalyzer;
 use crate::StackGraphLanguage;
 use crate::FILE_PATH_VAR;
 
+const BUILTINS_FILENAME: &str = "<builtins>";
+
 pub static DEFAULT_TSG_PATHS: Lazy<Vec<LoadPath>> =
     Lazy::new(|| vec![LoadPath::Grammar("queries/stack-graphs".into())]);
 pub static DEFAULT_BUILTINS_PATHS: Lazy<Vec<LoadPath>> =
@@ -77,18 +79,14 @@ impl LanguageConfiguration {
         if let Some((builtins_path, builtins_source)) = builtins_source {
             let mut builtins_globals = Variables::new();
 
-            let builtins_path_var = Path::new("<builtins>");
             builtins_globals
-                .add(
-                    FILE_PATH_VAR.into(),
-                    builtins_path_var.to_str().unwrap().into(),
-                )
+                .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
                 .expect("failed to add file path variable");
 
             if let Some(builtins_config) = builtins_config {
                 Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
             }
-            let file = builtins.add_file("<builtins>").unwrap();
+            let file = builtins.add_file(BUILTINS_FILENAME).unwrap();
             sgl.build_stack_graph_into(
                 &mut builtins,
                 file,
@@ -341,7 +339,7 @@ impl Loader {
         let mut globals = Variables::new();
 
         globals
-            .add(FILE_PATH_VAR.into(), path.to_str().unwrap().into())
+            .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
             .expect("failed to add file path variable");
 
         Self::load_globals_from_config_str(&config, &mut globals)?;

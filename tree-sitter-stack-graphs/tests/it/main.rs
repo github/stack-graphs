@@ -14,8 +14,7 @@ use tree_sitter_graph::Variables;
 use tree_sitter_stack_graphs::BuildError;
 use tree_sitter_stack_graphs::NoCancellation;
 use tree_sitter_stack_graphs::StackGraphLanguage;
-
-static FILE_PATH_VAR: &'static str = "FILE_PATH";
+use tree_sitter_stack_graphs::FILE_PATH_VAR;
 
 mod builder;
 mod edges;
@@ -35,7 +34,6 @@ pub(self) fn build_stack_graph(
     let mut globals = Variables::new();
     let source_path = Path::new(file_name);
 
-    // The FILE_PATH_VAR is not accessible here
     globals
         .add(FILE_PATH_VAR.into(), source_path.to_str().unwrap().into())
         .expect("failed to add file path variable");

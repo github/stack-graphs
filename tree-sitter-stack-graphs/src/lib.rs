@@ -435,10 +435,16 @@ static SCOPE_ATTRS: Lazy<HashSet<&'static str>> =
 static PRECEDENCE_ATTR: &'static str = "precedence";
 
 // Global variables
-static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
-static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
-static FILE_PATH_VAR: &'static str = "FILE_PATH";
-static ROOT_PATH_VAR: &'static str = "ROOT_PATH";
+/// Name of the variable used to pass the root node.
+pub const ROOT_NODE_VAR: &'static str = "ROOT_NODE";
+/// Name of the variable used to pass the jump-to-scope node.
+pub const JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
+/// Name of the variable used to pass the file path.
+/// If a root path is given, it should be a descendant the root path.
+pub const FILE_PATH_VAR: &'static str = "FILE_PATH";
+/// Name of the variable used to pass the root path.
+/// If given, should be an ancestor of the file path.
+pub const ROOT_PATH_VAR: &'static str = "ROOT_PATH";
 
 /// Holds information about how to construct stack graphs for a particular language.
 pub struct StackGraphLanguage {
@@ -648,11 +654,6 @@ impl<'a> Builder<'a> {
         globals
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
             .expect("Failed to set JUMP_TO_SCOPE_NODE");
-
-        // FILE_PATH is mandatory
-        globals
-            .get(&FILE_PATH_VAR.into())
-            .expect("FILE_PATH not set");
 
         let mut config = ExecutionConfig::new(&self.sgl.functions, &globals)
             .lazy(true)
