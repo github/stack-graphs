@@ -83,7 +83,7 @@ impl LanguageConfiguration {
                 Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
             }
 
-            if builtins_globals.get(&FILE_PATH_VAR.into()).is_some() {
+            if builtins_globals.get(&FILE_PATH_VAR.into()).is_none() {
                 builtins_globals
                     .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
                     .expect("failed to add file path variable");
