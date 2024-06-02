@@ -318,15 +318,17 @@ impl TestArgs {
             )? {
                 globals.clear();
 
-                // Add FILE_PATH to variables
-                globals
-                    .add(
-                        FILE_PATH_VAR.into(),
-                        test_fragment.path.to_str().unwrap().into(),
-                    )
-                    .expect("failed to add file path variable");
-
                 test_fragment.add_globals_to(&mut globals);
+
+                if globals.get(&FILE_PATH_VAR.into()).is_none() {
+                    globals
+                        .add(
+                            FILE_PATH_VAR.into(),
+                            test_fragment.path.to_str().unwrap().into(),
+                        )
+                        .expect("failed to add file path variable");
+                }
+
                 lc.sgl.build_stack_graph_into(
                     &mut test.graph,
                     test_fragment.file,
