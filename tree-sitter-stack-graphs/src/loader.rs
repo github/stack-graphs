@@ -342,7 +342,7 @@ impl Loader {
 
         Self::load_globals_from_config_str(&config, &mut globals)?;
 
-        if globals.get(&FILE_PATH_VAR.into()).is_some() {
+        if globals.get(&FILE_PATH_VAR.into()).is_none() {
             globals
                 .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
                 .expect("failed to add file path variable");
