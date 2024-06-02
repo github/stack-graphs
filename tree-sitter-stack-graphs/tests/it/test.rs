@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use crate::FILE_PATH_VAR;
 use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use stack_graphs::arena::Handle;
@@ -94,10 +95,22 @@ fn check_test(
         expected_successes + expected_failures,
         assertion_count,
     );
+
     let mut globals = Variables::new();
     for fragments in &test.fragments {
         globals.clear();
+
         fragments.add_globals_to(&mut globals);
+
+        if globals.get(&FILE_PATH_VAR.into()).is_none() {
+            globals
+                .add(
+                    FILE_PATH_VAR.into(),
+                    fragments.path.to_str().unwrap().into(),
+                )
+                .expect("failed to add file path variable");
+        }
+
         build_stack_graph_into(
             &mut test.graph,
             fragments.file,

@@ -435,9 +435,16 @@ static SCOPE_ATTRS: Lazy<HashSet<&'static str>> =
 static PRECEDENCE_ATTR: &'static str = "precedence";
 
 // Global variables
-static ROOT_NODE_VAR: &'static str = "ROOT_NODE";
-static JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
-static FILE_PATH_VAR: &'static str = "FILE_PATH";
+/// Name of the variable used to pass the root node.
+pub const ROOT_NODE_VAR: &'static str = "ROOT_NODE";
+/// Name of the variable used to pass the jump-to-scope node.
+pub const JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
+/// Name of the variable used to pass the file path.
+/// If a root path is given, it should be a descendant the root path.
+pub const FILE_PATH_VAR: &'static str = "FILE_PATH";
+/// Name of the variable used to pass the root path.
+/// If given, should be an ancestor of the file path.
+pub const ROOT_PATH_VAR: &'static str = "ROOT_PATH";
 
 /// Holds information about how to construct stack graphs for a particular language.
 pub struct StackGraphLanguage {
@@ -635,22 +642,18 @@ impl<'a> Builder<'a> {
         let tree = parse_errors.into_tree();
 
         let mut globals = Variables::nested(globals);
+
         if globals.get(&ROOT_NODE_VAR.into()).is_none() {
             let root_node = self.inject_node(NodeID::root());
             globals
                 .add(ROOT_NODE_VAR.into(), root_node.into())
                 .expect("Failed to set ROOT_NODE");
         }
+
         let jump_to_scope_node = self.inject_node(NodeID::jump_to());
         globals
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
             .expect("Failed to set JUMP_TO_SCOPE_NODE");
-        if globals.get(&FILE_PATH_VAR.into()).is_none() {
-            let file_name = self.stack_graph[self.file].to_string();
-            globals
-                .add(FILE_PATH_VAR.into(), file_name.into())
-                .expect("Failed to set FILE_PATH");
-        }
 
         let mut config = ExecutionConfig::new(&self.sgl.functions, &globals)
             .lazy(true)

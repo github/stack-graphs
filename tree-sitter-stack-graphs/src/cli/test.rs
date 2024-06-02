@@ -43,6 +43,7 @@ use crate::test::Test;
 use crate::test::TestResult;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
+use crate::FILE_PATH_VAR;
 
 #[derive(Args)]
 #[clap(after_help = r#"PATH SPECIFICATIONS:
@@ -316,7 +317,18 @@ impl TestArgs {
                 &mut Some(test_fragment.source.as_ref()),
             )? {
                 globals.clear();
+
                 test_fragment.add_globals_to(&mut globals);
+
+                if globals.get(&FILE_PATH_VAR.into()).is_none() {
+                    globals
+                        .add(
+                            FILE_PATH_VAR.into(),
+                            test_fragment.path.to_str().unwrap().into(),
+                        )
+                        .expect("failed to add file path variable");
+                }
+
                 lc.sgl.build_stack_graph_into(
                     &mut test.graph,
                     test_fragment.file,

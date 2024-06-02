@@ -29,6 +29,9 @@ use tree_sitter_loader::Loader as TsLoader;
 use crate::CancellationFlag;
 use crate::FileAnalyzer;
 use crate::StackGraphLanguage;
+use crate::FILE_PATH_VAR;
+
+const BUILTINS_FILENAME: &str = "<builtins>";
 
 pub static DEFAULT_TSG_PATHS: Lazy<Vec<LoadPath>> =
     Lazy::new(|| vec![LoadPath::Grammar("queries/stack-graphs".into())]);
@@ -75,10 +78,18 @@ impl LanguageConfiguration {
         let mut builtins = StackGraph::new();
         if let Some((builtins_path, builtins_source)) = builtins_source {
             let mut builtins_globals = Variables::new();
+
             if let Some(builtins_config) = builtins_config {
                 Loader::load_globals_from_config_str(builtins_config, &mut builtins_globals)?;
             }
-            let file = builtins.add_file("<builtins>").unwrap();
+
+            if builtins_globals.get(&FILE_PATH_VAR.into()).is_none() {
+                builtins_globals
+                    .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
+                    .expect("failed to add file path variable");
+            }
+
+            let file = builtins.add_file(BUILTINS_FILENAME).unwrap();
             sgl.build_stack_graph_into(
                 &mut builtins,
                 file,
@@ -325,9 +336,18 @@ impl Loader {
         graph: &mut StackGraph,
         cancellation_flag: &dyn CancellationFlag,
     ) -> Result<(), LoadError<'a>> {
-        let file = graph.add_file(&path.to_string_lossy()).unwrap();
+        let file_name = path.to_string_lossy();
+        let file = graph.add_file(&file_name).unwrap();
         let mut globals = Variables::new();
+
         Self::load_globals_from_config_str(&config, &mut globals)?;
+
+        if globals.get(&FILE_PATH_VAR.into()).is_none() {
+            globals
+                .add(FILE_PATH_VAR.into(), BUILTINS_FILENAME.into())
+                .expect("failed to add file path variable");
+        }
+
         sgl.build_stack_graph_into(graph, file, &source, &globals, cancellation_flag)
             .map_err(|err| LoadError::Builtins {
                 inner: err,

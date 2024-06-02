@@ -13,6 +13,7 @@
 ;; ^^^^^^^^^^^^^^^^
 
 global FILE_PATH
+global ROOT_PATH = ""
 global ROOT_NODE
 global JUMP_TO_SCOPE_NODE
 
@@ -272,7 +273,9 @@ inherit .parent_module
   node grandparent_module_ref_node
   var grandparent_module_ref = grandparent_module_ref_node
 
-  scan FILE_PATH {
+  ; get the file path relative to the root path
+  let rel_path = (replace FILE_PATH ROOT_PATH "")
+  scan rel_path {
     "([^/]+)/"
     {
       node def_dot

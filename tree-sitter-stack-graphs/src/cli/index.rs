@@ -42,6 +42,7 @@ use crate::BuildError;
 use crate::CancelAfterDuration;
 use crate::CancellationFlag;
 use crate::NoCancellation;
+use crate::{FILE_PATH_VAR, ROOT_PATH_VAR};
 
 #[derive(Args)]
 pub struct IndexArgs {
@@ -429,7 +430,16 @@ impl<'a> Indexer<'a> {
     ) -> std::result::Result<(), BuildErrorWithSource<'b>> {
         let relative_source_path = source_path.strip_prefix(source_root).unwrap();
         if let Some(lc) = lcs.primary {
-            let globals = Variables::new();
+            let mut globals = Variables::new();
+
+            globals
+                .add(FILE_PATH_VAR.into(), source_path.to_str().unwrap().into())
+                .expect("failed to add file path variable");
+
+            globals
+                .add(ROOT_PATH_VAR.into(), source_root.to_str().unwrap().into())
+                .expect("failed to add root path variable");
+
             lc.sgl
                 .build_stack_graph_into(graph, file, source, &globals, cancellation_flag)
                 .map_err(|inner| BuildErrorWithSource {
