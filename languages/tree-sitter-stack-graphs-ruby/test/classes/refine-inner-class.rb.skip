@@ -1,0 +1,28 @@
+class C
+end
+
+module M
+    class C
+    end
+
+    refine C do
+    #      ^ defined: 5
+        def foo
+        end
+    end
+end
+
+using M
+
+  M::C.new.foo
+# ^ defined: 4
+#    ^ defined: 5
+#          ^ defined: 9
+
+  C.new.foo
+# ^ defined: 1
+#       ^ defined:
+## This assertion is failing because, even though reference C on
+## line 8 resolves to definition C on line 5 by itself, it resolves
+## to the definition of C on line 1 when resolving the method. This
+## is an example of https://github.com/github/stack-graphs/issues/275.

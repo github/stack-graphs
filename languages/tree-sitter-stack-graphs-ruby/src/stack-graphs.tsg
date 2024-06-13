@@ -1,0 +1,469 @@
+;; -*- coding: utf-8 -*-
+;; ------------------------------------------------------------------------------------------------
+;; Copyright © 2023, stack-graphs authors.
+;; Licensed under either of Apache License, Version 2.0, or MIT license, at your option.
+;; Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
+;; ------------------------------------------------------------------------------------------------
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Stack graphs definition for Ruby
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Global Variables
+;; ^^^^^^^^^^^^^^^^
+
+global FILE_PATH
+global ROOT_NODE
+global JUMP_TO_SCOPE_NODE
+
+;; Attribute Shorthands
+;; ^^^^^^^^^^^^^^^^^^^^
+
+attribute node_definition = node        => type = "pop_symbol", node_symbol = node, is_definition
+attribute node_reference = node         => type = "push_symbol", node_symbol = node, is_reference
+attribute pop_node = node               => type = "pop_symbol", node_symbol = node
+attribute pop_scoped_node = node        => type = "pop_scoped_symbol", node_symbol = node
+attribute pop_scoped_symbol = symbol    => type = "pop_scoped_symbol", symbol = symbol
+attribute pop_symbol = symbol           => type = "pop_symbol", symbol = symbol
+attribute push_node = node              => type = "push_symbol", node_symbol = node
+attribute push_scoped_node = node       => type = "push_scoped_symbol", node_symbol = node
+attribute push_scoped_symbol = symbol   => type = "push_scoped_symbol", symbol = symbol
+attribute push_symbol = symbol          => type = "push_symbol", symbol = symbol
+attribute scoped_node_definition = node => type = "pop_scoped_symbol", node_symbol = node, is_definition
+attribute scoped_node_reference = node  => type = "push_scoped_symbol", node_symbol = node, is_reference
+attribute symbol_definition = symbol    => type = "pop_symbol", symbol = symbol, is_definition
+attribute symbol_reference = symbol     => type = "push_symbol", symbol = symbol, is_reference
+
+attribute node_symbol = node            => symbol = (source-text node), source_node = node
+
+;; Program
+;; ^^^^^^^
+
+(program)@prog {
+    ;; program lexical scope inherits global scope
+    edge @prog.lexical_scope -> ROOT_NODE
+
+    ;; program lexical scope inherits global scope via the root
+    ;; scope marker <::>
+    node root_scope
+    attr (root_scope) pop_symbol = "<::>"
+    edge root_scope -> ROOT_NODE
+    edge @prog.lexical_scope -> root_scope
+
+    ;; top-level definitions are accessible from the global scope
+    edge ROOT_NODE -> @prog.instance_defs
+    edge ROOT_NODE -> @prog.root_defs
+    edge ROOT_NODE -> @prog.static_defs
+}
+
+;; Bodies
+
+[
+    (program)
+    (body_statement)
+]@body {
+    node @body.instance_defs
+    node @body.lexical_scope
+    node @body.root_defs
+    node @body.static_defs
+
+    edge @body.lexical_scope -> @body.static_defs
+    attr (@body.lexical_scope -> @body.static_defs) precedence = 1
+}
+
+[
+    (program        (_)@stmt)@body
+    (body_statement (_)@stmt)@body
+] {
+    ;; program inherits statement definitions
+    edge @body.instance_defs -> @stmt.instance_defs
+    edge @body.root_defs -> @stmt.root_defs
+    edge @body.static_defs -> @stmt.static_defs
+}
+
+[
+    (program        . (_)@first)@body
+    (body_statement . (_)@first)@body
+] {
+    edge @first.lexical_scope -> @body.lexical_scope
+}
+
+[
+    (program        (_)@left . (_)@right)
+    (body_statement (_)@left . (_)@right)
+] {
+    edge @right.lexical_scope -> @left.lexical_scope
+    edge @right.lexical_scope -> @left.local_defs
+    attr (@right.lexical_scope -> @left.local_defs) precedence = 1
+}
+
+;; Statements
+;; ^^^^^^^^^^
+
+[
+    (class)
+    (module)
+    (uninterpreted)
+]@stmt {
+    node @stmt.instance_defs
+    node @stmt.lexical_scope
+    node @stmt.local_defs
+    node @stmt.root_defs
+    node @stmt.static_defs
+}
+
+[
+    (class name:(_)@name)
+    (module name:(_)@name)
+]@class {
+    ;; expose the class definition
+    edge @class.root_defs -> @name.root_def
+    edge @class.static_defs -> @name.static_def
+
+    ;; resolve the class in the lexical scope
+    edge @name.ref -> @class.lexical_scope
+}
+
+(class)@class {
+    node @class.instance
+}
+
+(class name:(_)@name)@class {
+    node dot
+    attr (dot) pop_symbol = "."
+
+    node def
+    attr (def) pop_symbol = "new"
+
+    edge @name.def_value -> dot
+    edge dot -> def
+    edge def -> @class.instance
+}
+
+(class body:(_)@body)@class {
+    edge @class.instance -> @body.instance_defs
+}
+
+(class name:(_)@name)@class {
+    let nonce = (uuid)
+
+    node refine_in
+    attr (refine_in) pop_scoped_symbol = "<refine-in>"
+    ;
+    node push_nonce
+    attr (push_nonce) push_symbol = nonce
+    ;
+    node using
+    attr (using) push_symbol = "<using>"
+    ;
+    edge @class.instance -> refine_in
+    edge refine_in -> push_nonce
+    edge push_nonce -> using
+    edge using -> JUMP_TO_SCOPE_NODE
+
+    node refine
+    attr (refine) pop_scoped_symbol = "<refine>"
+    ;
+    node pop_nonce
+    attr (pop_nonce) pop_symbol = nonce
+    ;
+    edge @name.def_value -> refine
+    edge refine -> pop_nonce
+    edge pop_nonce -> JUMP_TO_SCOPE_NODE
+}
+
+[
+    (class name:(_)@name body:(_)@body)
+    (module name:(_)@name body:(_)@body)
+]@class {
+    ;; body inherits class lexical scope
+    edge @body.lexical_scope -> @class.lexical_scope
+
+    ;; body inherits other definitions of this class
+    edge @body.lexical_scope -> @name.ref_value
+
+    ;; class body consists of body definitions
+    edge @name.def_value -> @body.static_defs
+
+    ;; root definitions are exposed upwards
+    edge @class.root_defs -> @body.root_defs
+}
+
+;; Expressions
+;; ^^^^^^^^^^^
+
+[
+    (_primary/constant)
+    (_primary/identifier)
+    (_primary/scope_resolution)
+    (assignment)
+    (call)
+    (integer)
+    (method)
+    (singleton_method)
+]@expr {
+    node @expr.instance_defs
+    node @expr.lexical_scope
+    node @expr.local_defs
+    node @expr.root_defs
+    node @expr.static_defs
+    node @expr.value
+}
+
+[
+    (_primary/constant)
+    (_primary/identifier)
+    (_primary/scope_resolution)
+]@name {
+    edge @name.ref -> @name.lexical_scope
+}
+
+[
+    (_primary/constant)
+    (_primary/identifier)
+    (_primary/scope_resolution)
+]@name {
+    node pop_dot
+    attr (pop_dot) pop_symbol = "."
+
+    node push_dot
+    attr (push_dot) push_symbol = "."
+
+    ;; The value of the expression is the value if the reference, but only
+    ;; if we are trying to look _inside_ the value. This prevents assignments
+    ;; of the form `foo = bar` to act as aliases.
+    edge @name.value -> pop_dot
+    edge pop_dot -> push_dot
+    edge push_dot -> @name.ref_value
+}
+
+[
+    (_primary/constant)
+    (_primary/scope_resolution)
+]@name {
+    node pop_double_colon
+    attr (pop_double_colon) pop_symbol = "::"
+
+    node push_double_colon
+    attr (push_double_colon) push_symbol = "::"
+
+    ;; The value of the expression is the value if the reference, but only
+    ;; if we are trying to look _inside_ the value. This prevents assignments
+    ;; of the form `foo = bar` to act as aliases.
+    edge @name.value -> pop_double_colon
+    edge pop_double_colon -> push_double_colon
+    edge push_double_colon -> @name.ref_value
+}
+
+(assignment left:(_)@name right:(_)@value)@assign {
+    edge @value.lexical_scope -> @assign.lexical_scope
+
+    edge @assign.local_defs -> @name.local_def
+    edge @assign.root_defs -> @name.root_def
+    edge @assign.static_defs -> @name.static_def
+
+    edge @name.def_value -> @value.value
+}
+
+(call receiver:(_)@recv method:(_)@mthd_name)@call {
+    node dot
+    attr (dot) push_symbol = "."
+
+    edge @call.value -> @mthd_name.ref_value
+    edge @mthd_name.ref -> dot
+    edge dot -> @recv.value
+    edge @recv.lexical_scope -> @call.lexical_scope
+}
+
+(call receiver:(_)@recv method:(_)@mthd_name)@call {
+    node dot
+    attr (dot) push_symbol = "."
+
+    node refine_scope
+    attr (refine_scope) is_endpoint
+    edge refine_scope -> @call.lexical_scope
+
+    node refine_in
+    attr (refine_in) push_scoped_symbol = "<refine-in>", scope = refine_scope
+
+    edge @mthd_name.ref -> dot
+    edge dot -> refine_in
+    edge refine_in -> @recv.value
+}
+
+(method name:(_)@name)@method {
+    node dot
+    attr (dot) pop_symbol = "."
+
+    node def
+    attr (def) node_definition = @name
+
+    edge @method.instance_defs -> dot
+    edge dot -> def
+}
+
+;; refine
+(call method:(_)@_mthd_name (#eq? @_mthd_name "refine") arguments:(argument_list (_)@name) block:(do_block body:(_)@body))@call {
+    node refine_scope
+    attr (refine_scope) is_endpoint
+
+    node using
+    attr (using) pop_symbol = "<using>"
+
+    node refine
+    attr (refine) push_scoped_symbol = "<refine>", scope = refine_scope
+
+    edge @call.static_defs -> using
+    edge using -> refine
+    edge refine -> @name.ref_value
+    edge @name.ref -> @call.lexical_scope
+
+    edge refine_scope -> @body.instance_defs
+}
+
+(singleton_method name:(_)@name)@method {
+    node dot
+    attr (dot) pop_symbol = "."
+
+    node def
+    attr (def) node_definition = @name
+
+    edge @method.static_defs -> dot
+    edge dot -> def
+}
+
+;; using
+(call method:(_)@_mthd_name (#eq? @_mthd_name "using") arguments:(argument_list (_)@name))@call {
+    node pop_using
+    attr (pop_using) pop_symbol = "<using>"
+
+    node push_using
+    attr (push_using) push_symbol = "<using>"
+
+    edge @call.local_defs -> pop_using
+    edge pop_using -> push_using
+    edge push_using -> @name.ref_value
+    edge @name.ref -> @call.lexical_scope
+}
+
+;; Identifiers
+;; ^^^^^^^^^^^
+
+;; Identifiers are single or scoped names and can appear in reference
+;; and definition positions. These rules create both reference and
+;; definition nodes, and ensure both support arbitrarily deep nesting.
+;;
+;; The nodes available to connect the refences are:
+;;     .ref         The reference. This node should be connected to the
+;;                  lexical scope where the definition should resolve.
+;;     .ref_value   The value the reference resolves to. References that
+;;                  need to be resolved in this value should connect to
+;;                  this node.
+;;
+;; The nodes available to connect the definitions are:
+;;     .def         The definition. Scopes exposing the definition should
+;;                  create an edge to this node.
+;;     .def_value   The body of this definition. This node should be connected
+;;                  to the definitions that are members of this definition.
+
+[
+    (constant)
+    (identifier)
+    (scope_resolution)
+]@identifier {
+    node @identifier.def_value
+    node @identifier.local_def
+    node @identifier.ref
+    node @identifier.ref_value
+    node @identifier.root_def
+    node @identifier.static_def
+}
+
+;;;; References
+;;;; ``````````
+
+(constant)@constant {
+    node ref
+    attr (ref) node_reference = @constant
+
+    node scope_sep
+    attr (scope_sep) push_symbol = "::"
+
+    edge @constant.ref_value -> ref
+    edge ref -> scope_sep
+    edge scope_sep -> @constant.ref
+}
+
+(identifier)@identifier {
+    node ref
+    attr (ref) node_reference = @identifier
+
+    edge @identifier.ref_value -> ref
+    edge ref -> @identifier.ref
+}
+
+(scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
+    edge @scope_res.ref_value -> @name.ref_value
+    edge @name.ref -> @scope.ref_value
+    edge @scope.ref -> @scope_res.ref
+}
+
+(scope_resolution !scope name:(_)@name)@scope_res {
+    node root_scope
+    attr (root_scope) symbol_reference = "<::>"
+
+    edge @scope_res.ref_value -> @name.ref_value
+    edge @name.ref -> root_scope
+    edge root_scope -> @scope_res.ref
+}
+
+;;;; Definitions
+;;;; ```````````
+
+(constant)@constant {
+    node def
+    attr (def) node_definition = @constant
+
+    node scope_sep
+    attr (scope_sep) pop_symbol = "::"
+
+    edge @constant.static_def -> scope_sep
+    edge scope_sep -> def
+    edge def -> @constant.def_value
+}
+
+(identifier)@identifier {
+    node def
+    attr (def) node_definition = @identifier
+
+    edge @identifier.local_def -> def
+    edge def -> @identifier.def_value
+}
+
+(scope_resolution scope:(_)@scope name:(_)@name)@scope_res {
+    edge @scope_res.root_def -> @scope.root_def
+    edge @scope_res.static_def -> @scope.static_def
+    edge @scope.def_value -> @name.static_def
+    edge @name.def_value -> @scope_res.def_value
+}
+
+(scope_resolution !scope name:(_)@name)@scope_res {
+    edge @scope_res.root_def -> @name.static_def
+    edge @name.def_value -> @scope_res.def_value
+}
+
+;; Comments
+;; ^^^^^^^^
+
+(comment)@comment {
+    node @comment.def_value
+    node @comment.instance_defs
+    node @comment.lexical_scope
+    node @comment.local_def
+    node @comment.local_defs
+    node @comment.ref_value
+    node @comment.root_def
+    node @comment.root_defs
+    node @comment.static_def
+    node @comment.static_defs
+}
