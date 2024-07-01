@@ -1078,6 +1078,10 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   edge @child.lexical_scope -> @expr.lexical_scope
 }
 
+(condition (_) @child) @expr {
+  edge @child.lexical_scope -> @expr.lexical_scope
+}
+
 ;; =============
 ;;  Expressions
 ;; =============
@@ -1107,6 +1111,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (this)
   ; (identifier)
   (parenthesized_expression)
+  (condition)
   (object_creation_expression)
   (field_access)
   (array_access)
