@@ -440,7 +440,7 @@ pub const ROOT_NODE_VAR: &'static str = "ROOT_NODE";
 /// Name of the variable used to pass the jump-to-scope node.
 pub const JUMP_TO_SCOPE_NODE_VAR: &'static str = "JUMP_TO_SCOPE_NODE";
 /// Name of the variable used to pass the file path.
-/// If a root path is given, it should be a descendant the root path.
+/// If a root path is given, it should be a descendant of the root path.
 pub const FILE_PATH_VAR: &'static str = "FILE_PATH";
 /// Name of the variable used to pass the root path.
 /// If given, should be an ancestor of the file path.
@@ -643,12 +643,10 @@ impl<'a> Builder<'a> {
 
         let mut globals = Variables::nested(globals);
 
-        if globals.get(&ROOT_NODE_VAR.into()).is_none() {
-            let root_node = self.inject_node(NodeID::root());
-            globals
-                .add(ROOT_NODE_VAR.into(), root_node.into())
-                .expect("Failed to set ROOT_NODE");
-        }
+        let root_node = self.inject_node(NodeID::root());
+        globals
+            .add(ROOT_NODE_VAR.into(), root_node.into())
+            .unwrap_or_default();
 
         let jump_to_scope_node = self.inject_node(NodeID::jump_to());
         globals

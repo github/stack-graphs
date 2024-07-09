@@ -26,8 +26,7 @@ pub const STACK_GRAPHS_BUILTINS_PATH: &str = "src/builtins.js";
 /// The stack graphs builtins source for this language.
 pub const STACK_GRAPHS_BUILTINS_SOURCE: &str = include_str!("../src/builtins.js");
 
-/// The name of the file path global variable.
-pub const FILE_PATH_VAR: &str = "FILE_PATH";
+/// The name of the project name global variable
 pub const PROJECT_NAME_VAR: &str = "PROJECT_NAME";
 
 pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> LanguageConfiguration {

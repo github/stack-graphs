@@ -33,13 +33,13 @@ glob = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 stack-graphs = { path = "../../stack-graphs" }
-tree-sitter-stack-graphs = { version = "0.8", path = "../../tree-sitter-stack-graphs" }
+tree-sitter-stack-graphs = { path = "../../tree-sitter-stack-graphs" }
 tree-sitter-typescript = "=0.20.2"
 tsconfig = "0.1.0"
 
 [dev-dependencies]
 anyhow = { version = "1.0" }
-tree-sitter-stack-graphs = { version = "0.8", path = "../../tree-sitter-stack-graphs", features = ["cli"] }
+tree-sitter-stack-graphs = { path = "../../tree-sitter-stack-graphs", features = ["cli"] }
 
 [build-dependencies]
 anyhow = { version = "1.0" }
