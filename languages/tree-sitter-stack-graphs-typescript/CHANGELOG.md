@@ -5,11 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v0.3.0 -- unreleased
+## v0.3.0 -- 2024-07-09
 
 ### Added
 
-- Support for TSX. A new language configuration for TSX is available, and TSX is enabled in the CLI next to TypeScript.
+- Support for TSX. A new language configuration for TSX is available with `{try_,}language_configuration_tsx`. TSX is enabled in the CLI next to TypeScript.
+
+### Fixed
+
+- Imports are more robust to the presence of file extensions in the import name.
+
+### Changed
+
+- The functions `{try_,}language_configuration` have been renamed to `{try_,}language_configuration_typescript`.
+
+### Removed
+
+- The `FILE_PATH_VAR` constant has been replaced in favor of `tree_sitter_stack_graphs::FILE_PATH_VAR`.
 
 ## v0.2.0 -- 2024-03-06
 
