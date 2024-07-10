@@ -5,17 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v0.8.2 -- unreleased
+## v0.9.0 -- 2024-07-09
+
+
+### Library
+
+- New crate-level constants `FILE_PATH_VAR` and `ROOT_PATH_VAR` standardize the TSG global variable names to use for the file and root path.
+- The file path variable will only use the filename set in the stack graph if no value was explicitly set.
 
 ### CLI
 
 #### Added
 
 - Tests run faster for languages with builtins sources by caching the partial paths for the builtins.
+- Indexing will set a value for the root path variable that is passed to TSG. The value is based on the directory that was provided on the command line.
 
 #### Changed
 
 - Failure to index a file will not abort indexing anymore, but simply mark the file as failed, as we already do for files with parse errors.
+
+#### Removed
+
+- The NPM distribution has been removed.
 
 ## v0.8.1 -- 2024-03-06
 

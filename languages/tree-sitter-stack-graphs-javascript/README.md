@@ -13,7 +13,7 @@ To use this library, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tree-sitter-stack-graphs-javascript = "0.1"
+tree-sitter-stack-graphs-javascript = "0.2"
 ```
 
 Check out our [documentation](https://docs.rs/tree-sitter-stack-graphs-javascript/*/) for more details on how to use this library.

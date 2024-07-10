@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-stack-graphs"
-version = "0.8.2"
+version = "0.9.0"
 description = "Create stack graphs using tree-sitter parsers"
 homepage = "https://github.com/github/stack-graphs/tree/main/tree-sitter-stack-graphs"
 repository = "https://github.com/github/stack-graphs/"
@@ -69,7 +69,7 @@ regex = "1"
 rust-ini = "0.18"
 serde_json = { version="1.0", optional=true }
 sha1 = { version="0.10", optional=true }
-stack-graphs = { version="0.13", path="../stack-graphs" }
+stack-graphs = { path="../stack-graphs" }
 thiserror = "1.0"
 time = { version = "0.3", optional = true }
 tokio = { version = "1.26", optional = true, features = ["io-std", "rt", "rt-multi-thread"] }
