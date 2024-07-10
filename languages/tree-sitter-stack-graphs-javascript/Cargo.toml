@@ -30,10 +30,10 @@ anyhow = { version = "1.0", optional = true }
 clap = { version = "4", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-stack-graphs = { path = "../../stack-graphs" }
+stack-graphs = { version = "0.14", path = "../../stack-graphs" } # explicit version is required to be able to publish crate
 tree-sitter-graph = "0.11.2"
 tree-sitter-javascript = "=0.20.4"
-tree-sitter-stack-graphs = { path = "../../tree-sitter-stack-graphs" }
+tree-sitter-stack-graphs = { version = "0.9", path = "../../tree-sitter-stack-graphs" } # explicit version is required to be able to publish crate
 
 [dev-dependencies]
 anyhow = "1.0"

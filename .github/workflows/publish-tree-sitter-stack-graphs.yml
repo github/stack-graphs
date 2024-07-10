@@ -29,31 +29,6 @@ jobs:
         working-directory: ${{ env.CRATE_DIR }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  publish-npm:
-    needs: publish-crate
-    runs-on: ubuntu-latest
-    env:
-      PACKAGE_DIR: './tree-sitter-stack-graphs/npm'
-    steps:
-      - name: Install Node environment
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16.x
-          registry-url: 'https://registry.npmjs.org'
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # TODO Verify the package version matches the tag
-      - name: Install dependencies
-        run: npm install
-        working-directory: ${{ env.PACKAGE_DIR }}
-      - name: Verify package
-        run: npm publish --dry-run
-        working-directory: ${{ env.PACKAGE_DIR }}
-      - name: Publish package
-        run: npm publish
-        working-directory: ${{ env.PACKAGE_DIR }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
   create-release:
     needs: publish-crate
     runs-on: ubuntu-latest
