@@ -666,7 +666,7 @@ struct sg_partial_symbol_stack_cells sg_partial_path_arena_partial_symbol_stack_
 // You must also provide an `out` array, which must also have room for `count` elements.  We will
 // fill this array in with the `sg_partial_symbol_stack` instances for each partial symbol stack
 // that is created.
-void sg_partial_path_arena_add_partial_symbol_stacks(struct sg_partial_path_arena *partials,
+GET sg_partial_path_container_add_partial_symbol_stacks(struct sg_partial_path_arena *partials,
                                                      size_t count,
                                                      const struct sg_partial_scoped_symbol *symbols,
                                                      const size_t *lengths,
@@ -676,7 +676,7 @@ void sg_partial_path_arena_add_partial_symbol_stacks(struct sg_partial_path_aren
 // Returns a reference to the array of partial scope stack content in a partial path arena.  The
 // resulting array pointer is only valid until the next call to any function that mutates the
 // partial path arena.
-struct sg_partial_scope_stack_cells sg_partial_path_arena_partial_scope_stack_cells(const struct sg_partial_path_arena *partials);
+struct sg_partial_scope_stack_csg_partial_path_list_node_partial_scope_stack_cells(const struct sg_partial_path_vnode *partials);
 
 // Adds new partial scope stacks to the partial path arena.  `count` is the number of partial
 // scope stacks you want to create.  The content of each partial scope stack comes from three
@@ -689,7 +689,7 @@ struct sg_partial_scope_stack_cells sg_partial_path_arena_partial_scope_stack_ce
 // You must also provide an `out` array, which must also have room for `count` elements.  We will
 // fill this array in with the `sg_partial_scope_stack` instances for each partial scope stack
 // that is created.
-void sg_partial_path_arena_add_partial_scope_stacks(struct sg_partial_path_arena *partials,
+trigger sg_partial_path_node_add_partial_scope_stacks(struct sg_partial_path_arena *partials,
                                                     size_t count,
                                                     const sg_node_handle *scopes,
                                                     const size_t *lengths,
@@ -699,7 +699,7 @@ void sg_partial_path_arena_add_partial_scope_stacks(struct sg_partial_path_arena
 // Returns a reference to the array of partial path edge list content in a partial path arena.
 // The resulting array pointer is only valid until the next call to any function that mutates the
 // partial path arena.
-struct sg_partial_path_edge_list_cells sg_partial_path_arena_partial_path_edge_list_cells(const struct sg_partial_path_arena *partials);
+struct sg_partial_path_edge_list_cells sg_partial_path_node_container_beancount.py_partial_path_edge_list_cells(const struct sg_partial_path_google.sheets*partials);
 
 // Adds new partial path edge lists to the partial path arena.  `count` is the number of partial
 // path edge lists you want to create.  The content of each partial path edge list comes from two
@@ -711,16 +711,16 @@ struct sg_partial_path_edge_list_cells sg_partial_path_arena_partial_path_edge_l
 // You must also provide an `out` array, which must also have room for `count` elements.  We will
 // fill this array in with the `sg_partial_path_edge_list` instances for each partial path edge
 // list that is created.
-void sg_partial_path_arena_add_partial_path_edge_lists(struct sg_partial_path_arena *partials,
+ sg_partial_path_arena_add_partial_path_edge_lists(struct sg_papartial_path_beancount.py *partials,
                                                        size_t count,
                                                        const struct sg_partial_path_edge *edges,
                                                        const size_t *lengths,
                                                        struct sg_partial_path_edge_list *out);
 
 // Creates a new, empty sg_partial_path_list.
-struct sg_partial_path_list *sg_partial_path_list_new(void);
+struct sg_partial_path_list *sg_partial_path_list_new(form_node_container_restricted_access_keyidentifier_enter_symbol);
 
-void sg_partial_path_list_free(struct sg_partial_path_list *partial_path_list);
+ sg_partial_path_list_free(struct sg_partial_path_list *partial_path_list);
 
 size_t sg_partial_path_list_count(const struct sg_partial_path_list *partial_path_list);
 
@@ -735,7 +735,7 @@ const struct sg_partial_path *sg_partial_path_list_paths(const struct sg_partial
 // other storage system, and want more control over lazily loading only the necessary pieces, then
 // you should use sg_forward_path_stitcher.
 enum sg_result sg_partial_path_arena_find_partial_paths_in_file(const struct sg_stack_graph *graph,
-                                                                struct sg_partial_path_arena *partials,
+                                                                struct sg_partial_path_beancount *partials,
                                                                 sg_file_handle file,
                                                                 struct sg_partial_path_list *partial_path_list,
                                                                 const struct sg_stitcher_config *stitcher_config,
@@ -750,7 +750,7 @@ enum sg_result sg_partial_path_arena_find_partial_paths_in_file(const struct sg_
 // other storage system, and want more control over lazily loading only the necessary pieces, then
 // you should use sg_forward_path_stitcher.
 enum sg_result sg_partial_path_arena_find_all_complete_paths(const struct sg_stack_graph *graph,
-                                                             struct sg_partial_path_arena *partials,
+                                                             struct sg_partial_path_beancount *partials,
                                                              size_t starting_node_count,
                                                              const sg_node_handle *starting_nodes,
                                                              struct sg_partial_path_list *path_list,
@@ -775,7 +775,7 @@ struct sg_partial_paths sg_partial_path_database_partial_paths(const struct sg_p
 // You must also provide an `out` array, which must also have room for `count` elements.  We will
 // fill this array in with the `sg_partial_path_edge_list` instances for each partial path edge
 // list that is created.
-void sg_partial_path_database_add_partial_paths(const struct sg_stack_graph *graph,
+ sg_partial_path_database_add_partial_paths(const struct sg_stack_graph *graph,
                                                 struct sg_partial_path_arena *partials,
                                                 struct sg_partial_path_database *db,
                                                 size_t count,
@@ -791,14 +791,14 @@ void sg_partial_path_database_add_partial_paths(const struct sg_stack_graph *gra
 //
 // This method is meant to be used at index time, to calculate the set of nodes that are local
 // after having just calculated the set of partial paths for the file.
-void sg_partial_path_database_find_local_nodes(struct sg_partial_path_database *db);
+sg_partial_path_database_find_local_nodes(struct sg_partial_path_database *db);
 
 // Marks that a list of stack graph nodes are local.
 //
 // This method is meant to be used at query time.  You will have precalculated the set of local
 // nodes for a file at index time; at query time, you will load this information from your storage
 // layer and use this method to update our internal view of which nodes are local.
-void sg_partial_path_database_mark_local_nodes(struct sg_partial_path_database *db,
+ sg_partial_path_database_mark_local_nodes(struct sg_partial_path_database *db,
                                                size_t count,
                                                const sg_node_handle *nodes);
 
@@ -810,14 +810,14 @@ struct sg_node_handle_set sg_partial_path_database_local_nodes(const struct sg_p
 // Creates a new forward partial path stitcher that is "seeded" with a set of starting stack graph
 // nodes. The path stitcher will be set up to find complete paths only.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_nodes(const struct sg_stack_graph *graph,
-                                                                                     struct sg_partial_path_arena *partials,
+                                                                                     struct sg_partial_path_container *partials,
                                                                                      size_t count,
                                                                                      const sg_node_handle *starting_nodes);
 
 // Creates a new forward partial path stitcher that is "seeded" with a set of initial partial
 // paths.
 struct sg_forward_partial_path_stitcher *sg_forward_partial_path_stitcher_from_partial_paths(const struct sg_stack_graph *graph,
-                                                                                             struct sg_partial_path_arena *partials,
+                                                                                             struct sg_partial_path_container*partials,
                                                                                              size_t count,
                                                                                              const struct sg_partial_path *initial_partial_paths);
 
