@@ -3189,7 +3189,12 @@ inherit .containing_class_value
 ;; ##### Member Expressions
 
 (member_expression
-  (_)@object . (_)@property)@member_expr
+  .
+  (_)@object
+  (_)? ; '?.' `optional_chain` operator
+  (_)@property
+  .
+)@member_expr
 {
 
     node member_push

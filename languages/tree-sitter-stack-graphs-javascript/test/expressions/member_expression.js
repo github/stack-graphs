@@ -16,3 +16,8 @@ let x = 1;
 
 /**/ x;
 //   ^ defined: 1
+
+// Optional chain
+
+/**/ x?.foo
+//   ^ defined: 1
