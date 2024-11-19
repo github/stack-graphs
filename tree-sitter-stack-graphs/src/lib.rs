@@ -653,6 +653,13 @@ impl<'a> Builder<'a> {
             .add(JUMP_TO_SCOPE_NODE_VAR.into(), jump_to_scope_node.into())
             .expect("Failed to set JUMP_TO_SCOPE_NODE");
 
+        if globals.get(&FILE_PATH_VAR.into()).is_none() {
+            let file_name = self.stack_graph[self.file].to_string();
+            globals
+                .add(FILE_PATH_VAR.into(), file_name.into())
+                .expect("Failed to set FILE_PATH");
+        }
+
         let mut config = ExecutionConfig::new(&self.sgl.functions, &globals)
             .lazy(true)
             .debug_attributes(
