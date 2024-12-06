@@ -3189,27 +3189,22 @@ inherit .containing_class_value
 ;; ##### Member Expressions
 
 (member_expression
-  .
-  (_)@object
-  (optional_chain)? ; '?.' operator
-  (_)@property
-  .
-)@member_expr
-{
-
-    node member_push
-    node property_push
+  object:(_)@object
+  property:(_)@property
+)@member_expr {
+  node member_push
+  node property_push
 
   ; scopes flow into object then back out
   edge @object.before_scope -> @member_expr.before_scope
   edge @member_expr.after_scope -> @object.after_scope
 
   ; value is a member projection on the value of the object ie. a push then push dot
-    attr (member_push) push_symbol = "GUARD:MEMBER"
-    attr (property_push) node_reference = @property
-    edge property_push -> member_push
-    edge @member_expr.value -> property_push
-    edge member_push -> @object.value
+  attr (member_push) push_symbol = "GUARD:MEMBER"
+  attr (property_push) node_reference = @property
+  edge property_push -> member_push
+  edge @member_expr.value -> property_push
+  edge member_push -> @object.value
 
   ; (member_expression) nodes can occur in patterns
   node @member_expr.covalue
