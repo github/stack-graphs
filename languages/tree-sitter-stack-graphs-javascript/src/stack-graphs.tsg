@@ -3191,7 +3191,7 @@ inherit .containing_class_value
 (member_expression
   .
   (_)@object
-  (_)? ; '?.' `optional_chain` operator
+  (optional_chain)? ; '?.' operator
   (_)@property
   .
 )@member_expr
