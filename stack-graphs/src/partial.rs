@@ -2631,4 +2631,24 @@ impl PartialPaths {
         self.partial_scope_stacks.clear();
         self.partial_path_edges.clear();
     }
+
+    pub fn save_checkpoint(&self) -> PartialPathsCheckpoint {
+        PartialPathsCheckpoint {
+            partial_symbol_stacks_len: self.partial_symbol_stacks.len(),
+            partial_scope_stacks_len: self.partial_scope_stacks.len(),
+            partial_path_edges_len: self.partial_path_edges.len(),
+        }
+    }
+
+    pub fn restore_checkpoint(&mut self, checkpoint: PartialPathsCheckpoint) {
+        self.partial_symbol_stacks.truncate(checkpoint.partial_symbol_stacks_len);
+        self.partial_scope_stacks.truncate(checkpoint.partial_scope_stacks_len);
+        self.partial_path_edges.truncate(checkpoint.partial_path_edges_len);
+    }
+}
+
+pub struct PartialPathsCheckpoint {
+    partial_symbol_stacks_len: usize,
+    partial_scope_stacks_len: usize,
+    partial_path_edges_len: usize,
 }

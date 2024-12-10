@@ -188,6 +188,10 @@ impl<T> Arena<T> {
         self.items.truncate(1);
     }
 
+    pub(crate) fn truncate(&mut self, new_len: usize) {
+        self.items.truncate(new_len);
+    }
+
     /// Adds a new instance to this arena, returning a stable handle to it.
     ///
     /// Note that we do not deduplicate instances of `T` in any way.  If you add two instances that
