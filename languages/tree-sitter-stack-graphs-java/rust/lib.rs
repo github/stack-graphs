@@ -25,7 +25,7 @@ pub fn try_language_configuration(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
     LanguageConfiguration::from_sources(
-        tree_sitter_java::language(),
+        tree_sitter_java::LANGUAGE.into(),
         Some(String::from("source.java")),
         None,
         vec![String::from("java")],

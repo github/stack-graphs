@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-stack-graphs-javascript"
-version = "0.2.0"
+version = "0.3.0"
 description = "Stack graphs definition for JavaScript using tree-sitter-javascript"
 readme = "README.md"
 keywords = ["tree-sitter", "stack-graphs", "javascript"]
@@ -31,9 +31,9 @@ clap = { version = "4", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 stack-graphs = { version = "0.14", path = "../../stack-graphs" } # explicit version is required to be able to publish crate
-tree-sitter-graph = "0.11.2"
-tree-sitter-javascript = "=0.20.4"
-tree-sitter-stack-graphs = { version = "0.9", path = "../../tree-sitter-stack-graphs" } # explicit version is required to be able to publish crate
+tree-sitter-graph = "0.12"
+tree-sitter-javascript = "=0.23.1"
+tree-sitter-stack-graphs = { version = "0.10", path = "../../tree-sitter-stack-graphs" } # explicit version is required to be able to publish crate
 
 [dev-dependencies]
 anyhow = "1.0"

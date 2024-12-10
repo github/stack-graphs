@@ -324,7 +324,7 @@
 //!   import sys
 //!   print(sys.path)
 //! "#;
-//! let grammar = tree_sitter_python::language();
+//! let grammar = tree_sitter_python::LANGUAGE.into();
 //! let tsg_source = STACK_GRAPH_RULES;
 //! let mut language = StackGraphLanguage::from_str(grammar, tsg_source)?;
 //! let mut stack_graph = StackGraph::new();
@@ -479,7 +479,7 @@ impl StackGraphLanguage {
         language: tree_sitter::Language,
         tsg_source: &str,
     ) -> Result<StackGraphLanguage, LanguageError> {
-        let tsg = tree_sitter_graph::ast::File::from_str(language, tsg_source)?;
+        let tsg = tree_sitter_graph::ast::File::from_str(language.clone(), tsg_source)?;
         Ok(StackGraphLanguage {
             language,
             tsg,
@@ -518,8 +518,8 @@ impl StackGraphLanguage {
         &mut self.functions
     }
 
-    pub fn language(&self) -> tree_sitter::Language {
-        self.language
+    pub fn language(&self) -> &tree_sitter::Language {
+        &self.language
     }
 
     /// Returns the original TSG path, if it was provided at construction or set with
@@ -624,7 +624,7 @@ impl<'a> Builder<'a> {
     ) -> Result<(), BuildError> {
         let tree = {
             let mut parser = Parser::new();
-            parser.set_language(self.sgl.language)?;
+            parser.set_language(&self.sgl.language)?;
             let ts_cancellation_flag = TreeSitterCancellationFlag::from(cancellation_flag);
             // The parser.set_cancellation_flag` is unsafe, because it does not tie the
             // lifetime of the parser to the lifetime of the cancellation flag in any way.

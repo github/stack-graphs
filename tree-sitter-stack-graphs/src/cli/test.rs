@@ -432,7 +432,7 @@ impl TestArgs {
             .add_from_graph(&lc.builtins)
             .map_err(|h| anyhow!("Duplicate builtin file {}", &graph[h]))?;
         let files = files.into_iter().collect::<HashSet<_>>();
-        match cache.entry(lc.language) {
+        match cache.entry(lc.language.clone()) {
             Entry::Occupied(o) => {
                 o.get().load_into(graph, partials, db)?;
             }

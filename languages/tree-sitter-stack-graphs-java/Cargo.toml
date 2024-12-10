@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-stack-graphs-java"
-version = "0.4.0"
+version = "0.5.0"
 description = "Stack graphs for the Java programming language"
 
 homepage = "https://github.com/github/stack-graphs/tree/main/languages/tree-sitter-stack-graphs-java"
@@ -40,8 +40,8 @@ cli = ["anyhow", "clap", "tree-sitter-stack-graphs/cli"]
 [dependencies]
 anyhow = { version = "1.0", optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
-tree-sitter-java = { version = "=0.20.2" }
-tree-sitter-stack-graphs = { version = "0.9", path = "../../tree-sitter-stack-graphs" } # explicit version is required to be able to publish crate
+tree-sitter-java = { version = "=0.23.4" }
+tree-sitter-stack-graphs = { version = "0.10", path = "../../tree-sitter-stack-graphs" } # explicit version is required to be able to publish crate
 
 [dev-dependencies]
 anyhow = { version = "1.0" }

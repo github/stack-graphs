@@ -67,7 +67,7 @@ impl PathLoaderArgs {
                 builtins_paths,
             )?
         } else {
-            let loader_config = TsConfig::load()
+            let loader_config = TsConfig::load(None)
                 .and_then(|v| v.get())
                 .map_err(LoadError::TreeSitter)?;
             Loader::from_tree_sitter_configuration(

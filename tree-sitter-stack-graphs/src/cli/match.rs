@@ -49,7 +49,7 @@ impl MatchArgs {
             None => return Err(anyhow!("No stack graph language found")),
         };
         let source = file_reader.get(&self.source_path)?;
-        let tree = parse(lc.language, &self.source_path, source)?;
+        let tree = parse(&lc.language, &self.source_path, source)?;
         if self.stanza.is_empty() {
             lc.sgl.tsg.try_visit_matches(&tree, source, true, |mat| {
                 print_matches(lc.sgl.tsg_path(), &self.source_path, source, mat)

@@ -9,6 +9,7 @@ use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use stack_graphs::graph::StackGraph;
 use std::path::PathBuf;
+use tree_sitter::Language;
 use tree_sitter_stack_graphs::loader::FileAnalyzers;
 use tree_sitter_stack_graphs::loader::LanguageConfiguration;
 use tree_sitter_stack_graphs::loader::Loader;
@@ -25,10 +26,10 @@ static TSG: Lazy<String> = Lazy::new(|| {
 
 #[test]
 fn can_load_from_provided_language_configuration() {
-    let language = tree_sitter_python::language();
-    let sgl = StackGraphLanguage::from_str(language, &TSG).unwrap();
+    let language: Language = tree_sitter_python::LANGUAGE.into();
+    let sgl = StackGraphLanguage::from_str(language.clone(), &TSG).unwrap();
     let lc = LanguageConfiguration {
-        language: language,
+        language: language.clone(),
         scope: Some("source.py".into()),
         content_regex: None,
         file_types: vec!["py".into()],
@@ -43,10 +44,10 @@ fn can_load_from_provided_language_configuration() {
     let tsl = loader
         .load_tree_sitter_language_for_file(&PATH, &mut None)
         .expect("Expected loading tree-sitter language to succeed");
-    assert_eq!(tsl, Some(language));
+    assert_eq!(tsl, Some(&language));
 
     let lc = loader
         .load_for_file(&PATH, &mut None, &NoCancellation)
         .expect("Expected loading stack graph language to succeed");
-    assert_eq!(lc.primary.map(|lc| lc.language), Some(language));
+    assert_eq!(lc.primary.map(|lc| &lc.language), Some(&language));
 }

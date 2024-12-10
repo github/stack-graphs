@@ -29,7 +29,7 @@ pub fn try_language_configuration(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
     LanguageConfiguration::from_sources(
-        tree_sitter_python::language(),
+        tree_sitter_python::LANGUAGE.into(),
         Some(String::from("source.py")),
         None,
         vec![String::from("py")],
