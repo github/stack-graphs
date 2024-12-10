@@ -2435,7 +2435,7 @@ inherit .containing_class_value
 
 [
   (primary_expression/identifier)@variable
-  (member_expression . (identifier)@variable)
+  (member_expression object:(identifier)@variable)
 ] {
   ; value is a lookup, ie a push
   attr (@variable.value) node_reference = @variable
@@ -3189,7 +3189,7 @@ inherit .containing_class_value
 ;; ##### Member Expressions
 
 (member_expression
-  (_)@object . (_)@property)@member_expr
+  object:(_)@object property:(_)@property)@member_expr
 {
 
     node member_push
