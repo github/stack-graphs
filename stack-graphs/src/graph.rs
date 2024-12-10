@@ -1334,7 +1334,10 @@ impl StackGraph {
 
     /// Returns the number of edges that end at a particular sink node.
     pub fn incoming_edge_degree(&self, sink: Handle<Node>) -> Degree {
-        self.incoming_edges[sink]
+        self.incoming_edges
+            .get(sink)
+            .cloned()
+            .unwrap_or(Degree::Zero)
     }
 }
 
