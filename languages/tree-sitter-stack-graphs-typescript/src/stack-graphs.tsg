@@ -627,16 +627,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (import_statement "type"?@is_type (import_clause (named_imports (import_specifier name:(_)@name))@clause))
 ] {
 if none @is_type {
-  node @name.expr_def
-  node @name.expr_def__ns
-  node @name.expr_ref
-  node @name.expr_ref__ns
-
-  ; expr reference
-  attr (@name.expr_ref) node_reference = @name
-  edge @name.expr_ref -> @name.expr_ref__ns
-  ;
-  attr (@name.expr_ref__ns) push_symbol = "%E"
   edge @name.expr_ref__ns -> @clause.lexical_scope
 }
 }
@@ -646,6 +636,9 @@ if none @is_type {
   (import_statement "type"?@is_type (import_clause (named_imports (import_specifier name:(_)@name !alias))@clause))
 ] {
 if none @is_type {
+  node @name.expr_def
+  node @name.expr_def__ns
+
   ; expr definition
   edge @clause.defs -> @name.expr_def__ns ; FIXME defs, lexical_defs?
   ;
@@ -664,7 +657,6 @@ if none @is_type {
 if none @is_type {
   node @alias.expr_def
   node @alias.expr_def__ns
-  node @alias.expr_ref
 
   ; expr definition
   edge @clause.defs -> @alias.expr_def__ns
@@ -2340,6 +2332,12 @@ if none @is_async {
   (ambient_declaration (module                  name:(string)    @name))
   ; X._
   (nested_identifier                          object:(identifier)@name)
+  ; _.X._
+  (member_expression                          object:(identifier)@name)
+  ; _.X
+  (nested_identifier                        property:(_)@name)
+  ; _._.X
+  (member_expression                        property:(_)@name)
 ] {
   node @name.expr_def
   node expr_def_typeof
@@ -2362,7 +2360,10 @@ if none @is_async {
   edge @name.type_def -> @name.type_def_member
 }
 
-(nested_identifier object:(_)@mod) @nested {
+[
+  (nested_identifier object:(_)@mod)
+  (member_expression object:[(member_expression) (identifier)]@mod)
+]@nested {
   node @nested.expr_def
   node @nested.type_def
 
@@ -2370,12 +2371,18 @@ if none @is_async {
   edge @nested.type_def -> @mod.type_def
 }
 
-(nested_identifier object:(_)@mod property:(_)@name) {
+[
+  (nested_identifier object:(_)@mod                                property:(_)@name)
+  (member_expression object:[(member_expression) (identifier)]@mod property:(_)@name)
+] {
   edge @mod.expr_def_member -> @name.expr_def
   edge @mod.type_def_member -> @name.type_def
 }
 
-(nested_identifier property:(_)@name)@nested {
+[
+  (nested_identifier property:(_)@name)
+  (member_expression property:(_)@name)
+]@nested {
   node @nested.expr_def_member
   node @nested.type_def_member
 
@@ -2782,105 +2789,13 @@ if none @is_async {
 
 ; x;
 
-[
-  (primary_expression/identifier)@name
-  ; FIXME expansion of _lhs_expression/identifier and _augmented_assignment_lhs
-  (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
-  (assignment_expression left:(identifier)@name)
-  (augmented_assignment_expression left:(identifier)@name)
-  (asserts (identifier)@name)
-  (type_predicate name:(identifier)@name)
-  ; FIXME type_query has its own restricted expression production
-  ;       we need to do this for every (identifier) inside a type query
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (type_query (identifier)@name)
-  (type_query (member_expression object:(identifier)@name))
-  (type_query (member_expression object:(member_expression object:(identifier)@name)))
-  (type_query (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (subscript_expression object:(identifier)@name))
-  (type_query (subscript_expression object:(member_expression object:(identifier)@name)))
-  (type_query (subscript_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(identifier)@name))
-  (type_query (call_expression function:(member_expression object:(identifier)@name)))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  (type_query (call_expression function:(subscript_expression object:(identifier)@name)))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  ; FIXME decorator has its own restricted expression production
-  ;       we need to do this for every (identifier) inside a decorator
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (decorator (identifier)@name)
-  (decorator (member_expression object:(identifier)@name))
-  (decorator (member_expression object:(member_expression object:(identifier)@name)))
-  (decorator (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(identifier)@name))
-  (decorator (call_expression function:(member_expression object:(identifier)@name)))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-; #dialect tsx
-  (nested_identifier object:(_)@name)
-  (nested_type_identifier module:(nested_identifier)@name)
-  (internal_module name:(_)@name)
-  (jsx_opening_element name: (_)@name)
-  (jsx_closing_element name: (_)@name)
-  (jsx_self_closing_element name: (_)@name)
-; #end
-] {
-if none @is_def {
+(identifier)@name {
   node @name.cotype
   node @name.lexical_defs
   node @name.lexical_scope
   node @name.type
   node @name.var_defs
-}
-}
 
-[
-  (primary_expression/identifier)@name
-  (decorator (identifier)@name)
-  ; FIXME expansion of _lhs_expression/identifier and _augmented_assignment_lhs
-  ;       we need to do this for every (identifier) inside a type query
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
-  (assignment_expression left:(identifier)@name)
-  (augmented_assignment_expression left:(identifier)@name)
-  (asserts (identifier)@name)
-  (type_predicate name:(identifier)@name)
-  ; FIXME type_query has its own restricted expression production
-  (type_query (identifier)@name)
-  (type_query (member_expression object:(identifier)@name))
-  (type_query (member_expression object:(member_expression object:(identifier)@name)))
-  (type_query (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (subscript_expression object:(identifier)@name))
-  (type_query (subscript_expression object:(member_expression object:(identifier)@name)))
-  (type_query (subscript_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(identifier)@name))
-  (type_query (call_expression function:(member_expression object:(identifier)@name)))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  (type_query (call_expression function:(subscript_expression object:(identifier)@name)))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  ; FIXME decorator has its own restricted expression production
-  ;       we need to do this for every (identifier) inside a decorator
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (decorator                           (identifier)@name)
-  (decorator (member_expression object:(identifier)@name))
-  (decorator (member_expression object:(member_expression object:(identifier)@name)))
-  (decorator (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(identifier)@name))
-  (decorator (call_expression function:(member_expression object:(identifier)@name)))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-; #dialect tsx
-; (nested_identifier object:(identifier)@name property:(identifier)) ; to pick up foo in JSX: <foo.bar.baz /> ; FIXME never matched
-  (jsx_opening_element name: (identifier)@name)
-  (jsx_closing_element name: (identifier)@name)
-  (jsx_self_closing_element name: (identifier)@name)
-; #end
-] {
-if none @is_def {
   node @name.expr_ref
   node @name.expr_ref__ns
   node @name.expr_ref__typeof
@@ -2898,7 +2813,67 @@ if none @is_def {
   attr (@name.expr_ref__typeof) push_symbol = ":"
   edge @name.expr_ref__typeof -> @name.expr_ref
 }
-}
+
+; [
+;   (primary_expression/identifier)@name
+;   ; FIXME expansion of _lhs_expression/identifier and _augmented_assignment_lhs
+;   ;       we need to do this for every (identifier) inside a type query
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
+;   (assignment_expression left:(identifier)@name)
+;   (augmented_assignment_expression left:(identifier)@name)
+;   (asserts (identifier)@name)
+;   (type_predicate name:(identifier)@name)
+;   ; FIXME type_query has its own restricted expression production
+;   ;       we need to do this for every (identifier) inside a type query
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (type_query (identifier)@name)
+;   (type_query (member_expression object:(identifier)@name))
+;   (type_query (member_expression object:(member_expression object:(identifier)@name)))
+;   (type_query (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (subscript_expression object:(identifier)@name))
+;   (type_query (subscript_expression object:(member_expression object:(identifier)@name)))
+;   (type_query (subscript_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (call_expression function:(identifier)@name))
+;   (type_query (call_expression function:(member_expression object:(identifier)@name)))
+;   (type_query (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+;   (type_query (call_expression function:(subscript_expression object:(identifier)@name)))
+;   (type_query (call_expression function:(subscript_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (call_expression function:(subscript_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+;   ; FIXME decorator has its own restricted expression production
+;   ;       we need to do this for every (identifier) inside a decorator
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (decorator (identifier)@name)
+;   (decorator (member_expression object:(identifier)@name))
+;   (decorator (member_expression object:(member_expression object:(identifier)@name)))
+;   (decorator (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+;   (decorator (call_expression function:(identifier)@name))
+;   (decorator (call_expression function:(member_expression object:(identifier)@name)))
+;   (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
+;   (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+;   ; FIXME nested_identifier has its own restricted expression production
+;   ;       we need to do this for every (identifier) inside a decorator
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (nested_identifier object:(identifier)@name)
+;   (nested_identifier object:(member_expression object:(identifier)@name))
+;   (nested_identifier object:(member_expression object:(member_expression object:(identifier)@name)))
+;   (nested_identifier object:(member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+; ; #dialect tsx
+;   (jsx_opening_element name: (identifier)@name)
+;   (jsx_closing_element name: (identifier)@name)
+;   (jsx_self_closing_element name: (identifier)@name)
+; ; #end
+; ] {
+; if none @is_def {
+; ; node @name.cotype
+; ; node @name.lexical_defs
+; ; node @name.lexical_scope
+; ; node @name.type
+; ; node @name.var_defs
+
+; }
+; }
 
 
 
@@ -3551,12 +3526,10 @@ if none @is_async {
 ; (member_expression (identifier) (property_identifier))
 ; (subscript_expression (identifier) (string))
 
-[
-  (member_expression object:(_)@object property:(_)@prop)@member_expr
-; #dialect tsx
-; (nested_identifier object:(_)@object property:(identifier)@prop)@member_expr ; FIXME this never matched anything!
-; #end
- ] {
+(member_expression
+  object:(_)@object
+  property:(_)@prop
+)@member_expr {
   node @member_expr.member
   node @prop.expr_ref
   node @prop.expr_ref__typeof
@@ -3577,7 +3550,6 @@ if none @is_async {
   attr (@prop.expr_ref__typeof) push_symbol = ":"
   edge @prop.expr_ref__typeof -> @prop.expr_ref
 }
-
 
 (subscript_expression
   object: (_)@object
@@ -4156,16 +4128,6 @@ if none @is_async {
   (undefined)
 ]@pat {
   node @pat.defs
-}
-
-[ ; NOTE these are the ones not also variables
-  (for_in_statement ["var" "let" "const"] left:(identifier)@name)
-  (variable_declarator name:(identifier)@name)
-  (pattern/identifier)@name
-  (rest_pattern (identifier)@name)
-] {
-  node @name.cotype
-  node @name.lexical_scope
 }
 
 [
@@ -5603,8 +5565,14 @@ if none @is_acc {
 [
   ; X
   (nested_type_identifier module:(identifier)@name)
-  ; X._, _.X._
+  ; X._
   (nested_identifier object:(identifier)@name)
+  ; _.X._
+  (member_expression object:(identifier)@name)
+  ; _.X
+  (nested_identifier property:(_)@name)
+  ; _._.X
+  (member_expression property:(_)@name)
 ] {
   node @name.type_ref
   attr (@name.type_ref) node_reference = @name
@@ -5615,16 +5583,25 @@ if none @is_acc {
   edge @name.type_ref_member -> @name.type_ref
 }
 
-(nested_identifier object:(_)@mod) @nested {
+[
+  (nested_identifier object:(_)@mod)
+  (member_expression object:[(member_expression) (identifier)]@mod)
+]@nested {
   node @nested.type_ref
   edge @mod.type_ref -> @nested.type_ref
 }
 
-(nested_identifier . (_)@mod . (_)@name .) {
+[
+  (nested_identifier object:(_)@mod                                property:(_)@name)
+  (member_expression object:[(member_expression) (identifier)]@mod property:(_)@name)
+] {
   edge @name.type_ref -> @mod.type_ref_member
 }
 
-(nested_identifier property:(_)@name) @nested {
+[
+  (nested_identifier property:(_)@name)
+  (member_expression property:(_)@name)
+]@nested {
   node @nested.type_ref_member
   edge @nested.type_ref_member -> @name.type_ref_member
 }
