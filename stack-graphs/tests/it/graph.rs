@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 
 use maplit::hashset;
-use stack_graphs::graph::StackGraph;
+use stack_graphs::graph::{Degree, StackGraph};
 
 use crate::test_graphs;
 use crate::test_graphs::CreateStackGraph;
@@ -195,4 +195,23 @@ fn can_add_graph_to_empty_graph() {
                 .sum::<usize>()
         );
     }
+}
+
+#[test]
+fn can_get_incoming_edges() {
+    let mut graph = StackGraph::new();
+    let file = graph.get_or_create_file("test.py");
+    let h1 = graph.internal_scope(file, 0);
+    let h2 = graph.internal_scope(file, 1);
+    let h3 = graph.internal_scope(file, 2);
+    assert_eq!(Degree::Zero, graph.incoming_edge_degree(h1));
+    assert_eq!(Degree::Zero, graph.incoming_edge_degree(h2));
+    assert_eq!(Degree::Zero, graph.incoming_edge_degree(h3));
+    graph.add_edge(h1, h2, 0);
+    graph.add_edge(h3, h2, 0);
+    assert_eq!(Degree::Zero, graph.incoming_edge_degree(h1));
+    assert_eq!(Degree::Multiple, graph.incoming_edge_degree(h2));
+    assert_eq!(Degree::Zero, graph.incoming_edge_degree(h3));
+    graph.add_edge(h3, h1, 0);
+    assert_eq!(Degree::One, graph.incoming_edge_degree(h1));
 }

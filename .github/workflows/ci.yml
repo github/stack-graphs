@@ -29,11 +29,11 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -47,14 +47,20 @@ jobs:
         run: ${{ env.CARGO_HACK }} test
       - name: Run test suite with all optimizations (default features)
         run: cargo test --release
-      - name: Install cargo-valgrind
+      - name: Install valgrind
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
-          cargo install cargo-valgrind
       - name: Run test suite under valgrind (default features)
+        id: valgrind
         # We only need to use valgrind to test the crates that have C bindings.
-        run: cargo valgrind test -p stack-graphs
+        run: script/ci-test-valgrind -p stack-graphs
+      - name: Upload valgrind log
+        if: ${{ failure() && steps.valgrind.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: valgrind logs
+          path: ${{ runner.temp }}/valgrind.log
       - name: Ensure C headers are up to date
         run: |
           script/cbindgen
@@ -73,9 +79,9 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -93,7 +99,7 @@ jobs:
         working-directory: languages
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: List languages
         id: language-list
         run: echo "languages=$(find -mindepth 1 -maxdepth 1 -type d -printf '%P\n' | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
@@ -116,7 +122,7 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -125,7 +131,7 @@ jobs:
           restore-keys: |
             ${{ runner.OS }}-cargo-
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Build (all feature combinations)
         run: cargo hack -p ${{ matrix.language }} --feature-powerset build
       - name: Test (all features)
@@ -146,7 +152,7 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -155,7 +161,7 @@ jobs:
           restore-keys: |
             ${{ runner.OS }}-cargo-
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: Build

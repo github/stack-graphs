@@ -778,7 +778,7 @@ impl ProjectSettings<'_> {
                 cancellation_flag: &dyn CancellationFlag,
             ) -> Result<LanguageConfiguration, LoadError> {{
                 LanguageConfiguration::from_sources(
-                    {}::language(),
+                    {}::LANGUAGE.into(),
                     Some(String::from("source.{}")),
                     None,
                     vec![String::from("{}")],

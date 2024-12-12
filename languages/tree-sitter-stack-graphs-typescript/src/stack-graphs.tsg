@@ -627,16 +627,6 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (import_statement "type"?@is_type (import_clause (named_imports (import_specifier name:(_)@name))@clause))
 ] {
 if none @is_type {
-  node @name.expr_def
-  node @name.expr_def__ns
-  node @name.expr_ref
-  node @name.expr_ref__ns
-
-  ; expr reference
-  attr (@name.expr_ref) node_reference = @name
-  edge @name.expr_ref -> @name.expr_ref__ns
-  ;
-  attr (@name.expr_ref__ns) push_symbol = "%E"
   edge @name.expr_ref__ns -> @clause.lexical_scope
 }
 }
@@ -646,6 +636,9 @@ if none @is_type {
   (import_statement "type"?@is_type (import_clause (named_imports (import_specifier name:(_)@name !alias))@clause))
 ] {
 if none @is_type {
+  node @name.expr_def
+  node @name.expr_def__ns
+
   ; expr definition
   edge @clause.defs -> @name.expr_def__ns ; FIXME defs, lexical_defs?
   ;
@@ -664,7 +657,6 @@ if none @is_type {
 if none @is_type {
   node @alias.expr_def
   node @alias.expr_def__ns
-  node @alias.expr_ref
 
   ; expr definition
   edge @clause.defs -> @alias.expr_def__ns
@@ -1469,6 +1461,8 @@ if none @is_async {
   edge @dec.lexical_scope -> @class_decl.lexical_scope
 }
 
+
+
 ; definitions
 [
   (abstract_class_declaration name:(_)@name)
@@ -1626,6 +1620,7 @@ if none @is_async {
 [
   (abstract_class_declaration body:(_)@body)
   (class_declaration          body:(_)@body)
+  (interface_declaration      body:(_)@body)
 ]@class_decl {
   ; propagate lexical scope
   ; FIXME the static members have access to type variables like this
@@ -1639,16 +1634,6 @@ if none @is_async {
   edge @class_decl.static_type -> @body.static_members
   attr (@class_decl.static_type -> @body.static_members) precedence = 2
 }
-[
-  (interface_declaration      body:(_)@body)
-]@class_decl {
-  ; propagate lexical scope
-  edge @body.lexical_scope -> @class_decl.generic_inner_lexical_scope
-
-  ; interface type equals body type
-  edge @class_decl.generic_inner_type -> @body.type
-}
-
 
 
 ;; Class Body
@@ -1662,23 +1647,35 @@ if none @is_async {
 ;    (public_field_definition)]
 ; )
 
-(class_body)@class_body {
-  node @class_body.lexical_scope
-  node @class_body.type_members
-  node @class_body.static_members
+[
+  (class_body)
+  (interface_body)
+]@body {
+  node @body.lexical_scope
+  node @body.type_members
+  node @body.static_members
 }
 
-(class_body
-  (_)@mem
-)@class_body {
+; decorators
+[
+  (class_body     decorator:(_)@dec)
+]@class_body {
+  ; connect lexical scope
+  edge @dec.lexical_scope -> @class_body.lexical_scope
+}
+
+[
+  (class_body     (_)@mem)
+  (interface_body (_)@mem)
+]@body {
   ; propagate lexical scope
-  edge @mem.lexical_scope -> @class_body.lexical_scope
+  edge @mem.lexical_scope -> @body.lexical_scope
 
   ; body members are member definitions
-  edge @class_body.type_members -> @mem.type_members
+  edge @body.type_members -> @mem.type_members
 
   ; body static members are static member definitions
-  edge @class_body.static_members -> @mem.static_members
+  edge @body.static_members -> @mem.static_members
 }
 
 
@@ -2334,7 +2331,13 @@ if none @is_async {
   (import_statement (import_clause (namespace_import (identifier)@name)))
   (ambient_declaration (module                  name:(string)    @name))
   ; X._
-  (nested_identifier                                 (identifier)@name)
+  (nested_identifier                          object:(identifier)@name)
+  ; _.X._
+  (member_expression                          object:(identifier)@name)
+  ; _.X
+  (nested_identifier                        property:(_)@name)
+  ; _._.X
+  (member_expression                        property:(_)@name)
 ] {
   node @name.expr_def
   node expr_def_typeof
@@ -2357,7 +2360,10 @@ if none @is_async {
   edge @name.type_def -> @name.type_def_member
 }
 
-(nested_identifier . (_) @mod) @nested {
+[
+  (nested_identifier object:(_)@mod)
+  (member_expression object:[(member_expression) (identifier)]@mod)
+]@nested {
   node @nested.expr_def
   node @nested.type_def
 
@@ -2365,12 +2371,18 @@ if none @is_async {
   edge @nested.type_def -> @mod.type_def
 }
 
-(nested_identifier . (_) @mod . (_) @name .) {
+[
+  (nested_identifier object:(_)@mod                                property:(_)@name)
+  (member_expression object:[(member_expression) (identifier)]@mod property:(_)@name)
+] {
   edge @mod.expr_def_member -> @name.expr_def
   edge @mod.type_def_member -> @name.type_def
 }
 
-(nested_identifier (_) @name .) @nested {
+[
+  (nested_identifier property:(_)@name)
+  (member_expression property:(_)@name)
+]@nested {
   node @nested.expr_def_member
   node @nested.type_def_member
 
@@ -2644,7 +2656,7 @@ if none @is_async {
   (call_expression)
   (class)
   (false)
-  (function)
+  (function_expression)
   (generator_function)
   (import)
   (member_expression)
@@ -2777,106 +2789,13 @@ if none @is_async {
 
 ; x;
 
-[
-  (primary_expression/identifier)@name
-  ; FIXME expansion of _lhs_expression/identifier and _augmented_assignment_lhs
-  (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
-  (assignment_expression left:(identifier)@name)
-  (augmented_assignment_expression left:(identifier)@name)
-  (asserts (identifier)@name)
-  (type_predicate name:(identifier)@name)
-  ; FIXME type_query has its own restricted expression production
-  ;       we need to do this for every (identifier) inside a type query
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (type_query (identifier)@name)
-  (type_query (member_expression object:(identifier)@name))
-  (type_query (member_expression object:(member_expression object:(identifier)@name)))
-  (type_query (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (subscript_expression object:(identifier)@name))
-  (type_query (subscript_expression object:(member_expression object:(identifier)@name)))
-  (type_query (subscript_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(identifier)@name))
-  (type_query (call_expression function:(member_expression object:(identifier)@name)))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  (type_query (call_expression function:(subscript_expression object:(identifier)@name)))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  ; FIXME decorator has its own restricted expression production
-  ;       we need to do this for every (identifier) inside a decorator
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (decorator (identifier)@name)
-  (decorator (member_expression object:(identifier)@name))
-  (decorator (member_expression object:(member_expression object:(identifier)@name)))
-  (decorator (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(identifier)@name))
-  (decorator (call_expression function:(member_expression object:(identifier)@name)))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-; #dialect tsx
-  (nested_identifier (identifier)@name)
-  (nested_identifier (nested_identifier)@name)
-  (nested_type_identifier module:(nested_identifier)@name)
-  (internal_module name:(_)@name)
-  (jsx_opening_element name: (_)@name)
-  (jsx_closing_element name: (_)@name)
-  (jsx_self_closing_element name: (_)@name)
-; #end
-] {
-if none @is_def {
+(identifier)@name {
   node @name.cotype
   node @name.lexical_defs
   node @name.lexical_scope
   node @name.type
   node @name.var_defs
-}
-}
 
-[
-  (primary_expression/identifier)@name
-  (decorator (identifier)@name)
-  ; FIXME expansion of _lhs_expression/identifier and _augmented_assignment_lhs
-  ;       we need to do this for every (identifier) inside a type query
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
-  (assignment_expression left:(identifier)@name)
-  (augmented_assignment_expression left:(identifier)@name)
-  (asserts (identifier)@name)
-  (type_predicate name:(identifier)@name)
-  ; FIXME type_query has its own restricted expression production
-  (type_query (identifier)@name)
-  (type_query (member_expression object:(identifier)@name))
-  (type_query (member_expression object:(member_expression object:(identifier)@name)))
-  (type_query (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (subscript_expression object:(identifier)@name))
-  (type_query (subscript_expression object:(member_expression object:(identifier)@name)))
-  (type_query (subscript_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(identifier)@name))
-  (type_query (call_expression function:(member_expression object:(identifier)@name)))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  (type_query (call_expression function:(subscript_expression object:(identifier)@name)))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(identifier)@name))))
-  (type_query (call_expression function:(subscript_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-  ; FIXME decorator has its own restricted expression production
-  ;       we need to do this for every (identifier) inside a decorator
-  ;       this cannot be expressed, so we manually unroll three levels here
-  (decorator                           (identifier)@name)
-  (decorator (member_expression object:(identifier)@name))
-  (decorator (member_expression object:(member_expression object:(identifier)@name)))
-  (decorator (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(identifier)@name))
-  (decorator (call_expression function:(member_expression object:(identifier)@name)))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
-  (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
-; #dialect tsx
-  (nested_identifier (identifier)@name (identifier)) ; to pick up foo in JSX: <foo.bar.baz />
-  (jsx_opening_element name: (identifier)@name)
-  (jsx_closing_element name: (identifier)@name)
-  (jsx_self_closing_element name: (identifier)@name)
-; #end
-] {
-if none @is_def {
   node @name.expr_ref
   node @name.expr_ref__ns
   node @name.expr_ref__typeof
@@ -2894,7 +2813,67 @@ if none @is_def {
   attr (@name.expr_ref__typeof) push_symbol = ":"
   edge @name.expr_ref__typeof -> @name.expr_ref
 }
-}
+
+; [
+;   (primary_expression/identifier)@name
+;   ; FIXME expansion of _lhs_expression/identifier and _augmented_assignment_lhs
+;   ;       we need to do this for every (identifier) inside a type query
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (for_in_statement ["var" "let" "const"]?@is_def left:(identifier)@name)
+;   (assignment_expression left:(identifier)@name)
+;   (augmented_assignment_expression left:(identifier)@name)
+;   (asserts (identifier)@name)
+;   (type_predicate name:(identifier)@name)
+;   ; FIXME type_query has its own restricted expression production
+;   ;       we need to do this for every (identifier) inside a type query
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (type_query (identifier)@name)
+;   (type_query (member_expression object:(identifier)@name))
+;   (type_query (member_expression object:(member_expression object:(identifier)@name)))
+;   (type_query (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (subscript_expression object:(identifier)@name))
+;   (type_query (subscript_expression object:(member_expression object:(identifier)@name)))
+;   (type_query (subscript_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (call_expression function:(identifier)@name))
+;   (type_query (call_expression function:(member_expression object:(identifier)@name)))
+;   (type_query (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+;   (type_query (call_expression function:(subscript_expression object:(identifier)@name)))
+;   (type_query (call_expression function:(subscript_expression object:(member_expression object:(identifier)@name))))
+;   (type_query (call_expression function:(subscript_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+;   ; FIXME decorator has its own restricted expression production
+;   ;       we need to do this for every (identifier) inside a decorator
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (decorator (identifier)@name)
+;   (decorator (member_expression object:(identifier)@name))
+;   (decorator (member_expression object:(member_expression object:(identifier)@name)))
+;   (decorator (member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+;   (decorator (call_expression function:(identifier)@name))
+;   (decorator (call_expression function:(member_expression object:(identifier)@name)))
+;   (decorator (call_expression function:(member_expression object:(member_expression object:(identifier)@name))))
+;   (decorator (call_expression function:(member_expression object:(member_expression object:(member_expression object:(identifier)@name)))))
+;   ; FIXME nested_identifier has its own restricted expression production
+;   ;       we need to do this for every (identifier) inside a decorator
+;   ;       this cannot be expressed, so we manually unroll three levels here
+;   (nested_identifier object:(identifier)@name)
+;   (nested_identifier object:(member_expression object:(identifier)@name))
+;   (nested_identifier object:(member_expression object:(member_expression object:(identifier)@name)))
+;   (nested_identifier object:(member_expression object:(member_expression object:(member_expression object:(identifier)@name))))
+; ; #dialect tsx
+;   (jsx_opening_element name: (identifier)@name)
+;   (jsx_closing_element name: (identifier)@name)
+;   (jsx_self_closing_element name: (identifier)@name)
+; ; #end
+; ] {
+; if none @is_def {
+; ; node @name.cotype
+; ; node @name.lexical_defs
+; ; node @name.lexical_scope
+; ; node @name.type
+; ; node @name.var_defs
+
+; }
+; }
 
 
 
@@ -3259,20 +3238,20 @@ if none @is_def {
 
 ; function (x) {};
 
-; (function
+; (function_expression
 ;   (formal_parameters (identifier))
 ;   (statement_block))
 
 ; this captures the parameters
-; (function
+; (function_expression
 ;   parameters: (_)@params)
 
 ; this captures the body
-; (function
+; (function_expression
 ;   body:(_)@body)@function
 
 ; functions with names
-; (function
+; (function_expression
 ;   name:(_)@name
 ;   parameters:(_)@call_sig)@fun {
 ; }
@@ -3307,7 +3286,7 @@ if none @is_def {
 ; }
 
 [
-  (function)
+  (function_expression)
   (arrow_function)
   (generator_function)
 ]@fun {
@@ -3334,9 +3313,9 @@ if none @is_def {
 }
 
 [
-  (function           parameters:(_)@call_sig)
-  (arrow_function     parameters:(_)@call_sig)
-  (generator_function parameters:(_)@call_sig)
+  (function_expression parameters:(_)@call_sig)
+  (arrow_function      parameters:(_)@call_sig)
+  (generator_function  parameters:(_)@call_sig)
 ]@fun {
   ; propagate lexical scope
   edge @call_sig.lexical_scope -> @fun.lexical_scope
@@ -3385,9 +3364,9 @@ if none @is_def {
 }
 
 [
-  (function           body:(_)@body)
-  (arrow_function     body:(_)@body)
-  (generator_function body:(_)@body)
+  (function_expression body:(_)@body)
+  (arrow_function      body:(_)@body)
+  (generator_function  body:(_)@body)
 ]@fun {
   ; propagate lexical scope
   edge @body.lexical_scope -> @fun.lexical_scope
@@ -3396,8 +3375,8 @@ if none @is_def {
 ;;;; specified return type
 
 [
-  (function return_type:(_)@return_type)
-  (arrow_function return_type:(_)@return_type)
+  (function_expression return_type:(_)@return_type)
+  (arrow_function      return_type:(_)@return_type)
 ]@fun {
   ; propagate lexical scope
   edge @return_type.lexical_scope -> @fun.lexical_scope
@@ -3409,8 +3388,8 @@ if none @is_def {
 ;;;; inferred return type
 
 [
-  (function       "async"?@is_async !return_type body:(_)@body)
-  (arrow_function "async"?@is_async !return_type body:(statement_block)@body)
+  (function_expression "async"?@is_async !return_type body:(_)@body)
+  (arrow_function      "async"?@is_async !return_type body:(statement_block)@body)
 ]@fun {
 if none @is_async {
   ; callable is type of return statement
@@ -3428,8 +3407,8 @@ if none @is_async {
 ;;;; inferred async return type
 
 [
-  (function       "async" !return_type body:(_)@body)
-  (arrow_function "async"              body:(statement_block)@body)
+  (function_expression "async" !return_type body:(_)@body)
+  (arrow_function      "async"              body:(statement_block)@body)
 ]@fun_decl {
   ; function returns body return type
   edge @fun_decl.callable__return -> @fun_decl.async_type
@@ -3547,22 +3526,10 @@ if none @is_async {
 ; (member_expression (identifier) (property_identifier))
 ; (subscript_expression (identifier) (string))
 
-[
-  (member_expression
-    object: (_)@object
-    property: (_)@prop
-  )@member_expr
-; #dialect tsx
-  (nested_identifier
-    (nested_identifier)@object
-    (identifier)@prop
-  )@member_expr
-  (nested_identifier
-    (identifier)@object
-    (identifier)@prop
-  )@member_expr
-; #end
- ] {
+(member_expression
+  object:(_)@object
+  property:(_)@prop
+)@member_expr {
   node @member_expr.member
   node @prop.expr_ref
   node @prop.expr_ref__typeof
@@ -3583,7 +3550,6 @@ if none @is_async {
   attr (@prop.expr_ref__typeof) push_symbol = ":"
   edge @prop.expr_ref__typeof -> @prop.expr_ref
 }
-
 
 (subscript_expression
   object: (_)@object
@@ -3890,15 +3856,13 @@ if none @is_async {
 
 ; (sequence_expression (number) (number))
 
-(sequence_expression
-  left: (_)@left
-  right: (_)@right
-)@sequence_expr {
+(sequence_expression (_)@expr)@sequence_expr {
   ; propagate lexical scope
-  edge @left.lexical_scope -> @sequence_expr.lexical_scope
-  edge @right.lexical_scope -> @sequence_expr.lexical_scope
+  edge @expr.lexical_scope -> @sequence_expr.lexical_scope
+}
 
-  ; FIXME @sequence_expr.type is type of last, but cannot express because of nesting
+(sequence_expression (_)@last .)@sequence_expr {
+  edge @sequence_expr.type -> @last.type
 }
 
 
@@ -4040,6 +4004,12 @@ if none @is_async {
   edge @class_expr.this__type_def -> @class_expr.generic_inner_type
 }
 
+; decorators
+(class decorator:(_)@dec)@class_expr {
+  ; connect lexical scope
+  edge @dec.lexical_scope -> @class_expr.lexical_scope
+}
+
 ; default constructor
 ; FIXME only if no other constructor is defined
 (class)@class_expr {
@@ -4158,16 +4128,6 @@ if none @is_async {
   (undefined)
 ]@pat {
   node @pat.defs
-}
-
-[ ; NOTE these are the ones not also variables
-  (for_in_statement ["var" "let" "const"] left:(identifier)@name)
-  (variable_declarator name:(identifier)@name)
-  (pattern/identifier)@name
-  (rest_pattern (identifier)@name)
-] {
-  node @name.cotype
-  node @name.lexical_scope
 }
 
 [
@@ -4571,6 +4531,12 @@ if none @is_async {
 ;   value:(_)@value ; opt
 ; )@def
 
+; decorators
+(public_field_definition decorator:(_)@dec)@def {
+  ; connect lexical scope
+  edge @dec.lexical_scope -> @def.lexical_scope
+}
+
 (public_field_definition
   name:(_)@name
 )@def {
@@ -4956,6 +4922,7 @@ if none @is_acc {
 [
   (array_type)
   (asserts)
+  (asserts_annotation)
   (conditional_type)
   (constraint)
   (constructor_type)
@@ -5071,6 +5038,9 @@ if none @is_acc {
   edge @type.lexical_scope -> @asserts.lexical_scope
 }
 
+(asserts_annotation (_)@asserts)@asserts_annotation {
+  edge @asserts.lexical_scope -> @asserts_annotation.lexical_scope
+}
 
 
 ;; Optional Type
@@ -5595,8 +5565,14 @@ if none @is_acc {
 [
   ; X
   (nested_type_identifier module:(identifier)@name)
-  ; X._, _.X._
-  (nested_identifier (identifier)@name)
+  ; X._
+  (nested_identifier object:(identifier)@name)
+  ; _.X._
+  (member_expression object:(identifier)@name)
+  ; _.X
+  (nested_identifier property:(_)@name)
+  ; _._.X
+  (member_expression property:(_)@name)
 ] {
   node @name.type_ref
   attr (@name.type_ref) node_reference = @name
@@ -5607,16 +5583,25 @@ if none @is_acc {
   edge @name.type_ref_member -> @name.type_ref
 }
 
-(nested_identifier . (_)@mod) @nested {
+[
+  (nested_identifier object:(_)@mod)
+  (member_expression object:[(member_expression) (identifier)]@mod)
+]@nested {
   node @nested.type_ref
   edge @mod.type_ref -> @nested.type_ref
 }
 
-(nested_identifier . (_)@mod . (_)@name .) {
+[
+  (nested_identifier object:(_)@mod                                property:(_)@name)
+  (member_expression object:[(member_expression) (identifier)]@mod property:(_)@name)
+] {
   edge @name.type_ref -> @mod.type_ref_member
 }
 
-(nested_identifier (_)@name .) @nested {
+[
+  (nested_identifier property:(_)@name)
+  (member_expression property:(_)@name)
+]@nested {
   node @nested.type_ref_member
   edge @nested.type_ref_member -> @name.type_ref_member
 }
@@ -6159,7 +6144,7 @@ if none @is_acc {
 
 [
   (arrow_function                 "async")
-  (function                       "async")
+  (function_expression            "async")
   (function_declaration           "async")
   (generator_function             "async")
   (generator_function_declaration "async")
@@ -6221,29 +6206,10 @@ if none @is_acc {
   [
     (jsx_text)
     (jsx_element)
-    (jsx_fragment)
     (jsx_self_closing_element)
     (jsx_expression)
   ]@child
 )@parent {
-  edge @child.lexical_scope -> @parent.lexical_scope
-}
-
-(jsx_fragment)@fragment {
-  node @fragment.lexical_scope
-  node @fragment.value
-  node @fragment.type
-}
-
-(jsx_fragment
-  [
-    (jsx_text)
-    (jsx_element)
-    (jsx_fragment)
-    (jsx_self_closing_element)
-    (jsx_expression)
-  ]@child
-) @parent {
   edge @child.lexical_scope -> @parent.lexical_scope
 }
 

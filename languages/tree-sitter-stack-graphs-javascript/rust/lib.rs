@@ -37,7 +37,7 @@ pub fn try_language_configuration(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
     let mut lc = LanguageConfiguration::from_sources(
-        tree_sitter_javascript::language(),
+        tree_sitter_javascript::LANGUAGE.into(),
         Some(String::from("source.js")),
         None,
         vec![String::from("js")],

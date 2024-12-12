@@ -1,0 +1,8 @@
+{
+   rust-1.83-false-positive-1
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   ...
+   fun:main
+}

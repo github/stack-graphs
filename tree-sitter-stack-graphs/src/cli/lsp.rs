@@ -560,25 +560,6 @@ impl<T, E: std::error::Error> FromStdError<T> for std::result::Result<T, E> {
     }
 }
 
-trait FromAnyhowError<T> {
-    #[must_use]
-    fn from_error(self) -> Result<T>;
-}
-
-impl<T> FromAnyhowError<T> for std::result::Result<T, anyhow::Error> {
-    #[must_use]
-    fn from_error(self) -> Result<T> {
-        match self {
-            Ok(value) => Ok(value),
-            Err(err) => Err(Error {
-                code: ErrorCode::ServerError(-1),
-                message: err.to_string(),
-                data: None,
-            }),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum Job {
     IndexPath(PathBuf),

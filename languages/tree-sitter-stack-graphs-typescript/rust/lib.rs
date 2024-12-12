@@ -44,7 +44,7 @@ pub fn try_language_configuration_typescript(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
     let mut lc = LanguageConfiguration::from_sources(
-        tree_sitter_typescript::language_typescript(),
+        tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
         Some(String::from("source.ts")),
         None,
         vec![String::from("ts")],
@@ -74,7 +74,7 @@ pub fn try_language_configuration_tsx(
     cancellation_flag: &dyn CancellationFlag,
 ) -> Result<LanguageConfiguration, LoadError> {
     let mut lc = LanguageConfiguration::from_sources(
-        tree_sitter_typescript::language_tsx(),
+        tree_sitter_typescript::LANGUAGE_TSX.into(),
         Some(String::from("source.tsx")),
         None,
         vec![String::from("tsx")],

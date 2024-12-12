@@ -1,6 +1,6 @@
 [package]
 name = "lsp-positions"
-version = "0.3.3"
+version = "0.3.4"
 description = "LSP-compatible character positions"
 homepage = "https://github.com/github/stack-graphs/tree/main/lsp-positions"
 repository = "https://github.com/github/stack-graphs/"
@@ -22,7 +22,7 @@ tree-sitter = ["dep:tree-sitter"]
 
 [dependencies]
 memchr = "2.4"
-tree-sitter = { version = "0.20", optional = true } # keep the same minor version as the tree-sitter
+tree-sitter = { version = "0.24", optional = true } # keep the same minor version as the tree-sitter
                                                     # dependency of tree-sitter-stack-graphs to prevent
                                                     # install problems
 unicode-segmentation = { version = "1.8" }
