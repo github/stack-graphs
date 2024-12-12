@@ -47,20 +47,16 @@ jobs:
         run: ${{ env.CARGO_HACK }} test
       - name: Run test suite with all optimizations (default features)
         run: cargo test --release
-      - name: Install cargo-valgrind
+      - name: Install valgrind
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
-          cargo install cargo-valgrind
       - name: Run test suite under valgrind (default features)
+        id: valgrind
         # We only need to use valgrind to test the crates that have C bindings.
-        run: cargo valgrind test -p stack-graphs
-        env:
-          # Since Rust 1.83, Valgrind reports some possible leaks that cargo-valgrind
-          # treats as fatal. The given suppressions file makes sure these are ignored.
-          VALGRINDFLAGS: --suppressions=valgrind.supp --gen-suppressions=all --log-file=${{ runner.temp }}/valgrind.log
+        run: script/ci-test-valgrind -p stack-graphs
       - name: Upload valgrind log
-        if: ${{ failure() }}
+        if: ${{ failure() && steps.valgrind.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: valgrind logs

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# Start by building the test binary, before we try to get its filename
+cargo test "$@" --no-run
+
+# Cargo does not have a clean way to get the test binary, so we do some text processing here to get it
+test="$(cargo test "$@" --no-run 2>&1 | grep 'Executable' | head -1 | sed -e 's/[^(]*(\(.*\)).*$/\1/')"
+log="${RUNNER_TEMP-.}/valgrind.log"
+
+# Run the test binary under valgrind
+if ! valgrind \
+    --leak-check=full \
+    --show-leak-kinds=all \
+    --error-exitcode=1 \
+    --suppressions=valgrind.supp \
+    --gen-suppressions=all \
+    --log-file="$log" \
+    "$test"; then
+  echo "Valgrind detected errors! See logs: $log"
+  exit 1
+fi
