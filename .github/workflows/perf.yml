@@ -233,12 +233,12 @@ jobs:
       # Download results
       #
       - name: Download base results
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: ${{ env.BASE_ARTIFACT }}
           path: ${{ env.BASE_ARTIFACT }}
       - name: Download head results
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: ${{ env.HEAD_ARTIFACT }}
           path: ${{ env.HEAD_ARTIFACT }}
