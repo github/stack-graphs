@@ -13,9 +13,7 @@ concurrency:
 
 jobs:
   test-rust:
-    # We force a newer runner version to fix a problem with Valgrind.
-    # Currently, ubuntu-latest is set to 22.04. Revert this back to ubuntu-latest once it is set to 24.04.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         rust: [stable]
