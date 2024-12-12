@@ -1,0 +1,74 @@
+{
+   rust-1.83-false-positive-1
+   Memcheck:Param
+   statx(file_name)
+   fun:statx
+   fun:statx
+   fun:_ZN3std3sys3pal4unix2fs9try_statx17h2609435043bb8525E
+   fun:{closure#0}
+   fun:run_with_cstr_stack<std::sys::pal::unix::fs::FileAttr>
+   fun:run_with_cstr<std::sys::pal::unix::fs::FileAttr>
+   fun:run_path_with_cstr<std::sys::pal::unix::fs::FileAttr>
+   fun:_ZN3std3sys3pal4unix2fs4stat17ha588398797a44835E
+   fun:metadata<&std::path::PathBuf>
+   fun:get_dbpath_for_term
+   fun:from_name
+   fun:_ZN4test4term8terminfo8TermInfo8from_env17h9b3ad5763ddd396cE
+   fun:new<std::io::stdio::Stdout>
+   fun:_ZN4test4term6stdout17hf274a19176f765bcE
+   fun:_ZN4test7console17run_tests_console17h3d81643311f50681E
+   fun:_ZN4test9test_main17h6c0fc3221ed0faa4E
+   fun:_ZN4test16test_main_static17h897b969e33229363E
+   fun:_ZN2it4main17hfbc3179ed1c35941E
+   fun:_ZN4core3ops8function6FnOnce9call_once17h945f64a17647f84cE
+   fun:_ZN3std3sys9backtrace28__rust_begin_short_backtrace17h41138d0332b09746E
+   fun:_ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17h98fa5fc32f9b0a38E
+}
+{
+   rust-1.83-false-positive-2
+   Memcheck:Param
+   statx(buf)
+   fun:statx
+   fun:statx
+   fun:_ZN3std3sys3pal4unix2fs9try_statx17h2609435043bb8525E
+   fun:{closure#0}
+   fun:run_with_cstr_stack<std::sys::pal::unix::fs::FileAttr>
+   fun:run_with_cstr<std::sys::pal::unix::fs::FileAttr>
+   fun:run_path_with_cstr<std::sys::pal::unix::fs::FileAttr>
+   fun:_ZN3std3sys3pal4unix2fs4stat17ha588398797a44835E
+   fun:metadata<&std::path::PathBuf>
+   fun:get_dbpath_for_term
+   fun:from_name
+   fun:_ZN4test4term8terminfo8TermInfo8from_env17h9b3ad5763ddd396cE
+   fun:new<std::io::stdio::Stdout>
+   fun:_ZN4test4term6stdout17hf274a19176f765bcE
+   fun:_ZN4test7console17run_tests_console17h3d81643311f50681E
+   fun:_ZN4test9test_main17h6c0fc3221ed0faa4E
+   fun:_ZN4test16test_main_static17h897b969e33229363E
+   fun:_ZN2it4main17hfbc3179ed1c35941E
+   fun:_ZN4core3ops8function6FnOnce9call_once17h945f64a17647f84cE
+   fun:_ZN3std3sys9backtrace28__rust_begin_short_backtrace17h41138d0332b09746E
+   fun:_ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17h98fa5fc32f9b0a38E
+}
+{
+   rust-1.83-false-positive-3
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:alloc
+   fun:alloc_impl
+   fun:allocate
+   fun:{closure#0}<std::thread::Inner>
+   fun:allocate_for_layout<core::mem::maybe_uninit::MaybeUninit<std::thread::Inner>, alloc::sync::{impl#14}::new_uninit::{closure_env#0}<std::thread::Inner>, fn(*mut u8) -> *mut alloc::sync::ArcInner<core::mem::maybe_uninit::MaybeUninit<std::thread::Inner>>>
+   fun:new_uninit<std::thread::Inner>
+   fun:new_inner
+   fun:new_main
+   fun:init
+   fun:{closure#0}
+   fun:do_call<std::rt::lang_start_internal::{closure_env#0}, ()>
+   fun:try<(), std::rt::lang_start_internal::{closure_env#0}>
+   fun:catch_unwind<std::rt::lang_start_internal::{closure_env#0}, ()>
+   fun:_ZN3std2rt19lang_start_internal17h1c66660c99c8424cE
+   fun:_ZN3std2rt10lang_start17hb778ad044944e8a4E
+   fun:main
+}

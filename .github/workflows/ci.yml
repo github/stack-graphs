@@ -57,6 +57,10 @@ jobs:
       - name: Run test suite under valgrind (default features)
         # We only need to use valgrind to test the crates that have C bindings.
         run: cargo valgrind test -p stack-graphs
+        env:
+          # Since Rust 1.83, Valgrind reports some possible leaks that cargo-valgrind
+          # treats as fatal. The given suppressions file makes sure these are ignored.
+          VALGRINDFLAGS: --suppressions=valgrind.supp
       - name: Ensure C headers are up to date
         run: |
           script/cbindgen
