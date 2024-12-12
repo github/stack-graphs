@@ -1,30 +1,9 @@
 {
    rust-1.83-false-positive-1
-   Memcheck:Param
-   statx(file_name)
-   fun:statx
-   ...
-   fun:get_dbpath_for_term
-   ...
-}
-{
-   rust-1.83-false-positive-2
-   Memcheck:Param
-   statx(buf)
-   fun:statx
-   ...
-   fun:get_dbpath_for_term
-   ...
-}
-{
-   rust-1.83-false-positive-3
    Memcheck:Leak
    match-leak-kinds: possible
    fun:malloc
-   ...
-   fun:new_uninit<std::thread::Inner>
-   fun:new_inner
-   fun:new_main
-   fun:init
-   ...
+   fun:_ZN3std2rt19lang_start_internal17h1c66660c99c8424cE
+   fun:_ZN3std2rt10lang_start17hb778ad044944e8a4E
+   fun:main
 }
