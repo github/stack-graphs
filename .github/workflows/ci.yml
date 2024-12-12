@@ -31,11 +31,11 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -79,9 +79,9 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -99,7 +99,7 @@ jobs:
         working-directory: languages
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: List languages
         id: language-list
         run: echo "languages=$(find -mindepth 1 -maxdepth 1 -type d -printf '%P\n' | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
@@ -122,7 +122,7 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -131,7 +131,7 @@ jobs:
           restore-keys: |
             ${{ runner.OS }}-cargo-
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Build (all feature combinations)
         run: cargo hack -p ${{ matrix.language }} --feature-powerset build
       - name: Test (all features)
@@ -152,7 +152,7 @@ jobs:
         with:
           rust-version: ${{ matrix.rust }}
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -161,7 +161,7 @@ jobs:
           restore-keys: |
             ${{ runner.OS }}-cargo-
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           lfs: true
       - name: Build
