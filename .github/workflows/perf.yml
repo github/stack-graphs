@@ -37,7 +37,7 @@ jobs:
       done: ${{ steps.done.outputs.cache-hit }}
     steps:
       - name: "Checkout base code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.BASE_REPO }}
           ref: ${{ env.BASE_SHA }}
@@ -49,7 +49,7 @@ jobs:
           printf 'BASE_SHA=%s\n' "$(git rev-list -1 ${{ env.BASE_SHA }} -- stack-graphs)" >> $GITHUB_ENV
         working-directory: ${{ env.BASE_DIR }}
       - name: "Checkout head code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
@@ -62,7 +62,7 @@ jobs:
         working-directory: ${{ env.HEAD_DIR }}
       - name: "Check cached status"
         id: done
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
           path: done
           key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
@@ -83,7 +83,7 @@ jobs:
         with:
           rust-version: stable
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -94,7 +94,7 @@ jobs:
           sudo apt-get install -y valgrind
       - name: "Cache base result"
         id: cache-base-result
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ${{ env.MASSIF_OUT }}
@@ -102,7 +102,7 @@ jobs:
           key: ${{ runner.os }}-perf-result-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.TEST_NAME }}
       - name: "Checkout base code"
         if: steps.cache-base-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.BASE_REPO }}
           ref: ${{ env.BASE_SHA }}
@@ -130,7 +130,7 @@ jobs:
                 ${{ env.BASE_DIR }}/data/${{ env.TEST_NAME }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       - name: Upload results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BASE_ARTIFACT }}
           path: |
@@ -152,7 +152,7 @@ jobs:
         with:
           rust-version: stable
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo
@@ -163,7 +163,7 @@ jobs:
           sudo apt-get install -y valgrind
       - name: "Cache head result"
         id: cache-head-result
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ${{ env.MASSIF_OUT }}
@@ -171,7 +171,7 @@ jobs:
           key: ${{ runner.os }}-perf-result-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}
       - name: "Checkout head code"
         if: steps.cache-head-result.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
@@ -199,7 +199,7 @@ jobs:
                 ${{ env.HEAD_DIR }}/data/${{ env.TEST_NAME }}
           ms_print ${{ env.MASSIF_OUT }} > ${{ env.MASSIF_REPORT }}
       - name: Upload results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.HEAD_ARTIFACT }}
           path: |
@@ -233,12 +233,12 @@ jobs:
       # Download results
       #
       - name: Download base results
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.BASE_ARTIFACT }}
           path: ${{ env.BASE_ARTIFACT }}
       - name: Download head results
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.HEAD_ARTIFACT }}
           path: ${{ env.HEAD_ARTIFACT }}
@@ -246,7 +246,7 @@ jobs:
       # Create report
       #
       - name: "Checkout code"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ${{ env.SRC_DIR }}
       - name: Generate summary
@@ -268,7 +268,7 @@ jobs:
       - name: Create status marker
         run: touch done
       - name: "Cache status"
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           path: done
           key: ${{ runner.os }}-perf-tested-${{ env.BASE_REPO }}@${{ env.BASE_SHA }}-${{ env.HEAD_REPO }}@${{ env.HEAD_SHA }}-${{ env.TEST_NAME }}

@@ -7,7 +7,7 @@ cargo run --bin tree-sitter-stack-graphs --features cli -- init \
   --language-id init_test \
   --language-file-extension it \
   --grammar-crate-name tree-sitter-python \
-  --grammar-crate-version 0.20.0 \
+  --grammar-crate-version 0.23.2 \
   --internal \
   --non-interactive
 
