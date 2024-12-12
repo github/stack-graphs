@@ -58,7 +58,13 @@ jobs:
         env:
           # Since Rust 1.83, Valgrind reports some possible leaks that cargo-valgrind
           # treats as fatal. The given suppressions file makes sure these are ignored.
-          VALGRINDFLAGS: --suppressions=valgrind.supp
+          VALGRINDFLAGS: --suppressions=valgrind.supp --gen-suppressions=all --log-file=${{ runner.temp }}/valgrind.log
+      - name: Upload valgrind log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: valgrind logs
+          path: ${{ runner.temp }}/valgrind.log
       - name: Ensure C headers are up to date
         run: |
           script/cbindgen
