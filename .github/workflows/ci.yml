@@ -1,10 +1,14 @@
 name: Continuous integration
+
 on:
   push:
     branches: [main]
   pull_request:
   schedule:
     - cron: "0 0 1,15 * *"
+
+permissions:
+  contents: read
 
 # In the event that there is a new push to the ref, cancel any running jobs because there are now obsolete, and wasting resources.
 concurrency:
@@ -23,7 +27,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Install cargo-hack
@@ -75,7 +79,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Checkout code
@@ -116,7 +120,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Install cargo-hack
@@ -148,7 +152,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Cache dependencies

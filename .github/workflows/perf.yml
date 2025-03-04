@@ -1,8 +1,13 @@
 name: Performance testing
+
 on:
   pull_request:
     paths:
       - 'stack-graphs/**'
+
+permissions:
+  contents: read
+  pull-requests: write
 
 # In the event that there is a new push to the ref, cancel any running jobs because there are now obsolete, and wasting resources.
 concurrency:
@@ -79,7 +84,7 @@ jobs:
       BASE_SHA: ${{ needs.changes.outputs.base-sha }}
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: stable
       - name: Cache Rust dependencies
@@ -148,7 +153,7 @@ jobs:
       HEAD_SHA: ${{ needs.changes.outputs.head-sha }}
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: stable
       - name: Cache Rust dependencies
