@@ -14,7 +14,7 @@ jobs:
       CRATE_DIR: './stack-graphs'
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
       - name: Checkout repository
         uses: actions/checkout@v4
       # TODO Verify the crate version matches the tag
@@ -38,7 +38,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Create GitHub release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@440c8c1cb0ed28b9f43e4d1d670870f059653174 # v1
         with:
           body: |
             Find more info on all releases at https://crates.io/crates/stack-graphs.

@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Install cargo-hack
@@ -75,7 +75,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Checkout code
@@ -116,7 +116,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Install cargo-hack
@@ -148,7 +148,7 @@ jobs:
 
     steps:
       - name: Install Rust environment
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@110f36749599534ca96628b82f52ae67e5d95a3c # v2
         with:
           rust-version: ${{ matrix.rust }}
       - name: Cache dependencies
