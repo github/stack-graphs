@@ -5,6 +5,9 @@ on:
     tags:
       - tree-sitter-stack-graphs-java-v*
 
+permissions:
+  contents: write
+
 jobs:
   publish-crate:
     runs-on: ubuntu-latest

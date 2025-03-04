@@ -1,10 +1,14 @@
 name: Continuous integration
+
 on:
   push:
     branches: [main]
   pull_request:
   schedule:
     - cron: "0 0 1,15 * *"
+
+permissions:
+  contents: read
 
 # In the event that there is a new push to the ref, cancel any running jobs because there are now obsolete, and wasting resources.
 concurrency:

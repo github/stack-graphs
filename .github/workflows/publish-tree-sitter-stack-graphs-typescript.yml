@@ -5,6 +5,9 @@ on:
     tags:
       - tree-sitter-stack-graphs-typescript-v*
 
+permissions:
+  contents: write
+
 jobs:
   publish-crate:
     runs-on: ubuntu-latest

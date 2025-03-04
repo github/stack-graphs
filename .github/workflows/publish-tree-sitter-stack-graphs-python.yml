@@ -5,6 +5,9 @@ on:
     tags:
       - tree-sitter-stack-graphs-python-v*
 
+permissions:
+  contents: write
+
 jobs:
   publish-crate:
     runs-on: ubuntu-latest
