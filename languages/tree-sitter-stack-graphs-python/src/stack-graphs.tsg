@@ -158,6 +158,7 @@ attribute node_symbol = node            => symbol = (source-text node), source_n
   (generator_expression)
   (ellipsis)
   (list_splat)
+  (assignment)
 
   ; expression list
   (expression_list)
