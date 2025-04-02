@@ -768,7 +768,7 @@ inherit .parent_module
     body: (_) @body
   ) @func
   (lambda
-    parameters: (_) @params
+    parameters: (_)? @params
     body: (_) @body
   )@func
 ] {
@@ -777,12 +777,16 @@ inherit .parent_module
   node drop_scope
 
   edge @func.call -> return_value
-  edge @body.before_scope -> @params.after_scope
+  if some @params {
+    edge @body.before_scope -> @params.after_scope
+  }
   edge @body.before_scope -> drop_scope
   edge drop_scope -> @func.bottom
   attr (drop_scope) type = "drop_scopes"
   attr (@func.call) pop_scoped_symbol = "()"
-  edge @params.before_scope -> JUMP_TO_SCOPE_NODE
+  if some @params {
+    edge @params.before_scope -> JUMP_TO_SCOPE_NODE
+  }
   attr (return_value) is_exported
   let @func.function_returns = return_value
 }
