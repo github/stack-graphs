@@ -5769,7 +5769,7 @@ if none @is_acc {
 
 ; (template_literal_type)
 
-(template_literal_type (_)@inner)@type {
+(template_literal_type (template_type)@inner)@type {
   ; propagate lexical scope
   edge @inner.lexical_scope -> @type.lexical_scope
 
