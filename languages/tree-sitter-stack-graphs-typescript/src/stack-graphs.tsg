@@ -2678,6 +2678,7 @@ if none @is_async {
   (ternary_expression)
   (this)
   (true)
+  (instantiation_expression)
 ; #dialect typescript
   (type_assertion)
 ; #end
