@@ -4270,9 +4270,20 @@ if none @is_async {
 }
 
 (array_pattern
-  (_)@pat
+  [
+    (_)
+    (subscript_expression
+      index:(number)@subidx
+    )
+  ]@pat
 )@array_pat {
-  node @pat.comp_index
+  ; There’s a `(subscript_expression … index:(number)@…)` stanza above that also
+  ; creates the `comp_index` and its `push_symbol` attribute.
+  let is_number_subscript = (not (is-null @subidx))
+
+  if (not is_number_subscript) {
+    node @pat.comp_index
+  }
 
   ; propagate lexical scope
   edge @pat.lexical_scope -> @array_pat.lexical_scope
@@ -4280,7 +4291,9 @@ if none @is_async {
   ; propagate cotype components
   edge @pat.cotype -> @pat.comp_index
   ;
-  attr (@pat.comp_index) push_symbol = (named-child-index @pat)
+  if (not is_number_subscript) {
+    attr (@pat.comp_index) push_symbol = (named-child-index @pat)
+  }
   edge @pat.comp_index -> @array_pat.indexable
 
   ; propagate defs
