@@ -2361,12 +2361,17 @@ if none @is_async {
 }
 
 [
-  (nested_identifier object:(_)@mod)
-  (member_expression object:[(member_expression) (identifier)]@mod)
+  (nested_identifier object:(_))
+  (member_expression object:(_))
 ]@nested {
   node @nested.expr_def
   node @nested.type_def
+}
 
+[
+  (nested_identifier object:(_)@mod)
+  (member_expression object:[(member_expression) (identifier)]@mod)
+]@nested {
   edge @nested.expr_def -> @mod.expr_def
   edge @nested.type_def -> @mod.type_def
 }
@@ -5584,10 +5589,16 @@ if none @is_acc {
 }
 
 [
+  (nested_identifier object:(_))
+  (member_expression object:(_))
+]@nested {
+  node @nested.type_ref
+}
+
+[
   (nested_identifier object:(_)@mod)
   (member_expression object:[(member_expression) (identifier)]@mod)
 ]@nested {
-  node @nested.type_ref
   edge @mod.type_ref -> @nested.type_ref
 }
 
