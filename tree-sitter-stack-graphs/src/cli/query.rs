@@ -5,6 +5,7 @@
 // Please see the LICENSE-APACHE or LICENSE-MIT files in this distribution for license details.
 // ------------------------------------------------------------------------------------------------
 
+use std::fmt::Debug;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -28,6 +29,7 @@ use crate::cli::util::sha1;
 use crate::cli::util::wait_for_input;
 use crate::cli::util::SourcePosition;
 use crate::cli::util::SourceSpan;
+use crate::cli::util::SourceIterator;
 use crate::loader::FileReader;
 use crate::CancellationFlag;
 use crate::NoCancellation;
@@ -65,6 +67,7 @@ impl QueryArgs {
 #[derive(Subcommand)]
 pub enum Target {
     Definition(Definition),
+    Span(Span)
 }
 
 impl Target {
@@ -74,6 +77,7 @@ impl Target {
         querier.set_collect_stats(collect_stats);
         match self {
             Self::Definition(cmd) => cmd.run(&mut querier)?,
+            Self::Span(cmd) => cmd.run(&mut querier)?,
         }
         Ok(querier.into_stats())
     }
@@ -91,7 +95,78 @@ pub struct Definition {
     pub references: Vec<SourcePosition>,
 }
 
+#[derive(Parser)]
+pub struct Span {
+    /// Reference source spans, formatted as PATH:LINE_LO:LINE_HI.
+    #[clap(
+        value_name = "SOURCE_SPAN",
+        required = true,
+        value_hint = ValueHint::AnyPath,
+        value_parser,
+    )]
+    pub references: Vec<SourceSpan>,
+}
+
 impl Definition {
+    pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
+        let cancellation_flag = NoCancellation;
+        let mut file_reader = FileReader::new();
+        for mut reference in self.references {
+            reference.canonicalize()?;
+
+            let results = querier.definitions(reference.clone(), &cancellation_flag)?;
+            let numbered = results.len() > 1;
+            let indent = if numbered { 6 } else { 0 };
+            if numbered {
+                println!("found {} references at position", results.len());
+            }
+            for (
+                idx,
+                QueryResult {
+                    source: reference,
+                    targets: definitions,
+                },
+            ) in results.into_iter().enumerate()
+            {
+                if numbered {
+                    println!("{:4}: queried reference", idx);
+                } else {
+                    println!("queried reference");
+                }
+                println!(
+                    "{}",
+                    Excerpt::from_source(
+                        &reference.path,
+                        file_reader.get(&reference.path).unwrap_or_default(),
+                        reference.first_line(),
+                        reference.first_line_column_range(),
+                        indent
+                    )
+                );
+                match definitions.len() {
+                    0 => println!("{}has no definitions", " ".repeat(indent)),
+                    1 => println!("{}has definition", " ".repeat(indent)),
+                    n => println!("{}has {} definitions", " ".repeat(indent), n),
+                }
+                for definition in definitions.into_iter() {
+                    print!(
+                        "{}",
+                        Excerpt::from_source(
+                            &definition.path,
+                            file_reader.get(&definition.path).unwrap_or_default(),
+                            definition.first_line(),
+                            definition.first_line_column_range(),
+                            indent
+                        )
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Span {
     pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
         let cancellation_flag = NoCancellation;
         let mut file_reader = FileReader::new();
@@ -173,18 +248,24 @@ impl<'a> Querier<'a> {
         }
     }
 
-    pub fn definitions(
+    pub fn definitions<T>(
         &mut self,
-        reference: SourcePosition,
+        reference: T,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<Vec<QueryResult>> {
+    ) -> Result<Vec<QueryResult>>
+    where
+        T: SourceIterator + std::fmt::Display
+    {
         let log_path = PathBuf::from(reference.to_string());
 
         let mut file_reader = FileReader::new();
-        let tag = file_reader.get(&reference.path).ok().map(sha1);
+        let tag = file_reader.get(reference.get_path()).ok().map(sha1);
         match self
             .db
-            .status_for_file(&reference.path.to_string_lossy(), tag.as_ref())?
+            .status_for_file(
+                &reference.get_path().to_string_lossy(),
+                tag.as_ref()
+            )?
         {
             FileStatus::Indexed => {}
             _ => {
@@ -197,7 +278,7 @@ impl<'a> Querier<'a> {
         self.reporter.started(&log_path);
 
         self.db
-            .load_graph_for_file(&reference.path.to_string_lossy())?;
+            .load_graph_for_file(&reference.get_path().to_string_lossy())?;
         let (graph, _, _) = self.db.get();
 
         let starting_nodes = reference.iter_references(graph).collect::<Vec<_>>();
@@ -210,7 +291,7 @@ impl<'a> Querier<'a> {
         let mut result = Vec::new();
         for (node, span) in starting_nodes {
             let reference_span = SourceSpan {
-                path: reference.path.clone(),
+                path: reference.get_path().clone(),
                 span,
             };
 
@@ -269,6 +350,10 @@ impl<'a> Querier<'a> {
                     Some(SourceSpan { path, span })
                 })
                 .collect::<Vec<_>>();
+
+            if definitions.len() == 0 {
+                continue;
+            }
 
             result.push(QueryResult {
                 source: reference_span,

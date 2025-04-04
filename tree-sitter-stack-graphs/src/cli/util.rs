@@ -177,6 +177,15 @@ impl From<&str> for PathSpec {
     }
 }
 
+pub trait SourceIterator {
+    fn iter_references<'a>(
+        &'a self,
+        graph: &'a StackGraph
+    ) -> impl Iterator<Item = (Handle<Node>, Span)> + 'a;
+
+    fn get_path<'a>(&'a self) -> &'a PathBuf;
+}
+
 #[derive(Clone, Debug)]
 /// A source position.
 pub struct SourcePosition {
@@ -189,7 +198,21 @@ pub struct SourcePosition {
 }
 
 impl SourcePosition {
-    pub fn iter_references<'a>(
+    fn within_span(&self, span: &lsp_positions::Span) -> bool {
+        ((span.start.line < self.line)
+            || (span.start.line == self.line && span.start.column.grapheme_offset <= self.column))
+            && ((span.end.line == self.line && span.end.column.grapheme_offset >= self.column)
+                || (span.end.line > self.line))
+    }
+
+    pub fn canonicalize(&mut self) -> std::io::Result<()> {
+        self.path = self.path.canonicalize()?;
+        Ok(())
+    }
+}
+
+impl SourceIterator for SourcePosition {
+    fn iter_references<'a>(
         &'a self,
         graph: &'a StackGraph,
     ) -> impl Iterator<Item = (Handle<Node>, Span)> + 'a {
@@ -213,16 +236,8 @@ impl SourcePosition {
             })
     }
 
-    fn within_span(&self, span: &lsp_positions::Span) -> bool {
-        ((span.start.line < self.line)
-            || (span.start.line == self.line && span.start.column.grapheme_offset <= self.column))
-            && ((span.end.line == self.line && span.end.column.grapheme_offset >= self.column)
-                || (span.end.line > self.line))
-    }
-
-    pub fn canonicalize(&mut self) -> std::io::Result<()> {
-        self.path = self.path.canonicalize()?;
-        Ok(())
+    fn get_path<'a>(&'a self) -> &'a PathBuf {
+        &self.path
     }
 }
 
@@ -318,6 +333,142 @@ impl SourceSpan {
             usize::MAX
         };
         start..end
+    }
+
+    fn within_span(&self, span: &lsp_positions::Span) -> bool {
+        ((self.span.start.line >= span.start.line)
+            && (self.span.start.line <= span.end.line))
+        ||
+        ((self.span.end.line >= span.start.line)
+            && (self.span.end.line <= span.end.line))
+    }
+
+    pub fn canonicalize(&mut self) -> std::io::Result<()> {
+        self.path = self.path.canonicalize()?;
+        Ok(())
+    }
+}
+
+impl SourceIterator for SourceSpan {
+
+    fn iter_references<'a>(
+        &'a self,
+        graph: &'a StackGraph,
+    ) -> impl Iterator<Item = (Handle<Node>, Span)> + 'a {
+        graph
+            .get_file(&self.path.to_string_lossy())
+            .into_iter()
+            .flat_map(move |file| {
+                graph.nodes_for_file(file).filter_map(move |node| {
+                    if !graph[node].is_reference() {
+                        return None;
+                    }
+                    let source_info = match graph.source_info(node) {
+                        Some(source_info) => source_info,
+                        None => return None,
+                    };
+                    if !self.within_span(&source_info.span) {
+                        return None;
+                    }
+                    Some((node, source_info.span.clone()))
+                })
+            })
+    }
+
+    fn get_path<'a>(&'a self) -> &'a PathBuf {
+        &self.path
+    }
+}
+
+impl std::fmt::Display for SourceSpan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:{}-{}",
+            self.path.display(),
+            self.span.start.line + 1,
+            self.span.end.line + 1,
+        )
+    }
+}
+
+impl std::str::FromStr for SourceSpan {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut values = s.split(':');
+        let path = match values.next() {
+            Some(path) => PathBuf::from(path),
+            None => return Err(anyhow!("Missing path in expected format PATH:LINE_LO:LINE_HI")),
+        };
+        let line_lo = match values.next() {
+            Some(line_lo) => {
+                let line = usize::from_str(line_lo).map_err(|_| {
+                    anyhow!(
+                        "Expected line-lo to be a number, got {} in expected format PATH:LINE_LO:LINE_HI",
+                        line_lo
+                    )
+                })?;
+                if line == 0 {
+                    return Err(anyhow!(
+                        "Line numbers are 1-based, got 0 in expected format PATH:LINE_LO:LINE_HI"
+                    ));
+                }
+                line - 1
+            }
+            None => {
+                return Err(anyhow!(
+                    "Missing line numbers in expected format PATH:LINE_LO:LINE_HI"
+                ))
+            }
+        };
+        let line_hi = match values.next() {
+            Some(column) => {
+                let column = usize::from_str(column)
+                    .map_err(|_| anyhow!("Expected line-hi to be a number, got {} in expected format PATH:LINE_LO:LINE_HI", column))?;
+                if column == 0 {
+                    return Err(anyhow!(
+                        "Line numbers are 1-based, got 0 in expected format PATH:LINE_LO:LINE_HI"
+                    ));
+                }
+                column - 1
+            }
+            None => {
+                return Err(anyhow!(
+                    "Missing line -hi number in expected format PATH:LINE_LO:LINE_HI"
+                ))
+            }
+        };
+        if values.next().is_some() {
+            return Err(anyhow!(
+                "Found unexpected components in expected format PATH:LINE_LO:LINE_HI"
+            ));
+        }
+        Ok(Self {
+            path,
+            span: Span {
+                start: lsp_positions::Position {
+                    line: line_lo,
+                    column: lsp_positions::Offset {
+                        utf8_offset: 0,
+                        utf16_offset: 0,
+                        grapheme_offset: 0
+                    },
+                    containing_line: Range { start: 0, end: 0 },
+                    trimmed_line: Range { start: 0, end: 0 },
+                },
+                end: lsp_positions::Position {
+                    line: line_hi,
+                    column: lsp_positions::Offset {
+                        utf8_offset: 0,
+                        utf16_offset: 0,
+                        grapheme_offset: 0
+                    },
+                    containing_line: Range { start: 0, end: 0 },
+                    trimmed_line: Range { start: 0, end: 0 },
+                },
+            }
+        })
     }
 }
 
