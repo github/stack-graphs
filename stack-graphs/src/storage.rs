@@ -36,42 +36,6 @@ use crate::CancellationFlag;
 
 const VERSION: usize = 6;
 
-const SCHEMA: &str = r#"
-        CREATE TABLE metadata (
-            version INTEGER NOT NULL
-        ) STRICT;
-        CREATE TABLE graphs (
-            file   TEXT PRIMARY KEY,
-            tag    TEXT NOT NULL,
-            error  TEXT,
-            value  BLOB NOT NULL
-        ) STRICT;
-        CREATE TABLE file_paths (
-            file     TEXT NOT NULL,
-            local_id INTEGER NOT NULL,
-            value    BLOB NOT NULL,
-            FOREIGN KEY(file) REFERENCES graphs(file)
-        ) STRICT;
-        CREATE TABLE root_paths (
-            file         TEXT NOT NULL,
-            symbol_stack TEXT NOT NULL,
-            value        BLOB NOT NULL,
-            FOREIGN KEY(file) REFERENCES graphs(file)
-        ) STRICT;
-    "#;
-
-const INDEXES: &str = r#"
-        CREATE INDEX IF NOT EXISTS idx_graphs_file ON graphs(file);
-        CREATE INDEX IF NOT EXISTS idx_file_paths_local_id ON file_paths(file, local_id);
-        CREATE INDEX IF NOT EXISTS idx_root_paths_symbol_stack ON root_paths(symbol_stack);
-    "#;
-
-const PRAGMAS: &str = r#"
-        PRAGMA journal_mode = WAL;
-        PRAGMA foreign_keys = false;
-        PRAGMA secure_delete = false;
-    "#;
-
 pub static BINCODE_CONFIG: bincode::config::Configuration = bincode::config::standard();
 
 #[derive(Debug, Error)]
@@ -155,30 +119,28 @@ impl SQLiteWriter {
     pub fn open_in_memory() -> Result<Self> {
         let mut conn = Connection::open_in_memory()?;
         Self::init(&mut conn)?;
-        init_indexes(&mut conn)?;
         Ok(Self { conn })
     }
 
     /// Open a file database.  If the file does not exist, it is automatically created.
     /// An error is returned if the database version is not supported.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let is_new = !path.as_ref().exists();
-        let mut conn = Connection::open(path)?;
-        set_pragmas_and_functions(&conn)?;
-        if is_new {
-            Self::init(&mut conn)?;
-        } else {
-            check_version(&conn)?;
+        if !path.as_ref().exists() {
+            return Err(StorageError::MissingDatabase(
+                path.as_ref().to_string_lossy().to_string()
+            ));
         }
-        init_indexes(&mut conn)?;
+        let mut conn = Connection::open(path)?;
+        Self::init(&mut conn)?;
+        set_functions(&conn)?;
+        check_version(&conn)?;
         Ok(Self { conn })
     }
 
     /// Create database tables and write metadata.
     fn init(conn: &mut Connection) -> Result<()> {
         let tx = conn.transaction()?;
-        tx.execute_batch(SCHEMA)?;
-        tx.execute("INSERT INTO metadata (version) VALUES (?)", [VERSION])?;
+        tx.execute("INSERT INTO sg_metadata (version) VALUES (?)", [VERSION])?;
         tx.commit()?;
         Ok(())
     }
@@ -196,15 +158,15 @@ impl SQLiteWriter {
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_all_inner(conn: &Connection) -> Result<usize> {
         {
-            let mut stmt = conn.prepare_cached("DELETE FROM file_paths")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM sg_file_paths")?;
             stmt.execute([])?;
         }
         {
-            let mut stmt = conn.prepare_cached("DELETE FROM root_paths")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM sg_root_paths")?;
             stmt.execute([])?;
         }
         let count = {
-            let mut stmt = conn.prepare_cached("DELETE FROM graphs")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM sg_graphs")?;
             stmt.execute([])?
         };
         Ok(count)
@@ -224,16 +186,8 @@ impl SQLiteWriter {
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_file_inner(conn: &Connection, file: &Path) -> Result<usize> {
         let file = file.to_string_lossy();
-        {
-            let mut stmt = conn.prepare_cached("DELETE FROM file_paths WHERE file=?")?;
-            stmt.execute([&file])?;
-        }
-        {
-            let mut stmt = conn.prepare_cached("DELETE FROM root_paths WHERE file=?")?;
-            stmt.execute([&file])?;
-        }
         let count = {
-            let mut stmt = conn.prepare_cached("DELETE FROM graphs WHERE file=?")?;
+            let mut stmt = conn.prepare_cached("DELETE FROM sg_graphs WHERE file=?")?;
             stmt.execute([&file])?
         };
         Ok(count)
@@ -254,19 +208,9 @@ impl SQLiteWriter {
     /// This is an inner method, which does not wrap individual SQL statements in a transaction.
     fn clean_file_or_directory_inner(conn: &Connection, file_or_directory: &Path) -> Result<usize> {
         let file_or_directory = file_or_directory.to_string_lossy();
-        {
-            let mut stmt =
-                conn.prepare_cached("DELETE FROM file_paths WHERE path_descendant_of(file, ?)")?;
-            stmt.execute([&file_or_directory])?;
-        }
-        {
-            let mut stmt =
-                conn.prepare_cached("DELETE FROM root_paths WHERE path_descendant_of(file, ?)")?;
-            stmt.execute([&file_or_directory])?;
-        }
         let count = {
             let mut stmt =
-                conn.prepare_cached("DELETE FROM graphs WHERE path_descendant_of(file, ?)")?;
+                conn.prepare_cached("DELETE FROM sg_graphs WHERE path_descendant_of(file, ?)")?;
             stmt.execute([&file_or_directory])?
         };
         Ok(count)
@@ -291,7 +235,7 @@ impl SQLiteWriter {
     ) -> Result<()> {
         copious_debugging!("--> Store error for {}", file.display());
         let mut stmt = conn
-            .prepare_cached("INSERT INTO graphs (file, tag, error, value) VALUES (?, ?, ?, ?)")?;
+            .prepare_cached("INSERT INTO sg_graphs (file, tag, error, value) VALUES (?, ?, ?, ?)")?;
         let graph = crate::serde::StackGraph::default();
         let serialized = bincode::encode_to_vec(&graph, BINCODE_CONFIG)?;
         stmt.execute((&file.to_string_lossy(), tag, error, serialized))?;
@@ -331,7 +275,7 @@ impl SQLiteWriter {
         let file_str = graph[file].name();
         copious_debugging!("--> Store graph for {}", file_str);
         let mut stmt =
-            conn.prepare_cached("INSERT INTO graphs (file, tag, value) VALUES (?, ?, ?)")?;
+            conn.prepare_cached("INSERT INTO sg_graphs (file, tag, value) VALUES (?, ?, ?)")?;
         let graph = serde::StackGraph::from_graph_filter(graph, &FileFilter(file));
         let serialized = bincode::encode_to_vec(&graph, BINCODE_CONFIG)?;
         stmt.execute((file_str, tag, &serialized))?;
@@ -352,10 +296,13 @@ impl SQLiteWriter {
         IP: IntoIterator<Item = &'a PartialPath>,
     {
         let file_str = graph[file].name();
-        let mut node_stmt =
-            conn.prepare_cached("INSERT INTO file_paths (file, local_id, value) VALUES (?, ?, ?)")?;
+        let mut node_stmt = conn.prepare_cached(
+            "INSERT INTO sg_file_paths (graph_id, local_id, value)
+            VALUES ((SELECT id FROM sg_graphs WHERE file = ?), ?, ?)"
+        )?;
         let mut root_stmt = conn.prepare_cached(
-            "INSERT INTO root_paths (file, symbol_stack, value) VALUES (?, ?, ?)",
+            "INSERT INTO sg_root_paths (graph_id, symbol_stack, value)
+            VALUES ((SELECT id FROM sg_graphs WHERE file = ?), ?, ?)"
         )?;
         #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
         let mut node_path_count = 0usize;
@@ -444,10 +391,9 @@ impl SQLiteReader {
                 path.as_ref().to_string_lossy().to_string(),
             ));
         }
-        let mut conn = Connection::open(path)?;
-        set_pragmas_and_functions(&conn)?;
+        let conn = Connection::open(path)?;
+        set_functions(&conn)?;
         check_version(&conn)?;
-        init_indexes(&mut conn)?;
         Ok(Self {
             conn,
             loaded_graphs: HashSet::new(),
@@ -499,7 +445,7 @@ impl SQLiteReader {
     /// Returns a [`Files`][] value that can be used to iterate over all files in the database.
     pub fn list_all<'a>(&'a mut self) -> Result<Files<'a, ()>> {
         self.conn
-            .prepare("SELECT file, tag, error FROM graphs")
+            .prepare("SELECT file, tag, error FROM sg_graphs")
             .map(|stmt| Files(stmt, ()))
             .map_err(|e| e.into())
     }
@@ -518,7 +464,7 @@ impl SQLiteReader {
         file_or_directory: &Path,
     ) -> Result<Files<'a, [String; 1]>> {
         let file_or_directory = file_or_directory.to_string_lossy().to_string();
-        conn.prepare("SELECT file, tag, error FROM graphs WHERE path_descendant_of(file, ?)")
+        conn.prepare("SELECT file, tag, error FROM sg_graphs WHERE path_descendant_of(file, ?)")
             .map(|stmt| Files(stmt, [file_or_directory]))
             .map_err(|e| e.into())
     }
@@ -549,7 +495,7 @@ impl SQLiteReader {
         }
         copious_debugging!(" * Load from database");
         stats.file_loads += 1;
-        let mut stmt = conn.prepare_cached("SELECT value FROM graphs WHERE file = ?")?;
+        let mut stmt = conn.prepare_cached("SELECT value FROM sg_graphs WHERE file = ?")?;
         let value = stmt.query_row([file], |row| row.get::<_, Vec<u8>>(0))?;
         let (file_graph, _): (serde::StackGraph, usize) =
             bincode::decode_from_slice(&value, BINCODE_CONFIG)?;
@@ -594,7 +540,11 @@ impl SQLiteReader {
         let file = self.graph[file].name();
         let mut stmt = self
             .conn
-            .prepare_cached("SELECT file,value from file_paths WHERE file = ? AND local_id = ?")?;
+            .prepare_cached("
+                SELECT sg_graphs.file, sg_file_paths.value
+                FROM sg_file_paths JOIN sg_graphs
+                ON sg_file_paths.graph_id = sg_graphs.id
+                WHERE sg_graphs.file = ? AND sg_file_paths.local_id = ?")?;
         let paths = stmt.query_map((file, id.local_id()), |row| {
             let file = row.get::<_, String>(0)?;
             let value = row.get::<_, Vec<u8>>(1)?;
@@ -638,7 +588,10 @@ impl SQLiteReader {
             symbol_stack.display(&self.graph, &mut self.partials)
         );
         let mut stmt = self.conn.prepare_cached(
-            "SELECT file,value from root_paths WHERE symbol_stack LIKE ? ESCAPE ?",
+            "SELECT sg_graphs.file, sg_root_paths.value
+            FROM sg_root_paths JOIN sg_graphs
+            ON sg_root_paths.graph_id = sg_graphs.id
+            WHERE sg_root_paths.symbol_stack LIKE ? ESCAPE ?"
         )?;
         let (symbol_stack_patterns, escape) =
             symbol_stack.storage_key_patterns(&self.graph, &mut self.partials);
@@ -819,15 +772,14 @@ impl Stats {
 
 /// Check if the database has the version supported by this library version.
 fn check_version(conn: &Connection) -> Result<()> {
-    let version = conn.query_row("SELECT version FROM metadata", [], |r| r.get::<_, usize>(0))?;
+    let version = conn.query_row("SELECT version FROM sg_metadata", [], |r| r.get::<_, usize>(0))?;
     if version != VERSION {
         return Err(StorageError::IncorrectVersion(version));
     }
     Ok(())
 }
 
-fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
-    conn.execute_batch(PRAGMAS)?;
+fn set_functions(conn: &Connection) -> Result<()> {
     conn.create_scalar_function(
         "path_descendant_of",
         2,
@@ -843,13 +795,6 @@ fn set_pragmas_and_functions(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn init_indexes(conn: &mut Connection) -> Result<()> {
-    let tx = conn.transaction()?;
-    tx.execute_batch(INDEXES)?;
-    tx.commit()?;
-    Ok(())
-}
-
 fn status_for_file<T: AsRef<str>>(
     conn: &Connection,
     file: &str,
@@ -857,12 +802,12 @@ fn status_for_file<T: AsRef<str>>(
 ) -> Result<FileStatus> {
     let result = if let Some(tag) = tag {
         let mut stmt =
-            conn.prepare_cached("SELECT error FROM graphs WHERE file = ? AND tag = ?")?;
+            conn.prepare_cached("SELECT error FROM sg_graphs WHERE file = ? AND tag = ?")?;
         stmt.query_row([file, tag.as_ref()], |r| r.get_ref(0).map(FileStatus::from))
             .optional()?
             .unwrap_or(FileStatus::Missing)
     } else {
-        let mut stmt = conn.prepare_cached("SELECT status FROM graphs WHERE file = ?")?;
+        let mut stmt = conn.prepare_cached("SELECT status FROM sg_graphs WHERE file = ?")?;
         stmt.query_row([file], |r| r.get_ref(0).map(FileStatus::from))
             .optional()?
             .unwrap_or(FileStatus::Missing)
