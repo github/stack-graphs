@@ -140,6 +140,19 @@ impl PartialOrd for Span {
     }
 }
 
+impl std::fmt::Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}:{} -> {}:{})",
+            self.start.line,
+            self.start.column.utf8_offset,
+            self.end.line,
+            self.end.column.utf8_offset
+        )
+    }
+}
+
 /// The offset of a character within a string (typically a line of source code), using several
 /// different units
 ///

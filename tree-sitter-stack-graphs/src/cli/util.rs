@@ -180,7 +180,7 @@ impl From<&str> for PathSpec {
 pub trait SourceIterator {
     fn iter_references<'a>(
         &'a self,
-        graph: &'a StackGraph
+        graph: &'a StackGraph,
     ) -> impl Iterator<Item = (Handle<Node>, Span)> + 'a;
 
     fn get_path<'a>(&'a self) -> &'a PathBuf;
@@ -336,11 +336,8 @@ impl SourceSpan {
     }
 
     fn within_span(&self, span: &lsp_positions::Span) -> bool {
-        ((self.span.start.line >= span.start.line)
-            && (self.span.start.line <= span.end.line))
-        ||
-        ((self.span.end.line >= span.start.line)
-            && (self.span.end.line <= span.end.line))
+        ((self.span.start.line >= span.start.line) && (self.span.start.line <= span.end.line))
+            || ((self.span.end.line >= span.start.line) && (self.span.end.line <= span.end.line))
     }
 
     pub fn canonicalize(&mut self) -> std::io::Result<()> {
@@ -350,7 +347,6 @@ impl SourceSpan {
 }
 
 impl SourceIterator for SourceSpan {
-
     fn iter_references<'a>(
         &'a self,
         graph: &'a StackGraph,
@@ -399,7 +395,11 @@ impl std::str::FromStr for SourceSpan {
         let mut values = s.split(':');
         let path = match values.next() {
             Some(path) => PathBuf::from(path),
-            None => return Err(anyhow!("Missing path in expected format PATH:LINE_LO:LINE_HI")),
+            None => {
+                return Err(anyhow!(
+                    "Missing path in expected format PATH:LINE_LO:LINE_HI"
+                ))
+            }
         };
         let line_lo = match values.next() {
             Some(line_lo) => {
@@ -452,7 +452,7 @@ impl std::str::FromStr for SourceSpan {
                     column: lsp_positions::Offset {
                         utf8_offset: 0,
                         utf16_offset: 0,
-                        grapheme_offset: 0
+                        grapheme_offset: 0,
                     },
                     containing_line: Range { start: 0, end: 0 },
                     trimmed_line: Range { start: 0, end: 0 },
@@ -462,12 +462,12 @@ impl std::str::FromStr for SourceSpan {
                     column: lsp_positions::Offset {
                         utf8_offset: 0,
                         utf16_offset: 0,
-                        grapheme_offset: 0
+                        grapheme_offset: 0,
                     },
                     containing_line: Range { start: 0, end: 0 },
                     trimmed_line: Range { start: 0, end: 0 },
                 },
-            }
+            },
         })
     }
 }

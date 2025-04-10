@@ -237,7 +237,8 @@ pub mod path_loading {
     impl Query {
         pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             let db_path = self.db_args.get_or(default_db_path);
-            self.query_args.run(&db_path)
+            self.query_args.run(&db_path)?;
+            Ok(())
         }
     }
 
@@ -468,7 +469,8 @@ pub mod provided_languages {
     impl Query {
         pub fn run(self, default_db_path: PathBuf) -> anyhow::Result<()> {
             let db_path = self.db_args.get_or(default_db_path);
-            self.query_args.run(&db_path)
+            self.query_args.run(&db_path)?;
+            Ok(())
         }
     }
 

@@ -127,7 +127,7 @@ impl SQLiteWriter {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         if !path.as_ref().exists() {
             return Err(StorageError::MissingDatabase(
-                path.as_ref().to_string_lossy().to_string()
+                path.as_ref().to_string_lossy().to_string(),
             ));
         }
         let mut conn = Connection::open(path)?;
@@ -234,8 +234,9 @@ impl SQLiteWriter {
         error: &str,
     ) -> Result<()> {
         copious_debugging!("--> Store error for {}", file.display());
-        let mut stmt = conn
-            .prepare_cached("INSERT INTO sg_graphs (file, tag, error, value) VALUES (?, ?, ?, ?)")?;
+        let mut stmt = conn.prepare_cached(
+            "INSERT INTO sg_graphs (file, tag, error, value) VALUES (?, ?, ?, ?)",
+        )?;
         let graph = crate::serde::StackGraph::default();
         let serialized = bincode::encode_to_vec(&graph, BINCODE_CONFIG)?;
         stmt.execute((&file.to_string_lossy(), tag, error, serialized))?;
@@ -298,11 +299,11 @@ impl SQLiteWriter {
         let file_str = graph[file].name();
         let mut node_stmt = conn.prepare_cached(
             "INSERT INTO sg_file_paths (graph_id, local_id, value)
-            VALUES ((SELECT id FROM sg_graphs WHERE file = ?), ?, ?)"
+            VALUES ((SELECT id FROM sg_graphs WHERE file = ?), ?, ?)",
         )?;
         let mut root_stmt = conn.prepare_cached(
             "INSERT INTO sg_root_paths (graph_id, symbol_stack, value)
-            VALUES ((SELECT id FROM sg_graphs WHERE file = ?), ?, ?)"
+            VALUES ((SELECT id FROM sg_graphs WHERE file = ?), ?, ?)",
         )?;
         #[cfg_attr(not(feature = "copious-debugging"), allow(unused))]
         let mut node_path_count = 0usize;
@@ -538,13 +539,14 @@ impl SQLiteReader {
         let id = self.graph[node].id();
         let file = id.file().expect("file node required");
         let file = self.graph[file].name();
-        let mut stmt = self
-            .conn
-            .prepare_cached("
+        let mut stmt = self.conn.prepare_cached(
+            "
                 SELECT sg_graphs.file, sg_file_paths.value
                 FROM sg_file_paths JOIN sg_graphs
                 ON sg_file_paths.graph_id = sg_graphs.id
-                WHERE sg_graphs.file = ? AND sg_file_paths.local_id = ?")?;
+                WHERE sg_graphs.file = ? AND sg_file_paths.local_id = ?
+            ",
+        )?;
         let paths = stmt.query_map((file, id.local_id()), |row| {
             let file = row.get::<_, String>(0)?;
             let value = row.get::<_, Vec<u8>>(1)?;
@@ -591,7 +593,7 @@ impl SQLiteReader {
             "SELECT sg_graphs.file, sg_root_paths.value
             FROM sg_root_paths JOIN sg_graphs
             ON sg_root_paths.graph_id = sg_graphs.id
-            WHERE sg_root_paths.symbol_stack LIKE ? ESCAPE ?"
+            WHERE sg_root_paths.symbol_stack LIKE ? ESCAPE ?",
         )?;
         let (symbol_stack_patterns, escape) =
             symbol_stack.storage_key_patterns(&self.graph, &mut self.partials);
@@ -772,7 +774,9 @@ impl Stats {
 
 /// Check if the database has the version supported by this library version.
 fn check_version(conn: &Connection) -> Result<()> {
-    let version = conn.query_row("SELECT version FROM sg_metadata", [], |r| r.get::<_, usize>(0))?;
+    let version = conn.query_row("SELECT version FROM sg_metadata", [], |r| {
+        r.get::<_, usize>(0)
+    })?;
     if version != VERSION {
         return Err(StorageError::IncorrectVersion(version));
     }

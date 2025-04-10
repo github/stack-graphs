@@ -27,12 +27,14 @@ use crate::cli::util::reporter::ConsoleReporter;
 use crate::cli::util::reporter::Reporter;
 use crate::cli::util::sha1;
 use crate::cli::util::wait_for_input;
+use crate::cli::util::SourceIterator;
 use crate::cli::util::SourcePosition;
 use crate::cli::util::SourceSpan;
-use crate::cli::util::SourceIterator;
 use crate::loader::FileReader;
 use crate::CancellationFlag;
 use crate::NoCancellation;
+
+type Result<T> = anyhow::Result<T>;
 
 #[derive(Args)]
 pub struct QueryArgs {
@@ -43,44 +45,58 @@ pub struct QueryArgs {
     #[clap(long)]
     pub stats: bool,
 
+    #[clap(long)]
+    pub silent: bool,
+
     #[clap(subcommand)]
     target: Target,
 }
 
 impl QueryArgs {
-    pub fn run(self, db_path: &Path) -> anyhow::Result<()> {
+    pub fn run(self, db_path: &Path) -> Result<QueryResults> {
         if self.wait_at_start {
             wait_for_input()?;
         }
         let mut db = SQLiteReader::open(&db_path)?;
-        let stitching_stats = self.target.run(&mut db, self.stats)?;
-        if self.stats {
+        let (results, stitching_stats) = self.target.run(&mut db, self.stats)?;
+        if !self.silent && self.stats {
             println!();
             print_stitching_stats(stitching_stats);
             println!();
             print_database_stats(db.stats());
         }
-        Ok(())
+        if !self.silent {
+            print!("{}", results);
+        }
+        Ok(results)
     }
 }
 
 #[derive(Subcommand)]
 pub enum Target {
     Definition(Definition),
-    Span(Span)
+    Span(Span),
 }
 
 impl Target {
-    fn run(self, db: &mut SQLiteReader, collect_stats: bool) -> anyhow::Result<StitchingStats> {
+    fn run(
+        self,
+        db: &mut SQLiteReader,
+        collect_stats: bool,
+    ) -> Result<(QueryResults, StitchingStats)> {
         let reporter = ConsoleReporter::details();
         let mut querier = Querier::new(db, &reporter);
         querier.set_collect_stats(collect_stats);
-        match self {
+        let result = match self {
             Self::Definition(cmd) => cmd.run(&mut querier)?,
             Self::Span(cmd) => cmd.run(&mut querier)?,
-        }
-        Ok(querier.into_stats())
+        };
+        Ok((result, querier.into_stats()))
     }
+}
+
+pub trait QueryRunner {
+    fn run(self, querier: &mut Querier) -> Result<QueryResults>;
 }
 
 #[derive(Parser)]
@@ -107,121 +123,29 @@ pub struct Span {
     pub references: Vec<SourceSpan>,
 }
 
-impl Definition {
-    pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
+impl QueryRunner for Definition {
+    fn run(self, querier: &mut Querier) -> Result<QueryResults> {
         let cancellation_flag = NoCancellation;
-        let mut file_reader = FileReader::new();
+        let mut results: QueryResults = Default::default();
         for mut reference in self.references {
             reference.canonicalize()?;
-
-            let results = querier.definitions(reference.clone(), &cancellation_flag)?;
-            let numbered = results.len() > 1;
-            let indent = if numbered { 6 } else { 0 };
-            if numbered {
-                println!("found {} references at position", results.len());
-            }
-            for (
-                idx,
-                QueryResult {
-                    source: reference,
-                    targets: definitions,
-                },
-            ) in results.into_iter().enumerate()
-            {
-                if numbered {
-                    println!("{:4}: queried reference", idx);
-                } else {
-                    println!("queried reference");
-                }
-                println!(
-                    "{}",
-                    Excerpt::from_source(
-                        &reference.path,
-                        file_reader.get(&reference.path).unwrap_or_default(),
-                        reference.first_line(),
-                        reference.first_line_column_range(),
-                        indent
-                    )
-                );
-                match definitions.len() {
-                    0 => println!("{}has no definitions", " ".repeat(indent)),
-                    1 => println!("{}has definition", " ".repeat(indent)),
-                    n => println!("{}has {} definitions", " ".repeat(indent), n),
-                }
-                for definition in definitions.into_iter() {
-                    print!(
-                        "{}",
-                        Excerpt::from_source(
-                            &definition.path,
-                            file_reader.get(&definition.path).unwrap_or_default(),
-                            definition.first_line(),
-                            definition.first_line_column_range(),
-                            indent
-                        )
-                    );
-                }
-            }
+            let res = querier.definitions(reference.clone(), &cancellation_flag)?;
+            results.extend(res);
         }
-        Ok(())
+        Ok(results)
     }
 }
 
-impl Span {
-    pub fn run(self, querier: &mut Querier) -> anyhow::Result<()> {
+impl QueryRunner for Span {
+    fn run(self, querier: &mut Querier) -> Result<QueryResults> {
         let cancellation_flag = NoCancellation;
-        let mut file_reader = FileReader::new();
+        let mut results: QueryResults = Default::default();
         for mut reference in self.references {
             reference.canonicalize()?;
-
-            let results = querier.definitions(reference.clone(), &cancellation_flag)?;
-            let numbered = results.len() > 1;
-            let indent = if numbered { 6 } else { 0 };
-            if numbered {
-                println!("found {} references at position", results.len());
-            }
-            for (
-                idx,
-                QueryResult {
-                    source: reference,
-                    targets: definitions,
-                },
-            ) in results.into_iter().enumerate()
-            {
-                if numbered {
-                    println!("{:4}: queried reference", idx);
-                } else {
-                    println!("queried reference");
-                }
-                println!(
-                    "{}",
-                    Excerpt::from_source(
-                        &reference.path,
-                        file_reader.get(&reference.path).unwrap_or_default(),
-                        reference.first_line(),
-                        reference.first_line_column_range(),
-                        indent
-                    )
-                );
-                match definitions.len() {
-                    0 => println!("{}has no definitions", " ".repeat(indent)),
-                    1 => println!("{}has definition", " ".repeat(indent)),
-                    n => println!("{}has {} definitions", " ".repeat(indent), n),
-                }
-                for definition in definitions.into_iter() {
-                    print!(
-                        "{}",
-                        Excerpt::from_source(
-                            &definition.path,
-                            file_reader.get(&definition.path).unwrap_or_default(),
-                            definition.first_line(),
-                            definition.first_line_column_range(),
-                            indent
-                        )
-                    );
-                }
-            }
+            let res = querier.definitions(reference.clone(), &cancellation_flag)?;
+            results.extend(res);
         }
-        Ok(())
+        Ok(results)
     }
 }
 
@@ -252,9 +176,9 @@ impl<'a> Querier<'a> {
         &mut self,
         reference: T,
         cancellation_flag: &dyn CancellationFlag,
-    ) -> Result<Vec<QueryResult>>
+    ) -> Result<QueryResults>
     where
-        T: SourceIterator + std::fmt::Display
+        T: SourceIterator + std::fmt::Display,
     {
         let log_path = PathBuf::from(reference.to_string());
 
@@ -262,10 +186,7 @@ impl<'a> Querier<'a> {
         let tag = file_reader.get(reference.get_path()).ok().map(sha1);
         match self
             .db
-            .status_for_file(
-                &reference.get_path().to_string_lossy(),
-                tag.as_ref()
-            )?
+            .status_for_file(&reference.get_path().to_string_lossy(), tag.as_ref())?
         {
             FileStatus::Indexed => {}
             _ => {
@@ -336,18 +257,31 @@ impl<'a> Querier<'a> {
                 }
             }
 
-            let definitions = actual_paths
+            let valid_paths = actual_paths
                 .into_iter()
                 .filter_map(|path| {
-                    let span = match graph.source_info(path.end_node) {
-                        Some(p) => p.span.clone(),
-                        None => return None,
+                    let source_info = graph.source_info(path.end_node);
+                    if source_info.is_none() {
+                        return None;
+                    }
+                    if graph[path.end_node].id().file().is_none() {
+                        return None;
                     };
-                    let path = match graph[path.end_node].id().file() {
-                        Some(f) => PathBuf::from(graph[f].name()),
-                        None => return None,
-                    };
-                    Some(SourceSpan { path, span })
+                    Some(path)
+                })
+                .collect::<Vec<_>>();
+
+            let definitions = valid_paths
+                .into_iter()
+                .filter_map(|path| {
+                    let source_info = graph.source_info(path.start_node);
+                    if source_info.is_none() {
+                        return None;
+                    }
+                    let span = source_info.unwrap().span.clone();
+                    let fname = graph[path.end_node].id().file().unwrap();
+                    let path = PathBuf::from(graph[fname].name());
+                    Some(SourceSpan { span, path })
                 })
                 .collect::<Vec<_>>();
 
@@ -372,7 +306,7 @@ impl<'a> Querier<'a> {
             None,
         );
 
-        Ok(result)
+        Ok(QueryResults { results: result })
     }
 
     pub fn into_stats(self) -> StitchingStats {
@@ -407,4 +341,76 @@ pub struct QueryResult {
     pub targets: Vec<SourceSpan>,
 }
 
-type Result<T> = std::result::Result<T, QueryError>;
+pub struct QueryResults {
+    pub results: Vec<QueryResult>,
+}
+
+impl Default for QueryResults {
+    fn default() -> Self {
+        Self {
+            results: Vec::new(),
+        }
+    }
+}
+
+impl QueryResults {
+    pub fn extend(&mut self, other: QueryResults) {
+        self.results.extend(other.results);
+    }
+}
+
+impl std::fmt::Display for QueryResults {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut file_reader = FileReader::new();
+        let numbered = self.results.len() > 1;
+        let indent = if numbered { 6 } else { 0 };
+        let results = &self.results;
+        if numbered {
+            write!(f, "found {} references at position", results.len())?;
+        }
+        for (
+            idx,
+            QueryResult {
+                source: reference,
+                targets: definitions,
+            },
+        ) in results.into_iter().enumerate()
+        {
+            if numbered {
+                write!(f, "{:4}: queried reference", idx)?;
+            } else {
+                write!(f, "queried reference")?;
+            }
+            write!(
+                f,
+                "{}",
+                Excerpt::from_source(
+                    &reference.path,
+                    file_reader.get(&reference.path).unwrap_or_default(),
+                    reference.first_line(),
+                    reference.first_line_column_range(),
+                    indent
+                )
+            )?;
+            match definitions.len() {
+                0 => write!(f, "{}has no definitions", " ".repeat(indent))?,
+                1 => write!(f, "{}has definition", " ".repeat(indent))?,
+                n => write!(f, "{}has {} definitions", " ".repeat(indent), n)?,
+            }
+            for definition in definitions.into_iter() {
+                write!(
+                    f,
+                    "{}",
+                    Excerpt::from_source(
+                        &definition.path,
+                        file_reader.get(&definition.path).unwrap_or_default(),
+                        definition.first_line(),
+                        definition.first_line_column_range(),
+                        indent
+                    )
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
