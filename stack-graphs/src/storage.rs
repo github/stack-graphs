@@ -65,6 +65,7 @@ impl From<CancellationError> for StorageError {
 }
 
 /// The status of a file in the database.
+#[derive(Debug, PartialEq)]
 pub enum FileStatus {
     Missing,
     Indexed,
