@@ -60,7 +60,7 @@ pub(super) fn parse(
             "{}",
             DisplayParseErrorsPretty {
                 parse_errors: &parse_errors,
-                path: path,
+                path,
                 source: &source,
                 max_errors: crate::MAX_PARSE_ERRORS,
             }

@@ -10,3 +10,5 @@ Cargo.lock
 
 # MacOS stuff
 .DS_Store
+
+.idea/

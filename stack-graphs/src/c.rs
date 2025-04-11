@@ -110,16 +110,13 @@ pub const SG_LIST_EMPTY_HANDLE: u32 = 0xffffffff;
 /// Describes in which direction the content of a deque is stored in memory.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Default)]
 pub enum sg_deque_direction {
+    #[default]
     SG_DEQUE_FORWARDS,
     SG_DEQUE_BACKWARDS,
 }
 
-impl Default for sg_deque_direction {
-    fn default() -> sg_deque_direction {
-        sg_deque_direction::SG_DEQUE_FORWARDS
-    }
-}
 
 /// Ensures all partial paths in the database are availabe in both forwards and backwards orientation.
 #[no_mangle]
@@ -321,9 +318,9 @@ pub struct sg_file {
 /// handles using simple equality, without having to dereference them.
 pub type sg_file_handle = u32;
 
-impl Into<Handle<File>> for sg_file_handle {
-    fn into(self) -> Handle<File> {
-        unsafe { std::mem::transmute(self) }
+impl From<sg_file_handle> for Handle<File> {
+    fn from(val: sg_file_handle) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
 
@@ -404,9 +401,9 @@ impl sg_node_id {
     }
 }
 
-impl Into<NodeID> for sg_node_id {
-    fn into(self) -> NodeID {
-        unsafe { std::mem::transmute(self) }
+impl From<sg_node_id> for NodeID {
+    fn from(val: sg_node_id) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
 
@@ -437,9 +434,9 @@ pub struct sg_node {
     pub is_endpoint: bool,
 }
 
-impl Into<Node> for sg_node {
-    fn into(self) -> Node {
-        unsafe { std::mem::transmute(self) }
+impl From<sg_node> for Node {
+    fn from(val: sg_node) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
 
@@ -474,9 +471,9 @@ pub enum sg_node_kind {
 /// A handle to a node in a stack graph.  A zero handle represents a missing node.
 pub type sg_node_handle = u32;
 
-impl Into<Handle<Node>> for sg_node_handle {
-    fn into(self) -> Handle<Node> {
-        unsafe { std::mem::transmute(self) }
+impl From<sg_node_handle> for Handle<Node> {
+    fn from(val: sg_node_handle) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
 
@@ -755,9 +752,9 @@ pub struct sg_partial_scoped_symbol {
     pub scopes: sg_partial_scope_stack,
 }
 
-impl Into<PartialScopedSymbol> for sg_partial_scoped_symbol {
-    fn into(self) -> PartialScopedSymbol {
-        unsafe { std::mem::transmute(self) }
+impl From<sg_partial_scoped_symbol> for PartialScopedSymbol {
+    fn from(val: sg_partial_scoped_symbol) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
 
@@ -992,9 +989,9 @@ pub struct sg_partial_path_edge {
     pub precedence: i32,
 }
 
-impl Into<PartialPathEdge> for sg_partial_path_edge {
-    fn into(self) -> PartialPathEdge {
-        unsafe { std::mem::transmute(self) }
+impl From<sg_partial_path_edge> for PartialPathEdge {
+    fn from(val: sg_partial_path_edge) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
 
@@ -1121,9 +1118,9 @@ pub struct sg_partial_path {
     pub edges: sg_partial_path_edge_list,
 }
 
-impl Into<PartialPath> for sg_partial_path {
-    fn into(self) -> PartialPath {
-        unsafe { std::mem::transmute(self) }
+impl From<sg_partial_path> for PartialPath {
+    fn from(val: sg_partial_path) -> Self {
+        unsafe { std::mem::transmute(val) }
     }
 }
 
@@ -1349,7 +1346,7 @@ pub extern "C" fn sg_partial_path_database_mark_local_nodes(
     let db = unsafe { &mut (*db).inner };
     let nodes = unsafe { std::slice::from_raw_parts(nodes, count) };
     for node in nodes {
-        db.mark_local_node(node.clone().into());
+        db.mark_local_node((*node).into());
     }
 }
 
@@ -1406,9 +1403,9 @@ pub struct sg_stitcher_config {
     pub detect_similar_paths: bool,
 }
 
-impl Into<StitcherConfig> for sg_stitcher_config {
-    fn into(self) -> StitcherConfig {
-        StitcherConfig::default().with_detect_similar_paths(self.detect_similar_paths)
+impl From<sg_stitcher_config> for StitcherConfig {
+    fn from(val: sg_stitcher_config) -> Self {
+        StitcherConfig::default().with_detect_similar_paths(val.detect_similar_paths)
     }
 }
 

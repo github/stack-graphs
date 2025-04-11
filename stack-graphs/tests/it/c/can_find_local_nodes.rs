@@ -78,7 +78,7 @@ fn check_local_nodes(graph: &TestGraph, file: &str, expected_local_nodes: &[&str
     let results = nodes
         .iter()
         .enumerate()
-        .filter(|(idx, _)| get_is_local(&local_nodes, *idx))
+        .filter(|(idx, _)| get_is_local(local_nodes, *idx))
         .map(|(_, node)| node.display(rust_graph).to_string())
         .collect::<BTreeSet<_>>();
 

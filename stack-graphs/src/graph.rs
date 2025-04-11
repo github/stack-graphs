@@ -221,7 +221,7 @@ pub struct DisplaySymbol<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplaySymbol<'a> {
+impl Display for DisplaySymbol<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", &self.graph[self.wrapped])
     }
@@ -295,7 +295,7 @@ pub struct DisplayInternedString<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayInternedString<'a> {
+impl Display for DisplayInternedString<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", &self.graph[self.wrapped])
     }
@@ -392,7 +392,7 @@ impl Index<Handle<File>> for StackGraph {
     type Output = File;
     #[inline(always)]
     fn index(&self, handle: Handle<File>) -> &File {
-        &self.files.get(handle)
+        self.files.get(handle)
     }
 }
 
@@ -402,7 +402,7 @@ pub struct DisplayFile<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayFile<'a> {
+impl Display for DisplayFile<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.graph[self.wrapped])
     }
@@ -505,7 +505,7 @@ pub struct DisplayNodeID<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayNodeID<'a> {
+impl Display for DisplayNodeID<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self.wrapped.file.into_option() {
             Some(file) => write!(f, "{}({})", file.display(self.graph), self.wrapped.local_id),
@@ -683,7 +683,7 @@ impl StackGraph {
     }
 
     pub(crate) fn add_node(&mut self, id: NodeID, node: Node) -> Option<Handle<Node>> {
-        if let Some(_) = self.node_id_handles.handle_for_id(id) {
+        if self.node_id_handles.handle_for_id(id).is_some() {
             return None;
         }
         let handle = self.nodes.add(node);
@@ -707,7 +707,7 @@ pub struct DisplayNode<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayNode<'a> {
+impl Display for DisplayNode<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self.wrapped {
             Node::DropScopes(node) => node.display(self.graph).fmt(f),
@@ -790,7 +790,7 @@ pub struct DisplayDropScopesNode<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayDropScopesNode<'a> {
+impl Display for DisplayDropScopesNode<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "[{}]", self.wrapped.id.display(self.graph))
@@ -886,7 +886,7 @@ pub struct DisplayPopScopedSymbolNode<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayPopScopedSymbolNode<'a> {
+impl Display for DisplayPopScopedSymbolNode<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "[{}]", self.wrapped.id.display(self.graph))
@@ -958,7 +958,7 @@ pub struct DisplayPopSymbolNode<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayPopSymbolNode<'a> {
+impl Display for DisplayPopSymbolNode<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "[{}]", self.wrapped.id.display(self.graph))
@@ -1034,7 +1034,7 @@ pub struct DisplayPushScopedSymbolNode<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayPushScopedSymbolNode<'a> {
+impl Display for DisplayPushScopedSymbolNode<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "[{}]", self.wrapped.id.display(self.graph))
@@ -1106,7 +1106,7 @@ pub struct DisplayPushSymbolNode<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayPushSymbolNode<'a> {
+impl Display for DisplayPushSymbolNode<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "[{}]", self.wrapped.id.display(self.graph))
@@ -1257,7 +1257,7 @@ pub struct DisplayScopeNode<'a> {
     graph: &'a StackGraph,
 }
 
-impl<'a> Display for DisplayScopeNode<'a> {
+impl Display for DisplayScopeNode<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "[{}]", self.wrapped.id.display(self.graph))
@@ -1552,7 +1552,7 @@ impl StackGraph {
                         id: NodeID::new_in_file(file, id.local_id),
                         symbol: self.add_symbol(&other[symbol]),
                         _scope: NodeID::default(),
-                        is_definition: is_definition,
+                        is_definition,
                     }
                     .into(),
                     Node::PopSymbol(PopSymbolNode {
@@ -1564,7 +1564,7 @@ impl StackGraph {
                         id: NodeID::new_in_file(file, id.local_id),
                         symbol: self.add_symbol(&other[symbol]),
                         _scope: NodeID::default(),
-                        is_definition: is_definition,
+                        is_definition,
                     }
                     .into(),
                     Node::PushScopedSymbol(PushScopedSymbolNode {
@@ -1577,7 +1577,7 @@ impl StackGraph {
                         id: NodeID::new_in_file(file, id.local_id),
                         symbol: self.add_symbol(&other[symbol]),
                         scope: node_id(scope),
-                        is_reference: is_reference,
+                        is_reference,
                         _phantom: (),
                     }
                     .into(),
@@ -1590,7 +1590,7 @@ impl StackGraph {
                         id: NodeID::new_in_file(file, id.local_id),
                         symbol: self.add_symbol(&other[symbol]),
                         _scope: NodeID::default(),
-                        is_reference: is_reference,
+                        is_reference,
                     }
                     .into(),
                     Node::Root(RootNode { .. }) => RootNode {
@@ -1606,7 +1606,7 @@ impl StackGraph {
                         id: NodeID::new_in_file(file, id.local_id),
                         _symbol: ControlledOption::default(),
                         _scope: NodeID::default(),
-                        is_exported: is_exported,
+                        is_exported,
                     }
                     .into(),
                 };

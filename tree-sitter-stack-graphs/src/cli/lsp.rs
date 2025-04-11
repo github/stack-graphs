@@ -291,10 +291,14 @@ impl Backend {
             querier.definitions(reference, cancellation_flag.as_ref())
         };
         match result {
-            Ok(result) => result.into_iter().flat_map(|r| r.targets).collect(),
-            Err(QueryError::Cancelled(at)) => {
+            Ok(result) => result.results.into_iter().flat_map(|r| r.targets).collect(),
+            Err(err) if matches!(err.downcast_ref::<QueryError>(), Some(QueryError::Cancelled(_))) => {
+                let at = match err.downcast_ref::<QueryError>() {
+                    Some(QueryError::Cancelled(at)) => *at,
+                    _ => unreachable!(),
+                };
                 self.logger
-                    .error(format!("query timed out at {}", at,))
+                    .error(format!("query timed out at {}", at))
                     .await;
                 return Vec::default();
             }

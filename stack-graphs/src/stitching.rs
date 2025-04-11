@@ -245,7 +245,7 @@ impl ForwardCandidates<Edge, Edge, GraphEdges, CancellationError> for GraphEdgeC
     {
         result.extend(self.graph.outgoing_edges(path.end_node).filter(|e| {
             self.file
-                .map_or(true, |file| self.graph[e.sink].is_in_file(file))
+                .is_none_or(|file| self.graph[e.sink].is_in_file(file))
         }));
     }
 
@@ -293,6 +293,12 @@ pub struct Database {
     root_paths_by_precondition_without_variable:
         SupplementalArena<SymbolStackKeyCell, Vec<Handle<PartialPath>>>,
     incoming_paths: SupplementalArena<Node, Degree>,
+}
+
+impl Default for Database {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Database {
@@ -774,7 +780,7 @@ impl SymbolStackKey {
 struct DisplaySymbolStackKey<'a>(SymbolStackKey, &'a StackGraph, &'a Database);
 
 #[cfg(feature = "copious-debugging")]
-impl<'a> Display for DisplaySymbolStackKey<'a> {
+impl Display for DisplaySymbolStackKey<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // Use a recursive function to print the contents of the key out in reverse order.
         fn display_one(
@@ -863,7 +869,7 @@ impl<H> ForwardPartialPathStitcher<H> {
         let next_iteration: (VecDeque<_>, VecDeque<_>, VecDeque<_>) = initial_partial_paths
             .into_iter()
             .map(|p| {
-                let c = AppendingCycleDetector::from(&mut appended_paths, p.clone().into());
+                let c = AppendingCycleDetector::from(&mut appended_paths, p.clone());
                 (p, c, false)
             })
             .multiunzip();
@@ -1062,14 +1068,12 @@ impl<H: Clone> ForwardPartialPathStitcher<H> {
                         |ps, left, right| {
                             if !left.equals(ps, right) {
                                 None
+                            } else if left.shadows(ps, right) {
+                                Some(Ordering::Less)
+                            } else if right.shadows(ps, left) {
+                                Some(Ordering::Greater)
                             } else {
-                                if left.shadows(ps, right) {
-                                    Some(Ordering::Less)
-                                } else if right.shadows(ps, left) {
-                                    Some(Ordering::Greater)
-                                } else {
-                                    Some(Ordering::Equal)
-                                }
+                                Some(Ordering::Equal)
                             }
                         },
                     ) {

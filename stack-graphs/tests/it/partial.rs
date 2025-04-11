@@ -470,7 +470,7 @@ fn can_create_partial_path_from_node() {
     fn verify(graph: &StackGraph, node: Handle<Node>, expected: &str) {
         let mut partials = PartialPaths::new();
         let path = PartialPath::from_node(graph, &mut partials, node);
-        let actual = path.display(&graph, &mut partials).to_string();
+        let actual = path.display(graph, &mut partials).to_string();
         assert_eq!(expected, actual);
     }
 

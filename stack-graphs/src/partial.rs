@@ -135,7 +135,7 @@ struct DisplayWithPartialPathsWrapper<'a, D> {
     partials: &'a PartialPaths,
 }
 
-impl<'a, D> Display for DisplayWithPartialPathsWrapper<'a, D>
+impl<D> Display for DisplayWithPartialPathsWrapper<'_, D>
 where
     D: DisplayWithPartialPaths,
 {
@@ -195,9 +195,9 @@ impl From<NonZeroU32> for SymbolStackVariable {
     }
 }
 
-impl Into<u32> for SymbolStackVariable {
-    fn into(self) -> u32 {
-        self.0.get()
+impl From<SymbolStackVariable> for u32 {
+    fn from(val: SymbolStackVariable) -> Self {
+        val.0.get()
     }
 }
 
@@ -266,9 +266,9 @@ impl From<NonZeroU32> for ScopeStackVariable {
     }
 }
 
-impl Into<u32> for ScopeStackVariable {
-    fn into(self) -> u32 {
-        self.0.get()
+impl From<ScopeStackVariable> for u32 {
+    fn from(val: ScopeStackVariable) -> Self {
+        val.0.get()
     }
 }
 
@@ -781,7 +781,7 @@ impl PartialSymbolStack {
             if let Some(other_symbol) = other.pop_front(partials) {
                 match self_symbol.cmp(graph, partials, &other_symbol) {
                     Ordering::Equal => continue,
-                    result @ _ => return result,
+                    result => return result,
                 }
             } else {
                 return Ordering::Greater;
@@ -819,7 +819,7 @@ impl PartialSymbolStack {
     }
 
     pub fn variable(&self) -> Option<SymbolStackVariable> {
-        self.variable.clone().into_option()
+        self.variable.into_option()
     }
 
     fn ensure_both_directions(&mut self, partials: &mut PartialPaths) {
@@ -966,11 +966,8 @@ impl PartialScopeStack {
     /// variable on the left-hand side, and add this “offset” to the values of all of the variables
     /// on the right-hand side.
     pub fn with_offset(mut self, scope_variable_offset: u32) -> PartialScopeStack {
-        match self.variable.into_option() {
-            Some(variable) => {
-                self.variable = ControlledOption::some(variable.with_offset(scope_variable_offset));
-            }
-            None => {}
+        if let Some(variable) = self.variable.into_option() {
+            self.variable = ControlledOption::some(variable.with_offset(scope_variable_offset));
         };
         self
     }
@@ -1297,6 +1294,12 @@ pub struct PartialSymbolStackBindings {
     bindings: SmallVec<[Option<PartialSymbolStack>; 4]>,
 }
 
+impl Default for PartialSymbolStackBindings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PartialSymbolStackBindings {
     /// Creates a new, empty set of partial symbol stack bindings.
     pub fn new() -> PartialSymbolStackBindings {
@@ -1344,7 +1347,7 @@ impl PartialSymbolStackBindings {
     }
 }
 
-impl<'a> DisplayWithPartialPaths for &'a mut PartialSymbolStackBindings {
+impl DisplayWithPartialPaths for &mut PartialSymbolStackBindings {
     fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
         for binding in &mut self.bindings {
             if let Some(binding) = binding.as_mut() {
@@ -1385,6 +1388,12 @@ impl<'a> DisplayWithPartialPaths for &'a mut PartialSymbolStackBindings {
 
 pub struct PartialScopeStackBindings {
     bindings: SmallVec<[Option<PartialScopeStack>; 4]>,
+}
+
+impl Default for PartialScopeStackBindings {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PartialScopeStackBindings {
@@ -1433,7 +1442,7 @@ impl PartialScopeStackBindings {
     }
 }
 
-impl<'a> DisplayWithPartialPaths for &'a mut PartialScopeStackBindings {
+impl DisplayWithPartialPaths for &mut PartialScopeStackBindings {
     fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
         for binding in &mut self.bindings {
             if let Some(binding) = binding.as_mut() {
@@ -1630,7 +1639,7 @@ impl PartialPathEdgeList {
             if let Some(other_edge) = other.pop_front(partials) {
                 match self_edge.cmp(&other_edge) {
                     Ordering::Equal => continue,
-                    result @ _ => return result,
+                    result => return result,
                 }
             } else {
                 return Ordering::Greater;
@@ -1871,24 +1880,24 @@ impl PartialPath {
             .symbol_stack_precondition
             .variable
             .into_option()
-            .map_or(false, |v| join.symbol_bindings.get(v).iter().len() > 0)
+            .is_some_and(|v| join.symbol_bindings.get(v).iter().len() > 0)
             || lhs
                 .scope_stack_precondition
                 .variable
                 .into_option()
-                .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
+                .is_some_and(|v| join.scope_bindings.get(v).iter().len() > 0)
         {
             Some(Cyclicity::StrengthensPrecondition)
         } else if rhs
             .symbol_stack_postcondition
             .variable
             .into_option()
-            .map_or(false, |v| join.symbol_bindings.get(v).iter().len() > 0)
+            .is_some_and(|v| join.symbol_bindings.get(v).iter().len() > 0)
             || rhs
                 .scope_stack_postcondition
                 .variable
                 .into_option()
-                .map_or(false, |v| join.scope_bindings.get(v).iter().len() > 0)
+                .is_some_and(|v| join.scope_bindings.get(v).iter().len() > 0)
         {
             Some(Cyclicity::StrengthensPostcondition)
         } else {
@@ -2018,7 +2027,7 @@ pub enum Cyclicity {
     StrengthensPostcondition,
 }
 
-impl<'a> DisplayWithPartialPaths for &'a PartialPath {
+impl DisplayWithPartialPaths for &PartialPath {
     fn prepare(&mut self, graph: &StackGraph, partials: &mut PartialPaths) {
         self.symbol_stack_precondition
             .clone()
@@ -2322,7 +2331,7 @@ impl Node {
                 let sink_scope = graph
                     .node_for_id(sink.scope)
                     .ok_or(PathResolutionError::UnknownAttachedScope)?;
-                let mut attached_scopes = scope_stack_postcondition.clone();
+                let mut attached_scopes = *scope_stack_postcondition;
                 attached_scopes.push_front(partials, sink_scope);
                 let postcondition_symbol = PartialScopedSymbol {
                     symbol: sink_symbol,
@@ -2614,6 +2623,12 @@ pub struct PartialPaths {
     pub(crate) partial_symbol_stacks: DequeArena<PartialScopedSymbol>,
     pub(crate) partial_scope_stacks: DequeArena<Handle<Node>>,
     pub(crate) partial_path_edges: DequeArena<PartialPathEdge>,
+}
+
+impl Default for PartialPaths {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PartialPaths {

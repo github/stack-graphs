@@ -266,7 +266,7 @@ impl<'a> Querier<'a> {
                     }
                     if graph[path.end_node].id().file().is_none() {
                         return None;
-                    };
+                    }
                     Some(path)
                 })
                 .collect::<Vec<_>>();

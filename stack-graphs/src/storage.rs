@@ -96,8 +96,8 @@ pub struct FileEntry {
 /// An iterator over a query returning rows with (path,tag,error) tuples.
 pub struct Files<'a, P: Params>(Statement<'a>, P);
 
-impl<'a, P: Params + Clone> Files<'a, P> {
-    pub fn try_iter<'b>(&'b mut self) -> Result<impl Iterator<Item = Result<FileEntry>> + 'b> {
+impl<P: Params + Clone> Files<'_, P> {
+    pub fn try_iter(&mut self) -> Result<impl Iterator<Item = Result<FileEntry>> + '_> {
         let entries = self.0.query_map(self.1.clone(), |r| {
             Ok(FileEntry {
                 path: PathBuf::from(r.get::<_, String>(0)?),
@@ -445,7 +445,7 @@ impl SQLiteReader {
     }
 
     /// Returns a [`Files`][] value that can be used to iterate over all files in the database.
-    pub fn list_all<'a>(&'a mut self) -> Result<Files<'a, ()>> {
+    pub fn list_all(&mut self) -> Result<Files<'_, ()>> {
         self.conn
             .prepare("SELECT file, tag, error FROM sg_graphs")
             .map(|stmt| Files(stmt, ()))

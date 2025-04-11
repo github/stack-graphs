@@ -142,7 +142,7 @@ impl Filter for ImplicationFilter<'_> {
         graph[*node]
             .id()
             .file()
-            .map_or(true, |f| self.include_file(graph, &f))
+            .is_none_or(|f| self.include_file(graph, &f))
             && self.0.include_node(graph, node)
     }
 

@@ -14,10 +14,7 @@ where
             Some(b) => eq(a, b),
             None => false,
         },
-        None => match b {
-            Some(_) => false,
-            None => true,
-        },
+        None => b.is_none(),
     }
 }
 

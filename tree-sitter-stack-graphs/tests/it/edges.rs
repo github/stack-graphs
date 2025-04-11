@@ -27,9 +27,9 @@ pub(super) fn check_stack_graph_edges(graph: &StackGraph, expected_edges: &[&str
         for edge in graph.outgoing_edges(source) {
             actual_edges.insert(format!(
                 "{} -{}-> {}",
-                graph[source].display(&graph),
+                graph[source].display(graph),
                 edge.precedence,
-                graph[edge.sink].display(&graph),
+                graph[edge.sink].display(graph),
             ));
         }
     }

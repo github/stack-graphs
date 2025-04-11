@@ -30,7 +30,7 @@ pub(super) fn check_stack_graph_nodes(
 ) {
     let actual_nodes = graph
         .nodes_for_file(file)
-        .map(|handle| graph[handle].display(&graph).to_string())
+        .map(|handle| graph[handle].display(graph).to_string())
         .collect::<Vec<_>>();
     assert_eq!(expected_nodes, actual_nodes);
 }

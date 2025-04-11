@@ -46,7 +46,7 @@ impl Database {
             if !filter.include_partial_path(graph, partials, path) {
                 continue;
             }
-            let path = PartialPath::from_partial_path(graph, partials, &path);
+            let path = PartialPath::from_partial_path(graph, partials, path);
             paths.push(path);
         }
         Self { paths }

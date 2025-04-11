@@ -233,7 +233,7 @@ fn can_compare_deques() {
 #[test]
 fn can_use_arena_after_clear() {
     let mut a = Arena::new();
-    let h = a.add(12 as u8);
+    let h = a.add(12_u8);
     assert_eq!(12, *a.get(h));
 
     a.clear();

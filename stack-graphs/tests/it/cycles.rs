@@ -39,7 +39,7 @@ fn renaming_path_is_productive() {
     let p = create_partial_path_and_edges(&mut graph, &mut partials, &[s, foo_def, bar_ref, s])
         .unwrap();
 
-    assert!(matches!(p.is_cyclic(&graph, &mut partials), None));
+    assert!(p.is_cyclic(&graph, &mut partials).is_none());
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn stitching_simple_identity_cycle_is_detected() {
         let mut paths = Appendables::new();
         let mut cd: AppendingCycleDetector<Handle<PartialPath>> =
             AppendingCycleDetector::from(&mut paths, db[p0].clone());
-        cd.append(&mut paths, p1.into());
+        cd.append(&mut paths, p1);
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)
@@ -328,7 +328,7 @@ fn stitching_composite_identity_cycle_is_detected() {
         let mut paths = Appendables::new();
         let mut cd: AppendingCycleDetector<Handle<PartialPath>> =
             AppendingCycleDetector::from(&mut paths, db[p0].clone());
-        cd.append(&mut paths, p1.into());
+        cd.append(&mut paths, p1);
         assert_eq!(
             enum_set![Cyclicity::StrengthensPostcondition],
             cd.is_cyclic(&graph, &mut partials, &mut db, &mut paths)

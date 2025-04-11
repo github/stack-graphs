@@ -173,6 +173,12 @@ impl<T> Drop for Arena<T> {
     }
 }
 
+impl<T> Default for Arena<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> Arena<T> {
     /// Creates a new arena.
     pub fn new() -> Arena<T> {
@@ -213,7 +219,6 @@ impl<T> Arena<T> {
     /// retain a reference to the arena!)
     pub fn iter_handles(&self) -> impl Iterator<Item = Handle<T>> {
         (1..self.items.len())
-            .into_iter()
             .map(|index| Handle::new(unsafe { NonZeroU32::new_unchecked(index as u32) }))
     }
 
@@ -477,7 +482,7 @@ pub struct ListCell<T> {
     tail: Handle<ListCell<T>>,
 }
 
-const EMPTY_LIST_HANDLE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(u32::MAX) };
+const EMPTY_LIST_HANDLE: NonZeroU32 = NonZeroU32::new(u32::MAX).unwrap();
 
 // An arena that's used to manage `List<T>` instances.
 //
@@ -533,7 +538,7 @@ impl<T> List<T> {
     }
 
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(mut self, arena: &'a ListArena<T>) -> impl Iterator<Item = &'a T> + 'a {
+    pub fn iter(mut self, arena: &ListArena<T>) -> impl Iterator<Item = &T> + '_ {
         std::iter::from_fn(move || self.pop_front(arena))
     }
 }
@@ -569,7 +574,7 @@ impl<T> List<T> {
             }
             match cmp_option(self.pop_front(arena), other.pop_front(arena), &mut cmp) {
                 Ordering::Equal => (),
-                result @ _ => return result,
+                result => return result,
             }
         }
     }
@@ -681,10 +686,10 @@ impl<T> ReversibleList<T> {
     }
 
     /// Returns an iterator over the elements of this list.
-    pub fn iter<'a>(
+    pub fn iter(
         mut self,
-        arena: &'a ReversibleListArena<T>,
-    ) -> impl Iterator<Item = &'a T> + 'a {
+        arena: &ReversibleListArena<T>,
+    ) -> impl Iterator<Item = &T> + '_ {
         std::iter::from_fn(move || self.pop_front(arena))
     }
 }
@@ -824,7 +829,7 @@ impl<T> ReversibleList<T> {
             }
             match cmp_option(self.pop_front(arena), other.pop_front(arena), &mut cmp) {
                 Ordering::Equal => (),
-                result @ _ => return result,
+                result => return result,
             }
         }
     }

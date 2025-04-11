@@ -41,7 +41,7 @@ impl StackGraph {
         Self::from_graph_filter(graph, &NoFilter)
     }
 
-    pub fn from_graph_filter<'a>(graph: &crate::graph::StackGraph, filter: &'a dyn Filter) -> Self {
+    pub fn from_graph_filter(graph: &crate::graph::StackGraph, filter: &dyn Filter) -> Self {
         let filter = ImplicationFilter(filter);
         let files = graph.filter_files(&filter);
         let nodes = graph.filter_nodes(&filter);
@@ -400,9 +400,9 @@ impl NodeID {
         graph: &mut crate::graph::StackGraph,
     ) -> Result<Handle<crate::graph::Node>, Error> {
         let value = self.to_node_id(graph)?;
-        Ok(graph
+        graph
             .node_for_id(value)
-            .ok_or_else(|| Error::NodeNotFound(self.clone()))?)
+            .ok_or_else(|| Error::NodeNotFound(self.clone()))
     }
 }
 
@@ -445,11 +445,11 @@ impl crate::graph::StackGraph {
         self.to_serializable_filter(&NoFilter)
     }
 
-    pub fn to_serializable_filter<'a>(&self, f: &'a dyn Filter) -> StackGraph {
+    pub fn to_serializable_filter(&self, f: &dyn Filter) -> StackGraph {
         crate::serde::StackGraph::from_graph_filter(self, f)
     }
 
-    fn filter_files<'a>(&self, filter: &'a dyn Filter) -> Files {
+    fn filter_files(&self, filter: &dyn Filter) -> Files {
         Files {
             data: self
                 .iter_files()
@@ -459,15 +459,15 @@ impl crate::graph::StackGraph {
         }
     }
 
-    fn filter_node<'a>(&self, _filter: &'a dyn Filter, id: crate::graph::NodeID) -> NodeID {
+    fn filter_node(&self, _filter: &dyn Filter, id: crate::graph::NodeID) -> NodeID {
         let file = id.file().map(|idx| self[idx].name().to_owned());
         let local_id = id.local_id();
         NodeID { file, local_id }
     }
 
-    fn filter_source_info<'a>(
+    fn filter_source_info(
         &self,
-        _filter: &'a dyn Filter,
+        _filter: &dyn Filter,
         handle: Handle<crate::graph::Node>,
     ) -> Option<SourceInfo> {
         self.source_info(handle).map(|info| SourceInfo {
@@ -476,9 +476,9 @@ impl crate::graph::StackGraph {
         })
     }
 
-    fn filter_node_debug_info<'a>(
+    fn filter_node_debug_info(
         &self,
-        _filter: &'a dyn Filter,
+        _filter: &dyn Filter,
         handle: Handle<crate::graph::Node>,
     ) -> Option<DebugInfo> {
         self.node_debug_info(handle).map(|info| DebugInfo {
@@ -492,11 +492,11 @@ impl crate::graph::StackGraph {
         })
     }
 
-    fn filter_nodes<'a>(&self, filter: &'a dyn Filter) -> Nodes {
+    fn filter_nodes(&self, filter: &dyn Filter) -> Nodes {
         Nodes {
             data: self
                 .iter_nodes()
-                .filter(|n| filter.include_node(self, &n))
+                .filter(|n| filter.include_node(self, n))
                 .map(|handle| {
                     let node = &self[handle];
                     let id = self.filter_node(filter, node.id());
@@ -560,11 +560,11 @@ impl crate::graph::StackGraph {
         }
     }
 
-    fn filter_edges<'a>(&self, filter: &'a dyn Filter) -> Edges {
+    fn filter_edges(&self, filter: &dyn Filter) -> Edges {
         Edges {
             data: self
                 .iter_nodes()
-                .map(|source| {
+                .flat_map(|source| {
                     self.outgoing_edges(source)
                         .filter(|e| filter.include_edge(self, &e.source, &e.sink))
                         .map(|e| Edge {
@@ -574,14 +574,13 @@ impl crate::graph::StackGraph {
                             debug_info: self.filter_edge_debug_info(filter, e.source, e.sink),
                         })
                 })
-                .flatten()
                 .collect::<Vec<_>>(),
         }
     }
 
-    fn filter_edge_debug_info<'a>(
+    fn filter_edge_debug_info(
         &self,
-        _filter: &'a dyn Filter,
+        _filter: &dyn Filter,
         source_handle: Handle<crate::graph::Node>,
         sink_handle: Handle<crate::graph::Node>,
     ) -> Option<DebugInfo> {

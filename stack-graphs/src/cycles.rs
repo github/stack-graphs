@@ -86,6 +86,15 @@ impl HasPathKey for PartialPath {
     }
 }
 
+impl<P> Default for SimilarPathDetector<P>
+where
+    P: HasPathKey,
+ {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<P> SimilarPathDetector<P>
 where
     P: HasPathKey,
@@ -221,6 +230,12 @@ pub struct Appendables<H> {
     interned: Arena<PartialPath>,
 }
 
+impl<H> Default for Appendables<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<H> Appendables<H> {
     pub fn new() -> Self {
         Self {
@@ -290,6 +305,12 @@ where
 #[derive(Clone)]
 pub struct AppendingCycleDetector<H> {
     appendages: List<InternedOrHandle<H>>,
+}
+
+impl<H> Default for AppendingCycleDetector<H> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<H> AppendingCycleDetector<H> {
@@ -395,7 +416,7 @@ where
             let cyclic_path = maybe_cyclic_path
                 .unwrap_or_else(|| PartialPath::from_node(graph, partials, end_node));
             cyclic_path.append_to(graph, partials, &mut prefix_path)?;
-            if prefix_path.edges.len() > 0 {
+            if !prefix_path.edges.is_empty() {
                 if let Some(cyclicity) = prefix_path.is_cyclic(graph, partials) {
                     cycles |= cyclicity;
                 }

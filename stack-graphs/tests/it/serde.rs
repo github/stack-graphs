@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------------------------
 
 use assert_json_diff::assert_json_eq;
-use serde_json;
 use serde_json::json;
 use stack_graphs::graph;
 use stack_graphs::graph::StackGraph;
@@ -992,7 +991,7 @@ fn can_serialize_partial_paths() {
         )
         .expect("Expect path finding to work");
     }
-    let actual = serde_json::to_value(&db.to_serializable(&graph, &mut partials))
+    let actual = serde_json::to_value(db.to_serializable(&graph, &mut partials))
         .expect("Cannot serialize paths");
     // formatted using: json_pp -json_opt utf8,canonical,pretty,indent_length=4
     let expected = json!(

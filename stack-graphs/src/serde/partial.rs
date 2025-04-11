@@ -108,7 +108,7 @@ impl PartialScopeStack {
             scopes,
             variable: value
                 .variable()
-                .map(|v| ScopeStackVariable::from_scope_stack_variable(v)),
+                .map(ScopeStackVariable::from_scope_stack_variable),
         }
     }
 
@@ -147,7 +147,7 @@ impl ScopeStackVariable {
 
     pub fn to_scope_stack_variable(&self) -> Result<crate::partial::ScopeStackVariable, Error> {
         crate::partial::ScopeStackVariable::new(self.0)
-            .ok_or_else(|| Error::InvalidStackVariable(self.0))
+            .ok_or(Error::InvalidStackVariable(self.0))
     }
 }
 
@@ -180,7 +180,7 @@ impl PartialSymbolStack {
             symbols,
             variable: value
                 .variable()
-                .map(|v| SymbolStackVariable::from_symbol_stack_variable(v)),
+                .map(SymbolStackVariable::from_symbol_stack_variable),
         }
     }
 
@@ -219,7 +219,7 @@ impl SymbolStackVariable {
 
     pub fn to_symbol_stack_variable(&self) -> Result<crate::partial::SymbolStackVariable, Error> {
         crate::partial::SymbolStackVariable::new(self.0)
-            .ok_or_else(|| Error::InvalidStackVariable(self.0))
+            .ok_or(Error::InvalidStackVariable(self.0))
     }
 }
 

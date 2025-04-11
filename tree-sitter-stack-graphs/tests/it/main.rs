@@ -22,7 +22,7 @@ mod loader;
 mod nodes;
 mod test;
 
-pub(self) fn build_stack_graph(
+ fn build_stack_graph(
     python_source: &str,
     tsg_source: &str,
 ) -> Result<(StackGraph, Handle<File>), BuildError> {

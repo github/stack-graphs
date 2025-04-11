@@ -362,7 +362,7 @@ impl<'a> SpanCalculator<'a> {
     ) -> Position {
         self.replace_current_line(line_utf8_offset);
         Position {
-            line: line,
+            line,
             column: *self.for_utf8_offset(column_utf8_offset),
             containing_line: self.containing_line.as_ref().unwrap().utf8_bounds.clone(),
             trimmed_line: self.trimmed_line.as_ref().unwrap().utf8_bounds.clone(),
@@ -401,7 +401,7 @@ impl<'a> SpanCalculator<'a> {
     ) -> Position {
         self.replace_current_line(line_utf8_offset);
         Position {
-            line: line,
+            line,
             column: *self.for_grapheme_offset(column_grapheme_offset),
             containing_line: self.containing_line.as_ref().unwrap().utf8_bounds.clone(),
             trimmed_line: self.trimmed_line.as_ref().unwrap().utf8_bounds.clone(),

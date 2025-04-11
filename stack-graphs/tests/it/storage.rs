@@ -52,8 +52,8 @@ fn test_foo_bar_root_candidate_paths(symbols: &[&str], variable: bool) -> usize 
 
         let r = StackGraph::root_node();
         let refs = symbols
-            .into_iter()
-            .map(|r| create_push_symbol_node(graph, file, *r, true))
+            .iter()
+            .map(|r| create_push_symbol_node(graph, file, r, true))
             .chain(std::iter::once(r))
             .collect_vec();
         let mut path = create_partial_path_and_edges(graph, partials, &refs).unwrap();
