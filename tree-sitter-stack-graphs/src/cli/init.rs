@@ -776,7 +776,7 @@ impl ProjectSettings<'_> {
 
             pub fn try_language_configuration(
                 cancellation_flag: &dyn CancellationFlag,
-            ) -> Result<LanguageConfiguration, LoadError> {{
+            ) -> Result<LanguageConfiguration, LoadError<'_>> {{
                 LanguageConfiguration::from_sources(
                     {}::LANGUAGE.into(),
                     Some(String::from("source.{}")),

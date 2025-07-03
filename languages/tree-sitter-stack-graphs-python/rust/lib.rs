@@ -27,7 +27,7 @@ pub fn language_configuration(cancellation_flag: &dyn CancellationFlag) -> Langu
 
 pub fn try_language_configuration(
     cancellation_flag: &dyn CancellationFlag,
-) -> Result<LanguageConfiguration, LoadError> {
+) -> Result<LanguageConfiguration, LoadError<'_>> {
     LanguageConfiguration::from_sources(
         tree_sitter_python::LANGUAGE.into(),
         Some(String::from("source.py")),

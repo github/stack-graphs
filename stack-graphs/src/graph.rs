@@ -1391,7 +1391,7 @@ impl DebugInfo {
         self.entries.push(DebugEntry { key, value });
     }
 
-    pub fn iter(&self) -> std::slice::Iter<DebugEntry> {
+    pub fn iter(&self) -> std::slice::Iter<'_, DebugEntry> {
         self.entries.iter()
     }
 }
