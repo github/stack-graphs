@@ -42,7 +42,7 @@ pub fn language_configuration_typescript(
 
 pub fn try_language_configuration_typescript(
     cancellation_flag: &dyn CancellationFlag,
-) -> Result<LanguageConfiguration, LoadError> {
+) -> Result<LanguageConfiguration, LoadError<'_>> {
     let mut lc = LanguageConfiguration::from_sources(
         tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
         Some(String::from("source.ts")),
@@ -72,7 +72,7 @@ pub fn language_configuration_tsx(
 
 pub fn try_language_configuration_tsx(
     cancellation_flag: &dyn CancellationFlag,
-) -> Result<LanguageConfiguration, LoadError> {
+) -> Result<LanguageConfiguration, LoadError<'_>> {
     let mut lc = LanguageConfiguration::from_sources(
         tree_sitter_typescript::LANGUAGE_TSX.into(),
         Some(String::from("source.tsx")),

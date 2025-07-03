@@ -665,7 +665,7 @@ impl PathLoader {
         language_path: &Path,
         file_path: &Path,
         file_content: &mut dyn ContentProvider,
-    ) -> Result<Option<&SupplementedLanguage>, LoadError> {
+    ) -> Result<Option<&SupplementedLanguage>, LoadError<'_>> {
         let scope = self.scope.as_deref();
         let languages = self.loader.languages_at_path(language_path, scope)?;
         if languages.is_empty() {
@@ -777,7 +777,7 @@ impl SupplementedTsLoader {
         &mut self,
         path: &Path,
         scope: Option<&str>,
-    ) -> Result<Vec<&SupplementedLanguage>, LoadError> {
+    ) -> Result<Vec<&SupplementedLanguage>, LoadError<'_>> {
         if !self.1.contains_key(path) {
             let languages = self
                 .0
