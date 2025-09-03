@@ -94,10 +94,9 @@ jobs:
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
     - if: matrix.build-mode == 'manual'
       shell: bash
-      # Our C code is only fixtures that aren't compilable. Automated corporate policy doesn't care,
-      # so we'll compile a "hello world" program for CodeQL to scan to make automation happy.
+      # Our C code is just a header file. Make a simple program that includes the header.
       run: |
-        echo -e '#include <stdio.h>\nint main() {\nputs("hello, world");\n}' | gcc -x c -o hello -pipe -
+        echo -e '#include <stdio.h>\n#include "stack-graphs/include/stack-graphs.h"\nint main() {\nprintf("Here is a big number: %ld\\n", SG_LIST_EMPTY_HANDLE);\n}' | gcc -x c -o hello -pipe -
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
