@@ -960,7 +960,7 @@ inherit .parent_module
 
 (class_definition
   superclasses: (argument_list
-    (_) @superclass)) @class
+    (expression) @superclass)) @class
 {
   edge @class.super_scope -> @superclass.output
 }
