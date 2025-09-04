@@ -881,7 +881,13 @@ inherit .parent_module
 
 [
   (parameter/typed_parameter
-    . (_) @name) @param
+    . (identifier) @name) @param
+  (parameter/typed_parameter
+    . (list_splat_pattern
+      (_) @name)) @param
+  (parameter/typed_parameter
+    . (dictionary_splat_pattern
+      (_) @name)) @param
   (parameter/list_splat_pattern
     (_) @name) @param
   (parameter/dictionary_splat_pattern
