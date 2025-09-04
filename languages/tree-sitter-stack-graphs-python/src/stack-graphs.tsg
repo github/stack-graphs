@@ -765,16 +765,10 @@ inherit .parent_module
 
 (with_clause) {}
 
-[
-  (function_definition
-    parameters: (_) @params
-    body: (_) @body
-  ) @func
-  (lambda
-    parameters: (_) @params
-    body: (_) @body
-  )@func
-] {
+(function_definition
+  parameters: (_) @params
+  body: (_) @body
+) @func {
   node @func.call
   node return_value
   node drop_scope
@@ -788,6 +782,30 @@ inherit .parent_module
   edge @params.before_scope -> JUMP_TO_SCOPE_NODE
   attr (return_value) is_exported
   let @func.function_returns = return_value
+}
+
+(lambda
+  body: (_) @body
+) @lam {
+  node @lam.call
+  node return_value
+  node @body.after_scope
+
+  edge @lam.call -> return_value
+  edge @body.before_scope -> @body.after_scope
+  edge @body.after_scope -> @lam.bottom
+  attr (@lam.call) pop_scoped_symbol = "()"
+  attr (return_value) is_exported
+  let @lam.function_returns = return_value
+}
+
+(lambda
+  parameters: (_) @params
+  body: (_) @body
+) {
+  edge @body.before_scope -> @params.after_scope
+  edge @params.before_scope -> JUMP_TO_SCOPE_NODE
+  edge @params.after_scope -> @body.after_scope
 }
 
 (function_definition
