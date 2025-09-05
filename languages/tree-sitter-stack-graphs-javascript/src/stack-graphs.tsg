@@ -1863,9 +1863,13 @@ inherit .containing_class_value
   node @switch_case.before_scope
 }
 
-(switch_case (_)* @stmts)@switch_case {
+(switch_case
+  value:(_)@value
+  (_)* @stmts)@switch_case {
   if (is-empty @stmts) {
-    edge @switch_case.after_scope -> @switch_case.before_scope
+    ; scopes flow into the value and then directly out of the case
+    edge @value.before_scope -> @switch_case.before_scope
+    edge @switch_case.after_scope -> @value.after_scope
   }
 }
 

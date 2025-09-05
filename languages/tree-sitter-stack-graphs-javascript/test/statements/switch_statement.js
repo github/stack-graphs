@@ -8,6 +8,11 @@ switch (x) {
         /**/ x;
         //   ^ defined: 1
         y = 2;
+    case 1:
+    case 2:
+        /**/ x;
+        //   ^ defined: 1
+        y = 2;
     default:
         /**/ x;
         //   ^ defined: 1
@@ -17,7 +22,7 @@ switch (x) {
 // Flow out
 
 /**/ y;
-//   ^ defined: 10, 14
+//   ^ defined: 10, 15, 19
 
 // Flow around
 
