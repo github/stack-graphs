@@ -1,3 +1,5 @@
+**NOTE:** _This repository is no longer supported or updated by GitHub. If you wish to continue to develop this code yourself, we recommend you fork it._
+
 # Stack graphs
 
 The crates in this repository provide a Rust implementation of _stack graphs_,
